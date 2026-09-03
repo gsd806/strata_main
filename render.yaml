@@ -19,6 +19,16 @@ services:
         sync: false
       - key: TURSO_AUTH_TOKEN
         sync: false
+      - key: EMAIL_VERIFICATION_ENABLED
+        value: "false"
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        value: STRATA <accounts@auth.stratafitness.online>
+      - key: EMAIL_REPLY_TO
+        value: stratafitness.official@gmail.com
+      - key: EMAIL_VERIFICATION_SECRET
+        sync: false
       - key: PADDLE_PRODUCT_ID
         value: pro_01m1ky8j916ybyacs836dxbz8x
       - key: PADDLE_PRICE_ID

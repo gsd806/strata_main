@@ -21,6 +21,40 @@ const SCHEMA = [
   )`,
   "CREATE INDEX IF NOT EXISTS sessions_user_id ON sessions(user_id)",
   "CREATE INDEX IF NOT EXISTS sessions_expires_at ON sessions(expires_at)",
+  `CREATE TABLE IF NOT EXISTS signup_verifications (
+    challenge_id TEXT PRIMARY KEY,
+    browser_token_hash TEXT NOT NULL UNIQUE,
+    user_id TEXT NOT NULL,
+    email TEXT NOT NULL COLLATE NOCASE,
+    name TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    password_salt TEXT NOT NULL,
+    code_digest TEXT NOT NULL,
+    generation INTEGER NOT NULL CHECK(generation >= 1),
+    attempts_used INTEGER NOT NULL DEFAULT 0 CHECK(attempts_used >= 0),
+    send_count INTEGER NOT NULL DEFAULT 0 CHECK(send_count >= 0),
+    last_sent_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    hard_expires_at INTEGER NOT NULL,
+    delivery_state TEXT NOT NULL,
+    consumed_at INTEGER,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    CHECK(expires_at <= hard_expires_at)
+  )`,
+  "CREATE UNIQUE INDEX IF NOT EXISTS signup_verifications_user_id ON signup_verifications(user_id)",
+  "CREATE INDEX IF NOT EXISTS signup_verifications_email ON signup_verifications(email,consumed_at,created_at)",
+  "CREATE INDEX IF NOT EXISTS signup_verifications_expiry ON signup_verifications(hard_expires_at,consumed_at)",
+  `CREATE TABLE IF NOT EXISTS email_verification_sends (
+    send_id TEXT PRIMARY KEY,
+    email_hash TEXT NOT NULL,
+    challenge_id TEXT NOT NULL,
+    generation INTEGER NOT NULL CHECK(generation >= 1),
+    sent_at INTEGER NOT NULL
+  )`,
+  "CREATE INDEX IF NOT EXISTS email_verification_sends_email_time ON email_verification_sends(email_hash,sent_at)",
+  "CREATE INDEX IF NOT EXISTS email_verification_sends_time ON email_verification_sends(sent_at)",
+  "CREATE UNIQUE INDEX IF NOT EXISTS email_verification_sends_challenge_generation ON email_verification_sends(challenge_id,generation)",
   `CREATE TABLE IF NOT EXISTS plans (
     user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     plan_json TEXT NOT NULL,
@@ -88,6 +122,21 @@ const SQL = {
   session:"SELECT s.token_hash,s.csrf_token,s.expires_at,u.id,u.name,u.email,u.created_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?",
   deleteSession:"DELETE FROM sessions WHERE token_hash=?",
   deleteExpired:"DELETE FROM sessions WHERE expires_at<=?",
+  verificationByTokenHash:"SELECT challenge_id,browser_token_hash,user_id,email,name,password_hash,password_salt,code_digest,generation,attempts_used,send_count,last_sent_at,expires_at,hard_expires_at,delivery_state,consumed_at,created_at,updated_at FROM signup_verifications WHERE browser_token_hash=?",
+  verificationByChallenge:"SELECT challenge_id,browser_token_hash,user_id,email,name,password_hash,password_salt,code_digest,generation,attempts_used,send_count,last_sent_at,expires_at,hard_expires_at,delivery_state,consumed_at,created_at,updated_at FROM signup_verifications WHERE challenge_id=?",
+  insertVerification:"INSERT INTO signup_verifications(challenge_id,browser_token_hash,user_id,email,name,password_hash,password_salt,code_digest,generation,attempts_used,send_count,last_sent_at,expires_at,hard_expires_at,delivery_state,consumed_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?,?)",
+  rotateVerification:"UPDATE signup_verifications SET code_digest=?,generation=generation+1,attempts_used=0,send_count=send_count+1,last_sent_at=?,expires_at=?,delivery_state=?,updated_at=? WHERE challenge_id=? AND generation=? AND consumed_at IS NULL",
+  markVerificationDelivery:"UPDATE signup_verifications SET delivery_state=?,updated_at=? WHERE challenge_id=? AND generation=? AND consumed_at IS NULL",
+  claimVerificationAttempt:"UPDATE signup_verifications SET attempts_used=attempts_used+1,updated_at=? WHERE challenge_id=? AND generation=? AND consumed_at IS NULL AND expires_at>? AND hard_expires_at>? AND attempts_used<? RETURNING challenge_id,browser_token_hash,user_id,email,name,password_hash,password_salt,code_digest,generation,attempts_used,send_count,last_sent_at,expires_at,hard_expires_at,delivery_state,consumed_at,created_at,updated_at",
+  consumeVerification:"UPDATE signup_verifications SET code_digest='',password_hash='',password_salt='',delivery_state='consumed',consumed_at=?,updated_at=? WHERE challenge_id=? AND generation=? AND consumed_at IS NULL",
+  completeSignupInsert:"INSERT INTO users(id,name,email,password_hash,password_salt,created_at) SELECT user_id,name,email,password_hash,password_salt,? FROM signup_verifications WHERE challenge_id=? AND generation=? AND consumed_at IS NULL AND expires_at>? AND hard_expires_at>? RETURNING id,name,email,created_at",
+  completeSignupConsume:"UPDATE signup_verifications SET code_digest='',password_hash='',password_salt='',delivery_state='consumed',consumed_at=?,updated_at=? WHERE challenge_id=? AND generation=? AND consumed_at IS NULL AND expires_at>? AND hard_expires_at>?",
+  completeSignupSession:"INSERT INTO sessions(token_hash,user_id,csrf_token,expires_at,created_at) SELECT ?,user_id,?,?,? FROM signup_verifications WHERE changes()=1 AND challenge_id=? AND generation=? AND consumed_at=?",
+  countVerificationSends:"SELECT COUNT(*) AS send_count FROM email_verification_sends WHERE email_hash=? AND sent_at>=?",
+  recordVerificationSend:"INSERT INTO email_verification_sends(send_id,email_hash,challenge_id,generation,sent_at) VALUES(?,?,?,?,?)",
+  claimVerificationSend:"INSERT OR IGNORE INTO email_verification_sends(send_id,email_hash,challenge_id,generation,sent_at) SELECT ?,?,?,?,? WHERE (SELECT COUNT(*) FROM email_verification_sends WHERE email_hash=? AND sent_at>=?)<?",
+  deleteOldVerifications:"DELETE FROM signup_verifications WHERE hard_expires_at<=? OR (consumed_at IS NOT NULL AND consumed_at<=?)",
+  deleteOldVerificationSends:"DELETE FROM email_verification_sends WHERE sent_at<?",
   plan:"SELECT plan_json,updated_at FROM plans WHERE user_id=?",
   upsertPlan:"INSERT INTO plans(user_id,plan_json,updated_at) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan_json=excluded.plan_json,updated_at=excluded.updated_at",
   preferences:"SELECT preferences_json,updated_at FROM preferences WHERE user_id=?",
@@ -138,6 +187,51 @@ function affectedRows(result) {
   return Number(result?.changes ?? result?.rowsAffected ?? 0);
 }
 
+const CONSUMED_VERIFICATION_RETENTION_MS = 60 * 60 * 1000;
+const VERIFICATION_SEND_RETENTION_MS = 24 * 60 * 60 * 1000;
+
+function verificationInsertArgs(verification) {
+  return [
+    verification.challengeId,
+    verification.browserTokenHash,
+    verification.userId,
+    verification.email,
+    verification.name,
+    verification.passwordHash,
+    verification.passwordSalt,
+    verification.codeDigest,
+    Number(verification.generation ?? 1),
+    Number(verification.attemptsUsed ?? 0),
+    Number(verification.sendCount ?? 0),
+    Number(verification.lastSentAt),
+    Number(verification.expiresAt),
+    Number(verification.hardExpiresAt),
+    verification.deliveryState,
+    Number(verification.createdAt),
+    Number(verification.updatedAt)
+  ];
+}
+
+function verificationRotationArgs(challengeId,currentGeneration,rotation) {
+  return [
+    rotation.codeDigest,
+    Number(rotation.lastSentAt),
+    Number(rotation.expiresAt),
+    rotation.deliveryState,
+    Number(rotation.updatedAt),
+    challengeId,
+    Number(currentGeneration)
+  ];
+}
+
+function verificationSendArgs(send) {
+  return [send.id,send.emailHash,send.challengeId,Number(send.generation),Number(send.sentAt)];
+}
+
+function verificationSendClaimArgs(send,since,maxSends) {
+  return [...verificationSendArgs(send),send.emailHash,Number(since),Number(maxSends)];
+}
+
 function accessSummary(row) {
   const purchaseCount=Number(row?.purchase_count || 0);
   const activePurchaseCount=Number(row?.active_purchase_count || 0);
@@ -177,6 +271,66 @@ function localStore(root) {
     async session(tokenHash,now) { return plainRow(statements.session.get(tokenHash,now)); },
     async deleteSession(tokenHash) { statements.deleteSession.run(tokenHash); },
     async deleteExpired(now) { statements.deleteExpired.run(now); },
+    async verificationByTokenHash(tokenHash) { return plainRow(statements.verificationByTokenHash.get(tokenHash)); },
+    async insertVerification(verification) {
+      statements.insertVerification.run(...verificationInsertArgs(verification));
+      return plainRow(statements.verificationByChallenge.get(verification.challengeId));
+    },
+    async rotateVerification(challengeId,currentGeneration,rotation) {
+      const result=statements.rotateVerification.run(...verificationRotationArgs(challengeId,currentGeneration,rotation));
+      return affectedRows(result)===1?plainRow(statements.verificationByChallenge.get(challengeId)):null;
+    },
+    async markVerificationDelivery(challengeId,generation,state,updatedAt) {
+      return affectedRows(statements.markVerificationDelivery.run(state,updatedAt,challengeId,generation))===1;
+    },
+    async claimVerificationAttempt(challengeId,generation,updatedAt,maxAttempts=5) {
+      return plainRow(statements.claimVerificationAttempt.get(updatedAt,challengeId,generation,updatedAt,updatedAt,maxAttempts));
+    },
+    async consumeVerification(challengeId,generation,consumedAt) {
+      const result=statements.consumeVerification.run(consumedAt,consumedAt,challengeId,generation);
+      return affectedRows(result)===1?plainRow(statements.verificationByChallenge.get(challengeId)):null;
+    },
+    async completeSignup(challengeId,generation,createdAt,session) {
+      if (!session||!session.tokenHash||!session.csrfToken) throw new TypeError("A session is required to complete signup.");
+      let transactionOpen=false;
+      try {
+        db.exec("BEGIN IMMEDIATE");
+        transactionOpen=true;
+        const user=plainRow(statements.completeSignupInsert.get(createdAt,challengeId,generation,createdAt,createdAt));
+        if (!user) {
+          db.exec("ROLLBACK");
+          transactionOpen=false;
+          return null;
+        }
+        const consumed=statements.completeSignupConsume.run(createdAt,createdAt,challengeId,generation,createdAt,createdAt);
+        if (affectedRows(consumed)!==1) throw new Error("Verification could not be consumed atomically.");
+        const insertedSession=statements.completeSignupSession.run(session.tokenHash,session.csrfToken,session.expiresAt,session.createdAt,challengeId,generation,createdAt);
+        if (affectedRows(insertedSession)!==1) throw new Error("Verification session could not be created atomically.");
+        db.exec("COMMIT");
+        transactionOpen=false;
+        return user;
+      } catch(error) {
+        if (transactionOpen) {
+          try { db.exec("ROLLBACK"); } catch { /* Preserve the original transaction error. */ }
+        }
+        throw error;
+      }
+    },
+    async countVerificationSends(emailHash,since) {
+      return Number(plainRow(statements.countVerificationSends.get(emailHash,since))?.send_count||0);
+    },
+    async recordVerificationSend(send) {
+      statements.recordVerificationSend.run(...verificationSendArgs(send));
+    },
+    async claimVerificationSend(send,since,maxSends) {
+      return affectedRows(statements.claimVerificationSend.run(...verificationSendClaimArgs(send,since,maxSends)))===1;
+    },
+    async deleteOldVerificationData(now,sendBefore=now-VERIFICATION_SEND_RETENTION_MS) {
+      const consumedBefore=now-CONSUMED_VERIFICATION_RETENTION_MS;
+      const verifications=affectedRows(statements.deleteOldVerifications.run(now,consumedBefore));
+      const sends=affectedRows(statements.deleteOldVerificationSends.run(sendBefore));
+      return {verifications,sends};
+    },
     async plan(userId) { return plainRow(statements.plan.get(userId)); },
     async upsertPlan(userId,planJson,updatedAt) { statements.upsertPlan.run(userId,planJson,updatedAt); },
     async preferences(userId) { return plainRow(statements.preferences.get(userId)); },
@@ -263,6 +417,56 @@ async function tursoStore(url,authToken) {
     session:(tokenHash,now) => first(SQL.session,[tokenHash,now]),
     deleteSession:(tokenHash) => run(SQL.deleteSession,[tokenHash]),
     deleteExpired:(now) => run(SQL.deleteExpired,[now]),
+    verificationByTokenHash:(tokenHash) => first(SQL.verificationByTokenHash,[tokenHash]),
+    async insertVerification(verification) {
+      await run(SQL.insertVerification,verificationInsertArgs(verification));
+      return first(SQL.verificationByChallenge,[verification.challengeId]);
+    },
+    async rotateVerification(challengeId,currentGeneration,rotation) {
+      const result=await run(SQL.rotateVerification,verificationRotationArgs(challengeId,currentGeneration,rotation));
+      return affectedRows(result)===1?first(SQL.verificationByChallenge,[challengeId]):null;
+    },
+    async markVerificationDelivery(challengeId,generation,state,updatedAt) {
+      return affectedRows(await run(SQL.markVerificationDelivery,[state,updatedAt,challengeId,generation]))===1;
+    },
+    async claimVerificationAttempt(challengeId,generation,updatedAt,maxAttempts=5) {
+      const result=await run(SQL.claimVerificationAttempt,[updatedAt,challengeId,generation,updatedAt,updatedAt,maxAttempts]);
+      return plainRow(result.rows[0],result.columns);
+    },
+    async consumeVerification(challengeId,generation,consumedAt) {
+      const result=await run(SQL.consumeVerification,[consumedAt,consumedAt,challengeId,generation]);
+      return affectedRows(result)===1?first(SQL.verificationByChallenge,[challengeId]):null;
+    },
+    async completeSignup(challengeId,generation,createdAt,session) {
+      if (!session||!session.tokenHash||!session.csrfToken) throw new TypeError("A session is required to complete signup.");
+      const verification=await first(SQL.verificationByChallenge,[challengeId]);
+      if (!verification||Number(verification.generation)!==Number(generation)||verification.consumed_at!=null) return null;
+      const results=await client.batch([
+        {sql:SQL.completeSignupInsert,args:[createdAt,challengeId,generation,createdAt,createdAt]},
+        {sql:SQL.completeSignupConsume,args:[createdAt,createdAt,challengeId,generation,createdAt,createdAt]},
+        {sql:SQL.completeSignupSession,args:[session.tokenHash,session.csrfToken,session.expiresAt,session.createdAt,challengeId,generation,createdAt]}
+      ],"write");
+      const user=plainRow(results[0]?.rows?.[0],results[0]?.columns);
+      if (affectedRows(results[0])!==1||!user) return null;
+      if (affectedRows(results[1])!==1) throw new Error("Verification could not be consumed atomically.");
+      if (affectedRows(results[2])!==1) throw new Error("Verification session could not be created atomically.");
+      return user;
+    },
+    async countVerificationSends(emailHash,since) {
+      return Number((await first(SQL.countVerificationSends,[emailHash,since]))?.send_count||0);
+    },
+    recordVerificationSend:(send) => run(SQL.recordVerificationSend,verificationSendArgs(send)),
+    async claimVerificationSend(send,since,maxSends) {
+      return affectedRows(await run(SQL.claimVerificationSend,verificationSendClaimArgs(send,since,maxSends)))===1;
+    },
+    async deleteOldVerificationData(now,sendBefore=now-VERIFICATION_SEND_RETENTION_MS) {
+      const consumedBefore=now-CONSUMED_VERIFICATION_RETENTION_MS;
+      const results=await client.batch([
+        {sql:SQL.deleteOldVerifications,args:[now,consumedBefore]},
+        {sql:SQL.deleteOldVerificationSends,args:[sendBefore]}
+      ],"write");
+      return {verifications:affectedRows(results[0]),sends:affectedRows(results[1])};
+    },
     plan:(userId) => first(SQL.plan,[userId]),
     upsertPlan:(userId,planJson,updatedAt) => run(SQL.upsertPlan,[userId,planJson,updatedAt]),
     preferences:(userId) => first(SQL.preferences,[userId]),

@@ -96,7 +96,7 @@ let browser;
 
     await page.setViewportSize({width:320,height:700});
     snapshot.narrowOverflow={};
-    for(const route of ["/","/account.html","/planner.html","/discover.html","/pricing","/contact","/terms","/privacy","/refunds","/install.html"]){
+    for(const route of ["/","/account.html","/verify-email.html","/planner.html","/discover.html","/pricing","/contact","/terms","/privacy","/refunds","/install.html"]){
       await page.goto(`${BASE_URL}${route}`,{waitUntil:"networkidle"});
       const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth);
       snapshot.narrowOverflow[route]=overflow;

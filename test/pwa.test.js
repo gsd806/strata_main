@@ -91,9 +91,9 @@ test("release version, cache keys, asset URLs, and catalog claims stay aligned",
   const exercises=JSON.parse(read("data/exercises.json"));
   const version=BUILD,versionPattern=escapeRegExp(version);
   const serviceWorker=read("service-worker.js");
-  const pages=["index.html","account.html","planner.html","discover.html","install.html","offline.html","pricing.html","contact.html","terms.html","privacy.html","refunds.html"];
+  const pages=["index.html","account.html","verify-email.html","planner.html","discover.html","install.html","offline.html","pricing.html","contact.html","terms.html","privacy.html","refunds.html"];
 
-  assert.equal(version,"6.6.1");
+  assert.equal(version,"6.7.0");
   assert.match(serviceWorker,new RegExp(`const BUILD="${versionPattern}";`));
   assert.match(serviceWorker,/const CACHE_PREFIX="strata-static-";/);
   assert.match(serviceWorker,/const STATIC_CACHE=`\$\{CACHE_PREFIX\}\$\{BUILD\}`;/);
@@ -167,7 +167,7 @@ test("manifest has complete install metadata and correctly sized icons",()=>{
 });
 
 test("every app page exposes consistent PWA and mobile metadata",()=>{
-  const appPages=["index.html","account.html","planner.html","discover.html","install.html","pricing.html","contact.html","terms.html","privacy.html","refunds.html"];
+  const appPages=["index.html","account.html","verify-email.html","planner.html","discover.html","install.html","pricing.html","contact.html","terms.html","privacy.html","refunds.html"];
   for(const page of appPages) {
     const html=read(`pages/${page}`);
     assert.match(html,/<meta\s+name="viewport"\s+content="[^"]*width=device-width[^"]*viewport-fit=cover[^"]*"\s*\/>/i,`${page} viewport`);
@@ -198,14 +198,14 @@ test("service worker precaches only public assets and never handles account APIs
   assert.ok(harness.precache.some((url)=>url.includes("strata-512.png")));
 
   const paths=harness.precache.map((entry)=>new URL(entry,"https://strata.test").pathname);
-  const privateHtml=["/","/index.html","/account.html","/planner.html","/discover.html"];
+  const privateHtml=["/","/index.html","/account.html","/verify-email","/verify-email.html","/planner.html","/discover.html"];
   for(const forbidden of privateHtml)assert.ok(!paths.includes(forbidden),`${forbidden} must not be precached`);
   assert.ok(!paths.some((entry)=>entry.startsWith("/api/")||entry.startsWith("/auth/")||entry==="/healthz"),"account and health routes must not be precached");
 
-  for(const endpoint of ["/api/status","/api/me","/api/billing/config","/api/billing/checkout","/api/paddle/webhook","/auth/login","/auth/signup","/healthz"]) {
+  for(const endpoint of ["/api/status","/api/me","/api/verification-status","/api/verify-email","/api/resend-verification","/api/billing/config","/api/billing/checkout","/api/paddle/webhook","/auth/login","/auth/signup","/auth/verify-email","/auth/resend-verification","/healthz"]) {
     assert.equal(dispatchServiceWorkerFetch(harness.listeners.fetch,endpoint),undefined,`${endpoint} must bypass the service worker`);
   }
-  for(const privatePage of ["/index.html","/account.html","/planner.html","/discover.html"]) {
+  for(const privatePage of ["/index.html","/account.html","/verify-email","/verify-email.html","/planner.html","/discover.html"]) {
     assert.equal(dispatchServiceWorkerFetch(harness.listeners.fetch,privatePage),undefined,`${privatePage} must bypass runtime asset caching`);
   }
   assert.equal(dispatchServiceWorkerFetch(harness.listeners.fetch,"/styles.css",{method:"POST"}),undefined,"writes must never be intercepted");

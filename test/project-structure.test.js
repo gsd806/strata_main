@@ -23,7 +23,7 @@ function walk(directory){
 
 test("keeps root, private server, and public browser files separated",()=>{
   for(const required of [
-    "server.js","src/server.js","src/database.js","src/payments.js",
+    "server.js","src/server.js","src/database.js","src/email.js","src/payments.js",
     "src/data/discovery-data.json","public/pages/index.html",
     "public/scripts/app.js","public/styles/styles.css",
     "public/data/exercises.json","public/service-worker.js","public/manifest.webmanifest"
@@ -32,7 +32,7 @@ test("keeps root, private server, and public browser files separated",()=>{
   assert.deepEqual(readdirSync(PUBLIC_ROOT).sort(),[
     "data","icons","manifest.webmanifest","pages","scripts","service-worker.js","styles"
   ]);
-  assert.deepEqual(readdirSync(SRC_ROOT).sort(),["data","database.js","payments.js","server.js"]);
+  assert.deepEqual(readdirSync(SRC_ROOT).sort(),["data","database.js","email.js","payments.js","server.js"]);
 
   const rootFiles=readdirSync(PROJECT_ROOT,{withFileTypes:true}).filter((entry)=>entry.isFile()).map((entry)=>entry.name);
   assert.deepEqual(rootFiles.filter((name)=>name.endsWith(".js")).sort(),["server.js"]);
@@ -43,7 +43,7 @@ test("keeps root, private server, and public browser files separated",()=>{
 
 test("keeps credentials, databases, and private modules out of public",()=>{
   const allowedExtensions=new Set([".html",".css",".js",".json",".webmanifest",".svg",".png"]);
-  const forbiddenNames=new Set(["server.js","database.js","payments.js","discovery-data.json","render.yaml","package.json","package-lock.json"]);
+  const forbiddenNames=new Set(["server.js","database.js","email.js","payments.js","discovery-data.json","render.yaml","package.json","package-lock.json"]);
   const textExtensions=new Set([".html",".css",".js",".json",".webmanifest",".svg"]);
 
   for(const file of walk(PUBLIC_ROOT)){
@@ -53,7 +53,7 @@ test("keeps credentials, databases, and private modules out of public",()=>{
     assert.doesNotMatch(name,/(?:^|\/)(?:\.env(?:\..*)?|data\/.*\.(?:sqlite(?:-(?:shm|wal))?|db)|.*\.(?:pem|key))$/i);
     if(textExtensions.has(extension)){
       const body=readFileSync(file,"utf8");
-      assert.doesNotMatch(body,/\b(?:PADDLE_API_KEY|PADDLE_WEBHOOK_SECRET|TURSO_AUTH_TOKEN|TURSO_DATABASE_URL|STRATA_DATA_DIR)\b/,`${name} references a server-only environment variable`);
+      assert.doesNotMatch(body,/\b(?:PADDLE_API_KEY|PADDLE_WEBHOOK_SECRET|TURSO_AUTH_TOKEN|TURSO_DATABASE_URL|STRATA_DATA_DIR|RESEND_API_KEY|EMAIL_VERIFICATION_SECRET)\b/,`${name} references a server-only environment variable`);
       assert.doesNotMatch(body,/pdl_(?:live|sandbox|sdbx)_apikey_[A-Za-z0-9_-]{16,}|pdl_ntfset_[A-Za-z0-9_-]{16,}/i,`${name} contains a Paddle secret`);
       assert.doesNotMatch(body,/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,`${name} contains a private key`);
     }

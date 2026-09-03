@@ -22,6 +22,27 @@ function safeNext(raw,exerciseId){
   return "/planner.html";
 }
 
+function verificationLocation(destination,{deliveryState=""}={}){
+  const query=new URLSearchParams();
+  if(destination==="/pricing")query.set("next","pricing");
+  else if(destination==="/discover.html")query.set("next","discover");
+  else{
+    query.set("next","planner");
+    const add=new URL(destination,"https://strata.local").searchParams.get("add");
+    if(add&&/^[a-z0-9-]{2,80}$/.test(add))query.set("add",add);
+  }
+  if(deliveryState==="failed")query.set("delivery","failed");
+  return `/verify-email.html?${query}`;
+}
+
+function rememberMaskedEmail(value){
+  try{
+    const masked=String(value||"").replace(/[\u0000-\u001f\u007f]/g,"").trim().slice(0,254);
+    if(masked)globalThis.sessionStorage?.setItem("strata.verification.maskedEmail",masked);
+    else globalThis.sessionStorage?.removeItem("strata.verification.maskedEmail");
+  }catch{}
+}
+
 const next=safeNext(params.get("next"),add);
 const preferredPanel=el(mode==="login"?"loginPanel":"signupPanel");
 preferredPanel.classList.add("active");
@@ -33,7 +54,8 @@ const knownErrors=new Set([
   "Cross-origin request rejected.","Too many attempts. Try again later.",
   "Use a valid name, email, and password of 10–128 characters.",
   "An account with that email already exists.","Email or password is incorrect.",
-  "Unable to complete the account request.","Account storage is temporarily unavailable. Please try again."
+  "Unable to complete the account request.","Account storage is temporarily unavailable. Please try again.",
+  "Email verification is temporarily unavailable. Please try again later."
 ]);
 let pendingQueryError=queryError?(knownErrors.has(queryError)?queryError:"Unable to complete the account request. Please try again."):"";
 if(queryError){
@@ -53,7 +75,13 @@ async function readJson(path,options={}){
   const contentType=String(response.headers?.get?.("content-type")||"").toLowerCase();
   const isJson=contentType.includes("json");
   const data=isJson?await response.json().catch(()=>null):null;
-  if(!response.ok)throw Object.assign(new Error(data?.error||"Request failed."),{status:response.status});
+  if(!response.ok)throw Object.assign(new Error(data?.error||"Request failed."),{
+    status:response.status,
+    code:data?.code,
+    verificationRequired:data?.verificationRequired===true,
+    maskedEmail:data?.maskedEmail,
+    deliveryState:["sent","failed","pending"].includes(data?.deliveryState)?data.deliveryState:""
+  });
   if(!data||typeof data!=="object")throw Object.assign(new Error("The account service returned an unexpected response."),{code:"invalid-response",status:502});
   return data;
 }
@@ -81,6 +109,9 @@ function showFormError(authMode,message,{status,focus=false}={}){
 
 function friendlyAuthError(error,authMode){
   if(knownErrors.has(error?.message))return error.message;
+  const code=String(error?.code||"").toUpperCase();
+  if(code==="EMAIL_VERIFICATION_UNAVAILABLE")return "Email verification is temporarily unavailable. Please try again later.";
+  if(code.includes("EMAIL")&&(code.includes("PROVIDER")||code.includes("DELIVERY")||code.includes("SEND")||code.includes("VERIFICATION")))return "We could not send your verification email right now. Please try again in a moment.";
   if(error?.status===404)return "The account service is unavailable. Deploy STRATA as a Node Web Service and try again.";
   if(error?.code==="invalid-response")return "The account service is unavailable on this deployment. Please try again after the server is connected.";
   if(error?.code==="network")return "Could not reach the account service. Check your connection and try again.";
@@ -188,9 +219,20 @@ function enhanceForm(authMode){
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify(payloadFor(authMode,form))
       });
+      if(authMode==="signup"&&result.verificationRequired===true){
+        rememberMaskedEmail(result.maskedEmail);
+        location.assign(verificationLocation(next));
+        return;
+      }
       if(!result.user?.id)throw Object.assign(new Error("The account service returned an unexpected response."),{code:"invalid-response",status:502});
       location.assign(next);
     }catch(error){
+      if(error.verificationRequired===true){
+        rememberMaskedEmail(error.maskedEmail);
+        const deliveryFailed=error.deliveryState==="failed"||["EMAIL_DELIVERY_UNAVAILABLE","EMAIL_DELIVERY_FAILED"].includes(String(error.code||"").toUpperCase());
+        location.assign(verificationLocation(next,{deliveryState:deliveryFailed?"failed":""}));
+        return;
+      }
       showFormError(authMode,friendlyAuthError(error,authMode),{status:error.status,focus:true});
     }finally{
       delete form.dataset.submitting;
