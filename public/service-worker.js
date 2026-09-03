@@ -1,0 +1,109 @@
+"use strict";
+
+const BUILD="6.6.1";
+const CACHE_PREFIX="strata-static-";
+const STATIC_CACHE=`${CACHE_PREFIX}${BUILD}`;
+const PRECACHE_URLS=[
+  "/offline.html",
+  "/install.html",
+  "/pricing.html",
+  "/contact.html",
+  "/terms.html",
+  "/privacy.html",
+  "/refunds.html",
+  "/install.css?v=6.6.1",
+  "/install.js?v=6.6.1",
+  "/site-info.css?v=6.6.1",
+  "/pricing.js?v=6.6.1",
+  "/pwa.js?v=6.6.1",
+  "/styles.css?v=6.6.1",
+  "/app.js?v=6.6.1",
+  "/account.css?v=6.6.1",
+  "/account.js?v=6.6.1",
+  "/planner.css?v=6.6.1",
+  "/planner.js?v=6.6.1",
+  "/discover.css?v=6.6.1",
+  "/discovery-core.js?v=6.6.1",
+  "/discover.js?v=6.6.1",
+  "/exercises.json?v=6.6.1",
+  "/manifest.webmanifest",
+  "/icons/strata-icon.svg",
+  "/icons/strata-192.png",
+  "/icons/strata-512.png",
+  "/icons/strata-maskable-512.png",
+  "/icons/apple-touch-icon.png"
+];
+const PUBLIC_ASSET_PATHS=new Set(PRECACHE_URLS.map((entry) => new URL(entry,self.location.origin).pathname));
+const PRIVATE_HTML_PATHS=new Set(["/","/index.html","/account.html","/planner.html","/discover.html"]);
+const PUBLIC_HTML_FALLBACKS=new Map([
+  ["/install","/install.html"],
+  ["/pricing","/pricing.html"],
+  ["/contact","/contact.html"],
+  ["/terms","/terms.html"],
+  ["/privacy","/privacy.html"],
+  ["/refunds","/refunds.html"]
+]);
+
+function bypassNetwork(pathname) {
+  return pathname.startsWith("/api/") || pathname.startsWith("/auth/") || pathname==="/healthz";
+}
+
+self.addEventListener("install",(event) => {
+  event.waitUntil(caches.open(STATIC_CACHE).then((cache) => cache.addAll(PRECACHE_URLS)).then(() => self.skipWaiting()));
+});
+
+self.addEventListener("activate",(event) => {
+  event.waitUntil(
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((key) => key.startsWith(CACHE_PREFIX) && key!==STATIC_CACHE).map((key) => caches.delete(key))))
+      .then(() => self.clients.claim())
+  );
+});
+
+async function navigationResponse(request,url) {
+  try {
+    return await fetch(request);
+  } catch {
+    const cache=await caches.open(STATIC_CACHE);
+    const normalizedPath=url.pathname.length>1?url.pathname.replace(/\/+$/g,""):url.pathname;
+    const pageKey=normalizedPath.endsWith(".html")?normalizedPath.slice(0,-5):normalizedPath;
+    // Paddle appends `_ptxn` to the default payment-link URL. Never serve a
+    // cached checkout landing page for that request: the transaction needs a
+    // live connection to Paddle and STRATA's server.
+    if (pageKey==="/pricing" && url.searchParams.has("_ptxn")) {
+      const offline=await cache.match("/offline.html");
+      return offline || new Response("STRATA is offline.",{status:503,headers:{"Content-Type":"text/plain; charset=utf-8"}});
+    }
+    const publicFallback=PUBLIC_HTML_FALLBACKS.get(pageKey);
+    if (publicFallback) {
+      const page=await cache.match(publicFallback);
+      if (page) return page;
+    }
+    const offline=await cache.match("/offline.html");
+    return offline || new Response("STRATA is offline.",{status:503,headers:{"Content-Type":"text/plain; charset=utf-8"}});
+  }
+}
+
+async function publicAssetResponse(request) {
+  const cached=await caches.match(request);
+  if (cached) return cached;
+  const response=await fetch(request);
+  if (response.ok && response.type==="basic") {
+    const cache=await caches.open(STATIC_CACHE);
+    await cache.put(request,response.clone());
+  }
+  return response;
+}
+
+self.addEventListener("fetch",(event) => {
+  const request=event.request;
+  if (request.method!=="GET") return;
+  const url=new URL(request.url);
+  if (url.origin!==self.location.origin || bypassNetwork(url.pathname)) return;
+  if (request.mode==="navigate") {
+    event.respondWith(navigationResponse(request,url));
+    return;
+  }
+  if (PRIVATE_HTML_PATHS.has(url.pathname) || !PUBLIC_ASSET_PATHS.has(url.pathname)) return;
+  event.respondWith(publicAssetResponse(request));
+});

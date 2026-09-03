@@ -1,0 +1,111 @@
+{
+  "methodology": {
+    "version": "2026.08",
+    "title": "STRATA FitScore methodology",
+    "summary": "FitScore is a transparent editorial shortlist for hypertrophy-oriented exercise selection. It is not a validated scientific instrument, a prediction of individual results, or a substitute for qualified coaching or medical care.",
+    "formula": "A weighted five-factor baseline is calculated, then a small disclosed editorial adjustment accounts for exercise-specific trade-offs that the five fields do not fully represent. The published score is never changed by community ratings.",
+    "factors": [
+      {"key":"stimulus","label":"Target stimulus","weight":30,"description":"How directly the movement can load the intended muscle when performed with appropriate technique.","boundary":"This is an editorial judgment informed by anatomy, mechanics, and exercise literature; it is not a direct measurement of muscle growth."},
+      {"key":"range","label":"Effective range","weight":20,"description":"Whether the movement can challenge the target through a useful and tolerable range of motion.","boundary":"More range is not automatically better for every person or exercise."},
+      {"key":"stability","label":"Stability","weight":20,"description":"How readily effort can be directed to the target before balance or unrelated coordination becomes limiting.","boundary":"Stability is task-specific and does not mean that free-weight exercises are ineffective."},
+      {"key":"progression","label":"Progression potential","weight":20,"description":"How easily load, repetitions, range, or technique can be measured and progressed over time.","boundary":"Progress still depends on consistent training and appropriate programming."},
+      {"key":"fatigue","label":"Fatigue efficiency","weight":10,"description":"The expected target stimulus relative to non-target fatigue, setup burden, and recovery cost.","boundary":"Fatigue response is individual and varies with load, volume, and execution."}
+    ],
+    "adjustment": "Editorial adjustment is the difference between the weighted baseline and the published FitScore. It is shown explicitly and is capped to a small range in the current dataset. It captures setup, practicality, resistance-profile, and exercise-specific considerations without pretending those judgments are measured with scientific precision.",
+    "evidenceNote": "Research supports broad training principles more strongly than exact head-to-head rankings of individual exercises. Every exercise page labels STRATA interpretation separately from the linked evidence."
+  },
+  "sources": [
+    {
+      "id":"rom-2023",
+      "type":"Systematic review",
+      "title":"Which ROMs Lead to Rome? A Systematic Review of the Effects of Range of Motion on Muscle Hypertrophy",
+      "publisher":"Journal of Strength and Conditioning Research / PubMed",
+      "year":2023,
+      "url":"https://pubmed.ncbi.nlm.nih.gov/36662126/",
+      "supports":"The effective-range factor and the general relevance of training at longer muscle lengths.",
+      "doesNotSupport":"It does not validate a specific STRATA score or prove that the exercise with the largest possible range is always superior."
+    },
+    {
+      "id":"rom-meta-2021",
+      "type":"Systematic review and meta-analysis",
+      "title":"Effects of range of motion on resistance training adaptations",
+      "publisher":"Scandinavian Journal of Medicine & Science in Sports / PubMed",
+      "year":2021,
+      "url":"https://pubmed.ncbi.nlm.nih.gov/34170576/",
+      "supports":"The role of range of motion in strength and hypertrophy adaptations.",
+      "doesNotSupport":"It does not establish one universally optimal range for every joint, person, or exercise."
+    },
+    {
+      "id":"prescription-2023",
+      "type":"Systematic review and Bayesian network meta-analysis",
+      "title":"Resistance training prescription for muscle strength and hypertrophy in healthy adults",
+      "publisher":"British Journal of Sports Medicine / PubMed",
+      "year":2023,
+      "url":"https://pubmed.ncbi.nlm.nih.gov/37414459/",
+      "supports":"Broad resistance-training prescription and the importance of progressive, repeated loading.",
+      "doesNotSupport":"It does not provide exact scores for individual exercises."
+    },
+    {
+      "id":"machines-2022",
+      "type":"Systematic review and meta-analysis",
+      "title":"Machines and free weight exercises: comparing changes in muscle size, strength, and power",
+      "publisher":"Journal of Sports Medicine and Physical Fitness / PubMed",
+      "year":2022,
+      "url":"https://pubmed.ncbi.nlm.nih.gov/34609100/",
+      "supports":"The conclusion that both machine and free-weight training can be effective, with strength adaptations showing task specificity.",
+      "doesNotSupport":"It does not make every machine or free-weight variation equivalent."
+    },
+    {
+      "id":"load-2021",
+      "type":"Systematic review and network meta-analysis",
+      "title":"Resistance Training Load Effects on Muscle Hypertrophy and Strength Gain",
+      "publisher":"Medicine & Science in Sports & Exercise / PubMed",
+      "year":2021,
+      "url":"https://pubmed.ncbi.nlm.nih.gov/33433148/",
+      "supports":"The use of multiple loading ranges for hypertrophy and heavier loading for maximal-strength specificity.",
+      "doesNotSupport":"It does not determine which exercise is best for a particular user."
+    },
+    {
+      "id":"progression-acsm",
+      "type":"Position stand",
+      "title":"Progression Models in Resistance Training for Healthy Adults",
+      "publisher":"American College of Sports Medicine",
+      "year":2009,
+      "url":"https://www.acsm.org/wp-content/uploads/2025/01/Progression-Models-in-Resistance-Training-for-Healthy-Adults-Simplified.pdf",
+      "supports":"The progression factor and general resistance-training progression principles.",
+      "doesNotSupport":"It does not validate STRATA's exact weighting or exercise order."
+    },
+    {
+      "id":"anatomy-openstax",
+      "type":"Open textbook",
+      "title":"Anatomy and Physiology 2e: The Muscular System",
+      "publisher":"OpenStax",
+      "year":2022,
+      "url":"https://openstax.org/books/anatomy-and-physiology-2e/pages/11-introduction",
+      "supports":"Anatomical terminology and broad muscle actions used in target labels.",
+      "doesNotSupport":"Anatomy alone cannot establish comparative hypertrophy outcomes."
+    },
+    {
+      "id":"execution-ace",
+      "type":"Professional exercise library",
+      "title":"ACE Exercise Library",
+      "publisher":"American Council on Exercise",
+      "year":2026,
+      "url":"https://www.acefitness.org/resources/everyone/exercise-library/",
+      "supports":"General movement setup and execution context.",
+      "doesNotSupport":"It does not validate STRATA scores or personalized rankings."
+    }
+  ],
+  "limitedConfidenceExercises": [
+    "cable-serratus-punch",
+    "external-rotation",
+    "face-pull",
+    "reverse-curl",
+    "lateral-stepup",
+    "bent-knee-calf",
+    "tibialis-raise",
+    "pallof-press",
+    "side-plank",
+    "dead-bug"
+  ]
+}

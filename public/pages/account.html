@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#10110f" />
+    <meta name="description" content="Create or sign in to your STRATA account." />
+    <meta name="application-name" content="STRATA" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="STRATA" />
+    <title>Account — STRATA</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icons/strata-icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="account.css?v=6.6.1" />
+  </head>
+  <body>
+    <a class="skip-link" href="#accountPage">Skip to account</a>
+    <header class="account-header">
+      <a class="brand" href="/" aria-label="STRATA home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>STRATA</span></a>
+      <nav class="account-nav" aria-label="Account page navigation"><a class="back-link" href="/install.html">Install app</a><a class="back-link" href="/">← Rankings</a></nav>
+    </header>
+    <main class="account-page" id="accountPage" aria-busy="true">
+      <section class="account-intro">
+        <p class="kicker"><span></span> Private account access</p>
+        <h1>YOUR TRAINING.<br /><em>REMEMBERED.</em></h1>
+        <p>Sign in to keep your discovery profile, community ratings, comparisons, and weekly plan connected to one account.</p>
+        <div class="storage-state" id="storageState" role="status" aria-live="polite"><i></i><span>Checking permanent account storage…</span></div>
+      </section>
+
+      <section class="signed-in-card" id="signedInCard" hidden aria-labelledby="signedInTitle">
+        <p class="kicker">Current account</p>
+        <h2 id="signedInTitle">YOU’RE SIGNED IN.</h2>
+        <p id="signedInIdentity"></p>
+        <p class="account-discovery-status" id="accountDiscoveryStatus" role="status" aria-live="polite"></p>
+        <div class="account-message signed-in-message" id="signedInMessage" role="alert" hidden></div>
+        <div class="signed-actions"><a id="accountDiscoveryAction" href="/pricing">Unlock Discovery →</a><a href="/planner.html">Open weekly planner →</a><button id="accountLogout" type="button">Sign out</button></div>
+      </section>
+
+      <section class="account-loading" id="accountLoading" aria-labelledby="accountLoadingTitle" hidden>
+        <p class="kicker">Account session</p>
+        <h2 id="accountLoadingTitle">CHECKING YOUR ACCOUNT…</h2>
+        <p id="accountLoadingMessage" role="status" aria-live="polite">Confirming whether you are already signed in.</p>
+        <button id="accountRetry" type="button" hidden>Try again <span aria-hidden="true">↻</span></button>
+      </section>
+
+      <section class="account-access" id="accountAccess" aria-label="Create an account or sign in">
+        <div class="auth-grid">
+          <article class="auth-panel" id="signupPanel" aria-labelledby="signupTitle">
+            <p class="panel-index">01 / New account</p>
+            <h2 id="signupTitle" tabindex="-1">CREATE ACCOUNT</h2>
+            <p>Build a private profile and save your plan between visits.</p>
+            <form id="signupForm" action="/auth/signup" method="post" aria-labelledby="signupTitle" aria-describedby="signupMessage">
+              <div class="account-message panel-message" id="signupMessage" role="alert" tabindex="-1" hidden></div>
+              <input id="signupNext" type="hidden" name="next" value="/planner.html" />
+              <label for="signupName">Name</label><input id="signupName" name="name" autocomplete="name" required minlength="2" maxlength="40" />
+              <label for="signupEmail">Email</label><input id="signupEmail" name="email" type="email" autocomplete="email" required maxlength="254" />
+              <label for="signupPassword">Password</label><input id="signupPassword" name="password" type="password" autocomplete="new-password" required minlength="10" maxlength="128" aria-describedby="signupPasswordHint" />
+              <small id="signupPasswordHint">Use at least 10 characters. Passwords are salted and hashed before storage.</small>
+              <button id="signupSubmit" type="submit">Create account <span>→</span></button>
+            </form>
+          </article>
+          <article class="auth-panel" id="loginPanel" aria-labelledby="loginTitle">
+            <p class="panel-index">02 / Returning account</p>
+            <h2 id="loginTitle" tabindex="-1">SIGN IN</h2>
+            <p>Use the exact email and password entered during signup.</p>
+            <form id="loginForm" action="/auth/login" method="post" aria-labelledby="loginTitle" aria-describedby="loginMessage">
+              <div class="account-message panel-message" id="loginMessage" role="alert" tabindex="-1" hidden></div>
+              <input id="loginNext" type="hidden" name="next" value="/planner.html" />
+              <label for="loginEmail">Email</label><input id="loginEmail" name="email" type="email" autocomplete="email" required maxlength="254" />
+              <label for="loginPassword">Password</label><input id="loginPassword" name="password" type="password" autocomplete="current-password" required minlength="10" maxlength="128" aria-describedby="loginPasswordHint" />
+              <small id="loginPasswordHint">If account storage is temporarily unavailable, wait a moment and try again.</small>
+              <button id="loginSubmit" type="submit">Sign in <span>→</span></button>
+            </form>
+          </article>
+        </div>
+      </section>
+    </main>
+    <footer class="build-footer">STRATA · Build 6.6.1 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
+    <script src="/pwa.js?v=6.6.1"></script>
+    <script src="account.js?v=6.6.1"></script>
+  </body>
+</html>

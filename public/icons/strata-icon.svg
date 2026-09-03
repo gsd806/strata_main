@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title description">
+  <title id="title">STRATA</title>
+  <desc id="description">Three ascending training bars on a dark square.</desc>
+  <rect width="1024" height="1024" rx="216" fill="#10110f"/>
+  <path d="M250 666 330 666 382 438 302 438Z" fill="#faf9f5"/>
+  <path d="M410 666 502 666 576 338 484 338Z" fill="#d9ff43"/>
+  <path d="M594 666 700 666 798 232 692 232Z" fill="#faf9f5"/>
+  <path d="M238 744H786" stroke="#ff5a36" stroke-width="32" stroke-linecap="square"/>
+</svg>

@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: strata-workout-index
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: TRUST_PROXY
+        value: "true"
+      - key: APP_BASE_URL
+        value: https://stratafitness.online
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
+      - key: PADDLE_PRODUCT_ID
+        value: pro_01m1ky8j916ybyacs836dxbz8x
+      - key: PADDLE_PRICE_ID
+        value: pri_01m1kyc2zd313d7a3ssmg02424
+      - key: PADDLE_CLIENT_TOKEN
+        sync: false
+      - key: PADDLE_API_KEY
+        sync: false
+      - key: PADDLE_WEBHOOK_SECRET
+        sync: false
+      - key: PADDLE_CHECKOUT_ENABLED
+        value: "true"
+      - key: PADDLE_ENFORCE_IP_ALLOWLIST
+        value: "false"
