@@ -10,7 +10,8 @@ const SCHEMA = [
     email TEXT NOT NULL UNIQUE COLLATE NOCASE,
     password_hash TEXT NOT NULL,
     password_salt TEXT NOT NULL,
-    created_at INTEGER NOT NULL
+    created_at INTEGER NOT NULL,
+    email_verified_at INTEGER
   )`,
   `CREATE TABLE IF NOT EXISTS sessions (
     token_hash TEXT PRIMARY KEY,
@@ -25,6 +26,7 @@ const SCHEMA = [
     challenge_id TEXT PRIMARY KEY,
     browser_token_hash TEXT NOT NULL UNIQUE,
     user_id TEXT NOT NULL,
+    purpose TEXT NOT NULL DEFAULT 'signup' CHECK(purpose IN ('signup','login')),
     email TEXT NOT NULL COLLATE NOCASE,
     name TEXT NOT NULL,
     password_hash TEXT NOT NULL,
@@ -42,7 +44,7 @@ const SCHEMA = [
     updated_at INTEGER NOT NULL,
     CHECK(expires_at <= hard_expires_at)
   )`,
-  "CREATE UNIQUE INDEX IF NOT EXISTS signup_verifications_user_id ON signup_verifications(user_id)",
+  "CREATE INDEX IF NOT EXISTS signup_verifications_user_id_idx ON signup_verifications(user_id)",
   "CREATE INDEX IF NOT EXISTS signup_verifications_email ON signup_verifications(email,consumed_at,created_at)",
   "CREATE INDEX IF NOT EXISTS signup_verifications_expiry ON signup_verifications(hard_expires_at,consumed_at)",
   `CREATE TABLE IF NOT EXISTS email_verification_sends (
@@ -116,25 +118,30 @@ const SCHEMA = [
 const SQL = {
   ping:"SELECT 1 AS ok",
   userByEmail:"SELECT * FROM users WHERE email = ?",
-  userById:"SELECT id,name,email,created_at FROM users WHERE id = ?",
-  insertUser:"INSERT INTO users(id,name,email,password_hash,password_salt,created_at) VALUES(?,?,?,?,?,?)",
+  userById:"SELECT id,name,email,created_at,email_verified_at FROM users WHERE id = ?",
+  insertUser:"INSERT INTO users(id,name,email,password_hash,password_salt,created_at,email_verified_at) VALUES(?,?,?,?,?,?,?)",
   insertSession:"INSERT INTO sessions(token_hash,user_id,csrf_token,expires_at,created_at) VALUES(?,?,?,?,?)",
-  session:"SELECT s.token_hash,s.csrf_token,s.expires_at,u.id,u.name,u.email,u.created_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?",
+  session:"SELECT s.token_hash,s.csrf_token,s.expires_at,u.id,u.name,u.email,u.created_at,u.email_verified_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?",
   deleteSession:"DELETE FROM sessions WHERE token_hash=?",
   deleteExpired:"DELETE FROM sessions WHERE expires_at<=?",
-  verificationByTokenHash:"SELECT challenge_id,browser_token_hash,user_id,email,name,password_hash,password_salt,code_digest,generation,attempts_used,send_count,last_sent_at,expires_at,hard_expires_at,delivery_state,consumed_at,created_at,updated_at FROM signup_verifications WHERE browser_token_hash=?",
-  verificationByChallenge:"SELECT challenge_id,browser_token_hash,user_id,email,name,password_hash,password_salt,code_digest,generation,attempts_used,send_count,last_sent_at,expires_at,hard_expires_at,delivery_state,consumed_at,created_at,updated_at FROM signup_verifications WHERE challenge_id=?",
-  insertVerification:"INSERT INTO signup_verifications(challenge_id,browser_token_hash,user_id,email,name,password_hash,password_salt,code_digest,generation,attempts_used,send_count,last_sent_at,expires_at,hard_expires_at,delivery_state,consumed_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?,?)",
-  rotateVerification:"UPDATE signup_verifications SET code_digest=?,generation=generation+1,attempts_used=0,send_count=send_count+1,last_sent_at=?,expires_at=?,delivery_state=?,updated_at=? WHERE challenge_id=? AND generation=? AND consumed_at IS NULL",
-  markVerificationDelivery:"UPDATE signup_verifications SET delivery_state=?,updated_at=? WHERE challenge_id=? AND generation=? AND consumed_at IS NULL",
-  claimVerificationAttempt:"UPDATE signup_verifications SET attempts_used=attempts_used+1,updated_at=? WHERE challenge_id=? AND generation=? AND consumed_at IS NULL AND expires_at>? AND hard_expires_at>? AND attempts_used<? RETURNING challenge_id,browser_token_hash,user_id,email,name,password_hash,password_salt,code_digest,generation,attempts_used,send_count,last_sent_at,expires_at,hard_expires_at,delivery_state,consumed_at,created_at,updated_at",
-  consumeVerification:"UPDATE signup_verifications SET code_digest='',password_hash='',password_salt='',delivery_state='consumed',consumed_at=?,updated_at=? WHERE challenge_id=? AND generation=? AND consumed_at IS NULL",
-  completeSignupInsert:"INSERT INTO users(id,name,email,password_hash,password_salt,created_at) SELECT user_id,name,email,password_hash,password_salt,? FROM signup_verifications WHERE challenge_id=? AND generation=? AND consumed_at IS NULL AND expires_at>? AND hard_expires_at>? RETURNING id,name,email,created_at",
-  completeSignupConsume:"UPDATE signup_verifications SET code_digest='',password_hash='',password_salt='',delivery_state='consumed',consumed_at=?,updated_at=? WHERE challenge_id=? AND generation=? AND consumed_at IS NULL AND expires_at>? AND hard_expires_at>?",
-  completeSignupSession:"INSERT INTO sessions(token_hash,user_id,csrf_token,expires_at,created_at) SELECT ?,user_id,?,?,? FROM signup_verifications WHERE changes()=1 AND challenge_id=? AND generation=? AND consumed_at=?",
+  verificationByTokenHash:"SELECT challenge_id,browser_token_hash,user_id,purpose,email,name,password_hash,password_salt,code_digest,generation,attempts_used,send_count,last_sent_at,expires_at,hard_expires_at,delivery_state,consumed_at,created_at,updated_at FROM signup_verifications WHERE browser_token_hash=?",
+  verificationByChallenge:"SELECT challenge_id,browser_token_hash,user_id,purpose,email,name,password_hash,password_salt,code_digest,generation,attempts_used,send_count,last_sent_at,expires_at,hard_expires_at,delivery_state,consumed_at,created_at,updated_at FROM signup_verifications WHERE challenge_id=?",
+  insertVerification:"INSERT INTO signup_verifications(challenge_id,browser_token_hash,user_id,purpose,email,name,password_hash,password_salt,code_digest,generation,attempts_used,send_count,last_sent_at,expires_at,hard_expires_at,delivery_state,consumed_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?,?)",
+  rotateVerification:"UPDATE signup_verifications SET code_digest=?,generation=generation+1,attempts_used=0,send_count=send_count+1,last_sent_at=?,expires_at=?,delivery_state=?,updated_at=? WHERE challenge_id=? AND generation=? AND consumed_at IS NULL RETURNING challenge_id,browser_token_hash,user_id,purpose,email,name,password_hash,password_salt,code_digest,generation,attempts_used,send_count,last_sent_at,expires_at,hard_expires_at,delivery_state,consumed_at,created_at,updated_at",
+  markVerificationDelivery:"UPDATE signup_verifications SET delivery_state=?,updated_at=? WHERE challenge_id=? AND generation=? AND consumed_at IS NULL RETURNING challenge_id",
+  claimVerificationAttempt:"UPDATE signup_verifications SET attempts_used=attempts_used+1,updated_at=? WHERE challenge_id=? AND generation=? AND consumed_at IS NULL AND expires_at>? AND hard_expires_at>? AND attempts_used<? RETURNING challenge_id,browser_token_hash,user_id,purpose,email,name,password_hash,password_salt,code_digest,generation,attempts_used,send_count,last_sent_at,expires_at,hard_expires_at,delivery_state,consumed_at,created_at,updated_at",
+  consumeVerification:"UPDATE signup_verifications SET code_digest='',password_hash='',password_salt='',delivery_state='consumed',consumed_at=?,updated_at=? WHERE challenge_id=? AND generation=? AND consumed_at IS NULL RETURNING challenge_id,browser_token_hash,user_id,purpose,email,name,password_hash,password_salt,code_digest,generation,attempts_used,send_count,last_sent_at,expires_at,hard_expires_at,delivery_state,consumed_at,created_at,updated_at",
+  completeSignupInsert:"INSERT INTO users(id,name,email,password_hash,password_salt,created_at,email_verified_at) SELECT user_id,name,email,password_hash,password_salt,?,? FROM signup_verifications WHERE challenge_id=? AND generation=? AND purpose='signup' AND consumed_at IS NULL AND expires_at>? AND hard_expires_at>? RETURNING id,name,email,created_at,email_verified_at",
+  completeSignupConsume:"UPDATE signup_verifications SET code_digest='',password_hash='',password_salt='',delivery_state='consumed',consumed_at=?,updated_at=? WHERE changes()=1 AND challenge_id=? AND generation=? AND purpose='signup' AND consumed_at IS NULL AND expires_at>? AND hard_expires_at>? RETURNING challenge_id",
+  completeSignupSession:"INSERT INTO sessions(token_hash,user_id,csrf_token,expires_at,created_at) SELECT ?,user_id,?,?,? FROM signup_verifications WHERE changes()=1 AND challenge_id=? AND generation=? AND purpose='signup' AND consumed_at=? RETURNING token_hash",
+  completeLoginVerifyUser:"UPDATE users SET email_verified_at=? WHERE email_verified_at IS NULL AND id=(SELECT user_id FROM signup_verifications WHERE challenge_id=? AND generation=? AND purpose='login' AND consumed_at IS NULL AND expires_at>? AND hard_expires_at>?) RETURNING id,name,email,created_at,email_verified_at",
+  completeLoginConsume:"UPDATE signup_verifications SET code_digest='',password_hash='',password_salt='',delivery_state='consumed',consumed_at=?,updated_at=? WHERE changes()=1 AND challenge_id=? AND generation=? AND purpose='login' AND consumed_at IS NULL AND expires_at>? AND hard_expires_at>? RETURNING challenge_id",
+  completeLoginSession:"INSERT INTO sessions(token_hash,user_id,csrf_token,expires_at,created_at) SELECT ?,user_id,?,?,? FROM signup_verifications WHERE changes()=1 AND challenge_id=? AND generation=? AND purpose='login' AND consumed_at=? RETURNING token_hash",
+  completeLoginDeleteOldSessions:"DELETE FROM sessions WHERE changes()=1 AND user_id=(SELECT user_id FROM signup_verifications WHERE challenge_id=? AND generation=? AND purpose='login' AND consumed_at=?) AND token_hash<>? RETURNING token_hash",
   countVerificationSends:"SELECT COUNT(*) AS send_count FROM email_verification_sends WHERE email_hash=? AND sent_at>=?",
   recordVerificationSend:"INSERT INTO email_verification_sends(send_id,email_hash,challenge_id,generation,sent_at) VALUES(?,?,?,?,?)",
-  claimVerificationSend:"INSERT OR IGNORE INTO email_verification_sends(send_id,email_hash,challenge_id,generation,sent_at) SELECT ?,?,?,?,? WHERE (SELECT COUNT(*) FROM email_verification_sends WHERE email_hash=? AND sent_at>=?)<?",
+  claimVerificationSend:"INSERT OR IGNORE INTO email_verification_sends(send_id,email_hash,challenge_id,generation,sent_at) SELECT ?,?,?,?,? WHERE (SELECT COUNT(*) FROM email_verification_sends WHERE email_hash=? AND sent_at>=?)<? RETURNING send_id",
+  verificationSendByChallengeGeneration:"SELECT send_id,email_hash,challenge_id,generation,sent_at FROM email_verification_sends WHERE challenge_id=? AND generation=?",
   deleteOldVerifications:"DELETE FROM signup_verifications WHERE hard_expires_at<=? OR (consumed_at IS NOT NULL AND consumed_at<=?)",
   deleteOldVerificationSends:"DELETE FROM email_verification_sends WHERE sent_at<?",
   plan:"SELECT plan_json,updated_at FROM plans WHERE user_id=?",
@@ -150,13 +157,13 @@ const SQL = {
   pendingPurchaseForUser:"SELECT transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at FROM paddle_purchases WHERE user_id=? AND price_id=? AND paddle_status IN ('draft','ready','paid') AND completed_at IS NULL AND access_revoked_at IS NULL ORDER BY created_at DESC LIMIT 1",
   completePurchase:"UPDATE paddle_purchases SET customer_id=COALESCE(?,customer_id),paddle_status='completed',completed_at=COALESCE(completed_at,?),updated_at=MAX(updated_at,?) WHERE transaction_id=?",
   updatePurchaseStatus:"UPDATE paddle_purchases SET paddle_status=?,updated_at=? WHERE transaction_id=? AND paddle_status<>'completed' AND updated_at<=?",
-  upsertAdjustment:"INSERT INTO paddle_adjustments(adjustment_id,transaction_id,action,type,status,occurred_at,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(adjustment_id) DO UPDATE SET action=excluded.action,type=excluded.type,status=excluded.status,occurred_at=excluded.occurred_at,updated_at=excluded.updated_at WHERE excluded.occurred_at>=paddle_adjustments.occurred_at",
+  upsertAdjustment:"INSERT INTO paddle_adjustments(adjustment_id,transaction_id,action,type,status,occurred_at,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(adjustment_id) DO UPDATE SET action=excluded.action,type=excluded.type,status=excluded.status,occurred_at=excluded.occurred_at,updated_at=excluded.updated_at WHERE excluded.occurred_at>=paddle_adjustments.occurred_at RETURNING adjustment_id",
   revokePurchase:"UPDATE paddle_purchases SET access_revoked_at=?,revocation_reason=?,updated_at=MAX(updated_at,?) WHERE transaction_id=? AND access_revoked_at IS NULL",
   hasDiscoveryAccess:"SELECT 1 AS active FROM paddle_purchases WHERE user_id=? AND (? IS NULL OR price_id=?) AND paddle_status='completed' AND completed_at IS NOT NULL AND access_revoked_at IS NULL LIMIT 1",
   discoveryAccessSummary:"SELECT COUNT(*) AS purchase_count,COALESCE(SUM(CASE WHEN paddle_status='completed' AND completed_at IS NOT NULL AND access_revoked_at IS NULL THEN 1 ELSE 0 END),0) AS active_purchase_count,COALESCE(SUM(CASE WHEN paddle_status IN ('draft','ready','paid') AND completed_at IS NULL AND access_revoked_at IS NULL THEN 1 ELSE 0 END),0) AS pending_purchase_count,MAX(CASE WHEN paddle_status='completed' AND access_revoked_at IS NULL THEN completed_at ELSE NULL END) AS latest_active_purchase_at,MAX(completed_at) AS latest_completed_at,MAX(access_revoked_at) AS latest_revoked_at FROM paddle_purchases WHERE user_id=? AND (? IS NULL OR price_id=?)",
   adjustmentById:"SELECT adjustment_id,transaction_id,action,type,status,occurred_at,updated_at FROM paddle_adjustments WHERE adjustment_id=?",
   webhookEvent:"SELECT event_id,notification_id,event_type,occurred_at,processed_at FROM paddle_webhook_events WHERE event_id=?",
-  recordWebhookEvent:"INSERT INTO paddle_webhook_events(event_id,notification_id,event_type,occurred_at,processed_at) VALUES(?,?,?,?,?) ON CONFLICT(event_id) DO NOTHING"
+  recordWebhookEvent:"INSERT INTO paddle_webhook_events(event_id,notification_id,event_type,occurred_at,processed_at) VALUES(?,?,?,?,?) ON CONFLICT(event_id) DO NOTHING RETURNING event_id"
 };
 
 function plainValue(value) {
@@ -183,6 +190,52 @@ function plainRow(row,columns) {
 
 function plainRows(rows,columns) { return rows.map((row) => plainRow(row,columns)); }
 
+function localColumnNames(db,table) {
+  return new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((row) => String(row.name)));
+}
+
+function addLocalColumn(db,table,column,declaration) {
+  if (localColumnNames(db,table).has(column)) return;
+  try {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${declaration}`);
+  } catch(error) {
+    // A second process may have completed the same additive migration after
+    // our schema probe. Only suppress the error when the column now exists.
+    if (!localColumnNames(db,table).has(column)) throw error;
+  }
+}
+
+function migrateLocalSchema(db) {
+  addLocalColumn(db,"users","email_verified_at","INTEGER");
+  // Turso/SQLite require a table rebuild to add a CHECK-constrained column to
+  // a populated table. Runtime validation below preserves the invariant while
+  // keeping this upgrade additive for existing verification rows.
+  addLocalColumn(db,"signup_verifications","purpose","TEXT NOT NULL DEFAULT 'signup'");
+  db.exec("DROP INDEX IF EXISTS signup_verifications_user_id");
+  db.exec("CREATE INDEX IF NOT EXISTS signup_verifications_user_id_idx ON signup_verifications(user_id)");
+}
+
+async function tursoColumnNames(client,table) {
+  const result=await client.execute(`PRAGMA table_info(${table})`);
+  return new Set(plainRows(result.rows,result.columns).map((row) => String(row.name)));
+}
+
+async function addTursoColumn(client,table,column,declaration) {
+  if ((await tursoColumnNames(client,table)).has(column)) return;
+  try {
+    await client.execute(`ALTER TABLE ${table} ADD COLUMN ${column} ${declaration}`);
+  } catch(error) {
+    if (!(await tursoColumnNames(client,table)).has(column)) throw error;
+  }
+}
+
+async function migrateTursoSchema(client) {
+  await addTursoColumn(client,"users","email_verified_at","INTEGER");
+  await addTursoColumn(client,"signup_verifications","purpose","TEXT NOT NULL DEFAULT 'signup'");
+  await client.execute("DROP INDEX IF EXISTS signup_verifications_user_id");
+  await client.execute("CREATE INDEX IF NOT EXISTS signup_verifications_user_id_idx ON signup_verifications(user_id)");
+}
+
 function affectedRows(result) {
   return Number(result?.changes ?? result?.rowsAffected ?? 0);
 }
@@ -191,10 +244,13 @@ const CONSUMED_VERIFICATION_RETENTION_MS = 60 * 60 * 1000;
 const VERIFICATION_SEND_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 function verificationInsertArgs(verification) {
+  const purpose=verification.purpose??"signup";
+  if (purpose!=="signup"&&purpose!=="login") throw new TypeError("Verification purpose must be signup or login.");
   return [
     verification.challengeId,
     verification.browserTokenHash,
     verification.userId,
+    purpose,
     verification.email,
     verification.name,
     verification.passwordHash,
@@ -259,6 +315,7 @@ function localStore(root) {
   const db = new DatabaseSync(join(dataDir,"strata.sqlite"),{timeout:5000,enableForeignKeyConstraints:true});
   db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
   for (const statement of SCHEMA) db.exec(statement);
+  migrateLocalSchema(db);
 
   const statements = Object.fromEntries(Object.entries(SQL).map(([name,sql]) => [name,db.prepare(sql)]));
   return {
@@ -266,7 +323,7 @@ function localStore(root) {
     async ping() { return probeConnection(() => statements.ping.get()); },
     async userByEmail(email) { return plainRow(statements.userByEmail.get(email)); },
     async userById(id) { return plainRow(statements.userById.get(id)); },
-    async insertUser(user) { statements.insertUser.run(user.id,user.name,user.email,user.passwordHash,user.passwordSalt,user.createdAt); },
+    async insertUser(user) { statements.insertUser.run(user.id,user.name,user.email,user.passwordHash,user.passwordSalt,user.createdAt,user.emailVerifiedAt??user.email_verified_at??null); },
     async insertSession(session) { statements.insertSession.run(session.tokenHash,session.userId,session.csrfToken,session.expiresAt,session.createdAt); },
     async session(tokenHash,now) { return plainRow(statements.session.get(tokenHash,now)); },
     async deleteSession(tokenHash) { statements.deleteSession.run(tokenHash); },
@@ -277,18 +334,16 @@ function localStore(root) {
       return plainRow(statements.verificationByChallenge.get(verification.challengeId));
     },
     async rotateVerification(challengeId,currentGeneration,rotation) {
-      const result=statements.rotateVerification.run(...verificationRotationArgs(challengeId,currentGeneration,rotation));
-      return affectedRows(result)===1?plainRow(statements.verificationByChallenge.get(challengeId)):null;
+      return plainRow(statements.rotateVerification.get(...verificationRotationArgs(challengeId,currentGeneration,rotation)));
     },
     async markVerificationDelivery(challengeId,generation,state,updatedAt) {
-      return affectedRows(statements.markVerificationDelivery.run(state,updatedAt,challengeId,generation))===1;
+      return Boolean(plainRow(statements.markVerificationDelivery.get(state,updatedAt,challengeId,generation)));
     },
     async claimVerificationAttempt(challengeId,generation,updatedAt,maxAttempts=5) {
       return plainRow(statements.claimVerificationAttempt.get(updatedAt,challengeId,generation,updatedAt,updatedAt,maxAttempts));
     },
     async consumeVerification(challengeId,generation,consumedAt) {
-      const result=statements.consumeVerification.run(consumedAt,consumedAt,challengeId,generation);
-      return affectedRows(result)===1?plainRow(statements.verificationByChallenge.get(challengeId)):null;
+      return plainRow(statements.consumeVerification.get(consumedAt,consumedAt,challengeId,generation));
     },
     async completeSignup(challengeId,generation,createdAt,session) {
       if (!session||!session.tokenHash||!session.csrfToken) throw new TypeError("A session is required to complete signup.");
@@ -296,16 +351,46 @@ function localStore(root) {
       try {
         db.exec("BEGIN IMMEDIATE");
         transactionOpen=true;
-        const user=plainRow(statements.completeSignupInsert.get(createdAt,challengeId,generation,createdAt,createdAt));
+        const user=plainRow(statements.completeSignupInsert.get(createdAt,createdAt,challengeId,generation,createdAt,createdAt));
         if (!user) {
           db.exec("ROLLBACK");
           transactionOpen=false;
           return null;
         }
-        const consumed=statements.completeSignupConsume.run(createdAt,createdAt,challengeId,generation,createdAt,createdAt);
-        if (affectedRows(consumed)!==1) throw new Error("Verification could not be consumed atomically.");
-        const insertedSession=statements.completeSignupSession.run(session.tokenHash,session.csrfToken,session.expiresAt,session.createdAt,challengeId,generation,createdAt);
-        if (affectedRows(insertedSession)!==1) throw new Error("Verification session could not be created atomically.");
+        const consumed=plainRow(statements.completeSignupConsume.get(createdAt,createdAt,challengeId,generation,createdAt,createdAt));
+        if (!consumed) throw new Error("Verification could not be consumed atomically.");
+        const insertedSession=plainRow(statements.completeSignupSession.get(session.tokenHash,session.csrfToken,session.expiresAt,session.createdAt,challengeId,generation,createdAt));
+        if (!insertedSession) throw new Error("Verification session could not be created atomically.");
+        db.exec("COMMIT");
+        transactionOpen=false;
+        return user;
+      } catch(error) {
+        if (transactionOpen) {
+          try { db.exec("ROLLBACK"); } catch { /* Preserve the original transaction error. */ }
+        }
+        throw error;
+      }
+    },
+    async completeLoginVerification(challengeId,generation,verifiedAt,session) {
+      if (!session||!session.tokenHash||!session.csrfToken) throw new TypeError("A session is required to complete login verification.");
+      let transactionOpen=false;
+      try {
+        db.exec("BEGIN IMMEDIATE");
+        transactionOpen=true;
+        const user=plainRow(statements.completeLoginVerifyUser.get(verifiedAt,challengeId,generation,verifiedAt,verifiedAt));
+        if (!user) {
+          db.exec("ROLLBACK");
+          transactionOpen=false;
+          return null;
+        }
+        const consumed=plainRow(statements.completeLoginConsume.get(verifiedAt,verifiedAt,challengeId,generation,verifiedAt,verifiedAt));
+        if (!consumed) throw new Error("Login verification could not be consumed atomically.");
+        const insertedSession=plainRow(statements.completeLoginSession.get(session.tokenHash,session.csrfToken,session.expiresAt,session.createdAt,challengeId,generation,verifiedAt));
+        if (!insertedSession) throw new Error("Verified login session could not be created atomically.");
+        // Only the freshly verified session should survive. The changes()
+        // guard binds this cleanup to the session insert above, so a stale
+        // sibling challenge cannot delete the winning session.
+        statements.completeLoginDeleteOldSessions.all(challengeId,generation,verifiedAt,session.tokenHash);
         db.exec("COMMIT");
         transactionOpen=false;
         return user;
@@ -323,7 +408,10 @@ function localStore(root) {
       statements.recordVerificationSend.run(...verificationSendArgs(send));
     },
     async claimVerificationSend(send,since,maxSends) {
-      return affectedRows(statements.claimVerificationSend.run(...verificationSendClaimArgs(send,since,maxSends)))===1;
+      return Boolean(plainRow(statements.claimVerificationSend.get(...verificationSendClaimArgs(send,since,maxSends))));
+    },
+    async verificationSendByChallengeGeneration(challengeId,generation) {
+      return plainRow(statements.verificationSendByChallengeGeneration.get(challengeId,generation));
     },
     async deleteOldVerificationData(now,sendBefore=now-VERIFICATION_SEND_RETENTION_MS) {
       const consumedBefore=now-CONSUMED_VERIFICATION_RETENTION_MS;
@@ -354,8 +442,7 @@ function localStore(root) {
       return plainRow(statements.purchaseByTransaction.get(transactionId));
     },
     async upsertAdjustment(adjustment) {
-      const result=statements.upsertAdjustment.run(adjustment.adjustmentId,adjustment.transactionId,adjustment.action,adjustment.type||null,adjustment.status,adjustment.occurredAt,adjustment.updatedAt);
-      return affectedRows(result)>0;
+      return Boolean(plainRow(statements.upsertAdjustment.get(adjustment.adjustmentId,adjustment.transactionId,adjustment.action,adjustment.type||null,adjustment.status,adjustment.occurredAt,adjustment.updatedAt)));
     },
     async adjustmentById(adjustmentId) { return plainRow(statements.adjustmentById.get(adjustmentId)); },
     async revokePurchase(transactionId,reason,revokedAt,updatedAt) {
@@ -366,7 +453,7 @@ function localStore(root) {
     async discoveryAccessSummary(userId,priceId=null) { return accessSummary(plainRow(statements.discoveryAccessSummary.get(userId,priceId,priceId))); },
     async webhookEvent(eventId) { return plainRow(statements.webhookEvent.get(eventId)); },
     async recordWebhookEvent(event) {
-      return affectedRows(statements.recordWebhookEvent.run(event.eventId,event.notificationId||null,event.eventType,event.occurredAt,event.processedAt))>0;
+      return Boolean(plainRow(statements.recordWebhookEvent.get(event.eventId,event.notificationId||null,event.eventType,event.occurredAt,event.processedAt)));
     },
     async close() { db.close(); }
   };
@@ -391,6 +478,7 @@ async function tursoStore(url,authToken) {
     throw new Error("Turso foreign key enforcement could not be enabled.");
   }
   for (const statement of SCHEMA) await client.execute(statement);
+  await migrateTursoSchema(client);
 
   async function first(sql,args=[]) {
     const result = await client.execute({sql,args});
@@ -412,7 +500,7 @@ async function tursoStore(url,authToken) {
     ping:() => probeConnection(() => client.execute(SQL.ping)),
     userByEmail:(email) => first(SQL.userByEmail,[email]),
     userById:(id) => first(SQL.userById,[id]),
-    insertUser:(user) => run(SQL.insertUser,[user.id,user.name,user.email,user.passwordHash,user.passwordSalt,user.createdAt]),
+    insertUser:(user) => run(SQL.insertUser,[user.id,user.name,user.email,user.passwordHash,user.passwordSalt,user.createdAt,user.emailVerifiedAt??user.email_verified_at??null]),
     insertSession:(session) => run(SQL.insertSession,[session.tokenHash,session.userId,session.csrfToken,session.expiresAt,session.createdAt]),
     session:(tokenHash,now) => first(SQL.session,[tokenHash,now]),
     deleteSession:(tokenHash) => run(SQL.deleteSession,[tokenHash]),
@@ -424,10 +512,11 @@ async function tursoStore(url,authToken) {
     },
     async rotateVerification(challengeId,currentGeneration,rotation) {
       const result=await run(SQL.rotateVerification,verificationRotationArgs(challengeId,currentGeneration,rotation));
-      return affectedRows(result)===1?first(SQL.verificationByChallenge,[challengeId]):null;
+      return plainRow(result.rows?.[0],result.columns);
     },
     async markVerificationDelivery(challengeId,generation,state,updatedAt) {
-      return affectedRows(await run(SQL.markVerificationDelivery,[state,updatedAt,challengeId,generation]))===1;
+      const result=await run(SQL.markVerificationDelivery,[state,updatedAt,challengeId,generation]);
+      return Boolean(plainRow(result.rows?.[0],result.columns));
     },
     async claimVerificationAttempt(challengeId,generation,updatedAt,maxAttempts=5) {
       const result=await run(SQL.claimVerificationAttempt,[updatedAt,challengeId,generation,updatedAt,updatedAt,maxAttempts]);
@@ -435,21 +524,37 @@ async function tursoStore(url,authToken) {
     },
     async consumeVerification(challengeId,generation,consumedAt) {
       const result=await run(SQL.consumeVerification,[consumedAt,consumedAt,challengeId,generation]);
-      return affectedRows(result)===1?first(SQL.verificationByChallenge,[challengeId]):null;
+      return plainRow(result.rows?.[0],result.columns);
     },
     async completeSignup(challengeId,generation,createdAt,session) {
       if (!session||!session.tokenHash||!session.csrfToken) throw new TypeError("A session is required to complete signup.");
       const verification=await first(SQL.verificationByChallenge,[challengeId]);
       if (!verification||Number(verification.generation)!==Number(generation)||verification.consumed_at!=null) return null;
       const results=await client.batch([
-        {sql:SQL.completeSignupInsert,args:[createdAt,challengeId,generation,createdAt,createdAt]},
+        {sql:SQL.completeSignupInsert,args:[createdAt,createdAt,challengeId,generation,createdAt,createdAt]},
         {sql:SQL.completeSignupConsume,args:[createdAt,createdAt,challengeId,generation,createdAt,createdAt]},
         {sql:SQL.completeSignupSession,args:[session.tokenHash,session.csrfToken,session.expiresAt,session.createdAt,challengeId,generation,createdAt]}
       ],"write");
       const user=plainRow(results[0]?.rows?.[0],results[0]?.columns);
-      if (affectedRows(results[0])!==1||!user) return null;
-      if (affectedRows(results[1])!==1) throw new Error("Verification could not be consumed atomically.");
-      if (affectedRows(results[2])!==1) throw new Error("Verification session could not be created atomically.");
+      if (!user) return null;
+      if (!plainRow(results[1]?.rows?.[0],results[1]?.columns)) throw new Error("Verification could not be consumed atomically.");
+      if (!plainRow(results[2]?.rows?.[0],results[2]?.columns)) throw new Error("Verification session could not be created atomically.");
+      return user;
+    },
+    async completeLoginVerification(challengeId,generation,verifiedAt,session) {
+      if (!session||!session.tokenHash||!session.csrfToken) throw new TypeError("A session is required to complete login verification.");
+      const verification=await first(SQL.verificationByChallenge,[challengeId]);
+      if (!verification||verification.purpose!=="login"||Number(verification.generation)!==Number(generation)||verification.consumed_at!=null) return null;
+      const results=await client.batch([
+        {sql:SQL.completeLoginVerifyUser,args:[verifiedAt,challengeId,generation,verifiedAt,verifiedAt]},
+        {sql:SQL.completeLoginConsume,args:[verifiedAt,verifiedAt,challengeId,generation,verifiedAt,verifiedAt]},
+        {sql:SQL.completeLoginSession,args:[session.tokenHash,session.csrfToken,session.expiresAt,session.createdAt,challengeId,generation,verifiedAt]},
+        {sql:SQL.completeLoginDeleteOldSessions,args:[challengeId,generation,verifiedAt,session.tokenHash]}
+      ],"write");
+      const user=plainRow(results[0]?.rows?.[0],results[0]?.columns);
+      if (!user) return null;
+      if (!plainRow(results[1]?.rows?.[0],results[1]?.columns)) throw new Error("Login verification could not be consumed atomically.");
+      if (!plainRow(results[2]?.rows?.[0],results[2]?.columns)) throw new Error("Verified login session could not be created atomically.");
       return user;
     },
     async countVerificationSends(emailHash,since) {
@@ -457,8 +562,10 @@ async function tursoStore(url,authToken) {
     },
     recordVerificationSend:(send) => run(SQL.recordVerificationSend,verificationSendArgs(send)),
     async claimVerificationSend(send,since,maxSends) {
-      return affectedRows(await run(SQL.claimVerificationSend,verificationSendClaimArgs(send,since,maxSends)))===1;
+      const result=await run(SQL.claimVerificationSend,verificationSendClaimArgs(send,since,maxSends));
+      return Boolean(plainRow(result.rows?.[0],result.columns));
     },
+    verificationSendByChallengeGeneration:(challengeId,generation) => first(SQL.verificationSendByChallengeGeneration,[challengeId,generation]),
     async deleteOldVerificationData(now,sendBefore=now-VERIFICATION_SEND_RETENTION_MS) {
       const consumedBefore=now-CONSUMED_VERIFICATION_RETENTION_MS;
       const results=await client.batch([
@@ -491,7 +598,7 @@ async function tursoStore(url,authToken) {
     },
     async upsertAdjustment(adjustment) {
       const result=await run(SQL.upsertAdjustment,[adjustment.adjustmentId,adjustment.transactionId,adjustment.action,adjustment.type||null,adjustment.status,adjustment.occurredAt,adjustment.updatedAt]);
-      return affectedRows(result)>0;
+      return Boolean(plainRow(result.rows?.[0],result.columns));
     },
     adjustmentById:(adjustmentId) => first(SQL.adjustmentById,[adjustmentId]),
     async revokePurchase(transactionId,reason,revokedAt,updatedAt) {
@@ -503,7 +610,7 @@ async function tursoStore(url,authToken) {
     webhookEvent:(eventId) => first(SQL.webhookEvent,[eventId]),
     async recordWebhookEvent(event) {
       const result=await run(SQL.recordWebhookEvent,[event.eventId,event.notificationId||null,event.eventType,event.occurredAt,event.processedAt]);
-      return affectedRows(result)>0;
+      return Boolean(plainRow(result.rows?.[0],result.columns));
     },
     async close() { client.close(); }
   };

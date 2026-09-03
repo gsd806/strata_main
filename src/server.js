@@ -152,6 +152,13 @@ function accountStorageUnavailable(error) {
   return Object.assign(new Error("Account storage is temporarily unavailable. Please try again."),{status:503,cause:error});
 }
 
+function authAudit(event,{purpose="",email=""}={}) {
+  const entry={event:String(event),at:new Date().toISOString()};
+  if (purpose==="signup"||purpose==="login") entry.purpose=purpose;
+  if (email) entry.email=maskEmail(email);
+  console.info(`Auth audit ${JSON.stringify(entry)}`);
+}
+
 function cookieMap(header="") {
   const cookies=Object.create(null);
   for (const part of String(header||"").split(";")) {
@@ -171,7 +178,11 @@ function cookieMap(header="") {
 async function sessionFor(req) {
   const token = cookieMap(req.headers.cookie)[SESSION_COOKIE];
   if (!token || token.length > 200) return null;
-  return await store.session(hashToken(token),Date.now()) || null;
+  const session=await store.session(hashToken(token),Date.now()) || null;
+  // Once verification is requested, configuration mistakes must fail closed:
+  // a missing provider key must never make an unverified session valid again.
+  if (session&&EMAIL_CONFIG.requestedEnabled&&!Number(session.email_verified_at)) return null;
+  return session;
 }
 
 function sessionCookie(token,maxAge=SESSION_SECONDS) {
@@ -538,6 +549,7 @@ function verificationPublic(row,now=Date.now()) {
       : "pending";
   return {
     verificationRequired:true,
+    purpose:row.purpose==="login"?"login":"signup",
     maskedEmail:maskEmail(row.email),
     expiresAt:Number(row.expires_at),
     resendAfter:Math.max(now,Number(row.last_sent_at)+VERIFICATION_RESEND_MS),
@@ -585,6 +597,7 @@ async function deliverVerification(row,code) {
       code,
       challengeId:row.challenge_id,
       generation:Number(row.generation),
+      purpose:row.purpose==="login"?"login":"signup",
       expiresInMinutes:Math.max(1,Math.ceil(remainingMs/60000))
     });
     await store.markVerificationDelivery(row.challenge_id,Number(row.generation),"sent",Date.now());
@@ -596,29 +609,20 @@ async function deliverVerification(row,code) {
   }
 }
 
-async function beginAccountRegistration(input) {
-  if (!EMAIL_CONFIG.requestedEnabled) {
-    if (!directSignupAllowed(EMAIL_CONFIG,process.env.NODE_ENV)) {
-      throw verificationError("Email verification is temporarily unavailable. Please try again later.",503,"EMAIL_VERIFICATION_UNAVAILABLE");
-    }
-    return {verified:true,...await registerAccountDirect(input)};
-  }
-  ensureVerificationDeliveryConfigured();
-  const {name,email,password}=validateRegistration(input);
+async function createVerificationChallenge({purpose,userId,email,name,passwordHash="",passwordSalt=""}) {
   const code=generateVerificationCode();
   const challengeId=randomUUID();
   const signupToken=randomBytes(32).toString("base64url");
-  const passwordSalt=randomBytes(16).toString("base64");
-  const pendingPasswordHash=await passwordHash(password,passwordSalt);
   const now=Date.now();
   const generation=1;
   const row={
     challengeId,
     browserTokenHash:hashToken(signupToken),
-    userId:randomUUID(),
+    purpose,
+    userId,
     email,
     name,
-    passwordHash:pendingPasswordHash,
+    passwordHash,
     passwordSalt,
     codeDigest:verificationCodeDigest(EMAIL_CONFIG,{challengeId,generation,email,code}),
     generation,
@@ -631,19 +635,46 @@ async function beginAccountRegistration(input) {
     createdAt:now,
     updatedAt:now
   };
+  const reservation=await claimVerificationSendSlot({email:row.email,challengeId,generation,sentAt:now});
+  if (!reservation.claimed) throw verificationEmailLimit();
+  await store.insertVerification(row);
+  const stored=await store.verificationByTokenHash(row.browserTokenHash);
   try {
-    const reservation=await claimVerificationSendSlot({email:row.email,challengeId,generation,sentAt:now});
-    if (!reservation.claimed) throw verificationEmailLimit();
-    await store.insertVerification(row);
-    const stored=await store.verificationByTokenHash(row.browserTokenHash);
-    try {
-      await deliverVerification(stored,code);
-    } catch(error) {
-      error.signupToken=signupToken;
-      error.verification=verificationPublic(stored);
-      throw error;
+    await deliverVerification(stored,code);
+  } catch(error) {
+    error.signupToken=signupToken;
+    error.verification=verificationPublic(stored);
+    throw error;
+  }
+  authAudit("verification_challenge_sent",{purpose,email});
+  return {signupToken,verification:verificationPublic(stored)};
+}
+
+async function beginAccountRegistration(input) {
+  if (!EMAIL_CONFIG.requestedEnabled) {
+    if (!directSignupAllowed(EMAIL_CONFIG,process.env.NODE_ENV,process.env.ALLOW_UNVERIFIED_SIGNUP_FOR_TESTS)) {
+      throw verificationError("Email verification is temporarily unavailable. Please try again later.",503,"EMAIL_VERIFICATION_UNAVAILABLE");
     }
-    return {signupToken,verification:verificationPublic(stored)};
+    authAudit("test_only_unverified_signup",{purpose:"signup",email:normalizeEmail(input?.email)});
+    return {verified:true,...await registerAccountDirect(input)};
+  }
+  ensureVerificationDeliveryConfigured();
+  const {name,email,password}=validateRegistration(input);
+  try {
+    if (await store.userByEmail(email)) {
+      authAudit("signup_existing_email_rejected",{purpose:"signup",email});
+      throw Object.assign(new Error("An account with that email already exists."),{status:409,code:"ACCOUNT_EXISTS"});
+    }
+    const passwordSalt=randomBytes(16).toString("base64");
+    const pendingPasswordHash=await passwordHash(password,passwordSalt);
+    return await createVerificationChallenge({
+      purpose:"signup",
+      userId:randomUUID(),
+      email,
+      name,
+      passwordHash:pendingPasswordHash,
+      passwordSalt
+    });
   } catch(error) {
     if (error.status) throw error;
     throw accountStorageUnavailable(error);
@@ -665,12 +696,28 @@ async function verifyAccountEmail(req,input) {
   const code=String(input.code||"").trim();
   const row=await verificationForRequest(req);
   const now=Date.now();
-  if (!usableVerification(row,now)||Number(row.expires_at)<=now) {
-    throw verificationError("That verification code is invalid or expired. Request a new code and try again.",400,"INVALID_VERIFICATION_CODE");
+  if (!usableVerification(row,now)) {
+    throw verificationError("Your verification request expired. Create the account again to receive a new code.",410,"VERIFICATION_EXPIRED",{clearSignup:true});
+  }
+  if (Number(row.expires_at)<=now) {
+    throw verificationError("That verification code expired. Request a new code and try again.",410,"VERIFICATION_CODE_EXPIRED",{verification:verificationPublic(row,now)});
   }
   const attempt=await store.claimVerificationAttempt(row.challenge_id,Number(row.generation),now,VERIFICATION_MAX_ATTEMPTS);
   if (!attempt) {
-    throw verificationError("That verification code is invalid or expired. Request a new code and try again.",400,"INVALID_VERIFICATION_CODE",{attemptsRemaining:0});
+    const current=await verificationForRequest(req),checkedAt=Date.now();
+    if (!usableVerification(current,checkedAt)) {
+      throw verificationError("Your verification request expired. Create the account again to receive a new code.",410,"VERIFICATION_EXPIRED",{clearSignup:true});
+    }
+    if (Number(current.generation)!==Number(row.generation)) {
+      throw verificationError("A newer verification code was sent. Use the most recent code from your email.",409,"VERIFICATION_CODE_REPLACED",{verification:verificationPublic(current,checkedAt)});
+    }
+    if (Number(current.expires_at)<=checkedAt) {
+      throw verificationError("That verification code expired. Request a new code and try again.",410,"VERIFICATION_CODE_EXPIRED",{verification:verificationPublic(current,checkedAt)});
+    }
+    throw verificationError("That verification code is invalid or expired. Request a new code and try again.",400,"INVALID_VERIFICATION_CODE",{
+      attemptsRemaining:Math.max(0,VERIFICATION_MAX_ATTEMPTS-Number(current.attempts_used||0)),
+      verification:verificationPublic(current,checkedAt)
+    });
   }
   const remaining=Math.max(0,VERIFICATION_MAX_ATTEMPTS-Number(attempt.attempts_used));
   if (!/^[0-9]{6}$/.test(code)) {
@@ -680,11 +727,23 @@ async function verifyAccountEmail(req,input) {
   if (!safeDigestEqual(actual,attempt.code_digest)) {
     throw verificationError("That verification code is invalid or expired. Request a new code and try again.",400,"INVALID_VERIFICATION_CODE",{attemptsRemaining:remaining});
   }
+  const purpose=attempt.purpose==="login"?"login":"signup";
+  const preparedSession=prepareSession(attempt.user_id,now);
+  if (purpose==="login") {
+    let user;
+    try {
+      user=await store.completeLoginVerification(attempt.challenge_id,Number(attempt.generation),now,preparedSession.record);
+    } catch(error) {
+      throw accountStorageUnavailable(error);
+    }
+    if (!user) throw verificationError("That verification code is invalid or expired. Request a new code and try again.",400,"INVALID_VERIFICATION_CODE");
+    authAudit("verification_completed",{purpose,email:attempt.email});
+    return {purpose,session:{token:preparedSession.token,csrfToken:preparedSession.csrfToken},user};
+  }
   if (await store.userByEmail(attempt.email)) {
     await store.consumeVerification(attempt.challenge_id,Number(attempt.generation),now);
     throw verificationError("An account with that email already exists. Sign in instead.",409,"ACCOUNT_EXISTS",{clearSignup:true});
   }
-  const preparedSession=prepareSession(attempt.user_id,now);
   let user;
   try { user=await store.completeSignup(attempt.challenge_id,Number(attempt.generation),now,preparedSession.record); }
   catch(error) {
@@ -697,7 +756,8 @@ async function verifyAccountEmail(req,input) {
     throw accountStorageUnavailable(error);
   }
   if (!user) throw verificationError("That verification code is invalid or expired. Request a new code and try again.",400,"INVALID_VERIFICATION_CODE");
-  return {session:{token:preparedSession.token,csrfToken:preparedSession.csrfToken},user};
+  authAudit("verification_completed",{purpose,email:attempt.email});
+  return {purpose,session:{token:preparedSession.token,csrfToken:preparedSession.csrfToken},user};
 }
 
 async function resendAccountVerification(req) {
@@ -714,16 +774,27 @@ async function resendAccountVerification(req) {
   const code=generateVerificationCode();
   const nextGeneration=Number(row.generation)+1;
   const reservation=await claimVerificationSendSlot({email:row.email,challengeId:row.challenge_id,generation:nextGeneration,sentAt:now});
-  if (!reservation.claimed) {
+  let mayRotate=reservation.claimed;
+  if (!mayRotate) {
     const current=await verificationForRequest(req),checkedAt=Date.now();
     if (usableVerification(current,checkedAt)) {
-      const emailHash=verificationEmailHash(EMAIL_CONFIG,row.email);
-      const sends=await store.countVerificationSends(emailHash,checkedAt-VERIFICATION_SEND_WINDOW_MS);
-      if (sends>=VERIFICATION_EMAIL_SENDS_PER_HOUR) throw verificationEmailLimit();
-      const retryAfter=Math.max(1,Math.ceil((Number(current.last_sent_at)+VERIFICATION_RESEND_MS-checkedAt)/1000));
-      throw verificationError("Another verification-code request is already being processed. Please wait before trying again.",429,"VERIFICATION_COOLDOWN",{retryAfter,verification:verificationPublic(current,checkedAt)});
+      // A process may have stopped after reserving this generation but before
+      // rotating the challenge. Reuse that durable reservation. During a live
+      // concurrent resend both requests may reach this point, but the guarded
+      // rotation below still permits only one winner and therefore one email.
+      const reserved=Number(current.generation)===Number(row.generation)
+        ? await store.verificationSendByChallengeGeneration(row.challenge_id,nextGeneration)
+        : null;
+      if (reserved) mayRotate=true;
+      else {
+        const emailHash=verificationEmailHash(EMAIL_CONFIG,row.email);
+        const sends=await store.countVerificationSends(emailHash,checkedAt-VERIFICATION_SEND_WINDOW_MS);
+        if (sends>=VERIFICATION_EMAIL_SENDS_PER_HOUR) throw verificationEmailLimit();
+        const retryAfter=Math.max(1,Math.ceil((Number(current.last_sent_at)+VERIFICATION_RESEND_MS-checkedAt)/1000));
+        throw verificationError("Another verification-code request is already being processed. Please wait before trying again.",429,"VERIFICATION_COOLDOWN",{retryAfter,verification:verificationPublic(current,checkedAt)});
+      }
     }
-    throw verificationError("Your verification request expired. Create the account again to receive a new code.",410,"VERIFICATION_EXPIRED",{clearSignup:true});
+    if (!mayRotate) throw verificationError("Your verification request expired. Create the account again to receive a new code.",410,"VERIFICATION_EXPIRED",{clearSignup:true});
   }
   const updated=await store.rotateVerification(row.challenge_id,Number(row.generation),{
     codeDigest:verificationCodeDigest(EMAIL_CONFIG,{challengeId:row.challenge_id,generation:nextGeneration,email:row.email,code}),
@@ -749,6 +820,15 @@ async function authenticateAccount(input) {
   try {
     const user=await store.userByEmail(email);
     if (!user || !await passwordMatches(password,user)) throw Object.assign(new Error("Email or password is incorrect."),{status:401});
+    if (EMAIL_CONFIG.requestedEnabled&&!Number(user.email_verified_at)) {
+      ensureVerificationDeliveryConfigured();
+      return await createVerificationChallenge({
+        purpose:"login",
+        userId:user.id,
+        email:user.email,
+        name:user.name
+      });
+    }
     return {session:await createSession(user.id),user};
   } catch(error) {
     if (error.status) throw error;
@@ -776,7 +856,7 @@ function accountErrorLocation(mode,message,requestedNext) {
   return `/account.html?${params}`;
 }
 
-function verificationLocation(requestedNext,{error="",sent=false}={}) {
+function verificationLocation(requestedNext,{error="",sent=false,purpose=""}={}) {
   const params=new URLSearchParams();
   const next=safeAccountNext(requestedNext);
   if (next.startsWith("/planner.html")) {
@@ -785,6 +865,7 @@ function verificationLocation(requestedNext,{error="",sent=false}={}) {
     if (add) params.set("add",add);
   } else if (next==="/pricing") params.set("next","pricing");
   else if (next==="/discover.html") params.set("next","discover");
+  if (purpose==="login"||purpose==="signup") params.set("purpose",purpose);
   if (error) params.set("error",error);
   if (sent) params.set("sent","1");
   return `/verify-email.html${params.size?`?${params}`:""}`;
@@ -840,6 +921,7 @@ function safeVerificationPageError(value) {
   if (!message) return "";
   const known=new Map([
     ["That verification code is invalid or expired. Request a new code and try again.","That code is incorrect or expired. Check the email or request another code."],
+    ["That verification code expired. Request a new code and try again.","That code expired. Request another code below."],
     ["Your verification request expired. Create the account again to receive a new code.","Your verification request expired. Return to signup to begin again."],
     ["Please wait before requesting another verification code.","Please wait before requesting another code."],
     ["This verification request has reached its resend limit. Create the account again to continue.","This request reached its resend limit. Return to signup to begin again."],
@@ -865,6 +947,9 @@ function renderVerificationFallbacks(html,url) {
   const next=requestedPageNext(url);
   let output=replaceInputValue(html,"verificationNext",next);
   output=replaceInputValue(output,"resendNext",next);
+  const purpose=url.searchParams.get("purpose")==="login"?"login":"signup";
+  output=replaceInputValue(output,"verificationPurpose",purpose);
+  output=replaceInputValue(output,"resendPurpose",purpose);
   let message=safeVerificationPageError(url.searchParams.get("error"));
   if (!message&&url.searchParams.get("delivery")==="failed") {
     message="We could not send the verification email. Please wait a moment, then request another code.";
@@ -884,14 +969,20 @@ async function handleAuthForm(req,res,url) {
   const routes=new Set(["/auth/signup","/auth/login","/auth/verify-email","/auth/resend-verification"]);
   if (!routes.has(url.pathname)) { json(res,404,{error:"Account route not found."}); return; }
   if (req.method!=="POST") { json(res,405,{error:"Method not allowed."},{Allow:"POST"}); return; }
-  if (!trustedAuthOrigin(req)) { redirect(res,"/account.html?error="+encodeURIComponent("Cross-origin request rejected.")); return; }
-  if (!rateAllowed(req,"auth")) { redirect(res,"/account.html?error="+encodeURIComponent("Too many attempts. Try again later.")); return; }
   const input=await bodyForm(req);
+  const verificationAction=url.pathname==="/auth/verify-email"||url.pathname==="/auth/resend-verification";
+  const rejectedLocation=(message)=>verificationAction
+    ? verificationLocation(input.next,{error:message,purpose:input.purpose})
+    : accountErrorLocation(url.pathname==="/auth/login"?"login":"signup",message,input.next);
+  if (!trustedAuthOrigin(req)) { redirect(res,rejectedLocation("Cross-origin request rejected.")); return; }
+  const rateKind=url.pathname==="/auth/verify-email"?"verify-email":url.pathname==="/auth/resend-verification"?"resend-verification":"auth";
+  const rateMaximum=rateKind==="verify-email"?12:rateKind==="resend-verification"?6:10;
+  if (!rateAllowed(req,rateKind,rateMaximum)) { redirect(res,rejectedLocation("Too many attempts. Try again later.")); return; }
   try {
     if (url.pathname==="/auth/signup") {
       const result=await beginAccountRegistration(input);
       if (result.verification) {
-        redirect(res,verificationLocation(input.next),{"Set-Cookie":signupCookie(result.signupToken)});
+        redirect(res,verificationLocation(input.next,{purpose:result.verification.purpose}),{"Set-Cookie":signupCookie(result.signupToken)});
       } else {
         redirect(res,safeAccountNext(input.next),{"Set-Cookie":sessionCookie(result.session.token)});
       }
@@ -899,7 +990,11 @@ async function handleAuthForm(req,res,url) {
     }
     if (url.pathname==="/auth/login") {
       const result=await authenticateAccount(input);
-      redirect(res,safeAccountNext(input.next),{"Set-Cookie":sessionCookie(result.session.token)});
+      if (result.verification) {
+        redirect(res,verificationLocation(input.next,{purpose:result.verification.purpose}),{"Set-Cookie":signupCookie(result.signupToken)});
+      } else {
+        redirect(res,safeAccountNext(input.next),{"Set-Cookie":sessionCookie(result.session.token)});
+      }
       return;
     }
     if (url.pathname==="/auth/verify-email") {
@@ -907,17 +1002,17 @@ async function handleAuthForm(req,res,url) {
       redirect(res,safeAccountNext(input.next),{"Set-Cookie":[sessionCookie(result.session.token),signupCookie("",0)]});
       return;
     }
-    await resendAccountVerification(req);
-    redirect(res,verificationLocation(input.next,{sent:true}));
+    const verification=await resendAccountVerification(req);
+    redirect(res,verificationLocation(input.next,{sent:true,purpose:verification.purpose||input.purpose}));
   } catch(error) {
     const message=error.status?error.message:"Unable to complete the account request.";
     if (!error.status) console.error(error);
     const headers={};
     if (error.signupToken) headers["Set-Cookie"]=signupCookie(error.signupToken);
     if (error.clearSignup) headers["Set-Cookie"]=signupCookie("",0);
-    if (url.pathname==="/auth/signup"&&error.signupToken) redirect(res,verificationLocation(input.next,{error:message}),headers);
+    if ((url.pathname==="/auth/signup"||url.pathname==="/auth/login")&&error.signupToken) redirect(res,verificationLocation(input.next,{error:message,purpose:error.verification?.purpose||input.purpose}),headers);
     else if (url.pathname==="/auth/verify-email"&&error.code==="ACCOUNT_EXISTS") redirect(res,accountErrorLocation("login",message,input.next),headers);
-    else if (url.pathname==="/auth/verify-email"||url.pathname==="/auth/resend-verification") redirect(res,verificationLocation(input.next,{error:message}),headers);
+    else if (url.pathname==="/auth/verify-email"||url.pathname==="/auth/resend-verification") redirect(res,verificationLocation(input.next,{error:message,purpose:error.verification?.purpose||input.purpose}),headers);
     else redirect(res,accountErrorLocation(url.pathname==="/auth/signup"?"signup":"login",message,input.next),headers);
   }
 }
@@ -1058,13 +1153,23 @@ async function handleApi(req,res,url) {
   if (url.pathname === "/api/login" && req.method === "POST") {
     if (!trustedAuthOrigin(req)) { json(res,403,{error:"Cross-origin request rejected."}); return; }
     if (!rateAllowed(req,"auth")) { json(res,429,{error:"Too many attempts. Try again later."}); return; }
-    const result=await authenticateAccount(await bodyJson(req));
-    json(res,200,{user:await userPayload(result.user)},{"Set-Cookie":sessionCookie(result.session.token)});
+    try {
+      const result=await authenticateAccount(await bodyJson(req));
+      if (result.verification) {
+        json(res,202,result.verification,{"Set-Cookie":signupCookie(result.signupToken)});
+      } else {
+        json(res,200,{user:await userPayload(result.user)},{"Set-Cookie":sessionCookie(result.session.token)});
+      }
+    } catch(error) {
+      if (!error.status) throw error;
+      if (error.signupToken||error.verification||/^(?:EMAIL_|VERIFICATION_)/.test(String(error.code||""))) sendVerificationApiError(res,error);
+      else json(res,error.status,{error:error.message,code:error.code||"AUTHENTICATION_FAILED"});
+    }
     return;
   }
   if (url.pathname === "/api/verification-status" && req.method === "GET") {
     const row=await verificationForRequest(req),now=Date.now();
-    if (!usableVerification(row,now)) { json(res,200,{active:false}); return; }
+    if (!usableVerification(row,now)) { json(res,200,{active:false,...(row?{purpose:row.purpose==="login"?"login":"signup"}:{})}); return; }
     json(res,200,{active:true,...verificationPublic(row,now)}); return;
   }
   if (url.pathname === "/api/verify-email" && req.method === "POST") {
@@ -1072,7 +1177,7 @@ async function handleApi(req,res,url) {
     if (!rateAllowed(req,"verify-email",12)) { json(res,429,{error:"Too many attempts. Try again later.",code:"VERIFICATION_RATE_LIMIT"}); return; }
     try {
       const result=await verifyAccountEmail(req,await bodyJson(req));
-      json(res,201,{user:await userPayload(result.user)},{"Set-Cookie":[sessionCookie(result.session.token),signupCookie("",0)]});
+      json(res,result.purpose==="login"?200:201,{user:await userPayload(result.user)},{"Set-Cookie":[sessionCookie(result.session.token),signupCookie("",0)]});
     } catch(error) {
       if (!error.status) throw error;
       sendVerificationApiError(res,error);
@@ -1127,8 +1232,17 @@ async function handleApi(req,res,url) {
     json(res,201,{transactionId:created.transactionId}); return;
   }
   if (url.pathname === "/api/logout" && req.method === "POST") {
-    const session=await requireSession(req,res); if (!session) return;
-    await store.deleteSession(session.token_hash);
+    // Logout is intentionally idempotent. Even an expired or newly blocked
+    // pre-verification cookie must be removable and must never become usable
+    // again after the account is verified.
+    const token=cookieMap(req.headers.cookie)[SESSION_COOKIE];
+    if (token&&token.length<=200) {
+      try { await store.deleteSession(hashToken(token)); }
+      catch(error) {
+        console.error("Session cleanup during logout failed:",error);
+        json(res,503,{error:"Could not sign out safely. Please try again."}); return;
+      }
+    }
     json(res,200,{ok:true},{"Set-Cookie":sessionCookie("",0)}); return;
   }
   if (url.pathname === "/api/plan" && req.method === "GET") {
@@ -1238,6 +1352,9 @@ const server=http.createServer(async(req,res) => {
 
 let cleanup;
 async function start() {
+  if (process.env.NODE_ENV==="production"&&!EMAIL_CONFIG.flagValid) {
+    throw new Error("EMAIL_VERIFICATION_ENABLED must be set explicitly to true or false in production.");
+  }
   store = await createStore(PROJECT_ROOT);
   await store.deleteExpired(Date.now());
   await store.deleteOldVerificationData(Date.now(),Date.now()-VERIFICATION_RETENTION_MS);

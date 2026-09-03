@@ -19,7 +19,7 @@ async function startServer() {
   runtimeDir=mkdtempSync(join(PROJECT_ROOT,"test-runtime","compression-"));
   server=spawn(process.execPath,["server.js"],{
     cwd:PROJECT_ROOT,
-    env:{...process.env,PORT:"0",HOST:"127.0.0.1",NODE_ENV:"test",TRUST_PROXY:"",TURSO_DATABASE_URL:"",TURSO_AUTH_TOKEN:"",STRATA_DATA_DIR:runtimeDir,PADDLE_CHECKOUT_ENABLED:"false",PADDLE_CLIENT_TOKEN:"",PADDLE_API_KEY:"",PADDLE_WEBHOOK_SECRET:"",PADDLE_PRODUCT_ID:"",PADDLE_PRICE_ID:""},
+    env:{...process.env,PORT:"0",HOST:"127.0.0.1",NODE_ENV:"test",ALLOW_UNVERIFIED_SIGNUP_FOR_TESTS:"true",TRUST_PROXY:"",TURSO_DATABASE_URL:"",TURSO_AUTH_TOKEN:"",STRATA_DATA_DIR:runtimeDir,PADDLE_CHECKOUT_ENABLED:"false",PADDLE_CLIENT_TOKEN:"",PADDLE_API_KEY:"",PADDLE_WEBHOOK_SECRET:"",PADDLE_PRODUCT_ID:"",PADDLE_PRICE_ID:""},
     stdio:["ignore","pipe","pipe"]
   });
   baseUrl=await new Promise((resolve,reject) => {

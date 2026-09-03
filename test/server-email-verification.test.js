@@ -182,6 +182,11 @@ test("new accounts require one delivered code while existing accounts remain saf
   assert.equal(wrong.response.status,400);
   assert.equal(wrong.data.code,"INVALID_VERIFICATION_CODE");
   assert.equal(db.prepare("SELECT attempts_used FROM signup_verifications WHERE email=?").get("verified@example.test").attempts_used,1);
+  const beforePrematureLogin=deliveries.length;
+  const prematureLogin=await postJson("/api/login",{email:"verified@example.test",password});
+  assert.equal(prematureLogin.response.status,401,"a fresh email must not become a login account after a wrong code");
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM users WHERE email=?").get("verified@example.test").count,0);
+  assert.equal(deliveries.length,beforePrematureLogin,"a nonexistent account must not trigger login verification");
 
   const earlyResend=await postJson("/api/resend-verification",{},signupCookie);
   assert.equal(earlyResend.response.status,429);
@@ -199,7 +204,7 @@ test("new accounts require one delivered code while existing accounts remain saf
   ]);
   const simultaneousStatuses=simultaneous.map((result)=>result.response.status).sort((a,b)=>a-b);
   assert.equal(simultaneousStatuses[0],201);
-  assert.ok([400,409].includes(simultaneousStatuses[1]));
+  assert.ok([400,409,410].includes(simultaneousStatuses[1]));
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM users WHERE email=?").get("verified@example.test").count,1);
   const completed=simultaneous.find((result)=>result.response.status===201);
   const sessionCookie=cookieValue(completed.setCookie,"strata_session");
@@ -213,15 +218,43 @@ test("new accounts require one delivered code while existing accounts remain saf
   assert.equal(secondDevice.response.status,200);
   assert.ok(cookieValue(secondDevice.setCookie,"strata_session"));
 
+  db.prepare("UPDATE users SET email_verified_at=NULL WHERE email=?").run("verified@example.test");
+  const blockedExistingSession=await request("/api/me",{headers:{Cookie:sessionCookie}});
+  assert.equal(blockedExistingSession.response.status,401,"an existing session must stop working when its account is unverified");
+  const blockedProtectedPage=await request("/planner.html",{redirect:"manual",headers:{Cookie:sessionCookie}});
+  assert.equal(blockedProtectedPage.response.status,302);
+  assert.equal(blockedProtectedPage.response.headers.get("location"),"/account.html?mode=login&next=planner");
+  const beforeBadLogin=deliveries.length;
+  const badUnverifiedLogin=await postJson("/api/login",{email:"verified@example.test",password:"incorrect-password-123"});
+  assert.equal(badUnverifiedLogin.response.status,401);
+  assert.equal(deliveries.length,beforeBadLogin,"an incorrect password must never send a login code");
+
+  const unverifiedLogin=await postJson("/api/login",{email:"verified@example.test",password});
+  assert.equal(unverifiedLogin.response.status,202);
+  assert.equal(unverifiedLogin.data.verificationRequired,true);
+  assert.equal(unverifiedLogin.data.purpose,"login");
+  assert.match(unverifiedLogin.setCookie,/strata_signup=/);
+  assert.doesNotMatch(unverifiedLogin.setCookie,/strata_session=/);
+  const loginCookie=cookieValue(unverifiedLogin.setCookie,"strata_signup");
+  const loginChallenge=db.prepare("SELECT purpose,password_hash,password_salt FROM signup_verifications WHERE email=? ORDER BY created_at DESC LIMIT 1").get("verified@example.test");
+  assert.equal(loginChallenge.purpose,"login");
+  assert.equal(loginChallenge.password_hash,"");
+  assert.equal(loginChallenge.password_salt,"");
+  const loginCode=codeFrom(deliveries.at(-1));
+  const verifiedLogin=await postJson("/api/verify-email",{code:loginCode},loginCookie);
+  assert.equal(verifiedLogin.response.status,200);
+  assert.ok(cookieValue(verifiedLogin.setCookie,"strata_session"));
+  assert.ok(Number(db.prepare("SELECT email_verified_at FROM users WHERE email=?").get("verified@example.test").email_verified_at)>0);
+  assert.equal((await request("/api/me",{headers:{Cookie:sessionCookie}})).response.status,401,"the pre-verification session must stay revoked");
+  assert.equal((await request("/api/me",{headers:{Cookie:cookieValue(secondDevice.setCookie,"strata_session")}})).response.status,401,"all other pre-verification sessions must be revoked");
+
   const duplicatePassword="must-not-replace-original-123";
+  const beforeDuplicate=deliveries.length;
   const duplicate=await postJson("/api/signup",{name:"Replacement Attempt",email:"verified@example.test",password:duplicatePassword});
-  assert.equal(duplicate.response.status,202);
-  const duplicateCookie=cookieValue(duplicate.setCookie,"strata_signup");
-  const duplicateCode=codeFrom(deliveries.at(-1));
-  const duplicateVerify=await postJson("/api/verify-email",{code:duplicateCode},duplicateCookie);
-  assert.equal(duplicateVerify.response.status,409);
-  assert.equal(duplicateVerify.data.code,"ACCOUNT_EXISTS");
-  assert.doesNotMatch(duplicateVerify.setCookie,/strata_session=/);
+  assert.equal(duplicate.response.status,409);
+  assert.equal(duplicate.data.code,"ACCOUNT_EXISTS");
+  assert.equal(deliveries.length,beforeDuplicate,"existing-email signup must be rejected before sending a code");
+  assert.doesNotMatch(duplicate.setCookie,/strata_(?:signup|session)=/);
   assert.equal((await postJson("/api/login",{email:"verified@example.test",password})).response.status,200);
   assert.equal((await postJson("/api/login",{email:"verified@example.test",password:duplicatePassword})).response.status,401);
   db.close();
@@ -278,6 +311,33 @@ test("parallel guesses atomically consume only five attempts and lock out the co
   db.close();
 });
 
+test("an expired code preserves the hard-lived challenge and consumes no attempt",async()=>{
+  providerStatus=200;
+  const email="expired-code@example.test";
+  const signup=await postJson("/api/signup",{name:"Expired Code",email,password:"expired-code-password-123"});
+  assert.equal(signup.response.status,202);
+  const pendingCookie=cookieValue(signup.setCookie,"strata_signup");
+  const originalCode=codeFrom(deliveries.at(-1));
+  const db=new DatabaseSync(join(runtimeDir,"strata.sqlite"));
+  db.prepare("UPDATE signup_verifications SET expires_at=?,last_sent_at=? WHERE email=?").run(Date.now()-1,Date.now()-61_000,email);
+
+  const expired=await postJson("/api/verify-email",{code:originalCode},pendingCookie);
+  assert.equal(expired.response.status,410);
+  assert.equal(expired.data.code,"VERIFICATION_CODE_EXPIRED");
+  assert.equal(expired.data.verificationRequired,true);
+  assert.equal(db.prepare("SELECT attempts_used FROM signup_verifications WHERE email=?").get(email).attempts_used,0);
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM users WHERE email=?").get(email).count,0);
+  assert.doesNotMatch(expired.setCookie,/strata_signup=;/);
+
+  const resent=await postJson("/api/resend-verification",{},pendingCookie);
+  assert.equal(resent.response.status,202);
+  const replacementCode=codeFrom(deliveries.at(-1));
+  const verified=await postJson("/api/verify-email",{code:replacementCode},pendingCookie);
+  assert.equal(verified.response.status,201);
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM users WHERE email=?").get(email).count,1);
+  db.close();
+});
+
 test("parallel signup reserves no more than five durable email send slots",async()=>{
   providerStatus=200;
   const email="parallel-signups@example.test";
@@ -293,6 +353,31 @@ test("parallel signup reserves no more than five durable email send slots",async
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM signup_verifications WHERE email=?").get(email).count,5);
   const hash=db.prepare("SELECT email_hash FROM email_verification_sends WHERE challenge_id IN (SELECT challenge_id FROM signup_verifications WHERE email=?) LIMIT 1").get(email).email_hash;
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM email_verification_sends WHERE email_hash=?").get(hash).count,5);
+  db.close();
+});
+
+test("resend recovers a generation reserved before a process interruption",async()=>{
+  providerStatus=200;
+  const email="recoverable-resend@example.test";
+  const signup=await postJson("/api/signup",{name:"Recoverable Resend",email,password:"recoverable-resend-password-123"});
+  assert.equal(signup.response.status,202);
+  const pendingCookie=cookieValue(signup.setCookie,"strata_signup");
+  const db=new DatabaseSync(join(runtimeDir,"strata.sqlite"));
+  const challenge=db.prepare("SELECT challenge_id,generation FROM signup_verifications WHERE email=?").get(email);
+  const firstSend=db.prepare("SELECT email_hash FROM email_verification_sends WHERE challenge_id=? AND generation=1").get(challenge.challenge_id);
+  const now=Date.now();
+  db.prepare("UPDATE signup_verifications SET last_sent_at=? WHERE challenge_id=?").run(now-61_000,challenge.challenge_id);
+  db.prepare("INSERT INTO email_verification_sends(send_id,email_hash,challenge_id,generation,sent_at) VALUES(?,?,?,?,?)")
+    .run("interrupted-resend-slot",firstSend.email_hash,challenge.challenge_id,2,now-1_000);
+  const before=deliveries.length;
+
+  const resent=await postJson("/api/resend-verification",{},pendingCookie);
+  assert.equal(resent.response.status,202);
+  assert.equal(deliveries.length-before,1);
+  assert.equal(db.prepare("SELECT generation FROM signup_verifications WHERE challenge_id=?").get(challenge.challenge_id).generation,2);
+  const code=codeFrom(deliveries.at(-1));
+  const verified=await postJson("/api/verify-email",{code},pendingCookie);
+  assert.equal(verified.response.status,201);
   db.close();
 });
 
@@ -360,7 +445,7 @@ test("native forms complete verification without JavaScript",async()=>{
     body:new URLSearchParams({name:"Native Verification",email,password:"native-verification-password-123",next:"pricing"}).toString()
   });
   assert.equal(signup.response.status,303);
-  assert.equal(signup.response.headers.get("location"),"/verify-email.html?next=pricing");
+  assert.equal(signup.response.headers.get("location"),"/verify-email.html?next=pricing&purpose=signup");
   const pendingCookie=cookieValue(signup.setCookie,"strata_signup");
   assert.ok(pendingCookie);
   const code=codeFrom(deliveries.at(-1));

@@ -37,16 +37,57 @@ function candidate(suffix,now,overrides={}) {
   };
 }
 
-function session(suffix,now) {
+function session(suffix,now,userId) {
   return {
     tokenHash:`session-token-hash-${suffix}`,
     csrfToken:`csrf-token-${suffix}`,
     expiresAt:now+60*60*1000,
-    createdAt:now
+    createdAt:now,
+    ...(userId?{userId}:{})
   };
 }
 
-test("verification storage rotates, limits, consumes, and preserves the legacy users schema",async()=>{
+function createLegacyDatabase(root,now) {
+  const db=new DatabaseSync(join(root,"strata.sqlite"));
+  db.exec(`CREATE TABLE users (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    password_hash TEXT NOT NULL,
+    password_salt TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE TABLE signup_verifications (
+    challenge_id TEXT PRIMARY KEY,
+    browser_token_hash TEXT NOT NULL UNIQUE,
+    user_id TEXT NOT NULL,
+    email TEXT NOT NULL COLLATE NOCASE,
+    name TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    password_salt TEXT NOT NULL,
+    code_digest TEXT NOT NULL,
+    generation INTEGER NOT NULL CHECK(generation >= 1),
+    attempts_used INTEGER NOT NULL DEFAULT 0 CHECK(attempts_used >= 0),
+    send_count INTEGER NOT NULL DEFAULT 0 CHECK(send_count >= 0),
+    last_sent_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    hard_expires_at INTEGER NOT NULL,
+    delivery_state TEXT NOT NULL,
+    consumed_at INTEGER,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    CHECK(expires_at <= hard_expires_at)
+  );
+  CREATE UNIQUE INDEX signup_verifications_user_id ON signup_verifications(user_id);`);
+  db.prepare("INSERT INTO users(id,name,email,password_hash,password_salt,created_at) VALUES(?,?,?,?,?,?)")
+    .run("legacy-schema-user","Legacy Schema","legacy-schema@example.test","legacy-hash","legacy-salt",now);
+  const pending=candidate("legacy-schema",now,{userId:"legacy-pending-user",email:"legacy-pending@example.test"});
+  db.prepare("INSERT INTO signup_verifications(challenge_id,browser_token_hash,user_id,email,name,password_hash,password_salt,code_digest,generation,attempts_used,send_count,last_sent_at,expires_at,hard_expires_at,delivery_state,consumed_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?,?)")
+    .run(pending.challengeId,pending.browserTokenHash,pending.userId,pending.email,pending.name,pending.passwordHash,pending.passwordSalt,pending.codeDigest,pending.generation,pending.attemptsUsed,pending.sendCount,pending.lastSentAt,pending.expiresAt,pending.hardExpiresAt,pending.deliveryState,pending.createdAt,pending.updatedAt);
+  db.close();
+}
+
+test("verification storage rotates, limits, consumes, and records verified signup users",async()=>{
   const root=testDirectory("verification-");
   const prior={nodeEnv:process.env.NODE_ENV,tursoUrl:process.env.TURSO_DATABASE_URL,dataDir:process.env.STRATA_DATA_DIR};
   process.env.NODE_ENV="test";
@@ -61,6 +102,7 @@ test("verification storage rotates, limits, consumes, and preserves the legacy u
     const first=await store.insertVerification(candidate("one",now));
     const second=await store.insertVerification(candidate("two",now,{email:"PENDING@example.test"}));
     assert.equal(first.generation,1);
+    assert.equal(first.purpose,"signup");
     assert.equal(second.email,"PENDING@example.test");
     assert.equal((await store.verificationByTokenHash(first.browser_token_hash)).challenge_id,first.challenge_id);
 
@@ -92,7 +134,8 @@ test("verification storage rotates, limits, consumes, and preserves the legacy u
 
     const completedAt=now+90_000;
     const user=await store.completeSignup(first.challenge_id,2,completedAt,session("completed",completedAt));
-    assert.deepEqual(user,{id:"user-one",name:"Pending one",email:"pending@example.test",created_at:completedAt});
+    assert.deepEqual(user,{id:"user-one",name:"Pending one",email:"pending@example.test",created_at:completedAt,email_verified_at:completedAt});
+    assert.equal((await store.userByEmail("pending@example.test")).email_verified_at,completedAt);
     const consumed=await store.verificationByTokenHash(first.browser_token_hash);
     assert.equal(consumed.consumed_at,completedAt);
     assert.equal(consumed.delivery_state,"consumed");
@@ -112,7 +155,51 @@ test("verification storage rotates, limits, consumes, and preserves the legacy u
     const db=new DatabaseSync(join(root,"strata.sqlite"));
     const userColumns=db.prepare("PRAGMA table_info(users)").all().map((row)=>row.name);
     db.close();
-    assert.deepEqual(userColumns,["id","name","email","password_hash","password_salt","created_at"]);
+    assert.deepEqual(userColumns,["id","name","email","password_hash","password_salt","created_at","email_verified_at"]);
+    if(prior.nodeEnv===undefined)delete process.env.NODE_ENV;else process.env.NODE_ENV=prior.nodeEnv;
+    if(prior.tursoUrl===undefined)delete process.env.TURSO_DATABASE_URL;else process.env.TURSO_DATABASE_URL=prior.tursoUrl;
+    if(prior.dataDir===undefined)delete process.env.STRATA_DATA_DIR;else process.env.STRATA_DATA_DIR=prior.dataDir;
+    rmSync(root,{recursive:true,force:true});
+  }
+});
+
+test("legacy SQLite schemas migrate email verification columns and indexes idempotently",async()=>{
+  const root=testDirectory("verification-migration-");
+  const prior={nodeEnv:process.env.NODE_ENV,tursoUrl:process.env.TURSO_DATABASE_URL,dataDir:process.env.STRATA_DATA_DIR};
+  process.env.NODE_ENV="test";
+  delete process.env.TURSO_DATABASE_URL;
+  process.env.STRATA_DATA_DIR=root;
+  const now=1_800_050_000_000;
+  let store;
+  try {
+    createLegacyDatabase(root,now);
+    store=await createStore(root);
+
+    assert.equal((await store.userByEmail("legacy-schema@example.test")).email_verified_at,null);
+    assert.equal((await store.verificationByTokenHash("browser-token-hash-legacy-schema")).purpose,"signup");
+
+    await store.insertVerification(candidate("legacy-login-one",now,{purpose:"login",userId:"legacy-schema-user",email:"legacy-schema@example.test",name:"",passwordHash:"",passwordSalt:""}));
+    await store.insertVerification(candidate("legacy-login-two",now+1,{purpose:"login",userId:"legacy-schema-user",email:"legacy-schema@example.test",name:"",passwordHash:"",passwordSalt:""}));
+    await assert.rejects(
+      ()=>store.insertVerification(candidate("bad-purpose",now,{purpose:"password-reset",email:"bad-purpose@example.test"})),
+      /purpose must be signup or login/i
+    );
+
+    await store.close();
+    store=await createStore(root);
+    assert.equal((await store.userByEmail("legacy-schema@example.test")).email_verified_at,null);
+
+    const db=new DatabaseSync(join(root,"strata.sqlite"));
+    const userColumns=db.prepare("PRAGMA table_info(users)").all().map((row)=>row.name);
+    const verificationColumns=db.prepare("PRAGMA table_info(signup_verifications)").all().map((row)=>row.name);
+    const verificationIndexes=db.prepare("PRAGMA index_list(signup_verifications)").all();
+    db.close();
+    assert.ok(userColumns.includes("email_verified_at"));
+    assert.ok(verificationColumns.includes("purpose"));
+    assert.equal(verificationIndexes.some((index)=>index.name==="signup_verifications_user_id"),false);
+    assert.equal(verificationIndexes.find((index)=>index.name==="signup_verifications_user_id_idx")?.unique,0);
+  } finally {
+    if (store) await store.close();
     if(prior.nodeEnv===undefined)delete process.env.NODE_ENV;else process.env.NODE_ENV=prior.nodeEnv;
     if(prior.tursoUrl===undefined)delete process.env.TURSO_DATABASE_URL;else process.env.TURSO_DATABASE_URL=prior.tursoUrl;
     if(prior.dataDir===undefined)delete process.env.STRATA_DATA_DIR;else process.env.STRATA_DATA_DIR=prior.dataDir;
@@ -177,6 +264,21 @@ test("verification email sends are reserved atomically per address",async()=>{
       generation:1,
       sentAt:now+100
     },now-1,5),false);
+
+    assert.equal(await store.claimVerificationSend({
+      id:"recoverable-send-slot",
+      emailHash:"recoverable-recipient-hash",
+      challengeId:"recoverable-challenge",
+      generation:2,
+      sentAt:now+200
+    },now-1,5),true);
+    assert.deepEqual(await store.verificationSendByChallengeGeneration("recoverable-challenge",2),{
+      send_id:"recoverable-send-slot",
+      email_hash:"recoverable-recipient-hash",
+      challenge_id:"recoverable-challenge",
+      generation:2,
+      sent_at:now+200
+    });
   } finally {
     await store.close();
     if(prior.nodeEnv===undefined)delete process.env.NODE_ENV;else process.env.NODE_ENV=prior.nodeEnv;
@@ -218,6 +320,77 @@ test("signup completion atomically creates one session and rolls back session fa
     assert.ok(stillPending.password_hash);
     assert.ok(stillPending.code_digest);
     db.close();
+  } finally {
+    await store.close();
+    if(prior.nodeEnv===undefined)delete process.env.NODE_ENV;else process.env.NODE_ENV=prior.nodeEnv;
+    if(prior.tursoUrl===undefined)delete process.env.TURSO_DATABASE_URL;else process.env.TURSO_DATABASE_URL=prior.tursoUrl;
+    if(prior.dataDir===undefined)delete process.env.STRATA_DATA_DIR;else process.env.STRATA_DATA_DIR=prior.dataDir;
+    rmSync(root,{recursive:true,force:true});
+  }
+});
+
+test("login verification atomically verifies an existing user, consumes its challenge, and creates a session",async()=>{
+  const root=testDirectory("atomic-login-verification-");
+  const prior={nodeEnv:process.env.NODE_ENV,tursoUrl:process.env.TURSO_DATABASE_URL,dataDir:process.env.STRATA_DATA_DIR};
+  process.env.NODE_ENV="test";
+  delete process.env.TURSO_DATABASE_URL;
+  process.env.STRATA_DATA_DIR=root;
+  const store=await createStore(root);
+  const now=1_800_450_000_000;
+  try {
+    await store.insertUser({id:"login-user",name:"Login User",email:"login@example.test",passwordHash:"hash",passwordSalt:"salt",createdAt:now});
+    await store.insertSession(session("legacy-login",now,"login-user"));
+    const login=await store.insertVerification(candidate("existing-login",now,{
+      purpose:"login",
+      userId:"login-user",
+      email:"login@example.test",
+      name:"",
+      passwordHash:"",
+      passwordSalt:""
+    }));
+    const sibling=await store.insertVerification(candidate("existing-login-sibling",now+1,{
+      purpose:"login",
+      userId:"login-user",
+      email:"login@example.test",
+      name:"",
+      passwordHash:"",
+      passwordSalt:""
+    }));
+    assert.equal(await store.completeSignup(login.challenge_id,1,now+100,session("wrong-purpose",now+100)),null);
+
+    const verifiedAt=now+200;
+    const verified=await store.completeLoginVerification(login.challenge_id,1,verifiedAt,session("verified-login",verifiedAt));
+    assert.deepEqual(verified,{id:"login-user",name:"Login User",email:"login@example.test",created_at:now,email_verified_at:verifiedAt});
+    assert.equal((await store.userById("login-user")).email_verified_at,verifiedAt);
+    assert.equal((await store.session("session-token-hash-verified-login",verifiedAt)).email_verified_at,verifiedAt);
+    assert.equal(await store.session("session-token-hash-legacy-login",verifiedAt),null,"pre-verification sessions must be revoked");
+    const consumed=await store.verificationByTokenHash(login.browser_token_hash);
+    assert.equal(consumed.consumed_at,verifiedAt);
+    assert.equal(consumed.delivery_state,"consumed");
+    assert.equal(consumed.code_digest,"");
+    assert.equal(await store.completeLoginVerification(login.challenge_id,1,verifiedAt+1,session("duplicate-login",verifiedAt+1)),null);
+    assert.equal(await store.completeLoginVerification(sibling.challenge_id,1,verifiedAt,session("sibling-login",verifiedAt)),null,"only the first active login challenge may verify an account");
+    assert.ok(await store.session("session-token-hash-verified-login",verifiedAt),"a stale sibling challenge must not revoke the winning session");
+
+    await store.insertUser({id:"rollback-login-user",name:"Rollback User",email:"rollback-login@example.test",passwordHash:"hash",passwordSalt:"salt",createdAt:now});
+    const rollback=await store.insertVerification(candidate("rollback-login",now,{
+      purpose:"login",
+      userId:"rollback-login-user",
+      email:"rollback-login@example.test",
+      name:"",
+      passwordHash:"",
+      passwordSalt:""
+    }));
+    await assert.rejects(()=>store.completeLoginVerification(rollback.challenge_id,1,now+300,{
+      tokenHash:"session-token-hash-verified-login",
+      csrfToken:"rollback-csrf",
+      expiresAt:now+60_000,
+      createdAt:now+300
+    }),/UNIQUE|constraint/i);
+    assert.equal((await store.userById("rollback-login-user")).email_verified_at,null);
+    const stillPending=await store.verificationByTokenHash(rollback.browser_token_hash);
+    assert.equal(stillPending.consumed_at,null);
+    assert.ok(stillPending.code_digest);
   } finally {
     await store.close();
     if(prior.nodeEnv===undefined)delete process.env.NODE_ENV;else process.env.NODE_ENV=prior.nodeEnv;

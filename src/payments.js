@@ -9,6 +9,7 @@ const secretsByConfig=new WeakMap();
 
 function clean(value) { return String(value||"").trim(); }
 function validId(value,prefix) { return new RegExp(`^${prefix}_[a-z0-9]{20,}$`).test(value); }
+function placeholderCredential(value) { return /replace[-_ ]?with|<[^>]+>|your[-_ ]?(?:private|secret|key)/i.test(String(value||"")); }
 function timeoutSignal(milliseconds) { return typeof globalThis.AbortSignal?.timeout==="function"?globalThis.AbortSignal.timeout(milliseconds):undefined; }
 
 function getPaymentConfig(env=process.env) {
@@ -18,9 +19,9 @@ function getPaymentConfig(env=process.env) {
   const apiKey=clean(env.PADDLE_API_KEY);
   const webhookSecret=clean(env.PADDLE_WEBHOOK_SECRET);
   const requestedEnabled=clean(env.PADDLE_CHECKOUT_ENABLED).toLowerCase()==="true";
-  const validClientToken=clientToken.startsWith("live_")&&!/sandbox|sdbx/i.test(clientToken);
-  const validApiKey=apiKey.startsWith("pdl_live_apikey_")&&apiKey.length>=40&&!/sandbox|sdbx/i.test(apiKey);
-  const validWebhookSecret=webhookSecret.startsWith("pdl_ntfset_")&&webhookSecret.length>=20;
+  const validClientToken=clientToken.startsWith("live_")&&!/sandbox|sdbx/i.test(clientToken)&&!placeholderCredential(clientToken);
+  const validApiKey=apiKey.startsWith("pdl_live_apikey_")&&apiKey.length>=40&&!/sandbox|sdbx/i.test(apiKey)&&!placeholderCredential(apiKey);
+  const validWebhookSecret=webhookSecret.startsWith("pdl_ntfset_")&&webhookSecret.length>=20&&!placeholderCredential(webhookSecret);
   const validCatalog=validId(productId,"pro")&&validId(priceId,"pri");
   const configured=validClientToken&&validApiKey&&validWebhookSecret&&validCatalog;
   const missing=[];

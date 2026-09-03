@@ -12,6 +12,7 @@ const authFields={
   signup:[el("signupName"),el("signupEmail"),el("signupPassword")],
   login:[el("loginEmail"),el("loginPassword")]
 };
+let navigating=false;
 
 function safeNext(raw,exerciseId){
   const addIsSafe=Boolean(exerciseId&&/^[a-z0-9-]{2,80}$/.test(exerciseId));
@@ -22,7 +23,7 @@ function safeNext(raw,exerciseId){
   return "/planner.html";
 }
 
-function verificationLocation(destination,{deliveryState=""}={}){
+function verificationLocation(destination,{deliveryState="",purpose="signup"}={}){
   const query=new URLSearchParams();
   if(destination==="/pricing")query.set("next","pricing");
   else if(destination==="/discover.html")query.set("next","discover");
@@ -31,15 +32,17 @@ function verificationLocation(destination,{deliveryState=""}={}){
     const add=new URL(destination,"https://strata.local").searchParams.get("add");
     if(add&&/^[a-z0-9-]{2,80}$/.test(add))query.set("add",add);
   }
+  query.set("purpose",purpose==="login"?"login":"signup");
   if(deliveryState==="failed")query.set("delivery","failed");
   return `/verify-email.html?${query}`;
 }
 
-function rememberMaskedEmail(value){
+function rememberVerification(value,purpose="signup"){
   try{
     const masked=String(value||"").replace(/[\u0000-\u001f\u007f]/g,"").trim().slice(0,254);
     if(masked)globalThis.sessionStorage?.setItem("strata.verification.maskedEmail",masked);
     else globalThis.sessionStorage?.removeItem("strata.verification.maskedEmail");
+    globalThis.sessionStorage?.setItem("strata.verification.purpose",purpose==="login"?"login":"signup");
   }catch{}
 }
 
@@ -80,6 +83,7 @@ async function readJson(path,options={}){
     code:data?.code,
     verificationRequired:data?.verificationRequired===true,
     maskedEmail:data?.maskedEmail,
+    purpose:data?.purpose==="login"?"login":"signup",
     deliveryState:["sent","failed","pending"].includes(data?.deliveryState)?data.deliveryState:""
   });
   if(!data||typeof data!=="object")throw Object.assign(new Error("The account service returned an unexpected response."),{code:"invalid-response",status:502});
@@ -208,7 +212,7 @@ function enhanceForm(authMode){
   form.addEventListener("input",clearAllFormErrors);
   form.addEventListener("submit",async(event)=>{
     event.preventDefault();
-    if(form.dataset.submitting==="true")return;
+    if(navigating||form.dataset.submitting==="true")return;
     clearFormError(authMode);
     form.dataset.submitting="true";
     form.setAttribute("aria-busy","true");
@@ -219,25 +223,32 @@ function enhanceForm(authMode){
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify(payloadFor(authMode,form))
       });
-      if(authMode==="signup"&&result.verificationRequired===true){
-        rememberMaskedEmail(result.maskedEmail);
-        location.assign(verificationLocation(next));
+      if(result.verificationRequired===true){
+        const purpose=result.purpose==="login"?"login":authMode;
+        rememberVerification(result.maskedEmail,purpose);
+        navigating=true;
+        location.assign(verificationLocation(next,{purpose}));
         return;
       }
       if(!result.user?.id)throw Object.assign(new Error("The account service returned an unexpected response."),{code:"invalid-response",status:502});
+      navigating=true;
       location.assign(next);
     }catch(error){
       if(error.verificationRequired===true){
-        rememberMaskedEmail(error.maskedEmail);
+        const purpose=error.purpose==="login"?"login":authMode;
+        rememberVerification(error.maskedEmail,purpose);
         const deliveryFailed=error.deliveryState==="failed"||["EMAIL_DELIVERY_UNAVAILABLE","EMAIL_DELIVERY_FAILED"].includes(String(error.code||"").toUpperCase());
-        location.assign(verificationLocation(next,{deliveryState:deliveryFailed?"failed":""}));
+        navigating=true;
+        location.assign(verificationLocation(next,{deliveryState:deliveryFailed?"failed":"",purpose}));
         return;
       }
       showFormError(authMode,friendlyAuthError(error,authMode),{status:error.status,focus:true});
     }finally{
-      delete form.dataset.submitting;
-      form.removeAttribute("aria-busy");
-      button.disabled=false;
+      if(!navigating){
+        delete form.dataset.submitting;
+        form.removeAttribute("aria-busy");
+        button.disabled=false;
+      }
     }
   });
 }

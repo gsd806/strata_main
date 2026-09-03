@@ -3,7 +3,7 @@ services:
     name: strata-workout-index
     runtime: node
     plan: free
-    buildCommand: npm install
+    buildCommand: npm install --omit=dev --no-audit --no-fund
     startCommand: npm start
     healthCheckPath: /healthz
     envVars:
@@ -20,7 +20,7 @@ services:
       - key: TURSO_AUTH_TOKEN
         sync: false
       - key: EMAIL_VERIFICATION_ENABLED
-        value: "false"
+        sync: false
       - key: RESEND_API_KEY
         sync: false
       - key: EMAIL_FROM
@@ -40,6 +40,6 @@ services:
       - key: PADDLE_WEBHOOK_SECRET
         sync: false
       - key: PADDLE_CHECKOUT_ENABLED
-        value: "true"
+        sync: false
       - key: PADDLE_ENFORCE_IP_ALLOWLIST
         value: "false"

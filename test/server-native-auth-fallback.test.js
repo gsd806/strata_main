@@ -67,9 +67,11 @@ test("server-rendered account forms preserve a safe native destination and error
 });
 
 test("server-rendered verification forms preserve planner additions without JavaScript",async()=>{
-  const body=await html("/verify-email.html?next=planner&add=flat-dumbbell-press&error="+encodeURIComponent("Please wait before requesting another verification code."));
+  const body=await html("/verify-email.html?next=planner&add=flat-dumbbell-press&purpose=login&error="+encodeURIComponent("Please wait before requesting another verification code."));
   assert.match(body,/id="verificationNext"[^>]*value="\/planner\.html\?add=flat-dumbbell-press"/);
   assert.match(body,/id="resendNext"[^>]*value="\/planner\.html\?add=flat-dumbbell-press"/);
+  assert.match(body,/id="verificationPurpose"[^>]*value="login"/);
+  assert.match(body,/id="resendPurpose"[^>]*value="login"/);
   assert.match(body,/id="verificationMessage"[^>]*>Please wait before requesting another code\.<\/div>/);
   assert.doesNotMatch(body,/id="verificationMessage"[^>]*hidden/);
 });
@@ -85,3 +87,15 @@ test("native fallback messages never reflect arbitrary query content",async()=>{
   assert.match(failed,/We could not send the verification email\. Please wait a moment, then request another code\./);
 });
 
+test("test mode cannot create an unverified account without the explicit override",async()=>{
+  const response=await fetch(`${base}/api/signup`,{
+    method:"POST",
+    headers:{Origin:base,"Content-Type":"application/json"},
+    body:JSON.stringify({name:"Blocked Test Signup",email:"blocked@example.test",password:"blocked-test-password-123"})
+  });
+  assert.equal(response.status,503);
+  const payload=await response.json();
+  assert.equal(payload.code,"EMAIL_VERIFICATION_UNAVAILABLE");
+  assert.equal(payload.verificationRequired,false);
+  assert.equal(response.headers.get("set-cookie"),null);
+});

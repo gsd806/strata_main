@@ -18,7 +18,7 @@ let BASE;
 async function startServer() {
   mkdirSync(join(PROJECT_ROOT,"test-runtime"),{recursive:true});
   runtimeDir=mkdtempSync(join(PROJECT_ROOT,"test-runtime","run-"));
-  server=spawn(process.execPath,["server.js"],{cwd:PROJECT_ROOT,env:{...process.env,PORT:"0",HOST:"127.0.0.1",NODE_ENV:"test",TRUST_PROXY:"",TURSO_DATABASE_URL:"",TURSO_AUTH_TOKEN:"",STRATA_DATA_DIR:runtimeDir,PADDLE_CHECKOUT_ENABLED:"false",PADDLE_CLIENT_TOKEN:"",PADDLE_API_KEY:"",PADDLE_WEBHOOK_SECRET:"",PADDLE_PRODUCT_ID:"",PADDLE_PRICE_ID:""},stdio:["ignore","pipe","pipe"]});
+  server=spawn(process.execPath,["server.js"],{cwd:PROJECT_ROOT,env:{...process.env,PORT:"0",HOST:"127.0.0.1",NODE_ENV:"test",ALLOW_UNVERIFIED_SIGNUP_FOR_TESTS:"true",TRUST_PROXY:"",TURSO_DATABASE_URL:"",TURSO_AUTH_TOKEN:"",STRATA_DATA_DIR:runtimeDir,PADDLE_CHECKOUT_ENABLED:"false",PADDLE_CLIENT_TOKEN:"",PADDLE_API_KEY:"",PADDLE_WEBHOOK_SECRET:"",PADDLE_PRODUCT_ID:"",PADDLE_PRICE_ID:""},stdio:["ignore","pipe","pipe"]});
   try {
     BASE=await new Promise((resolve,reject) => {
       let output="",settled=false,timer;
@@ -65,7 +65,7 @@ test.before(startServer);
 test.after(stopServer);
 
 test("serves rankings and gates private account pages",async()=>{
-  assert.equal(BUILD,"6.7.0");
+  assert.equal(BUILD,"6.7.1");
   const home=await request("/");
   assert.equal(home.response.status,200);
   assert.equal(home.response.headers.get("cache-control"),"private, no-store");
@@ -244,6 +244,10 @@ test("logs out and signs back into the same account with the original password",
   assert.equal(signup.response.status,201);
   const logout=await request("/api/logout",{method:"POST",headers:{Cookie:signup.cookie,Origin:BASE}});
   assert.equal(logout.response.status,200);
+  assert.match(logout.response.headers.get("set-cookie")||"",/strata_session=;.*Max-Age=0/i);
+  const repeatedLogout=await request("/api/logout",{method:"POST",headers:{Cookie:signup.cookie,Origin:BASE}});
+  assert.equal(repeatedLogout.response.status,200,"logout must also clear stale or unauthenticated cookies");
+  assert.match(repeatedLogout.response.headers.get("set-cookie")||"",/strata_session=;.*Max-Age=0/i);
   const afterLogout=await request("/api/me",{headers:{Cookie:signup.cookie}});
   assert.equal(afterLogout.response.status,401);
   const login=await request("/api/login",{method:"POST",headers:{Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({email:credentials.email,password:credentials.password})});

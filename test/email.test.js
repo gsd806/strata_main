@@ -53,25 +53,27 @@ test("email configuration fails closed when enabled and stays serialization-safe
   assert.doesNotMatch(serialized,/API_KEY|SECRET/);
 });
 
-test("production signup fails closed for disabled or mistyped verification flags",()=>{
+test("unverified direct signup requires an explicit test-only override",()=>{
   for (const flag of [undefined,"","false","treu","1","yes"]) {
     const env={NODE_ENV:"production"};
     if(flag!==undefined)env.EMAIL_VERIFICATION_ENABLED=flag;
     const config=getEmailVerificationConfig(env);
-    assert.equal(directSignupAllowed(config,"production"),false,`production flag ${String(flag)}`);
+    assert.equal(directSignupAllowed(config,"production","true"),false,`production flag ${String(flag)}`);
     if(flag!=="false") assert.equal(config.flagValid,false,`flag validity ${String(flag)}`);
   }
 
   const disabled=getEmailVerificationConfig({NODE_ENV:"test",EMAIL_VERIFICATION_ENABLED:"false"});
-  assert.equal(directSignupAllowed(disabled,"test"),true);
-  assert.equal(directSignupAllowed(disabled,"development"),true);
-  assert.equal(directSignupAllowed(disabled,""),true);
-  assert.equal(directSignupAllowed(disabled,"staging"),false);
-  assert.equal(directSignupAllowed(disabled,"prodution"),false);
+  assert.equal(directSignupAllowed(disabled,"test","true"),true);
+  assert.equal(directSignupAllowed(disabled,"test","false"),false);
+  assert.equal(directSignupAllowed(disabled,"test",""),false);
+  assert.equal(directSignupAllowed(disabled,"development","true"),false);
+  assert.equal(directSignupAllowed(disabled,"","true"),false);
+  assert.equal(directSignupAllowed(disabled,"staging","true"),false);
+  assert.equal(directSignupAllowed(disabled,"prodution","true"),false);
 
   const requestedButIncomplete=getEmailVerificationConfig({NODE_ENV:"test",EMAIL_VERIFICATION_ENABLED:"true"});
   assert.equal(requestedButIncomplete.enabled,false);
-  assert.equal(directSignupAllowed(requestedButIncomplete,"test"),false);
+  assert.equal(directSignupAllowed(requestedButIncomplete,"test","true"),false);
 });
 
 test("placeholder credentials are rejected and example secrets are blank",()=>{

@@ -16,7 +16,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Manrope:wght@400;500;600;700&amp;family=Oswald:wght@500;600;700&amp;display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/account.css?v=6.7.0" />
+    <link rel="stylesheet" href="/account.css?v=6.7.1" />
   </head>
   <body>
     <a class="skip-link" href="#verificationPanel">Skip to verification</a>
@@ -29,8 +29,8 @@
       <section class="account-intro">
         <p class="kicker"><span></span> One last step</p>
         <h1>CHECK YOUR.<br /><em>INBOX.</em></h1>
-        <p>Enter the 6-digit code we sent to <strong id="verificationEmail">the email address you just used</strong>. This keeps every STRATA account connected to a real inbox.</p>
-        <div class="storage-state verification-state" id="verificationState" role="status" aria-live="polite"><i></i><span>Enter your code to finish creating the account.</span></div>
+        <p>Enter the 6-digit code we sent to <strong id="verificationEmail">the email address you just used</strong>. This confirms the inbox before STRATA creates or restores account access.</p>
+        <div class="storage-state verification-state" id="verificationState" role="status" aria-live="polite"><i></i><span>Enter your code to continue securely.</span></div>
       </section>
 
       <section class="account-access verification-access" aria-label="Verify your email address">
@@ -42,16 +42,27 @@
           <form id="verificationForm" action="/auth/verify-email" method="post" aria-labelledby="verificationTitle" aria-describedby="verificationMessage verificationCodeHint">
             <div class="account-message panel-message" id="verificationMessage" role="alert" tabindex="-1" hidden></div>
             <input id="verificationNext" type="hidden" name="next" value="/planner.html" />
+            <input id="verificationPurpose" type="hidden" name="purpose" value="signup" />
             <label for="verificationCode">6-digit code</label>
             <input id="verificationCode" class="verification-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" enterkeyhint="done" autocapitalize="off" spellcheck="false" required aria-describedby="verificationCodeHint" />
             <small id="verificationCodeHint">Paste the whole code or type all six numbers.</small>
             <button id="verificationSubmit" type="submit">Verify and continue <span aria-hidden="true">→</span></button>
           </form>
 
+          <div class="verification-ended" id="verificationSessionEnded" role="status" aria-live="assertive" tabindex="-1" hidden>
+            <h3>VERIFICATION SESSION ENDED</h3>
+            <p id="verificationEndedMessage">This verification request is no longer active. Return to the account page to receive a new code.</p>
+            <div class="verification-ended-actions">
+              <a id="verificationRestart" href="/account.html?mode=signup">Restart signup <span aria-hidden="true">→</span></a>
+              <a id="verificationSignIn" href="/account.html?mode=login">Sign in instead <span aria-hidden="true">→</span></a>
+            </div>
+          </div>
+
           <div class="verification-resend">
             <p id="resendHint">Nothing arrived? Check spam, then request another code.</p>
             <form id="resendForm" action="/auth/resend-verification" method="post" aria-describedby="resendHint verificationStatus">
               <input id="resendNext" type="hidden" name="next" value="/planner.html" />
+              <input id="resendPurpose" type="hidden" name="purpose" value="signup" />
               <button class="verification-secondary" id="resendSubmit" type="submit">Send another code <span aria-hidden="true">↻</span></button>
             </form>
             <p class="verification-status" id="verificationStatus" role="status" aria-live="polite"></p>
@@ -60,8 +71,8 @@
       </section>
     </main>
 
-    <footer class="build-footer">STRATA · Build 6.7.0 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
-    <script src="/pwa.js?v=6.7.0"></script>
-    <script src="/verify-email.js?v=6.7.0"></script>
+    <footer class="build-footer">STRATA · Build 6.7.1 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
+    <script src="/pwa.js?v=6.7.1"></script>
+    <script src="/verify-email.js?v=6.7.1"></script>
   </body>
 </html>

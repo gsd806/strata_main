@@ -81,6 +81,7 @@ async function startApp() {
       PORT:"0",
       HOST:"127.0.0.1",
       NODE_ENV:"test",
+      ALLOW_UNVERIFIED_SIGNUP_FOR_TESTS:"true",
       TRUST_PROXY:"true",
       TURSO_DATABASE_URL:"",
       TURSO_AUTH_TOKEN:"",

@@ -99,8 +99,11 @@ test("live configuration is fail-closed and serializes browser-safe fields only"
   for(const overrides of [
     {PADDLE_CLIENT_TOKEN:"test_sandbox_token_fixture"},
     {PADDLE_CLIENT_TOKEN:"live_sandbox_mismatch_fixture"},
+    {PADDLE_CLIENT_TOKEN:"live_replace-with-your-client-side-token"},
     {PADDLE_API_KEY:"pdl_sdbx_apikey_fixture_123456"},
+    {PADDLE_API_KEY:"pdl_live_apikey_replace-with-your-private-live-api-key"},
     {PADDLE_WEBHOOK_SECRET:"short"},
+    {PADDLE_WEBHOOK_SECRET:"pdl_ntfset_replace-with-your-endpoint-secret"},
     {PADDLE_PRODUCT_ID:"pro_invalid"},
     {PADDLE_PRICE_ID:"pri_invalid"}
   ]) {

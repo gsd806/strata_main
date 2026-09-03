@@ -93,7 +93,7 @@ test("release version, cache keys, asset URLs, and catalog claims stay aligned",
   const serviceWorker=read("service-worker.js");
   const pages=["index.html","account.html","verify-email.html","planner.html","discover.html","install.html","offline.html","pricing.html","contact.html","terms.html","privacy.html","refunds.html"];
 
-  assert.equal(version,"6.7.0");
+  assert.equal(version,"6.7.1");
   assert.match(serviceWorker,new RegExp(`const BUILD="${versionPattern}";`));
   assert.match(serviceWorker,/const CACHE_PREFIX="strata-static-";/);
   assert.match(serviceWorker,/const STATIC_CACHE=`\$\{CACHE_PREFIX\}\$\{BUILD\}`;/);

@@ -1,6 +1,6 @@
 "use strict";
 
-const BUILD="6.7.0";
+const BUILD="6.7.1";
 const CACHE_PREFIX="strata-static-";
 const STATIC_CACHE=`${CACHE_PREFIX}${BUILD}`;
 const PRECACHE_URLS=[
@@ -11,21 +11,21 @@ const PRECACHE_URLS=[
   "/terms.html",
   "/privacy.html",
   "/refunds.html",
-  "/install.css?v=6.7.0",
-  "/install.js?v=6.7.0",
-  "/site-info.css?v=6.7.0",
-  "/pricing.js?v=6.7.0",
-  "/pwa.js?v=6.7.0",
-  "/styles.css?v=6.7.0",
-  "/app.js?v=6.7.0",
-  "/account.css?v=6.7.0",
-  "/account.js?v=6.7.0",
-  "/planner.css?v=6.7.0",
-  "/planner.js?v=6.7.0",
-  "/discover.css?v=6.7.0",
-  "/discovery-core.js?v=6.7.0",
-  "/discover.js?v=6.7.0",
-  "/exercises.json?v=6.7.0",
+  "/install.css?v=6.7.1",
+  "/install.js?v=6.7.1",
+  "/site-info.css?v=6.7.1",
+  "/pricing.js?v=6.7.1",
+  "/pwa.js?v=6.7.1",
+  "/styles.css?v=6.7.1",
+  "/app.js?v=6.7.1",
+  "/account.css?v=6.7.1",
+  "/account.js?v=6.7.1",
+  "/planner.css?v=6.7.1",
+  "/planner.js?v=6.7.1",
+  "/discover.css?v=6.7.1",
+  "/discovery-core.js?v=6.7.1",
+  "/discover.js?v=6.7.1",
+  "/exercises.json?v=6.7.1",
   "/manifest.webmanifest",
   "/icons/strata-icon.svg",
   "/icons/strata-192.png",

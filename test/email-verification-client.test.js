@@ -78,6 +78,7 @@ function accountPage(route){
 function verificationPage(route,{search="?next=planner&add=flat-dumbbell-press"}={}){
   const elements=elementsFrom(verifyHtml),requests=[],navigations=[],replacements=[],timers=[],sessionStorage=storage({"strata.verification.maskedEmail":"l***@example.test"});
   elements.get("verificationMessage").hidden=true;
+  elements.get("verificationSessionEnded").hidden=true;
   elements.get("verificationState").statusText=new Element("verificationStateText");
   const location={search,href:`https://strata.test/verify-email.html${search}`,assign:(path)=>navigations.push(path),replace:(path)=>replacements.push(path)};
   const context={
@@ -99,6 +100,9 @@ test("verification markup stays accessible and works without JavaScript",()=>{
   assert.match(verifyHtml,/id="verificationCode"[^>]*type="text"[^>]*inputmode="numeric"[^>]*autocomplete="one-time-code"[^>]*pattern="\[0-9\]\{6\}"[^>]*maxlength="6"/);
   assert.equal((verifyHtml.match(/name="code"/g)||[]).length,1,"the code must use one paste/autofill-friendly input");
   assert.doesNotMatch(verifyHtml,/name="(?:email|challenge|token)"/i,"the verification page must rely on the HttpOnly challenge cookie");
+  assert.match(verifyHtml,/id="verificationSessionEnded"[^>]*role="status"[^>]*hidden/);
+  assert.match(verifyHtml,/id="verificationRestart"[^>]*href="\/account\.html\?mode=signup"/);
+  assert.match(verifyHtml,/id="verificationSignIn"[^>]*href="\/account\.html\?mode=login"/);
 });
 
 test("enhanced signup sends only a masked hint to verification and preserves legacy 201 support",async()=>{
@@ -113,9 +117,29 @@ test("enhanced signup sends only a masked hint to verification and preserves leg
   const form=page.elements.get("signupForm");
   form.values={name:"New Lifter",email:"new.lifter@example.test",password:"secure-password-123"};
   await form.emit("submit",{preventDefault(){}});
-  assert.deepEqual(page.navigations,["/verify-email.html?next=pricing"]);
+  await form.emit("submit",{preventDefault(){}});
+  assert.deepEqual(page.navigations,["/verify-email.html?next=pricing&purpose=signup"]);
+  assert.equal(page.requests.filter(({path})=>path==="/api/signup").length,1,"navigation lock prevents a duplicate signup request");
   assert.equal(page.sessionStorage.getItem("strata.verification.maskedEmail"),"n***@example.test");
+  assert.equal(page.sessionStorage.getItem("strata.verification.purpose"),"signup");
   assert.doesNotMatch(page.navigations[0],/new\.lifter|secure-password|code|challenge/i);
+});
+
+test("enhanced login continues an unverified account on the verification page",async()=>{
+  const page=accountPage(async(path)=>{
+    if(path==="/api/status")return response(200,{persistent:true});
+    if(path==="/healthz")return response(200,{ok:true});
+    if(path==="/api/me")return response(401,{error:"Not signed in."});
+    if(path==="/api/login")return response(202,{verificationRequired:true,maskedEmail:"n***@example.test",expiresIn:600,resendAfter:60});
+    throw new Error(`Unexpected path ${path}`);
+  });
+  await settle();
+  const form=page.elements.get("loginForm");
+  form.values={email:"new.lifter@example.test",password:"secure-password-123"};
+  await form.emit("submit",{preventDefault(){}});
+  assert.deepEqual(page.navigations,["/verify-email.html?next=pricing&purpose=login"]);
+  assert.equal(page.sessionStorage.getItem("strata.verification.maskedEmail"),"n***@example.test");
+  assert.equal(page.sessionStorage.getItem("strata.verification.purpose"),"login");
 });
 
 test("enhanced signup carries a safe delivery failure into the verification page",async()=>{
@@ -136,7 +160,7 @@ test("enhanced signup carries a safe delivery failure into the verification page
   const form=account.elements.get("signupForm");
   form.values={name:"New Lifter",email:"new.lifter@example.test",password:"secure-password-123"};
   await form.emit("submit",{preventDefault(){}});
-  assert.deepEqual(account.navigations,["/verify-email.html?next=pricing&delivery=failed"]);
+  assert.deepEqual(account.navigations,["/verify-email.html?next=pricing&purpose=signup&delivery=failed"]);
   assert.doesNotMatch(account.navigations[0],/new\.lifter|secure-password|challenge/i);
 
   const verification=verificationPage(async(path)=>{
@@ -164,8 +188,10 @@ test("verification normalizes one code, posts only that code, and follows the sa
   await input.emit("input");
   assert.equal(input.value,"123456");
   await page.elements.get("verificationForm").emit("submit",{preventDefault(){}});
+  await page.elements.get("verificationForm").emit("submit",{preventDefault(){}});
   const request=page.requests.find(({path})=>path==="/api/verify-email");
   assert.deepEqual(JSON.parse(request.options.body),{code:"123456"});
+  assert.equal(page.requests.filter(({path})=>path==="/api/verify-email").length,1,"navigation lock prevents duplicate verification");
   assert.deepEqual(page.navigations,["/planner.html?add=flat-dumbbell-press"]);
   assert.equal(page.sessionStorage.getItem("strata.verification.maskedEmail"),null);
 });
@@ -189,6 +215,28 @@ test("invalid codes remain retryable and resend cooldown disables only resend",a
   assert.equal(page.timers.length,1,"cooldown uses one end-of-wait update, not a per-second live timer");
 });
 
+test("verification and resend requests cannot overlap",async()=>{
+  let finishVerification;
+  const page=verificationPage(async(path)=>{
+    if(path==="/api/verification-status")return response(200,{active:true,expiresAt:Date.now()+600000,resendAfter:0});
+    if(path==="/api/verify-email")return new Promise((resolve)=>{finishVerification=resolve;});
+    if(path==="/api/resend-verification")return response(202,{active:true,resendAfter:60});
+    throw new Error(`Unexpected path ${path}`);
+  });
+  await settle();
+  page.elements.get("verificationCode").value="123456";
+  const pending=page.elements.get("verificationForm").emit("submit",{preventDefault(){}});
+  await new Promise(setImmediate);
+  await page.elements.get("resendForm").emit("submit",{preventDefault(){}});
+  assert.equal(page.requests.filter(({path})=>path==="/api/resend-verification").length,0);
+  assert.equal(page.elements.get("verificationSubmit").disabled,true);
+  assert.equal(page.elements.get("resendSubmit").disabled,true);
+  finishVerification(response(400,{error:"Invalid code.",code:"INVALID_VERIFICATION_CODE",attemptsRemaining:4}));
+  await pending;
+  assert.equal(page.elements.get("verificationSubmit").disabled,false);
+  assert.equal(page.elements.get("resendSubmit").disabled,false);
+});
+
 test("the final incorrect attempt locks verification and guides the user to resend",async()=>{
   const page=verificationPage(async(path)=>{
     if(path==="/api/verification-status")return response(200,{active:true,expiresAt:Date.now()+600000,resendAfter:0,deliveryState:"sent",attemptsRemaining:1});
@@ -201,4 +249,102 @@ test("the final incorrect attempt locks verification and guides the user to rese
   assert.equal(page.elements.get("verificationSubmit").disabled,true);
   assert.match(page.elements.get("verificationMessage").textContent,/too many incorrect attempts/i);
   assert.match(page.elements.get("verificationState").statusText.textContent,/request a fresh code/i);
+});
+
+test("a missing or consumed challenge stays on the page with explicit recovery actions",async()=>{
+  const page=verificationPage(async(path)=>{
+    if(path==="/api/verification-status")return response(200,{active:false});
+    throw new Error(`Unexpected path ${path}`);
+  });
+  await settle();
+  assert.deepEqual(page.navigations,[]);
+  assert.deepEqual(page.replacements,[]);
+  assert.equal(page.elements.get("verificationSessionEnded").hidden,false);
+  assert.equal(page.elements.get("verificationSessionEnded").focused,true);
+  assert.match(page.elements.get("verificationEndedMessage").textContent,/no longer active/i);
+  assert.equal(page.elements.get("verificationCode").disabled,true);
+  assert.equal(page.elements.get("verificationSubmit").disabled,true);
+  assert.equal(page.elements.get("resendSubmit").disabled,true);
+  assert.equal(page.elements.get("verificationRestart").href,"/account.html?mode=signup&next=planner&add=flat-dumbbell-press");
+  assert.equal(page.elements.get("verificationSignIn").href,"/account.html?mode=login&next=planner&add=flat-dumbbell-press");
+  assert.equal(page.sessionStorage.getItem("strata.verification.maskedEmail"),null);
+});
+
+test("an ended login verification offers sign-in recovery instead of signup copy",async()=>{
+  const page=verificationPage(async(path)=>{
+    if(path==="/api/verification-status")return response(200,{active:false,purpose:"login"});
+    throw new Error(`Unexpected path ${path}`);
+  },{search:"?next=pricing&purpose=login"});
+  await settle();
+  assert.equal(page.elements.get("verificationSessionEnded").hidden,false);
+  assert.match(page.elements.get("verificationEndedMessage").textContent,/sign-in verification/i);
+  assert.equal(page.elements.get("verificationRestart").href,"/account.html?mode=login&next=pricing");
+  assert.match(String(page.elements.get("verificationRestart").innerHTML),/start sign-in again/i);
+  assert.match(page.elements.get("verificationStatus").textContent,/start sign-in again/i);
+});
+
+test("an expired code disables verification but keeps resend available",async()=>{
+  const page=verificationPage(async(path)=>{
+    if(path==="/api/verification-status")return response(200,{active:true,expiresAt:Date.now()-1000,resendAfter:Date.now()+60000});
+    throw new Error(`Unexpected path ${path}`);
+  });
+  await settle();
+  assert.deepEqual(page.navigations,[]);
+  assert.equal(page.elements.get("verificationSessionEnded").hidden,true);
+  assert.equal(page.elements.get("verificationSubmit").disabled,true);
+  assert.equal(page.elements.get("resendSubmit").disabled,true);
+  assert.match(page.elements.get("verificationState").statusText.textContent,/code has expired/i);
+  assert.equal(page.timers.length,1);
+  page.timers[0].callback();
+  assert.equal(page.elements.get("resendSubmit").disabled,false);
+});
+
+test("a code-expired API response remains recoverable through resend",async()=>{
+  const page=verificationPage(async(path)=>{
+    if(path==="/api/verification-status")return response(200,{active:true,expiresAt:Date.now()+600000,resendAfter:0});
+    if(path==="/api/verify-email")return response(410,{error:"Expired.",code:"VERIFICATION_CODE_EXPIRED"});
+    throw new Error(`Unexpected path ${path}`);
+  });
+  await settle();
+  page.elements.get("verificationCode").value="123456";
+  await page.elements.get("verificationForm").emit("submit",{preventDefault(){}});
+  assert.deepEqual(page.navigations,[]);
+  assert.deepEqual(page.replacements,[]);
+  assert.equal(page.elements.get("verificationSessionEnded").hidden,true);
+  assert.match(page.elements.get("verificationMessage").textContent,/expired/i);
+  assert.equal(page.elements.get("verificationSubmit").disabled,true);
+  assert.equal(page.elements.get("resendSubmit").disabled,false);
+});
+
+test("a hard-expired verification session is terminal and never redirects",async()=>{
+  const page=verificationPage(async(path)=>{
+    if(path==="/api/verification-status")return response(200,{active:true,expiresAt:Date.now()+600000,resendAfter:0});
+    if(path==="/api/verify-email")return response(410,{error:"Session expired.",code:"VERIFICATION_EXPIRED"});
+    throw new Error(`Unexpected path ${path}`);
+  });
+  await settle();
+  page.elements.get("verificationCode").value="123456";
+  await page.elements.get("verificationForm").emit("submit",{preventDefault(){}});
+  assert.deepEqual(page.navigations,[]);
+  assert.deepEqual(page.replacements,[]);
+  assert.equal(page.elements.get("verificationSessionEnded").hidden,false);
+  assert.match(page.elements.get("verificationEndedMessage").textContent,/signup verification expired/i);
+  assert.equal(page.elements.get("verificationSubmit").disabled,true);
+  assert.equal(page.elements.get("resendSubmit").disabled,true);
+});
+
+test("resend with no active challenge explains recovery instead of redirecting",async()=>{
+  const page=verificationPage(async(path)=>{
+    if(path==="/api/verification-status")return response(200,{active:true,expiresAt:Date.now()+600000,resendAfter:0});
+    if(path==="/api/resend-verification")return response(404,{error:"No active challenge.",code:"NO_ACTIVE_VERIFICATION"});
+    throw new Error(`Unexpected path ${path}`);
+  });
+  await settle();
+  await page.elements.get("resendForm").emit("submit",{preventDefault(){}});
+  assert.deepEqual(page.navigations,[]);
+  assert.deepEqual(page.replacements,[]);
+  assert.equal(page.elements.get("verificationSessionEnded").hidden,false);
+  assert.match(page.elements.get("verificationEndedMessage").textContent,/no longer active/i);
+  assert.equal(page.elements.get("verificationSubmit").disabled,true);
+  assert.equal(page.elements.get("resendSubmit").disabled,true);
 });

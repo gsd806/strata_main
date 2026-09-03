@@ -42,9 +42,10 @@ function placeholderCredential(value) {
   return /replace[-_ ]?with|replace-with|<[^>]+>|your[-_ ]?(?:private|secret|key)/i.test(String(value||""));
 }
 
-function directSignupAllowed(config,nodeEnv=process.env.NODE_ENV) {
+function directSignupAllowed(config,nodeEnv=process.env.NODE_ENV,explicitTestOverride=process.env.ALLOW_UNVERIFIED_SIGNUP_FOR_TESTS) {
   const runtime=clean(nodeEnv,40).toLowerCase();
-  return ["","development","test"].includes(runtime)&&config?.requestedEnabled!==true;
+  const allowed=clean(explicitTestOverride,20).toLowerCase()==="true";
+  return runtime==="test"&&allowed&&config?.requestedEnabled!==true;
 }
 
 function getEmailVerificationConfig(env=process.env) {
@@ -160,23 +161,26 @@ async function sendVerificationEmail(config,message,fetchImpl=globalThis.fetch) 
   const challengeId=clean(message?.challengeId,200);
   const generation=Number(message?.generation);
   const name=clean(message?.name,80)||"there";
+  const purpose=message?.purpose==="login"?"login":"signup";
   const expiresInMinutes=Math.max(1,Math.min(30,Math.ceil(Number(message?.expiresInMinutes)||10)));
   if (!mailboxAddress(to)||!/^\d{6}$/.test(code)||!challengeId||!Number.isSafeInteger(generation)||generation<1) {
     throw new TypeError("Invalid verification email input.");
   }
 
   const verificationUrl=`${config.appBaseUrl}/verify-email`;
-  const subject="Your STRATA verification code";
+  const subject=purpose==="login"?"Verify your STRATA sign-in":"Your STRATA verification code";
+  const action=purpose==="login"?"sign-in":"account verification";
   const text=[
     `Hi ${name},`,
     "",
-    `Your STRATA verification code is ${code}.`,
+    `Your STRATA ${action} code is ${code}.`,
     `It expires in ${expiresInMinutes} minutes.`,
     "",
-    "Return to the browser where you started signup and enter this code. If you did not request this account, you can ignore this email.",
+    `Return to the browser where you started ${purpose==="login"?"signing in":"signup"} and enter this code. If you did not request this, you can ignore this email.`,
     verificationUrl
   ].join("\n");
-  const html=`<!doctype html><html><body style="margin:0;padding:24px;background:#f4f2ec;color:#10110f;font-family:Arial,sans-serif"><main style="max-width:560px;margin:auto;background:#fff;padding:32px;border:1px solid #bbb"><p>Hi ${escapeHtml(name)},</p><h1 style="font-size:24px">Verify your STRATA email</h1><p>Your six-digit verification code is:</p><p style="font-size:36px;font-weight:700;letter-spacing:8px">${escapeHtml(code)}</p><p>It expires in ${expiresInMinutes} minutes.</p><p>Enter it on the STRATA verification page. If you did not request this account, you can ignore this email.</p><p><a href="${escapeHtml(verificationUrl)}">Open email verification</a></p></main></body></html>`;
+  const heading=purpose==="login"?"Verify your STRATA sign-in":"Verify your STRATA email";
+  const html=`<!doctype html><html><body style="margin:0;padding:24px;background:#f4f2ec;color:#10110f;font-family:Arial,sans-serif"><main style="max-width:560px;margin:auto;background:#fff;padding:32px;border:1px solid #bbb"><p>Hi ${escapeHtml(name)},</p><h1 style="font-size:24px">${heading}</h1><p>Your six-digit verification code is:</p><p style="font-size:36px;font-weight:700;letter-spacing:8px">${escapeHtml(code)}</p><p>It expires in ${expiresInMinutes} minutes.</p><p>Enter it on the STRATA verification page. If you did not request this, you can ignore this email.</p><p><a href="${escapeHtml(verificationUrl)}">Open email verification</a></p></main></body></html>`;
   const idempotencyDigest=digestParts(requireVerificationSecret(config),"verification-delivery-v1",[challengeId,generation]);
   const body={from:config.from,to:[to],subject,text,html};
   if (config.replyTo) body.reply_to=config.replyTo;

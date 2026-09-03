@@ -1,6 +1,8 @@
 # STRATA — Exercise Rankings and Weekly Planner
 
-STRATA is an evidence-informed workout index with server-backed, email-verified accounts, a private exercise-discovery studio, and a drag-and-drop weekly planner. It includes 160 resistance-training exercises—20 per muscle group, including 40 bodyweight options—across 8 muscle groups and 26 sub-muscle targets. Build 6.7.0 is an installable Progressive Web App (PWA) with Resend-powered account verification and Paddle-powered, one-time Discovery access.
+STRATA is an evidence-informed workout index with server-backed, email-verified accounts, a private exercise-discovery studio, and a drag-and-drop weekly planner. It includes 160 resistance-training exercises—20 per muscle group, including 40 bodyweight options—across 8 muscle groups and 26 sub-muscle targets. Build 6.7.1 is an installable Progressive Web App (PWA) with Resend-powered account verification and Paddle-powered, one-time Discovery access.
+
+**Build 6.7.1 is a security release.** It fixes a Turso completion-result bug that could commit a verified user and session while the browser was incorrectly told that the code had failed. Authentication-critical writes now prove success from SQL `RETURNING` rows instead of client-reported affected-row metadata. Production signup fails closed whenever verification is disabled or incomplete, unverified users cannot reuse an older session, and successful legacy-account verification replaces every older session with one newly verified session.
 
 ## Requirements
 
@@ -9,7 +11,7 @@ STRATA is an evidence-informed workout index with server-backed, email-verified 
 
 ## Project structure
 
-Build 6.7.0 separates browser files from private server code while preserving every public URL used by visitors, Paddle, Render, and installed PWAs:
+Build 6.7.1 separates browser files from private server code while preserving every public URL used by visitors, Paddle, Render, and installed PWAs:
 
 ```text
 server.js          Small root bootstrap used by `npm start`
@@ -45,7 +47,7 @@ The PWA caches only public interface assets and an offline explanation page. Acc
 
 ## Public pricing, support, and policies
 
-Build 6.7.0 has public, mobile-friendly pages at `/pricing`, `/contact`, `/terms`, `/privacy`, and `/refunds`. The homepage links to all five without requiring JavaScript or an account.
+Build 6.7.1 has public, mobile-friendly pages at `/pricing`, `/contact`, `/terms`, `/privacy`, and `/refunds`. The homepage links to all five without requiring JavaScript or an account.
 
 The homepage also includes an **About the Founder** section for Saeed Abdalla Alketbi, describing STRATA’s UAE roots and the engineering mindset behind the project. It intentionally publishes only the city-level location `Al Ain, UAE`; do not add a residential street address to the public site.
 
@@ -71,19 +73,19 @@ Render explicitly positions Free instances for testing and hobby projects rather
 
 ### 2. Configure the free Render web service
 
-The simplest route is **New → Blueprint**, select the repository, and let Render read `render.yaml`. When prompted, enter the two private Turso values, the three Paddle values that are not committed, the Resend API key, and the separate email-verification HMAC secret. Render marks these seven entries `sync: false`, so their values are not stored in the repository. The Paddle client-side token is intentionally browser-visible after deployment; the other credentials remain server-only.
+The simplest route is **New → Blueprint**, select the repository, and let Render read `render.yaml`. Render asks for nine values marked `sync: false`: two Turso credentials, the email-verification switch plus two email secrets, and the checkout switch plus three Paddle values. These values are entered in Render and are not stored in the repository. The Paddle client-side token is intentionally browser-visible after deployment; the API keys, database token, webhook secret, and verification secret remain server-only.
 
 For manual setup, choose **Web Service** (not Static Site), connect the GitHub repository, and use:
 
 ```text
 Runtime: Node
-Build Command: npm install
+Build Command: npm install --omit=dev --no-audit --no-fund
 Start Command: npm start
 Health Check Path: /healthz
 Instance Type: Free
 ```
 
-Under Render's **Environment** page, add the following for the current, tested live deployment. The checked-in `render.yaml` uses these same non-secret production values:
+Under Render's **Environment** page, add the following for the current live deployment. The checked-in `render.yaml` supplies the fixed non-secret values and asks you to enter both rollout switches manually:
 
 ```text
 NODE_ENV=production
@@ -106,7 +108,9 @@ PADDLE_CHECKOUT_ENABLED=true
 PADDLE_ENFORCE_IP_ALLOWLIST=false
 ```
 
-The live checkout has already passed an end-to-end test, so production keeps `PADDLE_CHECKOUT_ENABLED=true`. For a fresh or unverified Paddle setup, begin with the safe `.env.example` value `false`, finish the webhook test, and enable checkout only after the signed notification grants access correctly. Email verification has its own independent safe rollout switch: keep `EMAIL_VERIFICATION_ENABLED=false` until the Resend domain, credentials, and first deployment have been checked as described below. In production, that setting pauses new signup instead of creating an unverified account; established login remains available.
+The live checkout has already passed an end-to-end test, so the current production service may keep `PADDLE_CHECKOUT_ENABLED=true`. For a fresh or unverified Paddle setup, begin with `false`, finish the webhook test, and enable checkout only after the signed notification grants access correctly. Keep `EMAIL_VERIFICATION_ENABLED=false` during the first 6.7.1 migration deploy. In production, that setting pauses new signup instead of creating an unverified account; existing password login remains available until the verification switch is enabled.
+
+`EMAIL_VERIFICATION_ENABLED` must be spelled exactly and set explicitly to `true` or `false`; Build 6.7.1 refuses to start in production if the value is absent or invalid. Do not set `ALLOW_UNVERIFIED_SIGNUP_FOR_TESTS` in Render. That test-only escape hatch is accepted only when `NODE_ENV=test` and cannot enable production signup.
 
 `TRUST_PROXY=true` tells the login limiter to use the client address supplied by Render's trusted reverse proxy instead of treating every proxied request as one visitor. Do not enable it when exposing the Node process directly to the public internet.
 
@@ -131,7 +135,9 @@ Create a test account and save a workout. In Render, trigger **Manual Deploy →
 
 ## Resend email verification setup
 
-Build 6.7.0 verifies each new signup with a six-digit code delivered by Resend. The code expires after 10 minutes, permits at most five incorrect attempts, and cannot be resent until 60 seconds have passed. The entire pre-account challenge ends after 30 minutes. STRATA keeps the challenge in a short-lived, HttpOnly pre-authentication cookie and stores only an HMAC digest of the code in Turso—not the code itself. A user row and normal account session are created only after successful verification. Existing users remain ordinary verified accounts because pending signups are stored separately from the existing `users` table.
+Build 6.7.1 verifies each new signup with a six-digit code delivered by Resend. The code expires after 10 minutes, permits at most five incorrect attempts, and cannot be resent until 60 seconds have passed. The entire pre-account challenge ends after 30 minutes. STRATA keeps the challenge in a short-lived, HttpOnly pre-authentication cookie and stores only an HMAC digest of the code in Turso—not the code itself. A new user row and normal account session are created atomically only after a correct code.
+
+The migration also adds a durable `email_verified_at` marker. Existing 6.6/6.7.0 user rows begin unverified because the old schema had no trustworthy proof that their inbox had been checked. After verification is enabled, each existing user enters the correct password and completes one email code at the next login. Their user ID, password hash, planner, preferences, ratings, and Discovery purchases stay attached to the same account. Older sessions are denied while the marker is empty, then revoked when verification succeeds so only the new verified session remains.
 
 ### 1. Verify the sending subdomain
 
@@ -165,13 +171,13 @@ EMAIL_REPLY_TO=stratafitness.official@gmail.com
 EMAIL_VERIFICATION_SECRET=<the independent random value>
 ```
 
-Keep `EMAIL_VERIFICATION_ENABLED=false` for the first Build 6.7.0 deploy. This lets the new pending-signup schema initialize without changing the established login flow. New signup returns a temporary email-verification-unavailable response during this brief rollout stage, so no unverified account can be created. After the deploy:
+Keep `EMAIL_VERIFICATION_ENABLED=false` for the first Build 6.7.1 deploy. This lets the new columns and indexes initialize before email enforcement begins. New signup returns a temporary email-verification-unavailable response during this brief rollout stage, so no unverified account can be created. Existing password login continues during this migration-only stage. After the deploy:
 
 1. Confirm `/healthz` still returns HTTP `200` and `/api/status` still reports Turso as persistent.
-2. Sign in to at least one existing account and confirm its planner and Discovery entitlement still load. Existing accounts must not be asked for a code.
+2. Sign in to at least one existing account and confirm its planner and Discovery entitlement still load while the switch is off.
 3. Confirm the Resend domain is verified and the API key, From address, Reply-To address, and HMAC secret are present in Render.
 
-Only after those checks pass, change `EMAIL_VERIFICATION_ENABLED` to `true`, choose **Save and deploy**, and wait for the new deployment to become healthy. If its Resend or HMAC configuration is incomplete, STRATA keeps established logins available but rejects every new signup with a temporary verification-service error; do not work around that protection by putting a secret in source code.
+Only after those checks pass, change `EMAIL_VERIFICATION_ENABLED` to `true`, choose **Save and deploy**, and wait for the new deployment to become healthy. Confirm `/api/status` reports both `"emailVerificationEnabled":true` and `"emailVerificationConfigured":true`. An existing account should now be asked for one code after its correct password is entered; completing it must restore the same plan and Discovery entitlement. If Resend or HMAC configuration is incomplete while enforcement is requested, STRATA fails closed for unverified accounts and new signup until the configuration is corrected; accounts already marked verified can still sign in. Do not disable that protection in source code or reuse another service's secret.
 
 ### 4. Test the complete signup flow
 
@@ -182,6 +188,7 @@ Use a private/incognito window and an email inbox you control:
 3. Enter the code within 10 minutes. Confirm account creation completes, a normal session begins, and the planner works on a second device after signing in.
 4. Confirm an incorrect code is rejected, five incorrect attempts end that challenge, and requesting another email is blocked for the first 60 seconds.
 5. Request a new code after the cooldown and confirm the older code no longer works. Also confirm that a code or challenge older than its 10-minute/30-minute limit is rejected cleanly.
+6. For an existing account, confirm the correct password leads to email verification, the old session cannot access `/api/me`, and the verified session preserves the existing planner and Discovery access.
 
 Verification messages are essential transactional account mail, not marketing messages. Resend's published free-account limits are currently 100 transactional emails per day and 3,000 per month, with a default API rate limit of 10 requests per second; check the Resend **Usage** page and the current [quota documentation](https://resend.com/docs/knowledge-base/account-quotas-and-limits) rather than assuming those limits will never change. If Resend is temporarily unavailable, verified users must still be able to sign in; new users can retry or resend instead of receiving a partially created account.
 
@@ -309,7 +316,8 @@ Official references: [Paddle go-live checklist](https://developer.paddle.com/bui
 - Dedicated `/account.html` page with native server-submitted signup/login forms, so account access does not depend on homepage JavaScript
 - Resend-delivered six-digit email verification for new signups, with a 10-minute code, five-attempt limit, 60-second resend cooldown, and hard 30-minute challenge
 - HMAC-only verification-code storage, a short-lived HttpOnly pre-authentication cookie, and no user row or normal session until verification succeeds
-- Existing accounts remain verified during the upgrade because pending signups are stored separately
+- Durable verification state for new and existing accounts; legacy IDs, plans, ratings, preferences, and purchases are preserved through the one-time email check
+- Revocation of pre-verification sessions when an existing account completes its email check
 - Scrypt password hashing with per-user random salts
 - No plaintext or reversibly encrypted passwords are stored
 - Random database-backed sessions in HttpOnly, SameSite cookies
@@ -342,7 +350,7 @@ Official references: [Paddle go-live checklist](https://developer.paddle.com/bui
 npm test
 ```
 
-The suite checks authentication and persistence APIs, protected password storage, pending-signup isolation, code HMAC validation, verification expiry and attempt limits, resend rotation and cooldowns, provider failures, preservation of existing accounts, live Paddle configuration, signature verification, webhook idempotency, checkout/entitlement boundaries, refund handling, PWA installation and cache-safety rules, and the pure discovery engine: scoring contributions, personalization exclusions, target-compatible battles and alternatives, request limits, plan validation, search/filter behavior, source data, and all 160 YouTube links.
+The suite checks authentication and persistence APIs, protected password storage, pending-signup isolation, code HMAC validation, verification expiry and attempt limits, resend rotation and cooldowns, provider failures, Turso-safe returned-row completion semantics, legacy-account one-time verification, old-session revocation, preservation of account data, live Paddle configuration, signature verification, webhook idempotency, checkout/entitlement boundaries, refund handling, PWA installation and cache-safety rules, and the pure discovery engine: scoring contributions, personalization exclusions, target-compatible battles and alternatives, request limits, plan validation, search/filter behavior, source data, and all 160 YouTube links.
 
 Run the browser-free runtime checks as well with:
 

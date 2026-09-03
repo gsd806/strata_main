@@ -12,8 +12,8 @@ function safeNext(raw,exerciseId){
   return "/planner.html";
 }
 
-function accountLocation(destination){
-  const query=new URLSearchParams({mode:"signup"});
+function accountLocation(destination,mode="signup"){
+  const query=new URLSearchParams({mode:mode==="login"?"login":"signup"});
   if(destination==="/pricing")query.set("next","pricing");
   else if(destination==="/discover.html")query.set("next","discover");
   else{
@@ -28,12 +28,16 @@ const next=safeNext(params.get("next"),params.get("add"));
 const form=el("verificationForm"),codeInput=el("verificationCode"),verifyButton=el("verificationSubmit");
 const resendForm=el("resendForm"),resendButton=el("resendSubmit");
 const messageNode=el("verificationMessage"),statusNode=el("verificationStatus"),stateNode=el("verificationState");
+const endedNode=el("verificationSessionEnded"),endedMessageNode=el("verificationEndedMessage");
 let resendTimer=0;
 let verificationLocked=false;
+let verificationSessionEnded=false;
+let verificationNavigating=false;
+let verificationBusy=false;
+let verificationPurpose="signup";
 
 el("verificationNext").value=next;
 el("resendNext").value=next;
-el("verificationBack").href=accountLocation(next);
 
 function normalizedCode(value){
   return String(value||"").replace(/[^0-9]/g,"").slice(0,6);
@@ -42,6 +46,28 @@ function normalizedCode(value){
 function rememberedMaskedEmail(){
   try{return String(globalThis.sessionStorage?.getItem("strata.verification.maskedEmail")||"").trim().slice(0,254);}
   catch{return "";}
+}
+
+function rememberedPurpose(){
+  try{return globalThis.sessionStorage?.getItem("strata.verification.purpose")==="login"?"login":"signup";}
+  catch{return "signup";}
+}
+
+function setVerificationPurpose(value){
+  verificationPurpose=value==="login"?"login":"signup";
+  try{globalThis.sessionStorage?.setItem("strata.verification.purpose",verificationPurpose);}catch{}
+  el("verificationPurpose").value=verificationPurpose;
+  el("resendPurpose").value=verificationPurpose;
+  el("verificationBack").href=accountLocation(next,verificationPurpose);
+  el("verificationBack").textContent=verificationPurpose==="login"?"← Back to sign in":"← Back to signup";
+  el("verificationRestart").href=accountLocation(next,verificationPurpose);
+  el("verificationRestart").innerHTML=verificationPurpose==="login"
+    ?"Start sign-in again <span aria-hidden=\"true\">→</span>"
+    :"Restart signup <span aria-hidden=\"true\">→</span>";
+  el("verificationSignIn").href=accountLocation(next,"login");
+  el("verificationSignIn").innerHTML=verificationPurpose==="login"
+    ?"Use another account <span aria-hidden=\"true\">→</span>"
+    :"Sign in instead <span aria-hidden=\"true\">→</span>";
 }
 
 function rememberMaskedEmail(value){
@@ -53,7 +79,10 @@ function rememberMaskedEmail(value){
 }
 
 function forgetMaskedEmail(){
-  try{globalThis.sessionStorage?.removeItem("strata.verification.maskedEmail");}catch{}
+  try{
+    globalThis.sessionStorage?.removeItem("strata.verification.maskedEmail");
+    globalThis.sessionStorage?.removeItem("strata.verification.purpose");
+  }catch{}
 }
 
 function renderState(kind,text){
@@ -85,7 +114,16 @@ function errorCode(error){
 
 function noActiveChallenge(error){
   const code=errorCode(error);
-  return error?.status===404||code.includes("NO_ACTIVE")||code.includes("CHALLENGE_NOT_FOUND")||code==="VERIFICATION_EXPIRED"||code==="VERIFICATION_SEND_LIMIT";
+  return code.includes("NO_ACTIVE")||code.includes("CHALLENGE_NOT_FOUND")||code.includes("CONSUMED")||code==="VERIFICATION_EXPIRED"||code==="VERIFICATION_SESSION_EXPIRED"||code==="VERIFICATION_HARD_EXPIRED"||code==="VERIFICATION_SEND_LIMIT";
+}
+
+function inactiveVerificationMessage(expired=false){
+  if(verificationPurpose==="login")return expired
+    ?"This sign-in verification expired. Start sign-in again to receive a new code."
+    :"This sign-in verification is no longer active. Start sign-in again to receive a new code.";
+  return expired
+    ?"This signup verification expired. Restart signup to receive a new code."
+    :"This signup verification is no longer active. Restart signup to receive a new code.";
 }
 
 function friendlyError(error,action){
@@ -120,6 +158,10 @@ async function readJson(path,options={}){
       code:data?.code,
       retryAfter,
       attemptsRemaining:Number.isFinite(Number(data?.attemptsRemaining))?Number(data.attemptsRemaining):null,
+      purpose:data?.purpose==="login"?"login":data?.purpose==="signup"?"signup":"",
+      maskedEmail:data?.maskedEmail,
+      expiresAt:data?.expiresAt,
+      resendAfter:data?.resendAfter,
       deliveryState:["sent","failed","pending"].includes(data?.deliveryState)?data.deliveryState:""
     });
   }
@@ -151,26 +193,69 @@ function durationLabel(milliseconds){
 function setResendAfter(value,{duration=false,prefix="Another code can be sent in"}={}){
   if(resendTimer)globalThis.clearTimeout(resendTimer);
   resendTimer=0;
+  if(verificationSessionEnded){resendButton.disabled=true;return;}
   const unlockAt=timestamp(value,{duration}),remaining=unlockAt-Date.now();
   if(remaining<=0){resendButton.disabled=false;return;}
   resendButton.disabled=true;
   statusText(`${prefix} about ${durationLabel(remaining)}.`);
   resendTimer=globalThis.setTimeout(()=>{
-    resendButton.disabled=false;
-    statusText("You can request another code now.");
+    resendTimer=0;
+    if(!verificationSessionEnded&&!verificationBusy){
+      resendButton.disabled=false;
+      statusText("You can request another code now.");
+    }
   },Math.min(remaining+50,2147483647));
 }
 
 function describeExpiry(value){
   const expiresAt=timestamp(value),remaining=expiresAt-Date.now();
-  if(expiresAt&&remaining<=0){renderState("bad","This code has expired. Request another code below.");return;}
+  if(expiresAt&&remaining<=0){markCodeExpired();return;}
   if(remaining>0)renderState("good",`Your code expires in about ${durationLabel(remaining)}.`);
   else renderState("good","Your verification code is ready.");
 }
 
 function setVerificationLocked(locked){
   verificationLocked=locked===true;
-  verifyButton.disabled=verificationLocked;
+  verifyButton.disabled=verificationLocked||verificationBusy;
+}
+
+function setVerificationBusy(busy){
+  verificationBusy=busy===true;
+  verifyButton.disabled=verificationBusy||verificationLocked;
+  resendButton.disabled=verificationBusy||verificationSessionEnded||Boolean(resendTimer);
+}
+
+function markCodeExpired(){
+  setVerificationLocked(true);
+  codeInput.setAttribute("aria-invalid","true");
+  renderState("bad","This code has expired. Request another code below to continue.");
+  statusText(resendButton.disabled
+    ?"You can request another code after the resend cooldown."
+    :"You can request another code now.");
+}
+
+function endVerificationSession(message=""){
+  verificationSessionEnded=true;
+  verificationLocked=true;
+  if(resendTimer)globalThis.clearTimeout(resendTimer);
+  resendTimer=0;
+  forgetMaskedEmail();
+  clearError();
+  codeInput.value="";
+  codeInput.disabled=true;
+  verifyButton.disabled=true;
+  resendButton.disabled=true;
+  form.setAttribute("aria-disabled","true");
+  resendForm.setAttribute("aria-disabled","true");
+  endedMessageNode.textContent=message||(verificationPurpose==="login"
+    ?"This sign-in verification is no longer active. Start sign-in again to receive a new code."
+    :"This signup verification is no longer active. Restart signup to receive a new code.");
+  endedNode.hidden=false;
+  renderState("bad","Your verification session has ended. This page did not grant account access.");
+  statusText(verificationPurpose==="login"
+    ?"Start sign-in again to request a new verification code."
+    :"Restart signup to request a new verification code.");
+  requestAnimationFrame(()=>endedNode.focus({preventScroll:false}));
 }
 
 function renderChallengeState(result){
@@ -215,14 +300,15 @@ function nativeQueryMessage(){
 async function refreshStatus(){
   try{
     const result=await readJson("/api/verification-status");
-    if(result.active!==true){forgetMaskedEmail();location.replace(accountLocation(next));return;}
+    if(result.purpose)setVerificationPurpose(result.purpose);
+    if(result.active!==true){endVerificationSession();return;}
     rememberMaskedEmail(result.maskedEmail);
     renderChallengeState(result);
     setResendAfter(result.resendAfter);
   }catch(error){
-    if(noActiveChallenge(error)||error.status===401||error.status===410){
-      forgetMaskedEmail();
-      location.replace(accountLocation(next));
+    if(error.purpose)setVerificationPurpose(error.purpose);
+    if(noActiveChallenge(error)){
+      endVerificationSession();
       return;
     }
     renderState("warn","We could not check the verification timer. You can still enter your code.");
@@ -237,7 +323,7 @@ function enhanceVerification(){
   });
   form.addEventListener("submit",async(event)=>{
     event.preventDefault();
-    if(form.dataset.submitting==="true")return;
+    if(verificationSessionEnded||verificationNavigating||verificationBusy||form.dataset.submitting==="true")return;
     const code=normalizedCode(codeInput.value);
     codeInput.value=code;
     clearError();
@@ -248,15 +334,36 @@ function enhanceVerification(){
     }
     form.dataset.submitting="true";
     form.setAttribute("aria-busy","true");
-    verifyButton.disabled=true;
+    setVerificationBusy(true);
     try{
       const result=await readJson("/api/verify-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code})});
       if(!result.user?.id)throw Object.assign(new Error("Unexpected response."),{code:"invalid-response",status:502});
       forgetMaskedEmail();
+      verificationNavigating=true;
       location.assign(next);
     }catch(error){
-      if(errorCode(error)==="ACCOUNT_EXISTS"){forgetMaskedEmail();location.replace(accountLocation(next).replace("mode=signup","mode=login"));return;}
-      if(noActiveChallenge(error)){forgetMaskedEmail();location.replace(accountLocation(next));return;}
+      if(error.purpose)setVerificationPurpose(error.purpose);
+      if(errorCode(error)==="VERIFICATION_CODE_REPLACED"){
+        codeInput.value="";
+        rememberMaskedEmail(error.maskedEmail);
+        renderChallengeState(error);
+        setResendAfter(error.resendAfter);
+        showError("A newer code was sent. Use the most recent six-digit code from your email.");
+        return;
+      }
+      if(errorCode(error)==="ACCOUNT_EXISTS"){
+        endVerificationSession("An account already exists for this email. Sign in instead, or restart signup with a different address.");
+        return;
+      }
+      if(noActiveChallenge(error)){
+        endVerificationSession(inactiveVerificationMessage(errorCode(error).includes("EXPIRED")));
+        return;
+      }
+      if(errorCode(error)==="VERIFICATION_CODE_EXPIRED"||error.status===410){
+        markCodeExpired();
+        showError("That code has expired. Send another code and try again.");
+        return;
+      }
       if(error.attemptsRemaining===0){
         setVerificationLocked(true);
         renderState("bad","Too many incorrect attempts. Request a fresh code below to continue.");
@@ -266,22 +373,25 @@ function enhanceVerification(){
         showError(friendlyError(error,"verify"));
       }
     }finally{
-      delete form.dataset.submitting;
-      form.removeAttribute("aria-busy");
-      verifyButton.disabled=verificationLocked;
+      if(!verificationNavigating){
+        setVerificationBusy(false);
+        delete form.dataset.submitting;
+        form.removeAttribute("aria-busy");
+      }
     }
   });
 
   resendForm.addEventListener("submit",async(event)=>{
     event.preventDefault();
-    if(resendForm.dataset.submitting==="true"||resendButton.disabled)return;
+    if(verificationSessionEnded||verificationBusy||resendForm.dataset.submitting==="true"||resendButton.disabled)return;
     resendForm.dataset.submitting="true";
     resendForm.setAttribute("aria-busy","true");
-    resendButton.disabled=true;
+    setVerificationBusy(true);
     clearError();
     try{
       const result=await readJson("/api/resend-verification",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});
-      if(result.active===false){forgetMaskedEmail();location.replace(accountLocation(next));return;}
+      if(result.purpose)setVerificationPurpose(result.purpose);
+      if(result.active===false){endVerificationSession();return;}
       rememberMaskedEmail(result.maskedEmail);
       codeInput.value="";
       setVerificationLocked(false);
@@ -290,17 +400,22 @@ function enhanceVerification(){
       setResendAfter(result.resendAfter,{duration:true,prefix:"Fresh code sent. You can request another code in"});
       requestAnimationFrame(()=>codeInput.focus({preventScroll:false}));
     }catch(error){
-      if(noActiveChallenge(error)||error.status===401||error.status===410){forgetMaskedEmail();location.replace(accountLocation(next));return;}
+      if(error.purpose)setVerificationPurpose(error.purpose);
+      if(noActiveChallenge(error)){
+        endVerificationSession(inactiveVerificationMessage(errorCode(error).includes("EXPIRED")));
+        return;
+      }
       if(error.status===429||errorCode(error).includes("COOLDOWN"))setResendAfter(error.retryAfter,{duration:true,prefix:"Try sending another code again in"});
       showError(friendlyError(error,"resend"),{markCode:false});
     }finally{
+      setVerificationBusy(false);
       delete resendForm.dataset.submitting;
       resendForm.removeAttribute("aria-busy");
-      if(!resendTimer)resendButton.disabled=false;
     }
   });
 }
 
+setVerificationPurpose(params.get("purpose")||rememberedPurpose());
 rememberMaskedEmail(rememberedMaskedEmail());
 nativeQueryMessage();
 if(globalThis.matchMedia?.("(max-width: 720px)").matches)requestAnimationFrame(()=>el("verificationTitle").focus({preventScroll:false}));
