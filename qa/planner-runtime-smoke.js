@@ -109,8 +109,8 @@ function clickLoadMore(){
   assert.equal(result.expandedCards,64,"One desktop Load more action should render 64 cards total");
   assert.equal(result.uniqueExpandedCards,64,"Load more must not duplicate library cards");
   assert.equal(result.firstPagePreserved,true,"Load more should preserve the original first page order");
-  assert.equal(result.loadMoreStillAvailable,true,"A 160-item library should have more results after 64 cards");
+  assert.equal(result.loadMoreStillAvailable,true,"A 200-item library should have more results after 64 cards");
   assert.equal(result.focusedFirstNewCard,true,"Focus should move to the first newly revealed card");
-  assert.match(result.resultStatus,/Showing 64 of 160 matching movements\./);
+  assert.match(result.resultStatus,/Showing 64 of 200 matching movements\./);
   console.log(JSON.stringify(result,null,2));
 })().catch((error)=>{console.error(error);process.exitCode=1;});

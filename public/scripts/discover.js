@@ -8,11 +8,21 @@ const LIMITATION_OPTIONS={"no-overhead":"Avoid overhead positions","no-deep-knee
 const EXPLORER_DESKTOP_PAGE_SIZE=24;
 const EXPLORER_MOBILE_PAGE_SIZE=12;
 const SEARCH_DEBOUNCE_MS=180;
-const state={exercises:[],methodology:null,sources:[],limited:new Set(),preferences:null,user:null,aggregate:new Map(),userRatings:new Map(),compare:[],collection:"all",query:"",group:"all",equipment:"all",pattern:"all",level:"all",sort:"personal",recommendations:[],activeExercise:null,explorerLimit:EXPLORER_DESKTOP_PAGE_SIZE};
+const RATINGS_REFRESH_MIN_INTERVAL_MS=15_000;
+const FEATURE_DEFAULT="recommendations";
+const FEATURE_CONFIG=Object.freeze({
+  recommendations:{panelId:"recommendations",headingId:"recommendationTitle",label:"Best for you"},
+  explorer:{panelId:"exerciseExplorer",headingId:"explorerTitle",label:"Explore and rate"},
+  battle:{panelId:"battle",headingId:"battleTitle",label:"Exercise battle"},
+  profile:{panelId:"profile",headingId:"profileTitle",label:"Tune my ranking"},
+  methodology:{panelId:"methodology",headingId:"methodTitle",label:"FitScore method"}
+});
+const state={exercises:[],methodology:null,sources:[],limited:new Set(),preferences:null,user:null,csrfToken:"",aggregate:new Map(),userRatings:new Map(),ratingsRefreshedAt:0,ratingsRefreshPromise:null,compare:[],collection:"all",query:"",group:"all",equipment:"all",pattern:"all",level:"all",sort:"personal",recommendations:[],activeExercise:null,activeFeature:null,explorerLimit:EXPLORER_DESKTOP_PAGE_SIZE};
 const el=(id)=>document.getElementById(id);
 
 async function api(path,options={}) {
-  const response=await fetch(path,{...options,credentials:"same-origin",headers:{Accept:"application/json",...(options.body?{"Content-Type":"application/json"}:{}),...(options.headers||{})}});
+  const method=String(options.method||"GET").toUpperCase(),changesState=method!=="GET"&&method!=="HEAD";
+  const response=await fetch(path,{...options,credentials:"same-origin",headers:{Accept:"application/json",...(options.body?{"Content-Type":"application/json"}:{}),...(changesState&&state.csrfToken?{"X-CSRF-Token":state.csrfToken}:{}),...(options.headers||{})}});
   const data=await response.json().catch(()=>({}));
   if(!response.ok){
     const error=Object.assign(new Error(data.error||"Request failed."),{status:response.status,code:data.code||"REQUEST_FAILED"});
@@ -26,9 +36,85 @@ async function api(path,options={}) {
 function escapeHtml(value){return String(value??"").replace(/[&<>'"]/g,(char)=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[char]));}
 function exerciseById(id){return state.exercises.find((exercise)=>exercise.id===id);}
 function titleCase(value){return String(value).replace(/(^|[- /])\w/g,(match)=>match.toUpperCase());}
+function featureName(value){
+  const raw=String(value||"").replace(/^#/,"");
+  if(Object.hasOwn(FEATURE_CONFIG,raw))return raw;
+  return Object.keys(FEATURE_CONFIG).find((name)=>FEATURE_CONFIG[name].panelId===raw)||null;
+}
+function featureFromLocation(){
+  const raw=String(globalThis.location?.hash||"").replace(/^#/,"");
+  try{return featureName(decodeURIComponent(raw));}catch{return featureName(raw);}
+}
+function featurePanel(name){const config=FEATURE_CONFIG[name];return config?el(config.panelId):null;}
+function featureHash(name){return `#${FEATURE_CONFIG[name].panelId}`;}
+function updateFeatureHistory(name,mode){
+  if(mode!=="push"&&mode!=="replace")return;
+  const hash=featureHash(name);
+  if(String(globalThis.location?.hash||"")===hash)return;
+  const method=mode==="push"?"pushState":"replaceState";
+  globalThis.history?.[method]?.({feature:name},"",hash);
+}
+function activateFeature(value,{focus=false,scroll=false,smooth=false,announce=false,historyMode="none"}={}){
+  const name=featureName(value)||FEATURE_DEFAULT,config=FEATURE_CONFIG[name],panel=featurePanel(name);
+  if(!panel)return false;
+  state.activeFeature=name;
+  for(const candidate of Object.keys(FEATURE_CONFIG)){
+    const candidatePanel=featurePanel(candidate);
+    if(candidatePanel)candidatePanel.hidden=candidate!==name;
+  }
+  for(const link of document.querySelectorAll("[data-feature-target]")){
+    const active=featureName(link.dataset.featureTarget)===name;
+    link.classList.toggle("active",active);
+    link.setAttribute?.("aria-controls",FEATURE_CONFIG[featureName(link.dataset.featureTarget)]?.panelId||"");
+    link.setAttribute?.("aria-expanded",String(active));
+    if(link.classList.contains("feature-block")){
+      if(active)link.setAttribute?.("aria-current","location");
+      else link.removeAttribute?.("aria-current");
+    }
+  }
+  document.body.dataset.activeFeature=name;
+  updateFeatureHistory(name,historyMode);
+  if(announce&&el("featureStatus"))el("featureStatus").textContent=`${config.label} workspace opened.`;
+  if(state.user&&["recommendations","explorer","battle"].includes(name))void refreshCommunityRatings().catch(()=>{});
+  if(scroll||focus){
+    const move=()=>{
+      const reduceMotion=window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+      if(scroll)panel.scrollIntoView?.({behavior:smooth&&!reduceMotion?"smooth":"auto",block:"start"});
+      if(focus)el(config.headingId)?.focus?.({preventScroll:true});
+    };
+    if(typeof globalThis.requestAnimationFrame==="function")globalThis.requestAnimationFrame(move);else setTimeout(move,0);
+  }
+  return true;
+}
+function initializeFeatureNavigation(){
+  const rawHash=String(globalThis.location?.hash||"").replace(/^#/,"");
+  const requested=featureFromLocation(),atHub=rawHash==="featureHub";
+  activateFeature(requested||FEATURE_DEFAULT,{scroll:Boolean(requested),historyMode:requested||atHub?"none":"replace"});
+}
+let featureHistoryQueued=false;
+function restoreFeatureFromHistory(){
+  if(featureHistoryQueued)return;
+  featureHistoryQueued=true;
+  Promise.resolve().then(()=>{
+    featureHistoryQueued=false;
+    const rawHash=String(globalThis.location?.hash||"").replace(/^#/,"");
+    if(rawHash==="featureHub")return;
+    const requested=featureFromLocation();
+    activateFeature(requested||FEATURE_DEFAULT,{scroll:Boolean(requested)});
+  });
+}
+window.addEventListener?.("popstate",restoreFeatureFromHistory);
+window.addEventListener?.("hashchange",restoreFeatureFromHistory);
 const round=Core.round;
 function aggregateFor(id){return state.aggregate.get(id)||null;}
-function communityLabel(id){const item=aggregateFor(id);return item&&Number(item.rating_count)>0?`${round(item.overall*2,1)}/10 · ${item.rating_count} vote${Number(item.rating_count)===1?"":"s"}`:"No community votes";}
+function communitySummary(id){
+  const item=aggregateFor(id),count=Math.max(0,Number.parseInt(item?.rating_count,10)||0),overall=Number(item?.overall);
+  if(!count||!Number.isFinite(overall))return {count:0,hasRatings:false,score:"",label:"Not rated yet",attribution:"No Strata+ ratings yet"};
+  const score=(Math.min(5,Math.max(1,overall))*2).toFixed(1);
+  return {count,hasRatings:true,score,label:`${score}/10 · ${count} rating${count===1?"":"s"}`,attribution:`Rated by ${count} Strata+ user${count===1?"":"s"}`};
+}
+function communityLabel(id){return communitySummary(id).label;}
+function ratingAverage(value){const number=Number(value);return Number.isFinite(number)?number.toFixed(1):"—";}
 const setupScore=Core.setupScore;
 const setupLabel=Core.setupLabel;
 const resistanceProfile=Core.resistanceProfile;
@@ -60,7 +146,7 @@ function renderRecommendations(){
   buildRecommendations();
   const goal={hypertrophy:"Hypertrophy selection",strength:"Strength skill",balanced:"Balanced","time-efficient":"Time-efficient setup"}[state.preferences.goal]||titleCase(state.preferences.goal);
   el("recommendationSummary").textContent=`Rules-based ${goal.toLowerCase()} ranking · ${state.preferences.equipment.length} equipment types · ${state.preferences.days} days`;
-  el("recommendationGrid").innerHTML=state.recommendations.length?state.recommendations.map(({exercise,result},index)=>`<article class="recommend-card" data-rank="${String(index+1).padStart(2,"0")}"><div class="card-topline"><span class="match-pill">${result.match}% personal match</span>${scoreButton(exercise)}</div><h3>${escapeHtml(exercise.name)}</h3><span class="target">${escapeHtml(GROUP_LABELS[exercise.group])} / ${escapeHtml(exercise.sub)}</span><p>${escapeHtml(profileReason(result))}. ${escapeHtml(exercise.why)}</p><div class="mini-meta"><span>${escapeHtml(exercise.equipment)}</span><span>${escapeHtml(exercise.level)}</span></div><div class="mini-actions"><button data-open-detail="${exercise.id}" type="button" aria-label="Why ${escapeHtml(exercise.name)} ranks here">Why it ranks</button>${compareButton(exercise)}<a href="/planner.html?add=${encodeURIComponent(exercise.id)}" aria-label="Add ${escapeHtml(exercise.name)} to weekly plan">Plan +</a></div></article>`).join(""):`<div class="loading-card">No exercise matches all saved equipment and constraints. Update your profile above.</div>`;
+  el("recommendationGrid").innerHTML=state.recommendations.length?state.recommendations.map(({exercise,result},index)=>`<article class="recommend-card" data-rank="${String(index+1).padStart(2,"0")}"><div class="card-topline"><span class="match-pill">${result.match}% personal match</span>${scoreButton(exercise)}</div><h3>${escapeHtml(exercise.name)}</h3><span class="target">${escapeHtml(GROUP_LABELS[exercise.group])} / ${escapeHtml(exercise.sub)}</span><p>${escapeHtml(profileReason(result))}. ${escapeHtml(exercise.why)}</p><div class="mini-meta"><span>${escapeHtml(exercise.equipment)}</span><span>${escapeHtml(exercise.level)}</span></div><div class="community-line"><span>Community rating</span><strong>${escapeHtml(communityLabel(exercise.id))}</strong></div><div class="mini-actions"><button data-open-detail="${exercise.id}" type="button" aria-label="Why ${escapeHtml(exercise.name)} ranks here">Why it ranks</button>${compareButton(exercise)}<a href="/planner.html?add=${encodeURIComponent(exercise.id)}" aria-label="Add ${escapeHtml(exercise.name)} to weekly plan">Plan +</a></div></article>`).join(""):`<div class="loading-card recommendation-empty"><p>No exercise matches all saved equipment and constraints.</p><a class="small-button" href="#profile" data-feature-target="profile">Tune my ranking →</a></div>`;
 }
 
 function populateFilters(){
@@ -82,7 +168,27 @@ function resetExplorerWindow(){state.explorerLimit=explorerPageSize();}
 function renderExplorer(){
   const items=discoveryResults(),visibleItems=items.slice(0,state.explorerLimit),remaining=Math.max(0,items.length-visibleItems.length),nextCount=Math.min(explorerPageSize(),remaining);
   el("resultCount").textContent=items.length;el("resultNoun").textContent=items.length===1?"exercise":"exercises";el("exerciseGrid").hidden=!items.length;el("emptyState").hidden=Boolean(items.length);
-  el("exerciseGrid").innerHTML=visibleItems.map((exercise,index)=>{const personal=personalResult(exercise);return `<article class="exercise-card" data-result-index="${index}"><div class="card-topline"><span class="match-pill">${escapeHtml(personalLabel(personal))}</span>${scoreButton(exercise)}</div><h3>${escapeHtml(exercise.name)}</h3><span class="target">${escapeHtml(GROUP_LABELS[exercise.group]||titleCase(exercise.group))} / ${escapeHtml(exercise.sub)}</span><p>${escapeHtml(exercise.why)}</p><div class="mini-meta"><span>${escapeHtml(exercise.equipment)}</span><span>${escapeHtml(exercise.pattern)}</span><span>${escapeHtml(exercise.level)}</span></div><div class="community-line"><span>Community score</span><strong>${escapeHtml(communityLabel(exercise.id))}</strong></div><div class="mini-actions"><button data-open-detail="${exercise.id}" type="button" aria-label="Inspect ${escapeHtml(exercise.name)}">Inspect</button>${compareButton(exercise)}<a href="/planner.html?add=${encodeURIComponent(exercise.id)}" aria-label="Add ${escapeHtml(exercise.name)} to weekly plan">Plan +</a></div></article>`;}).join("")+(!remaining?"":`<div class="explorer-load-more"><p>Showing ${visibleItems.length} of ${items.length} matching exercises</p><button data-load-more-exercises type="button" aria-controls="exerciseGrid">Load ${nextCount} more <span aria-hidden="true">↓</span></button></div>`);
+  el("exerciseGrid").innerHTML=visibleItems.map((exercise,index)=>{const personal=personalResult(exercise);return `<article class="exercise-card" data-result-index="${index}"><div class="card-topline"><span class="match-pill">${escapeHtml(personalLabel(personal))}</span>${scoreButton(exercise)}</div><h3>${escapeHtml(exercise.name)}</h3><span class="target">${escapeHtml(GROUP_LABELS[exercise.group]||titleCase(exercise.group))} / ${escapeHtml(exercise.sub)}</span><p>${escapeHtml(exercise.why)}</p><div class="mini-meta"><span>${escapeHtml(exercise.equipment)}</span><span>${escapeHtml(exercise.pattern)}</span><span>${escapeHtml(exercise.level)}</span></div><div class="community-line"><span>Community rating</span><strong>${escapeHtml(communityLabel(exercise.id))}</strong></div><div class="mini-actions"><button data-open-detail="${exercise.id}" type="button" aria-label="Inspect ${escapeHtml(exercise.name)}">Inspect</button>${compareButton(exercise)}<a href="/planner.html?add=${encodeURIComponent(exercise.id)}" aria-label="Add ${escapeHtml(exercise.name)} to weekly plan">Plan +</a></div></article>`;}).join("")+(!remaining?"":`<div class="explorer-load-more"><p>Showing ${visibleItems.length} of ${items.length} matching exercises</p><button data-load-more-exercises type="button" aria-controls="exerciseGrid">Load ${nextCount} more <span aria-hidden="true">↓</span></button></div>`);
+}
+
+function renderCommunityViews(){
+  if(!state.exercises.length||!state.preferences)return;
+  renderRecommendations();renderExplorer();
+  if(state.activeExercise&&el("detailDialog")?.open)openDetail(state.activeExercise);
+  if(state.compare.length>=2&&!el("battleResults")?.hidden)openComparison();
+}
+
+async function refreshCommunityRatings({force=false}={}){
+  if(!state.user||!state.exercises.length)return false;
+  if(state.ratingsRefreshPromise)return state.ratingsRefreshPromise;
+  if(!force&&Date.now()-state.ratingsRefreshedAt<RATINGS_REFRESH_MIN_INTERVAL_MS)return false;
+  const refresh=api("/api/ratings/aggregates").then((data)=>{
+    const aggregates=Array.isArray(data.aggregates)?data.aggregates:Array.isArray(data.ratings?.aggregates)?data.ratings.aggregates:[];
+    state.aggregate=new Map(aggregates.map((item)=>[item.exercise_id,item]));
+    state.ratingsRefreshedAt=Date.now();renderCommunityViews();return true;
+  });
+  state.ratingsRefreshPromise=refresh;
+  try{return await refresh;}finally{if(state.ratingsRefreshPromise===refresh)state.ratingsRefreshPromise=null;}
 }
 
 function renderMethodology(){
@@ -150,6 +256,7 @@ function openDetail(id){
   const exercise=exerciseById(id);if(!exercise)return;state.activeExercise=id;
   const dialog=el("detailDialog");
   const baseline=weightedBaseline(exercise),adjustment=scoreAdjustment(exercise),personal=personalResult(exercise),aggregate=aggregateFor(id),sources=sourceSelection(exercise),alternatives=alternativesFor(exercise),confidence=state.limited.has(id)?"Limited":"Moderate";
+  const community=communitySummary(id),ownRating=state.userRatings.get(id)||null;
   const profileHeading=personal.eligible?"Why it fits you":"Why it does not match your profile";
   const profileSummary=personal.eligible?`<strong>${personal.match}% rules-based match.</strong> ${escapeHtml(profileReason(personal))}.`:`<strong>Excluded by your saved rules.</strong> ${escapeHtml(profileReason(personal))}.`;
   el("detailContent").innerHTML=`
@@ -161,7 +268,7 @@ function openDetail(id){
     </div><aside>
       <section class="detail-section"><h3>Practical decision</h3><p><strong>Stability:</strong> ${exercise.metrics.stability}/100 · <strong>Effective range:</strong> ${exercise.metrics.range}/100</p><p><strong>Resistance profile:</strong> ${escapeHtml(resistanceProfile(exercise))}</p><p><strong>Progression:</strong> ${exercise.metrics.progression}/100 · <strong>Setup:</strong> ${escapeHtml(setupLabel(exercise))}</p><p><strong>Editorial practicality:</strong> ${practicality(exercise)}/100</p><h4>Programming starting point</h4><p>${escapeHtml(exercise.sets)} sets · ${escapeHtml(exercise.reps)} reps · ${escapeHtml(exercise.rest)} rest</p><h4>Technique cues</h4><ul>${exercise.cues.map((cue)=>`<li>${escapeHtml(cue)}</li>`).join("")}</ul><h4>Consideration</h4><p>${escapeHtml(exercise.caution)}</p></section>
       <section class="detail-section" id="alternativeSection"><h3>Find an alternative</h3><div class="alternative-list">${alternatives.length?alternatives.map(({exercise:candidate,match})=>`<div class="alternative-item"><div><strong>${escapeHtml(candidate.name)}</strong><small>${escapeHtml(gainsAndLosses(exercise,candidate))}</small></div><span>${match}%</span><div class="alternative-actions"><button data-open-detail="${candidate.id}" type="button" aria-label="Open ${escapeHtml(candidate.name)} details">Open</button><a href="/planner.html?add=${encodeURIComponent(candidate.id)}" aria-label="Add ${escapeHtml(candidate.name)} to weekly plan">Plan +</a></div></div>`).join(""):"<p>No eligible same-target alternative under your saved profile.</p>"}</div><p>Match percentages are transparent editorial similarity scores based on target, pattern, resistance profile, equipment, skill, and factor profile.</p></section>
-      <section class="detail-section"><h3>Community score</h3><div class="rating-summary"><strong>${aggregate?`${round(aggregate.overall*2,1)}/10`:"—"}</strong><span>${aggregate?`${aggregate.rating_count} account vote${Number(aggregate.rating_count)===1?"":"s"}`:"No ratings yet"}</span></div>${aggregate?`<div class="community-breakdown">${[["comfort","Comfort"],["pump","Pump"],["enjoyment","Enjoyment"],["stability","Stability"],["setup","Setup"],["overall","Overall"]].map(([key,label])=>`<span>${label}<b>${round(aggregate[key],1)}/5</b></span>`).join("")}</div>`:""}<p>Your vote is tied to your account and replaces your prior vote. It never changes the official FitScore.</p>${ratingFormMarkup(exercise)}</section>
+      <section class="detail-section"><h3>Community score</h3><div class="rating-summary"><strong>${escapeHtml(community.hasRatings?`${community.score}/10`:community.label)}</strong><span>${escapeHtml(community.attribution)}</span></div>${community.hasRatings?`<div class="community-breakdown">${[["comfort","Comfort"],["pump","Pump"],["enjoyment","Enjoyment"],["stability","Stability"],["setup","Setup"],["overall","Overall"]].map(([key,label])=>`<span>${label}<b>${ratingAverage(aggregate[key])}/5</b></span>`).join("")}</div>`:""}${ownRating?`<p><strong>Your rating:</strong> ${Number(ownRating.overall)}/5 overall</p>`:"<p>Be the first Strata+ user to rate this exercise.</p>"}<p>Your rating is tied to your account and replaces your prior rating. It never changes the official FitScore.</p>${ratingFormMarkup(exercise)}</section>
     </aside></div></div>`;
   if(!dialog.open)dialog.showModal();document.body.classList.add("dialog-open");
 }
@@ -185,7 +292,7 @@ function openComparison(){
     tableRow("Exercise",exercises,(exercise)=>`<strong>${escapeHtml(exercise.name)}</strong><br>${escapeHtml(exercise.sub)}`),
     tableRow("Official FitScore",exercises,(exercise)=>`${exercise.score}/100`,{winner:true}),
     tableRow("Personal match",exercises,(exercise)=>personalResult(exercise).eligible?`${personalResult(exercise).match}%`:"Excluded by profile",{winner:true}),
-    tableRow("Community score",exercises,(exercise)=>escapeHtml(communityLabel(exercise.id))),
+    tableRow("Community rating",exercises,(exercise)=>escapeHtml(communityLabel(exercise.id))),
     tableRow("Primary target",exercises,(exercise)=>escapeHtml(exercise.sub)),
     tableRow("Stability",exercises,(exercise)=>`${exercise.metrics.stability}/100`,{winner:true}),
     tableRow("Effective range",exercises,(exercise)=>`${exercise.metrics.range}/100`,{winner:true}),
@@ -256,13 +363,14 @@ profileForm.addEventListener("submit",async(event)=>{
 
 document.addEventListener("submit",async(event)=>{
   const form=event.target.closest("[data-rating-form]");if(!form)return;event.preventDefault();const id=form.dataset.ratingForm,data=Object.fromEntries(new FormData(form));const rating=Object.fromEntries(Object.entries(data).map(([key,value])=>[key,Number(value)]));const button=form.querySelector("button"),originalHtml=button.innerHTML;button.disabled=true;button.textContent="Saving…";
-  try{const result=await api(`/api/ratings/${encodeURIComponent(id)}`,{method:"PUT",body:JSON.stringify({rating})});state.userRatings.set(id,result.rating);state.aggregate.set(id,result.aggregate);openDetail(id);renderExplorer();renderRecommendations();showToast("Your account rating was saved.");}
+  try{const result=await api(`/api/ratings/${encodeURIComponent(id)}`,{method:"PUT",body:JSON.stringify({rating})});state.userRatings.set(id,result.rating);if(result.aggregate)state.aggregate.set(id,result.aggregate);else state.aggregate.delete(id);state.ratingsRefreshedAt=Date.now();renderCommunityViews();showToast("Your account rating was saved.");}
   catch(error){button.innerHTML=originalHtml;showToast(error.message);}finally{button.disabled=false;}
 });
 
 document.addEventListener("click",(event)=>{
-  const detail=event.target.closest("[data-open-detail]"),compare=event.target.closest("[data-toggle-compare]"),close=event.target.closest("[data-close-dialog]"),collection=event.target.closest("[data-collection]"),reset=event.target.closest("[data-reset-filters]"),loadMore=event.target.closest("[data-load-more-exercises]"),share=event.target.closest("[data-share-exercise]"),shareBattle=event.target.closest("[data-share-battle]");
-  if(detail){if(el("detailDialog").open)closeDialog("detailDialog");openDetail(detail.dataset.openDetail);}
+  const feature=event.target.closest("[data-feature-target]"),detail=event.target.closest("[data-open-detail]"),compare=event.target.closest("[data-toggle-compare]"),close=event.target.closest("[data-close-dialog]"),collection=event.target.closest("[data-collection]"),reset=event.target.closest("[data-reset-filters]"),loadMore=event.target.closest("[data-load-more-exercises]"),share=event.target.closest("[data-share-exercise]"),shareBattle=event.target.closest("[data-share-battle]");
+  if(feature&&featureName(feature.dataset.featureTarget)){event.preventDefault();activateFeature(feature.dataset.featureTarget,{focus:true,scroll:true,smooth:true,announce:true,historyMode:"push"});}
+  else if(detail){if(el("detailDialog").open)closeDialog("detailDialog");openDetail(detail.dataset.openDetail);}
   else if(compare){toggleCompare(compare.dataset.toggleCompare);if(el("detailDialog").open)openDetail(compare.dataset.toggleCompare);}
   else if(close)closeDialog(close.dataset.closeDialog);
   else if(collection){state.collection=collection.dataset.collection;if(state.collection==="community"){state.sort="community";el("sortSelect").value="community";}setCollectionState(state.collection);resetExplorerWindow();renderExplorer();}
@@ -277,6 +385,12 @@ document.querySelectorAll("dialog").forEach((dialog)=>{
   dialog.addEventListener("cancel",(event)=>{event.preventDefault();closeDialog(dialog.id);});
   dialog.addEventListener("close",syncDialogState);
 });
+function refreshCommunityRatingsWhenVisible(){
+  if(document.visibilityState&&document.visibilityState!=="visible")return;
+  void refreshCommunityRatings().catch(()=>{});
+}
+window.addEventListener?.("focus",refreshCommunityRatingsWhenVisible);
+document.addEventListener("visibilitychange",refreshCommunityRatingsWhenVisible);
 el("searchInput").addEventListener("input",(event)=>{const query=event.target.value;clearTimeout(explorerSearchTimer);explorerSearchTimer=setTimeout(()=>{state.query=query;resetExplorerWindow();renderExplorer();},SEARCH_DEBOUNCE_MS);});
 el("groupFilter").addEventListener("change",(event)=>{state.group=event.target.value;resetExplorerWindow();renderExplorer();});
 el("equipmentFilter").addEventListener("change",(event)=>{state.equipment=event.target.value;resetExplorerWindow();renderExplorer();});
@@ -285,7 +399,7 @@ el("levelFilter").addEventListener("change",(event)=>{state.level=event.target.v
 el("sortSelect").addEventListener("change",(event)=>{state.sort=event.target.value;resetExplorerWindow();renderExplorer();});
 el("clearFilters").addEventListener("click",resetFilters);
 el("clearCompare").addEventListener("click",()=>{state.compare=[];el("battleResults").hidden=true;renderCompareTray();renderRecommendations();renderExplorer();});
-el("openCompare").addEventListener("click",()=>{openComparison();const reduceMotion=window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;el("battle").scrollIntoView({behavior:reduceMotion?"auto":"smooth",block:"start"});});
+el("openCompare").addEventListener("click",()=>{activateFeature("battle",{focus:true,scroll:true,smooth:true,announce:true,historyMode:"push"});openComparison();});
 el("battleSelects").addEventListener("change",()=>{readBattleBuilder();el("battleResults").hidden=true;renderRecommendations();renderExplorer();});
 el("battleForm").addEventListener("submit",(event)=>{event.preventDefault();readBattleBuilder();renderCompareTray();renderRecommendations();renderExplorer();openComparison();});
 el("battleReset").addEventListener("click",()=>{state.compare=[];el("battleResults").hidden=true;renderCompareTray();renderRecommendations();renderExplorer();});
@@ -295,10 +409,11 @@ el("logoutButton").addEventListener("click",async()=>{try{await api("/api/logout
 async function init(){
   try{
     const data=await api("/api/discovery");state.exercises=data.exercises;state.methodology=data.methodology;state.sources=data.sources;state.limited=new Set(data.limitedConfidenceExercises);state.preferences=data.preferences;state.user=data.user;
-    state.aggregate=new Map((data.ratings.aggregates||[]).map((item)=>[item.exercise_id,item]));state.userRatings=new Map((data.ratings.user||[]).map((item)=>[item.exercise_id,item]));
+    state.csrfToken=String(data.csrfToken||"");state.aggregate=new Map((data.ratings.aggregates||[]).map((item)=>[item.exercise_id,item]));state.userRatings=new Map((data.ratings.user||[]).map((item)=>[item.exercise_id,item]));state.ratingsRefreshedAt=Date.now();
     el("userName").textContent=data.user.name;el("catalogTotal").textContent=state.exercises.length;el("recommendationTitle").innerHTML=`BEST EXERCISES <em>FOR ${escapeHtml(data.user.name.split(/\s+/)[0].toUpperCase())}.</em>`;
     renderProfile();populateFilters();renderMethodology();renderRecommendations();resetExplorerWindow();renderExplorer();renderCompareTray();
   }catch(error){el("profileStatus").textContent="Unable to load";el("battleStatus").textContent=error.message;el("recommendationGrid").innerHTML=`<div class="loading-card">${escapeHtml(error.message)}</div>`;el("exerciseGrid").innerHTML=`<div class="loading-card">${escapeHtml(error.message)}</div>`;showToast(error.message);}
+  finally{initializeFeatureNavigation();}
 }
 
 init();

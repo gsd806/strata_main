@@ -51,6 +51,10 @@ vm.runInContext(readPublic("scripts","discover.js"),context,{filename:"discover.
 (async()=>{
   await new Promise(setImmediate);
   vm.runInContext(`
+    globalThis.featureAudit={defaultFeature:state.activeFeature,defaultVisible:!el("recommendations").hidden,defaultHidden:Object.keys(FEATURE_CONFIG).filter((name)=>featurePanel(name).hidden).length};
+    activateFeature("explorer");
+    featureAudit.explorerFeature=state.activeFeature;featureAudit.explorerVisible=!el("exerciseExplorer").hidden;featureAudit.explorerHidden=Object.keys(FEATURE_CONFIG).filter((name)=>featurePanel(name).hidden).length;
+    activateFeature("recommendations");
     state.compare=["flat-dumbbell-press","machine-chest-press","cable-fly"];
     renderCompareTray();
     openComparison();
@@ -59,6 +63,7 @@ vm.runInContext(readPublic("scripts","discover.js"),context,{filename:"discover.
   `,context);
   const result={
     ...context.audit,
+    ...context.featureAudit,
     discoveryFetch:fetches.filter((path)=>path==="/api/discovery").length===1,
     battleBuilder:/Flat Dumbbell Press/.test(elements.get("battleSelects").innerHTML),
     battleSlots:(elements.get("battleSelects").innerHTML.match(/data-battle-slot=/g)||[]).length,
@@ -78,6 +83,12 @@ vm.runInContext(readPublic("scripts","discover.js"),context,{filename:"discover.
   assert.equal(result.renderedResults,Math.min(24,result.results));
   assert.equal(result.hasLoadMore,result.results>24);
   assert.equal(result.compareCount,3);
+  assert.equal(result.defaultFeature,"recommendations");
+  assert.equal(result.defaultVisible,true);
+  assert.equal(result.defaultHidden,4);
+  assert.equal(result.explorerFeature,"explorer");
+  assert.equal(result.explorerVisible,true);
+  assert.equal(result.explorerHidden,4);
   assert.equal(result.battleSlots,4);
   assert.ok(result.battleRows>=10);
   for(const key of ["discoveryFetch","battleBuilder","battleTable","battleVisible","battleStatus","detailOpen","bodyLocked","scoreAudit","evidence","alternatives","ratings"])assert.equal(result[key],true,key);

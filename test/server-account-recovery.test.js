@@ -342,7 +342,7 @@ test("password recovery is private, preserves account data, and revokes every se
 
   const plan=await jsonRequest("/api/plan",{plan:planFixture()},{cookie:account.cookie,method:"PUT"});
   assert.equal(plan.response.status,200);
-  const rating=await jsonRequest("/api/ratings/flat-dumbbell-press",{rating:ratingFixture},{cookie:account.cookie,method:"PUT"});
+  const rating=await jsonRequest("/api/ratings/flat-dumbbell-press",{rating:ratingFixture},{cookie:account.cookie,csrf:account.csrfToken,method:"PUT"});
   assert.equal(rating.response.status,200);
   const preferences=await jsonRequest("/api/preferences",{preferences:preferencesFixture},{cookie:account.cookie,method:"PUT"});
   assert.equal(preferences.response.status,200);
@@ -525,7 +525,7 @@ test("account deletion requires email confirmation, supports cancel, blocks pend
 
   const savedPlan=await jsonRequest("/api/plan",{plan:planFixture()},{cookie:account.cookie,method:"PUT"});
   const savedPreferences=await jsonRequest("/api/preferences",{preferences:preferencesFixture},{cookie:account.cookie,method:"PUT"});
-  const savedRating=await jsonRequest("/api/ratings/flat-dumbbell-press",{rating:ratingFixture},{cookie:account.cookie,method:"PUT"});
+  const savedRating=await jsonRequest("/api/ratings/flat-dumbbell-press",{rating:ratingFixture},{cookie:account.cookie,csrf:account.csrfToken,method:"PUT"});
   assert.equal(savedPlan.response.status,200);
   assert.equal(savedPreferences.response.status,200);
   assert.equal(savedRating.response.status,200);

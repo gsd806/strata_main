@@ -4,7 +4,7 @@ const test=require("node:test");
 const assert=require("node:assert/strict");
 const Core=require("../public/scripts/discovery-core");
 const exercises=require("../public/data/exercises.json");
-const {methodology}=require("../src/data/discovery-data.json");
+const {methodology,limitedConfidenceExercises}=require("../src/data/discovery-data.json");
 
 const preferences={goal:"hypertrophy",level:"Intermediate",days:4,equipment:["Dumbbells","Bodyweight"],preferences:["stable","long-range"],limitations:[]};
 const byId=(id)=>exercises.find((exercise)=>exercise.id===id);
@@ -139,7 +139,7 @@ test("search, collections, filters, and sorts return the expected library slices
   assert.ok(beginnerResults.every((exercise)=>exercise.level==="Beginner"));
 
   const bodyweightResults=Core.filterExercises(exercises,{...base,collection:"bodyweight"},preferences,aggregateFor);
-  assert.equal(bodyweightResults.length,40);
+  assert.equal(bodyweightResults.length,50);
   assert.ok(bodyweightResults.every((exercise)=>exercise.equipment==="Bodyweight"));
 
   assert.deepEqual(Core.filterExercises(exercises,{...base,collection:"community",sort:"community"},preferences,aggregateFor).map((exercise)=>exercise.id),["flat-dumbbell-press"]);
@@ -149,11 +149,12 @@ test("search, collections, filters, and sorts return the expected library slices
 });
 
 test("all exercises retain complete YouTube, scoring, and instruction data",()=>{
-  assert.equal(exercises.length,160);
+  assert.equal(exercises.length,200);
   assert.equal(new Set(exercises.map((exercise)=>exercise.id)).size,exercises.length,"Exercise IDs must be unique");
   assert.equal(new Set(exercises.map((exercise)=>exercise.name.toLowerCase())).size,exercises.length,"Exercise names must be unique");
-  assert.deepEqual(Object.fromEntries(Object.keys(groups).map((group)=>[group,exercises.filter((exercise)=>exercise.group===group).length])),Object.fromEntries(Object.keys(groups).map((group)=>[group,20])));
-  assert.deepEqual(Object.fromEntries(Object.keys(groups).map((group)=>[group,exercises.filter((exercise)=>exercise.group===group&&exercise.equipment==="Bodyweight").length])),Object.fromEntries(Object.keys(groups).map((group)=>[group,5])));
+  assert.deepEqual(Object.fromEntries(Object.keys(groups).map((group)=>[group,exercises.filter((exercise)=>exercise.group===group).length])),Object.fromEntries(Object.keys(groups).map((group)=>[group,25])));
+  assert.deepEqual(Object.fromEntries(Object.keys(groups).map((group)=>[group,exercises.filter((exercise)=>exercise.group===group&&exercise.equipment==="Bodyweight").length])),{chest:6,back:6,shoulders:6,arms:6,legs:7,glutes:6,calves:7,core:6});
+  assert.equal(exercises.filter((exercise)=>exercise.equipment==="Bodyweight").length,50);
   for(const [group,targets] of Object.entries(groups))for(const target of targets)assert.ok(exercises.filter((exercise)=>exercise.group===group&&exercise.sub===target).length>=3,`${group} / ${target} needs at least three choices`);
   for(const exercise of exercises){
     assert.deepEqual(Object.keys(exercise),fields,`${exercise.id} field order`);
@@ -172,4 +173,10 @@ test("all exercises retain complete YouTube, scoring, and instruction data",()=>
     assert.equal(new Set(exercise.traits).size,exercise.traits.length,`${exercise.id} duplicate traits`);
     assert.ok(exercise.traits.every((trait)=>Core.TRAIT_KEYS.includes(trait)),`${exercise.id} traits`);
   }
+});
+
+test("limited-confidence exercise metadata references unique catalog entries",()=>{
+  assert.equal(new Set(limitedConfidenceExercises).size,limitedConfidenceExercises.length,"Limited-confidence IDs must be unique");
+  const exerciseIds=new Set(exercises.map((exercise)=>exercise.id));
+  for(const id of limitedConfidenceExercises)assert.ok(exerciseIds.has(id),`Unknown limited-confidence exercise: ${id}`);
 });

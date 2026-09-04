@@ -2062,7 +2062,14 @@ async function handleApi(req,res,url) {
   if (url.pathname === "/api/discovery" && req.method === "GET") {
     const session=await requireDiscoveryAccess(req,res); if (!session) return;
     const [preferences,aggregates,userRatings]=await Promise.all([preferencesFor(session.id),store.ratingAggregates(),store.ratingsForUser(session.id)]);
-    json(res,200,{user:await userPayload(session),exercises:EXERCISES,methodology:DISCOVERY_DATA.methodology,sources:DISCOVERY_DATA.sources,limitedConfidenceExercises:DISCOVERY_DATA.limitedConfidenceExercises,preferences,ratings:{aggregates,user:userRatings}}); return;
+    json(res,200,{user:await userPayload(session),csrfToken:session.csrf_token,exercises:EXERCISES,methodology:DISCOVERY_DATA.methodology,sources:DISCOVERY_DATA.sources,limitedConfidenceExercises:DISCOVERY_DATA.limitedConfidenceExercises,preferences,ratings:{aggregates,user:userRatings}}); return;
+  }
+  if (url.pathname === "/api/ratings/aggregates" && req.method === "GET") {
+    const session=await requireDiscoveryAccess(req,res); if (!session) return;
+    const aggregates=await store.ratingAggregates();
+    // This deliberately contains community aggregates only. Never include a
+    // user row, email address, per-account rating, or session credential here.
+    json(res,200,{aggregates,updatedAt:Date.now()}); return;
   }
   if (url.pathname === "/api/preferences" && req.method === "PUT") {
     const session=await requireDiscoveryAccess(req,res); if (!session) return;
@@ -2073,6 +2080,8 @@ async function handleApi(req,res,url) {
   const ratingMatch=url.pathname.match(/^\/api\/ratings\/([a-z0-9-]{2,80})$/);
   if (ratingMatch && req.method === "PUT") {
     const session=await requireDiscoveryAccess(req,res); if (!session) return;
+    if (!trustedAuthOrigin(req)) { json(res,403,{error:"Rating security check failed. Refresh and try again.",code:"RATING_ORIGIN_REQUIRED"}); return; }
+    if (!validCsrf(req,session)) { json(res,403,{error:"Security check failed. Refresh and try again.",code:"INVALID_CSRF"}); return; }
     const exerciseId=ratingMatch[1];
     if (!EXERCISE_IDS.has(exerciseId)) { json(res,404,{error:"Exercise not found."}); return; }
     if (!rateAllowed(req,`rating:${session.id}`,60)) { json(res,429,{error:"Too many rating updates. Try again later."}); return; }

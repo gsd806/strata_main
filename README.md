@@ -1,8 +1,10 @@
 # STRATA — Exercise Rankings and Weekly Planner
 
-STRATA is an evidence-informed workout index with server-backed, email-verified accounts, a private Strata+ studio, and a drag-and-drop weekly planner. It includes 160 resistance-training exercises—20 per muscle group, including 40 bodyweight options—across 8 muscle groups and 26 sub-muscle targets. Build 6.8.1 is an installable Progressive Web App (PWA) with Resend-powered account email, Paddle-powered one-time Strata+ access, and a private owner dashboard.
+STRATA is an evidence-informed workout index with server-backed, email-verified accounts, a private Strata+ studio, and a drag-and-drop weekly planner. It includes 200 resistance-training exercises—25 per muscle group, including 50 bodyweight options—across 8 muscle groups and 26 sub-muscle targets. Build 6.9.0 is an installable Progressive Web App (PWA) with Resend-powered account email, Paddle-powered one-time Strata+ access, and a private owner dashboard.
 
-**Build 6.8.1 adds secure administration and a complete help desk.** The one verified STRATA account whose email exactly matches the server-only `ADMIN_EMAIL` becomes the permanently bound primary administrator. It can open `/admin`, confirm its current STRATA password for a 30-minute elevated session, view service/account/support summaries, search accounts, inspect limited account and Strata+ status, send recovery or deletion-confirmation links to the registered address, cancel pending deletion requests, revoke sessions, suspend or restore accounts, answer support requests, and review an audit trail. It never exposes password hashes, codes, tokens, provider credentials, full payment details, or direct account-deletion controls.
+**Build 6.9.0 expands and simplifies Strata+.** The catalog now has 200 exercises, including 50 bodyweight choices. A five-block mobile-first hub opens one focused Strata+ workspace at a time, while deep links and browser history still work. Community ratings remain Strata+-only, aggregate anonymously across every account, refresh when a member returns to or reopens a rating view, and keep each member to one replaceable rating per exercise.
+
+The secure administrator and complete help desk introduced in Build 6.8.1 remain included. The one verified STRATA account whose email exactly matches the server-only `ADMIN_EMAIL` becomes the permanently bound primary administrator. It can open `/admin`, confirm its current STRATA password for a 30-minute elevated session, view service/account/support summaries, search accounts, inspect limited account and Strata+ status, send recovery or deletion-confirmation links to the registered address, cancel pending deletion requests, revoke sessions, suspend or restore accounts, answer support requests, and review an audit trail. It never exposes password hashes, codes, tokens, provider credentials, full payment details, or direct account-deletion controls.
 
 The public Contact page now has a server-backed support form. Requests receive a reference, remain visible in the Help Desk, and can be answered through the existing Resend setup. Email remains available as a fallback at `stratafitness.official@gmail.com`.
 
@@ -15,7 +17,7 @@ This build retains the Build 6.7.5 account-security work: password reset and ema
 
 ## Project structure
 
-Build 6.8.1 separates browser files from private server code while preserving every public URL used by visitors, Paddle, Render, and installed PWAs:
+Build 6.9.0 separates browser files from private server code while preserving every public URL used by visitors, Paddle, Render, and installed PWAs:
 
 ```text
 server.js          Small root bootstrap used by `npm start`
@@ -51,7 +53,7 @@ The PWA caches only public interface assets and an offline explanation page. Acc
 
 ## Public pricing, support, and policies
 
-Build 6.8.1 has public, mobile-friendly pages at `/pricing`, `/contact`, `/terms`, `/privacy`, and `/refunds`. The homepage links to all five without requiring JavaScript or an account. `/contact` submits help requests into Turso and sends acknowledgments and reference-only owner notifications through Resend; the full message stays in the private Admin help desk. Durable one-way IP/email quotas, a honeypot, and secret/card detection protect the form across Render restarts. If the form is unavailable, the public mail link still works.
+Build 6.9.0 has public, mobile-friendly pages at `/pricing`, `/contact`, `/terms`, `/privacy`, and `/refunds`. The homepage links to all five without requiring JavaScript or an account. `/contact` submits help requests into Turso and sends acknowledgments and reference-only owner notifications through Resend; the full message stays in the private Admin help desk. Durable one-way IP/email quotas, a honeypot, and secret/card detection protect the form across Render restarts. If the form is unavailable, the public mail link still works.
 
 The homepage also includes an **About the Founder** section for Saeed Abdalla Alketbi, describing STRATA’s UAE roots and the engineering mindset behind the project. It intentionally publishes only the city-level location `Al Ain, UAE`; do not add a residential street address to the public site.
 
@@ -72,7 +74,7 @@ ADMIN_EMAIL=stratafitness.official@gmail.com
 SUPPORT_EMAIL=stratafitness.official@gmail.com
 ```
 
-To activate the owner account after deploying Build 6.8.1:
+To activate the owner account after deploying Build 6.9.0:
 
 1. If `stratafitness.official@gmail.com` already has a verified STRATA account, deploy and sign in again. Startup binds that immutable user ID as the primary administrator, revokes older sessions, and invalidates any recovery or deletion links issued before promotion.
 2. If it has no STRATA account, create one with that exact address, complete the six-digit email verification, then sign out and sign back in once. The first verified login securely claims the empty administrator slot.
@@ -138,9 +140,9 @@ PADDLE_CHECKOUT_ENABLED=true
 PADDLE_ENFORCE_IP_ALLOWLIST=false
 ```
 
-The live checkout has already passed an end-to-end test, so the current production service may keep `PADDLE_CHECKOUT_ENABLED=true`. For a fresh or unverified Paddle setup, begin with `false`, finish the webhook test, and enable checkout only after the signed notification grants access correctly. An existing deployment whose signup email already works should keep `EMAIL_VERIFICATION_ENABLED=true`; the same verified Resend configuration powers verification, password reset, account deletion, support acknowledgments, support notifications, and administrator replies. Build 6.8.1 adds only the non-secret `ADMIN_EMAIL` and `SUPPORT_EMAIL` settings shown above.
+The live checkout has already passed an end-to-end test, so the current production service may keep `PADDLE_CHECKOUT_ENABLED=true`. For a fresh or unverified Paddle setup, begin with `false`, finish the webhook test, and enable checkout only after the signed notification grants access correctly. An existing deployment whose signup email already works should keep `EMAIL_VERIFICATION_ENABLED=true`; the same verified Resend configuration powers verification, password reset, account deletion, support acknowledgments, support notifications, and administrator replies. Build 6.9.0 adds only the non-secret `ADMIN_EMAIL` and `SUPPORT_EMAIL` settings shown above.
 
-`EMAIL_VERIFICATION_ENABLED` must be spelled exactly and set explicitly to `true` or `false`; Build 6.8.1 refuses to start in production if the value is absent or invalid. Do not set `ALLOW_UNVERIFIED_SIGNUP_FOR_TESTS` in Render. That test-only escape hatch is accepted only when `NODE_ENV=test` and cannot enable production signup.
+`EMAIL_VERIFICATION_ENABLED` must be spelled exactly and set explicitly to `true` or `false`; Build 6.9.0 refuses to start in production if the value is absent or invalid. Do not set `ALLOW_UNVERIFIED_SIGNUP_FOR_TESTS` in Render. That test-only escape hatch is accepted only when `NODE_ENV=test` and cannot enable production signup.
 
 `TRUST_PROXY=true` tells the login limiter to use the client address supplied by Render's trusted reverse proxy instead of treating every proxied request as one visitor. Do not enable it when exposing the Node process directly to the public internet.
 
@@ -152,7 +154,7 @@ Do not add `STRATA_DATA_DIR` and do not add a Render disk. Save the variables an
 
 Open these URLs on the deployed site before testing signup:
 
-- `/api/status` should return JSON containing `"build":"6.8.1"`, `"storage":"turso"`, `"persistent":true`, `"emailVerificationEnabled":true`, `"emailVerificationConfigured":true`, `"passwordResetEnabled":true`, `"accountDeletionEnabled":true`, and `"adminConfigured":true`. The response exposes readiness booleans only, never the administrator address or any credential value.
+- `/api/status` should return JSON containing `"build":"6.9.0"`, `"storage":"turso"`, `"persistent":true`, `"emailVerificationEnabled":true`, `"emailVerificationConfigured":true`, `"passwordResetEnabled":true`, `"accountDeletionEnabled":true`, and `"adminConfigured":true`. The response exposes readiness booleans only, never the administrator address or any credential value.
 - `/healthz` should return HTTP `200` with `{"ok":true}`.
 - A `404` or an HTML page means the project is not running as the Node Web Service.
 - `/api/status` succeeding while `/healthz` returns `503` means Render cannot currently query Turso; recheck the database URL, token, and Turso database availability.
@@ -165,7 +167,7 @@ Create a test account and save a workout. In Render, trigger **Manual Deploy →
 
 ## Resend account-email setup
 
-Build 6.8.1 uses Resend for signup verification, password-reset links, account-deletion confirmation links, support acknowledgments and owner notifications, and administrator replies. Signup codes expire after 10 minutes, permit at most five incorrect attempts, and cannot be resent until 60 seconds have passed. The entire pre-account challenge ends after 30 minutes. STRATA keeps the challenge in a short-lived, HttpOnly pre-authentication cookie and stores only an HMAC digest of the code in Turso—not the code itself. A new user row and normal account session are created atomically only after a correct code.
+Build 6.9.0 uses Resend for signup verification, password-reset links, account-deletion confirmation links, support acknowledgments and owner notifications, and administrator replies. Signup codes expire after 10 minutes, permit at most five incorrect attempts, and cannot be resent until 60 seconds have passed. The entire pre-account challenge ends after 30 minutes. STRATA keeps the challenge in a short-lived, HttpOnly pre-authentication cookie and stores only an HMAC digest of the code in Turso—not the code itself. A new user row and normal account session are created atomically only after a correct code.
 
 The migration also adds a durable `email_verified_at` marker. Existing 6.6/6.7.0 user rows begin unverified because the old schema had no trustworthy proof that their inbox had been checked. After verification is enabled, each existing user enters the correct password and completes one email code at the next login. Their user ID, password hash, planner, preferences, ratings, and Strata+ purchases stay attached to the same account. Older sessions are denied while the marker is empty, then revoked when verification succeeds so only the new verified session remains.
 
@@ -201,9 +203,9 @@ EMAIL_REPLY_TO=stratafitness.official@gmail.com
 EMAIL_VERIFICATION_SECRET=<the independent random value>
 ```
 
-If these exact settings are already working in Build 6.7.1, keep them unchanged while deploying 6.8.1. Startup creates the new tables and columns before the server begins accepting requests, so a separate database reset or email-off migration deploy is not required. After the deploy:
+If these exact settings are already working in Build 6.7.1, keep them unchanged while deploying 6.9.0. Startup creates the new tables and columns before the server begins accepting requests, so a separate database reset or email-off migration deploy is not required. After the deploy:
 
-1. Confirm `/healthz` still returns HTTP `200` and `/api/status` reports Build 6.8.1 with Turso persistent, every account-email flag `true`, and `adminConfigured:true`.
+1. Confirm `/healthz` still returns HTTP `200` and `/api/status` reports Build 6.9.0 with Turso persistent, every account-email flag `true`, and `adminConfigured:true`.
 2. Sign in to one existing account and confirm its planner and Strata+ entitlement are unchanged.
 3. Confirm the Resend domain is verified and the API key, From address, Reply-To address, and HMAC secret remain present in Render.
 
@@ -349,7 +351,7 @@ Official references: [Paddle go-live checklist](https://developer.paddle.com/bui
 ## Included
 
 - Exercise rankings, sub-muscle navigation, search, and equipment/level filters
-- Twenty curated movements per region, including five bodyweight choices in every region and portable resistance-band options
+- Twenty-five curated movements per region, including at least six bodyweight choices in every region and portable resistance-band options
 - Paid `/discover.html` studio for signed-in users with an active Strata+ entitlement
 - Visible two-to-four exercise battle builder with an inline result covering targets, scores, stability, range, resistance profile, progression, setup, equipment, and practicality
 - Transparent FitScore contributions, weighted baseline, editorial adjustment, methodology boundaries, and direct evidence links
@@ -359,7 +361,7 @@ Official references: [Paddle go-live checklist](https://developer.paddle.com/bui
 - Search by exercise, muscle, equipment, pattern, or goal, plus filters, sorts, and quick collections including bodyweight-only discovery
 - Downloadable/mobile-share exercise, comparison, and personalized-shortlist image cards
 - Detailed scoring, execution notes, prescriptions, and cautions
-- YouTube tutorial-search links for all 160 exercises
+- YouTube tutorial-search links for all 200 exercises
 - Server-side account creation and login
 - Separate, always-visible **Sign up** and **Log in** links on the homepage plus a server-rendered profile link for active sessions
 - Dedicated `/account.html` page with native server-submitted signup/login forms, so account access does not depend on homepage JavaScript
@@ -403,7 +405,7 @@ Official references: [Paddle go-live checklist](https://developer.paddle.com/bui
 npm test
 ```
 
-The suite checks authentication and persistence APIs, protected password storage, pending-signup isolation, code HMAC validation, verification expiry and attempt limits, resend rotation and cooldowns, provider failures, Turso-safe returned-row completion semantics, legacy-account one-time verification, one-time reset/deletion tokens, registered-email delivery, reset replay prevention, credential-version login races, full session revocation, deletion cancellation and cascades, preservation of unrelated account and payment data, admin ownership and session rotation, primary-owner protection, redacted management APIs, audited account actions, optimistic support updates, durable help-form limits, secret/card rejection, support-mail idempotency, pending-checkout interlocks, live Paddle configuration, signature verification, webhook idempotency, checkout/entitlement boundaries, refund handling, PWA installation and cache-safety rules, and the pure discovery engine: scoring contributions, personalization exclusions, target-compatible battles and alternatives, request limits, plan validation, search/filter behavior, source data, and all 160 YouTube links.
+The suite checks authentication and persistence APIs, protected password storage, pending-signup isolation, code HMAC validation, verification expiry and attempt limits, resend rotation and cooldowns, provider failures, Turso-safe returned-row completion semantics, legacy-account one-time verification, one-time reset/deletion tokens, registered-email delivery, reset replay prevention, credential-version login races, full session revocation, deletion cancellation and cascades, preservation of unrelated account and payment data, admin ownership and session rotation, primary-owner protection, redacted management APIs, audited account actions, optimistic support updates, durable help-form limits, secret/card rejection, support-mail idempotency, pending-checkout interlocks, live Paddle configuration, signature verification, webhook idempotency, checkout/entitlement boundaries, refund handling, PWA installation and cache-safety rules, and the pure discovery engine: scoring contributions, personalization exclusions, target-compatible battles and alternatives, request limits, plan validation, search/filter behavior, source data, and all 200 YouTube links.
 
 Run the browser-free runtime checks as well with:
 

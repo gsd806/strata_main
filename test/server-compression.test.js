@@ -80,7 +80,7 @@ test("negotiates gzip for large text while preserving response semantics",async(
   assert.equal(compressed.headers["cache-control"],"public, max-age=300");
   const exercises=JSON.parse(gunzipSync(compressed.body));
   assert.ok(Array.isArray(exercises));
-  assert.equal(exercises.length,160);
+  assert.equal(exercises.length,200);
 
   const identity=await request("/exercises.json",{headers:{"Accept-Encoding":"gzip;q=0, *;q=1"}});
   assert.equal(identity.headers["content-encoding"],undefined);

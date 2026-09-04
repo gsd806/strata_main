@@ -28,11 +28,13 @@ test("homepage publishes the founder story without exposing a residential addres
   assert.match(copy,/third-year chemical engineering student at United Arab Emirates University \(UAEU\)/i);
   assert.match(copy,/Born and raised in the UAE and based in Al Ain/i);
   assert.match(copy,/Chemical Engineering · UAEU/i);
+  assert.match(home,/<div class="founder-mark"[^>]*>[\s\S]*?<span>SK<\/span>/);
+  assert.doesNotMatch(home,/<div class="founder-mark"[^>]*>[\s\S]*?<span>SA<\/span>/);
   assert.doesNotMatch(copy,/Zahkir|Malad|street 13|st\.?\s*13/i);
 });
 
 test("published Strata+ price and refund promise are exact and consistent",()=>{
-  assert.equal(BUILD,"6.8.1");
+  assert.equal(BUILD,"6.9.0");
   const pricingHtml=read("pricing.html"),pricing=text("pricing.html"),refunds=text("refunds.html"),terms=text("terms.html");
   assert.match(pricing,/Strata\+/);
   assert.match(pricing,/\$5\.99 USD/i);

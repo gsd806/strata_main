@@ -16,10 +16,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="discover.css?v=6.8.1" />
+    <link rel="stylesheet" href="discover.css?v=6.9.0" />
   </head>
   <body>
-    <a class="skip-link" href="#exerciseExplorer">Skip to exercise explorer</a>
+    <a class="skip-link" href="#featureHub">Skip to Strata+ tools</a>
     <header class="studio-header">
       <a class="brand" href="/" aria-label="STRATA home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>STRATA</span></a>
       <nav class="studio-nav" aria-label="Primary navigation"><a class="active" href="/discover.html" aria-current="page">Strata+</a><a href="/planner.html">Plan week</a><a href="/">Index</a><a href="/install.html">Install</a></nav>
@@ -34,15 +34,30 @@
             <p class="eyebrow"><span></span> Private Strata+ studio</p>
             <h1>CHOOSE BETTER.<br /><em>KNOW WHY.</em></h1>
             <p>Compare movements, audit every FitScore, find close alternatives, and rank the library around the equipment and constraints that actually apply to you.</p>
-            <div class="hero-actions"><a class="button button-accent" href="#recommendations">Best for you <span>↘</span></a><a class="text-link" href="#methodology">Audit the method →</a></div>
+            <div class="hero-actions"><a class="button button-accent" href="#recommendations" data-feature-target="recommendations">Best for you <span>↘</span></a><a class="text-link" href="#methodology" data-feature-target="methodology">Audit the method →</a></div>
           </div>
-          <div class="hero-stats" aria-label="Strata+ workspace statistics"><div><strong id="catalogTotal">160</strong><span>Exercises</span></div><div><strong>2–4</strong><span>Compare</span></div><div><strong>5</strong><span>Score factors</span></div></div>
+          <div class="hero-stats" aria-label="Strata+ workspace statistics"><div><strong id="catalogTotal">200</strong><span>Exercises</span></div><div><strong>2–4</strong><span>Compare</span></div><div><strong>5</strong><span>Score factors</span></div></div>
         </div>
       </section>
 
-      <section class="profile-section" id="profile" aria-labelledby="profileTitle">
+      <section class="feature-hub" id="featureHub" aria-labelledby="featureHubTitle">
         <div class="studio-container">
-          <div class="section-heading compact-heading"><div><p class="kicker">01 / Your selection rules</p><h2 id="profileTitle">TUNE THE <em>RANKING.</em></h2></div><p>This profile changes personalized rankings only. It never changes the official STRATA FitScore.</p></div>
+          <div class="feature-hub-heading"><div><p class="kicker">Choose a Strata+ tool</p><h2 id="featureHubTitle">WHAT DO YOU WANT TO <em>DO?</em></h2></div><p>Open one focused workspace at a time. Your profile, comparisons, ratings, and filters stay ready while you switch.</p></div>
+          <nav class="feature-grid" aria-label="Strata+ features">
+            <a class="feature-block" href="#recommendations" data-feature-target="recommendations" aria-controls="recommendations" aria-expanded="false"><span>01 / Personal</span><strong>Best for you</strong><small>Your ranked shortlist based on equipment, goals, and constraints.</small><b aria-hidden="true">↘</b></a>
+            <a class="feature-block" href="#exerciseExplorer" data-feature-target="explorer" aria-controls="exerciseExplorer" aria-expanded="false"><span>02 / Community</span><strong>Explore &amp; rate</strong><small>Search 200 exercises, inspect evidence, and add your rating.</small><b aria-hidden="true">↘</b></a>
+            <a class="feature-block" href="#battle" data-feature-target="battle" aria-controls="battle" aria-expanded="false"><span>03 / Compare</span><strong>Exercise battle</strong><small>Compare two to four movements side by side.</small><b aria-hidden="true">↘</b></a>
+            <a class="feature-block" href="#profile" data-feature-target="profile" aria-controls="profile" aria-expanded="false"><span>04 / Preferences</span><strong>Tune my ranking</strong><small>Set your goal, experience, equipment, and movement limits.</small><b aria-hidden="true">↘</b></a>
+            <a class="feature-block" href="#methodology" data-feature-target="methodology" aria-controls="methodology" aria-expanded="false"><span>05 / Evidence</span><strong>FitScore method</strong><small>See every factor, weight, boundary, and source.</small><b aria-hidden="true">↘</b></a>
+          </nav>
+          <p class="sr-only" id="featureStatus" role="status" aria-live="polite"></p>
+        </div>
+      </section>
+
+      <section class="profile-section feature-panel" id="profile" data-feature-panel="profile" aria-labelledby="profileTitle">
+        <div class="studio-container">
+          <a class="tool-menu-link" href="#featureHub">All Strata+ tools ↑</a>
+          <div class="section-heading compact-heading"><div><p class="kicker">04 / Your selection rules</p><h2 id="profileTitle" tabindex="-1">TUNE THE <em>RANKING.</em></h2></div><p>This profile changes personalized rankings only. It never changes the official STRATA FitScore.</p></div>
           <form class="profile-card" id="profileForm">
             <div class="profile-primary">
               <label>Primary goal<select name="goal" id="goalSelect"><option value="hypertrophy">Hypertrophy selection</option><option value="strength">Strength skill</option><option value="balanced">Balanced</option><option value="time-efficient">Time-efficient setup</option></select></label>
@@ -59,9 +74,10 @@
         </div>
       </section>
 
-      <section class="battle-section" id="battle" aria-labelledby="battleTitle">
+      <section class="battle-section feature-panel" id="battle" data-feature-panel="battle" aria-labelledby="battleTitle">
         <div class="studio-container">
-          <div class="section-heading"><div><p class="kicker">02 / Exercise comparison</p><h2 id="battleTitle">BUILD AN EXERCISE <em>BATTLE.</em></h2></div><p>Choose any two to four exercises. STRATA will compare their scores, target, mechanics, progression, setup, equipment, practicality, and fit for your saved profile.</p></div>
+          <a class="tool-menu-link tool-menu-link-light" href="#featureHub">All Strata+ tools ↑</a>
+          <div class="section-heading"><div><p class="kicker">03 / Exercise comparison</p><h2 id="battleTitle" tabindex="-1">BUILD AN EXERCISE <em>BATTLE.</em></h2></div><p>Choose any two to four exercises. STRATA will compare their scores, target, mechanics, progression, setup, equipment, practicality, and fit for your saved profile.</p></div>
           <form class="battle-builder" id="battleForm">
             <div class="battle-selects" id="battleSelects"></div>
             <div class="battle-builder-actions"><button class="button button-accent" id="runBattle" type="submit">Compare exercises <span>→</span></button><button class="small-button" id="battleReset" type="button">Reset</button><span id="battleStatus" role="status" aria-live="polite">Choose at least two exercises.</span></div>
@@ -70,16 +86,18 @@
         </div>
       </section>
 
-      <section class="recommendation-section" id="recommendations" aria-labelledby="recommendationTitle">
+      <section class="recommendation-section feature-panel" id="recommendations" data-feature-panel="recommendations" aria-labelledby="recommendationTitle">
         <div class="studio-container">
-          <div class="section-heading"><div><p class="kicker">03 / Personalized shortlist</p><h2 id="recommendationTitle">BEST EXERCISES <em>FOR YOU.</em></h2></div><div class="heading-action"><p id="recommendationSummary">Based on your saved selection rules.</p><button class="small-button" id="shareRanking" type="button">Share shortlist ↗</button></div></div>
+          <a class="tool-menu-link" href="#featureHub">All Strata+ tools ↑</a>
+          <div class="section-heading"><div><p class="kicker">01 / Personalized shortlist</p><h2 id="recommendationTitle" tabindex="-1">BEST EXERCISES <em>FOR YOU.</em></h2></div><div class="heading-action"><p id="recommendationSummary">Based on your saved selection rules.</p><button class="small-button" id="shareRanking" type="button">Share shortlist ↗</button></div></div>
           <div class="recommendation-grid" id="recommendationGrid"><div class="loading-card">Building your ranking…</div></div>
         </div>
       </section>
 
-      <section class="explorer-section" id="exerciseExplorer" aria-labelledby="explorerTitle" tabindex="-1">
+      <section class="explorer-section feature-panel" id="exerciseExplorer" data-feature-panel="explorer" aria-labelledby="explorerTitle">
         <div class="studio-container">
-          <div class="section-heading"><div><p class="kicker">04 / Search and explore</p><h2 id="explorerTitle">EXPLORE EVERY <em>TRADE-OFF.</em></h2></div><p>Search by exercise, muscle, equipment, pattern, or difficulty. Select up to four movements for a deeper comparison.</p></div>
+          <a class="tool-menu-link" href="#featureHub">All Strata+ tools ↑</a>
+          <div class="section-heading"><div><p class="kicker">02 / Search, inspect, and rate</p><h2 id="explorerTitle" tabindex="-1">EXPLORE EVERY <em>TRADE-OFF.</em></h2></div><p>Search by exercise, muscle, equipment, pattern, or difficulty. Select up to four movements for a deeper comparison.</p></div>
           <div class="collection-row" role="group" aria-label="Quick exercise collections"><button data-collection="all" class="active" type="button" aria-pressed="true">All exercises</button><button data-collection="top-chest" type="button" aria-pressed="false">Highest-rated chest</button><button data-collection="dumbbells" type="button" aria-pressed="false">Best with dumbbells</button><button data-collection="bodyweight" type="button" aria-pressed="false">Bodyweight only</button><button data-collection="beginner" type="button" aria-pressed="false">Beginner-friendly</button><button data-collection="community" type="button" aria-pressed="false">Community rated</button></div>
           <div class="explorer-toolbar" role="search" aria-label="Filter exercises">
             <label class="search-control"><span aria-hidden="true">⌕</span><span class="sr-only">Search exercises</span><input id="searchInput" type="search" placeholder="Exercise, muscle, equipment, pattern…" autocomplete="off" /></label>
@@ -87,7 +105,7 @@
             <label><span class="sr-only">Equipment</span><select id="equipmentFilter"><option value="all">All equipment</option></select></label>
             <label><span class="sr-only">Movement pattern</span><select id="patternFilter"><option value="all">All patterns</option></select></label>
             <label><span class="sr-only">Difficulty</span><select id="levelFilter"><option value="all">All difficulty</option><option>Beginner</option><option>Intermediate</option><option>Advanced</option></select></label>
-            <label><span class="sr-only">Sort exercises</span><select id="sortSelect"><option value="personal">Personal match</option><option value="score">STRATA FitScore</option><option value="community">Community score</option><option value="practicality">Practicality</option><option value="difficulty">Difficulty</option></select></label>
+            <label><span class="sr-only">Sort exercises</span><select id="sortSelect"><option value="personal">Personal match</option><option value="score">STRATA FitScore</option><option value="community">Community rating</option><option value="practicality">Practicality</option><option value="difficulty">Difficulty</option></select></label>
           </div>
           <div class="results-line"><p id="resultStatus" role="status" aria-live="polite" aria-atomic="true"><strong id="resultCount">0</strong> matching <span id="resultNoun">exercises</span></p><button class="plain-button" id="clearFilters" type="button">Reset search</button></div>
           <div class="exercise-grid" id="exerciseGrid"><div class="loading-card">Loading exercise intelligence…</div></div>
@@ -95,15 +113,15 @@
         </div>
       </section>
 
-      <section class="method-section" id="methodology" aria-labelledby="methodTitle">
+      <section class="method-section feature-panel" id="methodology" data-feature-panel="methodology" aria-labelledby="methodTitle">
         <div class="studio-container method-layout">
-          <div class="method-intro"><p class="kicker kicker-light">05 / Transparent FitScore</p><h2 id="methodTitle">NO BLACK <em>BOX.</em></h2><p id="methodSummary"></p><p class="method-warning">FitScore is editorial synthesis, not a validated scientific measurement. Community votes are always shown separately.</p></div>
+          <div class="method-intro"><a class="tool-menu-link tool-menu-link-light" href="#featureHub">All Strata+ tools ↑</a><p class="kicker kicker-light">05 / Transparent FitScore</p><h2 id="methodTitle" tabindex="-1">NO BLACK <em>BOX.</em></h2><p id="methodSummary"></p><p class="method-warning">FitScore is editorial synthesis, not a validated scientific measurement. Community ratings are always shown separately.</p></div>
           <div class="method-factors" id="methodFactors"></div>
         </div>
       </section>
     </main>
 
-    <footer class="build-footer">STRATA · Build 6.8.1 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
+    <footer class="build-footer">STRATA · Build 6.9.0 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
 
     <aside class="compare-tray" id="compareTray" hidden aria-label="Exercise comparison tray">
       <div><span>EXERCISE BATTLE</span><p id="compareNames">Choose 2–4 exercises</p></div>
@@ -112,8 +130,8 @@
 
     <dialog class="detail-dialog" id="detailDialog" aria-labelledby="detailTitle"><div id="detailContent"></div></dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=6.8.1"></script>
-    <script src="discovery-core.js?v=6.8.1"></script>
-    <script src="discover.js?v=6.8.1"></script>
+    <script src="/pwa.js?v=6.9.0"></script>
+    <script src="discovery-core.js?v=6.9.0"></script>
+    <script src="discover.js?v=6.9.0"></script>
   </body>
 </html>

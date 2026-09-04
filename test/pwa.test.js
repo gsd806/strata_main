@@ -93,7 +93,7 @@ test("release version, cache keys, asset URLs, and catalog claims stay aligned",
   const serviceWorker=read("service-worker.js");
   const pages=["index.html","account.html","verify-email.html","forgot-password.html","reset-password.html","delete-account.html","admin.html","planner.html","discover.html","install.html","offline.html","pricing.html","contact.html","terms.html","privacy.html","refunds.html"];
 
-  assert.equal(version,"6.8.1");
+  assert.equal(version,"6.9.0");
   assert.match(serviceWorker,new RegExp(`const BUILD="${versionPattern}";`));
   assert.match(serviceWorker,/const CACHE_PREFIX="strata-static-";/);
   assert.match(serviceWorker,/const STATIC_CACHE=`\$\{CACHE_PREFIX\}\$\{BUILD\}`;/);
@@ -118,21 +118,21 @@ test("release version, cache keys, asset URLs, and catalog claims stay aligned",
     assert.doesNotMatch(source,/"\/exercises\.json"/,`${file} must not request an unversioned catalog`);
   }
 
-  assert.equal(exercises.length,160);
+  assert.equal(exercises.length,200);
   assert.equal(new Set(exercises.map((exercise)=>exercise.group)).size,8);
   assert.equal(new Set(exercises.map((exercise)=>exercise.sub)).size,26);
-  assert.equal(exercises.filter((exercise)=>exercise.equipment==="Bodyweight").length,40);
+  assert.equal(exercises.filter((exercise)=>exercise.equipment==="Bodyweight").length,50);
   const perGroup=Object.values(exercises.reduce((counts,exercise)=>{
     counts[exercise.group]=(counts[exercise.group]||0)+1;
     return counts;
   },{}));
-  assert.ok(perGroup.length===8&&perGroup.every((count)=>count===20));
+  assert.ok(perGroup.length===8&&perGroup.every((count)=>count===25));
 
-  assert.match(read("pages/index.html"),/ranks 160 resistance exercises across 8 muscle groups and 26 sub-muscle targets/i);
-  assert.match(read("pages/index.html"),/id="catalogTotal">160</);
-  assert.match(read("pages/discover.html"),/id="catalogTotal">160</);
-  assert.match(read("pages/planner.html"),/id="libraryCount">160</);
-  assert.match(readProject("README.md"),/160 resistance-training exercises—20 per muscle group, including 40 bodyweight options—across 8 muscle groups and 26 sub-muscle targets/);
+  assert.match(read("pages/index.html"),/ranks 200 resistance exercises across 8 muscle groups and 26 sub-muscle targets/i);
+  assert.match(read("pages/index.html"),/id="catalogTotal">200</);
+  assert.match(read("pages/discover.html"),/id="catalogTotal">200</);
+  assert.match(read("pages/planner.html"),/id="libraryCount">200</);
+  assert.match(readProject("README.md"),/200 resistance-training exercises—25 per muscle group, including 50 bodyweight options—across 8 muscle groups and 26 sub-muscle targets/);
 });
 
 test("manifest has complete install metadata and correctly sized icons",()=>{

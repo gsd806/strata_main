@@ -626,6 +626,164 @@
     }
   },
   {
+    "id": "decline-barbell-bench-press",
+    "name": "Decline Barbell Bench Press",
+    "group": "chest",
+    "sub": "Mid / lower chest",
+    "score": 88,
+    "equipment": "Barbell / Smith",
+    "level": "Intermediate",
+    "pattern": "Press",
+    "why": "The decline angle provides a stable heavy press with strong loading potential for the sternal chest fibers.",
+    "caution": "Use secure leg pads and a spotter or safeties, and choose a range that remains comfortable for the shoulders.",
+    "sets": "3–4",
+    "reps": "6–10",
+    "rest": "2–3 min",
+    "cues": [
+      "Lock the legs into the pads before unracking the bar.",
+      "Lower toward the lower chest with the forearms near vertical.",
+      "Press smoothly while keeping the upper back set on the bench."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Decline%20Barbell%20Bench%20Press%20exercise%20form%20tutorial",
+    "traits": [
+      "compound"
+    ],
+    "metrics": {
+      "stimulus": 91,
+      "stability": 86,
+      "progression": 92,
+      "range": 83,
+      "fatigue": 79
+    }
+  },
+  {
+    "id": "dumbbell-floor-press",
+    "name": "Dumbbell Floor Press",
+    "group": "chest",
+    "sub": "Mid / lower chest",
+    "score": 83,
+    "equipment": "Dumbbells",
+    "level": "Beginner",
+    "pattern": "Press",
+    "why": "The floor limits shoulder extension and creates a simple, repeatable dumbbell press for home or gym training.",
+    "caution": "Lower the elbows under control rather than striking the floor, and use a load you can position safely without a spotter.",
+    "sets": "3–4",
+    "reps": "8–15",
+    "rest": "1½–2 min",
+    "cues": [
+      "Lie with the knees bent and the dumbbells stacked over the elbows.",
+      "Lower until the upper arms gently contact the floor.",
+      "Pause briefly, then press without bouncing the elbows."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Dumbbell%20Floor%20Press%20exercise%20form%20tutorial",
+    "traits": [
+      "compound",
+      "floor"
+    ],
+    "metrics": {
+      "stimulus": 84,
+      "stability": 88,
+      "progression": 88,
+      "range": 70,
+      "fatigue": 87
+    }
+  },
+  {
+    "id": "band-chest-fly",
+    "name": "Resistance-Band Chest Fly",
+    "group": "chest",
+    "sub": "Mid / lower chest",
+    "score": 80,
+    "equipment": "Resistance band",
+    "level": "Beginner",
+    "pattern": "Press / adduct",
+    "why": "A band provides portable chest adduction with rising tension and lets the user adjust resistance through stance distance.",
+    "caution": "Inspect the band and anchor before every set, keep it away from the face, and avoid forcing the arms behind a comfortable range.",
+    "sets": "3–4",
+    "reps": "12–20",
+    "rest": "1–1½ min",
+    "cues": [
+      "Anchor the band securely behind the torso at chest height.",
+      "Keep a soft elbow bend while sweeping the hands together.",
+      "Return slowly until the chest reaches a comfortable stretch."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Resistance-Band%20Chest%20Fly%20exercise%20form%20tutorial",
+    "traits": [
+      "isolation"
+    ],
+    "metrics": {
+      "stimulus": 78,
+      "stability": 84,
+      "progression": 75,
+      "range": 78,
+      "fatigue": 90
+    }
+  },
+  {
+    "id": "incline-cable-press",
+    "name": "Incline Cable Press",
+    "group": "chest",
+    "sub": "Upper chest",
+    "score": 89,
+    "equipment": "Cables",
+    "level": "Intermediate",
+    "pattern": "Press",
+    "why": "An inclined cable path keeps tension on the upper chest while allowing each arm to follow a comfortable pressing line.",
+    "caution": "Secure the bench between the pulleys, use manageable loads, and stop if the cable path pulls the shoulders into discomfort.",
+    "sets": "3–4",
+    "reps": "8–15",
+    "rest": "1½–2 min",
+    "cues": [
+      "Set the bench to a low incline between two low pulleys.",
+      "Press upward and slightly inward without shrugging.",
+      "Lower with control until the upper chest is comfortably lengthened."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Incline%20Cable%20Press%20exercise%20form%20tutorial",
+    "traits": [
+      "compound"
+    ],
+    "metrics": {
+      "stimulus": 91,
+      "stability": 88,
+      "progression": 86,
+      "range": 90,
+      "fatigue": 84
+    }
+  },
+  {
+    "id": "archer-pushup",
+    "name": "Archer Push-Up",
+    "group": "chest",
+    "sub": "Mid / lower chest",
+    "score": 78,
+    "equipment": "Bodyweight",
+    "level": "Advanced",
+    "pattern": "Press / adduct",
+    "why": "Shifting the torso toward one hand increases the working-side challenge without requiring external loading.",
+    "caution": "Build strong standard push-ups first, use a range the wrists and shoulders tolerate, and avoid dropping onto the working arm.",
+    "sets": "3–4",
+    "reps": "5–10 / side",
+    "rest": "1½–2 min",
+    "cues": [
+      "Set the hands wider than a standard push-up position.",
+      "Shift the chest toward one hand as that elbow bends.",
+      "Keep the trunk rigid and alternate sides with control."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Archer%20Push-Up%20exercise%20form%20tutorial",
+    "traits": [
+      "compound",
+      "unilateral",
+      "floor"
+    ],
+    "metrics": {
+      "stimulus": 86,
+      "stability": 64,
+      "progression": 70,
+      "range": 84,
+      "fatigue": 78
+    }
+  },
+  {
     "id": "neutral-pulldown",
     "name": "Neutral-grip Lat Pulldown",
     "group": "back",
@@ -1257,6 +1415,166 @@
       "stability": 84,
       "progression": 64,
       "range": 76,
+      "fatigue": 94
+    }
+  },
+  {
+    "id": "conventional-deadlift",
+    "name": "Conventional Deadlift",
+    "group": "back",
+    "sub": "Spinal erectors",
+    "score": 80,
+    "equipment": "Barbell / Smith",
+    "level": "Intermediate",
+    "pattern": "Pull / hinge",
+    "why": "The conventional deadlift develops heavily loadable hip-hinge strength with substantial spinal-extensor demand.",
+    "caution": "Learn the hinge with lighter loads, keep the bar close, and stop the set if fatigue causes the back position to change markedly.",
+    "sets": "2–4",
+    "reps": "3–8",
+    "rest": "2–4 min",
+    "cues": [
+      "Set the midfoot under the bar and brace before lifting.",
+      "Push the floor away while keeping the bar close to the legs.",
+      "Stand tall without leaning backward at lockout."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Conventional%20Deadlift%20exercise%20form%20tutorial",
+    "traits": [
+      "compound",
+      "unsupported-hinge"
+    ],
+    "metrics": {
+      "stimulus": 83,
+      "stability": 68,
+      "progression": 96,
+      "range": 83,
+      "fatigue": 60
+    }
+  },
+  {
+    "id": "pendlay-row",
+    "name": "Pendlay Row",
+    "group": "back",
+    "sub": "Upper back",
+    "score": 79,
+    "equipment": "Barbell / Smith",
+    "level": "Advanced",
+    "pattern": "Pull / hinge",
+    "why": "Resetting each repetition on the floor creates a measurable horizontal pull with a strict starting position.",
+    "caution": "Use this only if a near-horizontal hinge is comfortable and sustainable; choose a supported row if the lower back becomes limiting.",
+    "sets": "3–5",
+    "reps": "5–10",
+    "rest": "2–3 min",
+    "cues": [
+      "Hinge until the torso is near horizontal and brace firmly.",
+      "Pull the bar toward the lower ribs without lifting the chest.",
+      "Return the bar to the floor and reset every repetition."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Pendlay%20Row%20exercise%20form%20tutorial",
+    "traits": [
+      "compound",
+      "unsupported-hinge"
+    ],
+    "metrics": {
+      "stimulus": 84,
+      "stability": 67,
+      "progression": 91,
+      "range": 77,
+      "fatigue": 66
+    }
+  },
+  {
+    "id": "meadows-row",
+    "name": "Meadows Row",
+    "group": "back",
+    "sub": "Latissimus dorsi",
+    "score": 84,
+    "equipment": "Barbell / Smith",
+    "level": "Intermediate",
+    "pattern": "Pull / hinge",
+    "why": "The offset landmine setup supports a long one-arm rowing path and allows progressive plate loading.",
+    "caution": "Secure the free end of the bar, keep clear of the plates, and use a supported row if the hinge position irritates the back.",
+    "sets": "3–4",
+    "reps": "8–12 / side",
+    "rest": "1½–2 min",
+    "cues": [
+      "Stand across the landmine and brace the nonworking hand.",
+      "Drive the working elbow back toward the hip.",
+      "Lower the plates under control for a full comfortable reach."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Meadows%20Row%20exercise%20form%20tutorial",
+    "traits": [
+      "compound",
+      "unilateral",
+      "unsupported-hinge"
+    ],
+    "metrics": {
+      "stimulus": 90,
+      "stability": 72,
+      "progression": 86,
+      "range": 91,
+      "fatigue": 72
+    }
+  },
+  {
+    "id": "machine-pullover",
+    "name": "Machine Pullover",
+    "group": "back",
+    "sub": "Latissimus dorsi",
+    "score": 90,
+    "equipment": "Machine",
+    "level": "Beginner",
+    "pattern": "Pull / hinge",
+    "why": "A supported pullover machine trains shoulder extension through a repeatable arc without grip strength limiting the set.",
+    "caution": "Adjust the seat and start position before loading, and use only a shoulder range that stays smooth and comfortable.",
+    "sets": "3–4",
+    "reps": "8–15",
+    "rest": "1½–2 min",
+    "cues": [
+      "Align the shoulders with the machine pivot where possible.",
+      "Brace the torso and drive the upper arms down in an arc.",
+      "Return slowly without letting the weight stack slam."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Machine%20Pullover%20exercise%20form%20tutorial",
+    "traits": [
+      "isolation",
+      "overhead"
+    ],
+    "metrics": {
+      "stimulus": 89,
+      "stability": 95,
+      "progression": 88,
+      "range": 90,
+      "fatigue": 87
+    }
+  },
+  {
+    "id": "prone-cobra",
+    "name": "Prone Cobra",
+    "group": "back",
+    "sub": "Upper back",
+    "score": 74,
+    "equipment": "Bodyweight",
+    "level": "Beginner",
+    "pattern": "Pull / hinge",
+    "why": "This low-load prone hold introduces upper-back endurance and controlled shoulder-blade retraction without equipment.",
+    "caution": "Keep the lift small, avoid forcing the neck or lower back into extension, and stop if the position causes discomfort.",
+    "sets": "2–4",
+    "reps": "15–30 s",
+    "rest": "1 min",
+    "cues": [
+      "Lie face down with the arms beside the torso.",
+      "Lift the chest slightly while drawing the shoulder blades back.",
+      "Keep the neck long and breathe throughout the hold."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Prone%20Cobra%20exercise%20form%20tutorial",
+    "traits": [
+      "floor"
+    ],
+    "metrics": {
+      "stimulus": 69,
+      "stability": 86,
+      "progression": 62,
+      "range": 70,
       "fatigue": 94
     }
   },
@@ -1897,6 +2215,166 @@
     }
   },
   {
+    "id": "half-kneeling-landmine-press",
+    "name": "Half-Kneeling Landmine Press",
+    "group": "shoulders",
+    "sub": "Front delts",
+    "score": 87,
+    "equipment": "Barbell / Smith",
+    "level": "Intermediate",
+    "pattern": "Raise / press",
+    "why": "The angled landmine path offers a progressive one-arm press between horizontal and fully overhead positions.",
+    "caution": "Anchor the bar securely, pad the kneeling knee, and keep the load light enough to prevent trunk rotation or rib flare.",
+    "sets": "3–4",
+    "reps": "8–12 / side",
+    "rest": "1½–2 min",
+    "cues": [
+      "Kneel opposite the pressing arm and brace the glutes.",
+      "Press the bar up and forward along its natural arc.",
+      "Keep the ribs stacked while lowering to the shoulder."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Half-Kneeling%20Landmine%20Press%20exercise%20form%20tutorial",
+    "traits": [
+      "compound",
+      "unilateral",
+      "overhead",
+      "floor"
+    ],
+    "metrics": {
+      "stimulus": 88,
+      "stability": 84,
+      "progression": 91,
+      "range": 86,
+      "fatigue": 81
+    }
+  },
+  {
+    "id": "cable-y-raise",
+    "name": "Cable Y-Raise",
+    "group": "shoulders",
+    "sub": "Side delts",
+    "score": 86,
+    "equipment": "Cables",
+    "level": "Intermediate",
+    "pattern": "Raise / press",
+    "why": "Low cables create continuous tension as the arms travel in a diagonal Y path through shoulder abduction.",
+    "caution": "Use a light load and a pain-free path, and stop the raise before the shoulders shrug or the ribs flare.",
+    "sets": "3–4",
+    "reps": "10–20",
+    "rest": "1–1½ min",
+    "cues": [
+      "Cross the low cables and begin with the hands near the hips.",
+      "Raise the arms diagonally with a soft elbow bend.",
+      "Finish before shrugging, then lower under control."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Cable%20Y-Raise%20exercise%20form%20tutorial",
+    "traits": [
+      "isolation",
+      "overhead"
+    ],
+    "metrics": {
+      "stimulus": 85,
+      "stability": 82,
+      "progression": 86,
+      "range": 91,
+      "fatigue": 86
+    }
+  },
+  {
+    "id": "dumbbell-front-raise",
+    "name": "Dumbbell Front Raise",
+    "group": "shoulders",
+    "sub": "Front delts",
+    "score": 80,
+    "equipment": "Dumbbells",
+    "level": "Beginner",
+    "pattern": "Raise / press",
+    "why": "A simple free-weight raise directly trains shoulder flexion and is easy to perform with modest dumbbells.",
+    "caution": "Keep the load conservative, avoid swinging through the torso, and use a pain-free height rather than forcing the top position.",
+    "sets": "2–4",
+    "reps": "10–20",
+    "rest": "1–1½ min",
+    "cues": [
+      "Stand tall with the dumbbells resting near the thighs.",
+      "Raise with soft elbows until around shoulder height.",
+      "Lower slowly without rocking the torso backward."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Dumbbell%20Front%20Raise%20exercise%20form%20tutorial",
+    "traits": [
+      "isolation"
+    ],
+    "metrics": {
+      "stimulus": 78,
+      "stability": 78,
+      "progression": 84,
+      "range": 78,
+      "fatigue": 88
+    }
+  },
+  {
+    "id": "band-pull-apart",
+    "name": "Band Pull-Apart",
+    "group": "shoulders",
+    "sub": "Rear delts",
+    "score": 84,
+    "equipment": "Resistance band",
+    "level": "Beginner",
+    "pattern": "Raise / press",
+    "why": "A portable band provides accessible horizontal-abduction work for the rear delts with minimal setup.",
+    "caution": "Inspect the band before use, select a resistance that allows a smooth path, and keep it away from the face if grip slips.",
+    "sets": "2–4",
+    "reps": "12–25",
+    "rest": "1 min",
+    "cues": [
+      "Hold the band at shoulder height with straight wrists.",
+      "Pull the hands apart while keeping the ribs stacked.",
+      "Return slowly without letting the band snap inward."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Band%20Pull-Apart%20exercise%20form%20tutorial",
+    "traits": [
+      "isolation"
+    ],
+    "metrics": {
+      "stimulus": 80,
+      "stability": 92,
+      "progression": 79,
+      "range": 82,
+      "fatigue": 93
+    }
+  },
+  {
+    "id": "scapular-wall-slide",
+    "name": "Scapular Wall Slide",
+    "group": "shoulders",
+    "sub": "Rotator cuff",
+    "score": 80,
+    "equipment": "Bodyweight",
+    "level": "Beginner",
+    "pattern": "Raise / press",
+    "why": "The wall provides feedback for controlled upward rotation and overhead movement with no external loading.",
+    "caution": "Work only through a comfortable range, avoid forcing the arms flat against the wall, and stop if pinching or pain appears.",
+    "sets": "2–4",
+    "reps": "8–15",
+    "rest": "1 min",
+    "cues": [
+      "Stand against the wall with the ribs gently stacked.",
+      "Slide the forearms upward without shrugging abruptly.",
+      "Reach comfortably, then return with steady control."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Scapular%20Wall%20Slide%20exercise%20form%20tutorial",
+    "traits": [
+      "isolation",
+      "overhead"
+    ],
+    "metrics": {
+      "stimulus": 70,
+      "stability": 94,
+      "progression": 65,
+      "range": 86,
+      "fatigue": 96
+    }
+  },
+  {
     "id": "incline-curl",
     "name": "Incline Dumbbell Curl",
     "group": "arms",
@@ -2518,6 +2996,164 @@
       "progression": 91,
       "range": 89,
       "fatigue": 94
+    }
+  },
+  {
+    "id": "dumbbell-concentration-curl",
+    "name": "Dumbbell Concentration Curl",
+    "group": "arms",
+    "sub": "Biceps",
+    "score": 87,
+    "equipment": "Dumbbells",
+    "level": "Beginner",
+    "pattern": "Elbow flex / extend",
+    "why": "Bracing the upper arm against the thigh makes this a stable, focused curl that is difficult to swing.",
+    "caution": "Keep the elbow supported without pressing sharply into the thigh, and stop before wrist or elbow discomfort develops.",
+    "sets": "3–4",
+    "reps": "8–15 / side",
+    "rest": "1–1½ min",
+    "cues": [
+      "Sit forward and brace the upper arm against the inner thigh.",
+      "Curl without letting the shoulder roll toward the hand.",
+      "Lower until the elbow is comfortably extended."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Dumbbell%20Concentration%20Curl%20exercise%20form%20tutorial",
+    "traits": [
+      "isolation",
+      "unilateral"
+    ],
+    "metrics": {
+      "stimulus": 86,
+      "stability": 90,
+      "progression": 83,
+      "range": 91,
+      "fatigue": 88
+    }
+  },
+  {
+    "id": "spider-curl",
+    "name": "Spider Curl",
+    "group": "arms",
+    "sub": "Biceps",
+    "score": 89,
+    "equipment": "Dumbbells",
+    "level": "Intermediate",
+    "pattern": "Elbow flex / extend",
+    "why": "Chest support reduces torso assistance while the hanging arm position creates a strict and repeatable curl.",
+    "caution": "Set the bench securely, keep the shoulders comfortable at the edge, and avoid snapping the elbows straight at the bottom.",
+    "sets": "3–4",
+    "reps": "8–15",
+    "rest": "1–1½ min",
+    "cues": [
+      "Lie chest-down on an incline bench with the arms hanging.",
+      "Keep the upper arms quiet while curling the dumbbells.",
+      "Squeeze briefly and lower to a controlled elbow extension."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Spider%20Curl%20exercise%20form%20tutorial",
+    "traits": [
+      "isolation"
+    ],
+    "metrics": {
+      "stimulus": 90,
+      "stability": 88,
+      "progression": 86,
+      "range": 92,
+      "fatigue": 84
+    }
+  },
+  {
+    "id": "zottman-curl",
+    "name": "Zottman Curl",
+    "group": "arms",
+    "sub": "Forearms",
+    "score": 82,
+    "equipment": "Dumbbells",
+    "level": "Intermediate",
+    "pattern": "Elbow flex / extend",
+    "why": "Rotating to a palms-down lowering phase combines elbow-flexor work with an added forearm extensor challenge.",
+    "caution": "Use a lighter load than a standard curl, rotate smoothly, and reduce the range if the wrists or elbows become uncomfortable.",
+    "sets": "3–4",
+    "reps": "8–15",
+    "rest": "1–1½ min",
+    "cues": [
+      "Curl with the palms rotating upward near the top.",
+      "Turn the palms down without letting the elbows drift.",
+      "Lower slowly, then reset the grip at the bottom."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Zottman%20Curl%20exercise%20form%20tutorial",
+    "traits": [
+      "isolation"
+    ],
+    "metrics": {
+      "stimulus": 82,
+      "stability": 80,
+      "progression": 80,
+      "range": 86,
+      "fatigue": 86
+    }
+  },
+  {
+    "id": "dumbbell-triceps-kickback",
+    "name": "Dumbbell Triceps Kickback",
+    "group": "arms",
+    "sub": "Triceps lateral / medial",
+    "score": 82,
+    "equipment": "Dumbbells",
+    "level": "Beginner",
+    "pattern": "Elbow flex / extend",
+    "why": "A supported hinge and light dumbbell offer simple elbow-extension work with a strong shortened-position challenge.",
+    "caution": "Support the torso, use a manageable load, and avoid swinging the upper arm or forcing the elbow beyond straight.",
+    "sets": "3–4",
+    "reps": "10–20 / side",
+    "rest": "1–1½ min",
+    "cues": [
+      "Brace one hand and keep the working upper arm beside the torso.",
+      "Extend the elbow without swinging the shoulder backward.",
+      "Pause briefly, then return the forearm under control."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Dumbbell%20Triceps%20Kickback%20exercise%20form%20tutorial",
+    "traits": [
+      "isolation",
+      "unilateral"
+    ],
+    "metrics": {
+      "stimulus": 79,
+      "stability": 80,
+      "progression": 82,
+      "range": 82,
+      "fatigue": 91
+    }
+  },
+  {
+    "id": "diamond-pushup",
+    "name": "Diamond Push-Up",
+    "group": "arms",
+    "sub": "Triceps lateral / medial",
+    "score": 82,
+    "equipment": "Bodyweight",
+    "level": "Intermediate",
+    "pattern": "Elbow flex / extend",
+    "why": "A narrow hand position increases elbow-extension demand while retaining the accessible push-up loading pattern.",
+    "caution": "The hands do not need to form a perfect diamond; widen them if the wrists or elbows feel strained and keep the range comfortable.",
+    "sets": "3–4",
+    "reps": "6–15",
+    "rest": "1½–2 min",
+    "cues": [
+      "Place the hands narrowly beneath the center of the chest.",
+      "Keep the elbows tracking back rather than flaring sharply.",
+      "Maintain a rigid trunk as the chest lowers and presses away."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Diamond%20Push-Up%20exercise%20form%20tutorial",
+    "traits": [
+      "compound",
+      "floor"
+    ],
+    "metrics": {
+      "stimulus": 86,
+      "stability": 75,
+      "progression": 86,
+      "range": 80,
+      "fatigue": 82
     }
   },
   {
@@ -3163,6 +3799,168 @@
     }
   },
   {
+    "id": "barbell-back-squat",
+    "name": "Barbell Back Squat",
+    "group": "legs",
+    "sub": "Quadriceps",
+    "score": 88,
+    "equipment": "Barbell / Smith",
+    "level": "Intermediate",
+    "pattern": "Squat / hinge",
+    "why": "The back squat provides highly measurable whole-leg loading and broad progression options when technique is established.",
+    "caution": "Use a rack with safeties, learn an appropriate depth and bar position, and stop if pain or loss of control develops.",
+    "sets": "3–5",
+    "reps": "4–10",
+    "rest": "2–4 min",
+    "cues": [
+      "Set the bar securely on the upper back and brace before stepping out.",
+      "Sit between the hips while the knees track with the toes.",
+      "Drive through the feet and keep the torso controlled."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Barbell%20Back%20Squat%20exercise%20form%20tutorial",
+    "traits": [
+      "compound",
+      "deep-knee"
+    ],
+    "metrics": {
+      "stimulus": 93,
+      "stability": 75,
+      "progression": 97,
+      "range": 92,
+      "fatigue": 65
+    }
+  },
+  {
+    "id": "pendulum-squat",
+    "name": "Pendulum Squat",
+    "group": "legs",
+    "sub": "Quadriceps",
+    "score": 93,
+    "equipment": "Machine",
+    "level": "Intermediate",
+    "pattern": "Squat / hinge",
+    "why": "The supported arcing path allows deep knee flexion and progressive quadriceps loading with little balance demand.",
+    "caution": "Adjust the platform and stops before loading, keep the feet planted, and use only the depth your knees and hips tolerate.",
+    "sets": "3–5",
+    "reps": "6–15",
+    "rest": "2–3 min",
+    "cues": [
+      "Set the feet where the knees can track comfortably.",
+      "Descend under control while keeping the back on the pad.",
+      "Drive the platform away without locking the knees abruptly."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Pendulum%20Squat%20exercise%20form%20tutorial",
+    "traits": [
+      "compound",
+      "deep-knee"
+    ],
+    "metrics": {
+      "stimulus": 95,
+      "stability": 94,
+      "progression": 92,
+      "range": 95,
+      "fatigue": 78
+    }
+  },
+  {
+    "id": "dumbbell-reverse-lunge",
+    "name": "Dumbbell Reverse Lunge",
+    "group": "legs",
+    "sub": "Quadriceps",
+    "score": 84,
+    "equipment": "Dumbbells",
+    "level": "Intermediate",
+    "pattern": "Squat / hinge",
+    "why": "Stepping backward provides unilateral knee and hip loading with an easy-to-adjust stride and dumbbell progression.",
+    "caution": "Begin without external load if balance is uncertain, keep the front foot planted, and shorten the depth if the knee becomes painful.",
+    "sets": "3–4",
+    "reps": "8–12 / side",
+    "rest": "1½–2 min",
+    "cues": [
+      "Step one foot backward and land softly on the ball of the foot.",
+      "Lower with the front knee tracking over the toes.",
+      "Push through the front foot to return to standing."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Dumbbell%20Reverse%20Lunge%20exercise%20form%20tutorial",
+    "traits": [
+      "compound",
+      "unilateral",
+      "deep-knee"
+    ],
+    "metrics": {
+      "stimulus": 89,
+      "stability": 72,
+      "progression": 87,
+      "range": 91,
+      "fatigue": 76
+    }
+  },
+  {
+    "id": "sliding-hamstring-curl",
+    "name": "Sliding Hamstring Curl",
+    "group": "legs",
+    "sub": "Hamstrings",
+    "score": 86,
+    "equipment": "Bodyweight",
+    "level": "Intermediate",
+    "pattern": "Squat / hinge",
+    "why": "Heel sliders combine knee flexion with an adjustable bodyweight hip-extension demand using minimal equipment.",
+    "caution": "Use a clear low-friction surface with controlled sliders, keep the hips within a manageable height, and stop if cramping becomes sharp.",
+    "sets": "3–4",
+    "reps": "6–15",
+    "rest": "1½–2 min",
+    "cues": [
+      "Lie on the back with both heels placed on sliders.",
+      "Lift the hips and draw the heels toward the body.",
+      "Extend the legs slowly without losing trunk control."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Sliding%20Hamstring%20Curl%20exercise%20form%20tutorial",
+    "traits": [
+      "isolation",
+      "floor"
+    ],
+    "metrics": {
+      "stimulus": 88,
+      "stability": 82,
+      "progression": 83,
+      "range": 90,
+      "fatigue": 84
+    }
+  },
+  {
+    "id": "pistol-squat",
+    "name": "Pistol Squat",
+    "group": "legs",
+    "sub": "Quadriceps",
+    "score": 79,
+    "equipment": "Bodyweight",
+    "level": "Advanced",
+    "pattern": "Squat / hinge",
+    "why": "A pistol squat creates high unilateral leg demand and a long knee range using bodyweight alone.",
+    "caution": "Earn the movement through supported progressions, use a stable assistance point when needed, and never force depth or balance.",
+    "sets": "3–4",
+    "reps": "3–8 / side",
+    "rest": "1½–2 min",
+    "cues": [
+      "Reach the free leg forward and brace before descending.",
+      "Track the working knee in line with the toes.",
+      "Use support or a target height until every rep is controlled."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Pistol%20Squat%20exercise%20form%20tutorial",
+    "traits": [
+      "compound",
+      "unilateral",
+      "deep-knee"
+    ],
+    "metrics": {
+      "stimulus": 86,
+      "stability": 55,
+      "progression": 82,
+      "range": 94,
+      "fatigue": 68
+    }
+  },
+  {
     "id": "hip-thrust",
     "name": "Machine Hip Thrust",
     "group": "glutes",
@@ -3805,6 +4603,169 @@
     }
   },
   {
+    "id": "barbell-sumo-deadlift",
+    "name": "Barbell Sumo Deadlift",
+    "group": "glutes",
+    "sub": "Glute max",
+    "score": 85,
+    "equipment": "Barbell / Smith",
+    "level": "Intermediate",
+    "pattern": "Extend / abduct",
+    "why": "A wider stance creates a heavily loadable hip-extension pattern with meaningful glute and adductor involvement.",
+    "caution": "Choose a stance that allows the knees to track comfortably, keep the bar close, and avoid forcing an excessively wide position.",
+    "sets": "3–4",
+    "reps": "4–8",
+    "rest": "2–4 min",
+    "cues": [
+      "Set a wide stance with the toes turned out comfortably.",
+      "Brace and push the floor apart as the bar leaves the ground.",
+      "Stand tall while keeping the bar close to the body."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Barbell%20Sumo%20Deadlift%20exercise%20form%20tutorial",
+    "traits": [
+      "compound",
+      "unsupported-hinge"
+    ],
+    "metrics": {
+      "stimulus": 90,
+      "stability": 73,
+      "progression": 95,
+      "range": 87,
+      "fatigue": 66
+    }
+  },
+  {
+    "id": "dumbbell-curtsy-lunge",
+    "name": "Dumbbell Curtsy Lunge",
+    "group": "glutes",
+    "sub": "Glute med / min",
+    "score": 78,
+    "equipment": "Dumbbells",
+    "level": "Intermediate",
+    "pattern": "Extend / abduct",
+    "why": "The diagonal step adds multiplanar unilateral loading and challenges hip control with simple dumbbell progression.",
+    "caution": "Keep the crossover modest and the front knee comfortable; use a standard reverse lunge if twisting or knee discomfort appears.",
+    "sets": "3–4",
+    "reps": "8–12 / side",
+    "rest": "1½–2 min",
+    "cues": [
+      "Step the moving foot diagonally behind the planted leg.",
+      "Keep most pressure through the front foot.",
+      "Stand by driving the front hip forward without twisting."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Dumbbell%20Curtsy%20Lunge%20exercise%20form%20tutorial",
+    "traits": [
+      "compound",
+      "unilateral",
+      "deep-knee"
+    ],
+    "metrics": {
+      "stimulus": 82,
+      "stability": 66,
+      "progression": 78,
+      "range": 87,
+      "fatigue": 76
+    }
+  },
+  {
+    "id": "banded-fire-hydrant",
+    "name": "Banded Fire Hydrant",
+    "group": "glutes",
+    "sub": "Glute med / min",
+    "score": 81,
+    "equipment": "Resistance band",
+    "level": "Beginner",
+    "pattern": "Extend / abduct",
+    "why": "A loop band adds portable resistance to quadruped hip abduction while the floor supports the trunk.",
+    "caution": "Use a light band, keep the pelvis level, and reduce the range if the lower back rotates or the hip pinches.",
+    "sets": "3–4",
+    "reps": "12–20 / side",
+    "rest": "1 min",
+    "cues": [
+      "Place the loop above the knees and begin on all fours.",
+      "Lift one bent knee sideways without turning the pelvis.",
+      "Pause briefly and return the knee with band tension controlled."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Banded%20Fire%20Hydrant%20exercise%20form%20tutorial",
+    "traits": [
+      "isolation",
+      "unilateral",
+      "floor"
+    ],
+    "metrics": {
+      "stimulus": 78,
+      "stability": 84,
+      "progression": 77,
+      "range": 82,
+      "fatigue": 92
+    }
+  },
+  {
+    "id": "kickstand-romanian-deadlift",
+    "name": "Kickstand Romanian Deadlift",
+    "group": "glutes",
+    "sub": "Glute max",
+    "score": 85,
+    "equipment": "Dumbbells",
+    "level": "Intermediate",
+    "pattern": "Extend / abduct",
+    "why": "A lightly supported rear foot shifts more hip-hinge demand to one side while retaining useful balance assistance.",
+    "caution": "Keep both hips facing the floor, hinge only as far as trunk control allows, and reduce load if the back becomes limiting.",
+    "sets": "3–4",
+    "reps": "8–12 / side",
+    "rest": "1½–2 min",
+    "cues": [
+      "Place the rear toes lightly behind the working foot.",
+      "Push the working hip back while keeping the dumbbells close.",
+      "Drive through the front foot to return to standing."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Kickstand%20Romanian%20Deadlift%20exercise%20form%20tutorial",
+    "traits": [
+      "compound",
+      "unilateral",
+      "unsupported-hinge"
+    ],
+    "metrics": {
+      "stimulus": 91,
+      "stability": 72,
+      "progression": 88,
+      "range": 93,
+      "fatigue": 75
+    }
+  },
+  {
+    "id": "hip-airplane",
+    "name": "Hip Airplane",
+    "group": "glutes",
+    "sub": "Glute med / min",
+    "score": 73,
+    "equipment": "Bodyweight",
+    "level": "Advanced",
+    "pattern": "Extend / abduct",
+    "why": "This single-leg hinge drill challenges hip rotation control and gluteal stability without external resistance.",
+    "caution": "Use fingertip support while learning, keep the range small, and stop if balance loss or hip discomfort prevents control.",
+    "sets": "2–4",
+    "reps": "5–8 / side",
+    "rest": "1 min",
+    "cues": [
+      "Hinge on one leg and hold a stable support if needed.",
+      "Rotate the pelvis open and closed without moving the planted knee.",
+      "Use a small range that remains slow and balanced."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Hip%20Airplane%20exercise%20form%20tutorial",
+    "traits": [
+      "unilateral",
+      "unsupported-hinge"
+    ],
+    "metrics": {
+      "stimulus": 76,
+      "stability": 58,
+      "progression": 69,
+      "range": 84,
+      "fatigue": 83
+    }
+  },
+  {
     "id": "standing-calf",
     "name": "Standing Calf Raise",
     "group": "calves",
@@ -4422,6 +5383,163 @@
       "progression": 80,
       "range": 84,
       "fatigue": 92
+    }
+  },
+  {
+    "id": "single-leg-seated-calf-raise",
+    "name": "Single-Leg Seated Calf Raise",
+    "group": "calves",
+    "sub": "Soleus",
+    "score": 88,
+    "equipment": "Dumbbells",
+    "level": "Intermediate",
+    "pattern": "Ankle flexion",
+    "why": "Training one bent-knee side at a time targets the soleus and lets a dumbbell provide simple progressive loading.",
+    "caution": "Place the dumbbell securely above the knee rather than on the kneecap, and use a stable step that cannot slide.",
+    "sets": "3–4",
+    "reps": "10–20 / side",
+    "rest": "1–1½ min",
+    "cues": [
+      "Sit tall with the working forefoot on a low stable step.",
+      "Hold the dumbbell above the knee and lower the heel slowly.",
+      "Rise onto the toes without letting the ankle roll outward."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Single-Leg%20Seated%20Calf%20Raise%20exercise%20form%20tutorial",
+    "traits": [
+      "isolation",
+      "unilateral"
+    ],
+    "metrics": {
+      "stimulus": 91,
+      "stability": 83,
+      "progression": 85,
+      "range": 93,
+      "fatigue": 88
+    }
+  },
+  {
+    "id": "hack-squat-calf-raise",
+    "name": "Hack Squat Calf Raise",
+    "group": "calves",
+    "sub": "Gastrocnemius",
+    "score": 90,
+    "equipment": "Machine",
+    "level": "Beginner",
+    "pattern": "Ankle flexion",
+    "why": "The hack-squat pad supports the body while the platform allows stable, heavily loadable straight-knee calf raises.",
+    "caution": "Keep enough forefoot on the platform, set the safeties before starting, and avoid bouncing through the bottom position.",
+    "sets": "3–5",
+    "reps": "8–15",
+    "rest": "1½–2 min",
+    "cues": [
+      "Place the balls of the feet securely on the platform edge.",
+      "Keep the knees softly straight while lowering the heels.",
+      "Rise as high as control allows without rolling the ankles."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Hack%20Squat%20Calf%20Raise%20exercise%20form%20tutorial",
+    "traits": [
+      "isolation"
+    ],
+    "metrics": {
+      "stimulus": 90,
+      "stability": 94,
+      "progression": 92,
+      "range": 88,
+      "fatigue": 86
+    }
+  },
+  {
+    "id": "band-resisted-calf-raise",
+    "name": "Band-Resisted Calf Raise",
+    "group": "calves",
+    "sub": "Gastrocnemius",
+    "score": 79,
+    "equipment": "Resistance band",
+    "level": "Beginner",
+    "pattern": "Ankle flexion",
+    "why": "A loop or long band increases resistance through a familiar standing calf raise without requiring a machine.",
+    "caution": "Secure the band beneath the feet, keep it away from the face, and inspect it for damage before every set.",
+    "sets": "3–4",
+    "reps": "12–25",
+    "rest": "1 min",
+    "cues": [
+      "Stand on the center of the band with even foot pressure.",
+      "Hold the band securely while rising onto the toes.",
+      "Pause at the top and lower the heels without bouncing."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Band-Resisted%20Calf%20Raise%20exercise%20form%20tutorial",
+    "traits": [
+      "isolation"
+    ],
+    "metrics": {
+      "stimulus": 75,
+      "stability": 84,
+      "progression": 75,
+      "range": 79,
+      "fatigue": 93
+    }
+  },
+  {
+    "id": "leaning-calf-raise",
+    "name": "Leaning Calf Raise",
+    "group": "calves",
+    "sub": "Gastrocnemius",
+    "score": 83,
+    "equipment": "Bodyweight",
+    "level": "Beginner",
+    "pattern": "Ankle flexion",
+    "why": "Leaning into a wall provides balance support for controlled straight-knee calf raises with no equipment.",
+    "caution": "Use a wall that will not move, keep the feet from slipping, and stay within a comfortable ankle range.",
+    "sets": "3–4",
+    "reps": "12–25",
+    "rest": "1 min",
+    "cues": [
+      "Place the hands on a wall and lean forward as one straight line.",
+      "Keep the knees softly straight as both heels rise.",
+      "Lower slowly until the heels return to the floor."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Leaning%20Calf%20Raise%20exercise%20form%20tutorial",
+    "traits": [
+      "isolation"
+    ],
+    "metrics": {
+      "stimulus": 82,
+      "stability": 76,
+      "progression": 80,
+      "range": 90,
+      "fatigue": 91
+    }
+  },
+  {
+    "id": "squat-calf-raise",
+    "name": "Squat Calf Raise",
+    "group": "calves",
+    "sub": "Soleus",
+    "score": 82,
+    "equipment": "Bodyweight",
+    "level": "Intermediate",
+    "pattern": "Ankle flexion",
+    "why": "Holding a squat keeps the knees bent while repeated heel raises emphasize the soleus without external load.",
+    "caution": "Use wall support if needed, choose a knee angle that is comfortable, and stop before balance or knee discomfort disrupts control.",
+    "sets": "3–4",
+    "reps": "12–25",
+    "rest": "1–1½ min",
+    "cues": [
+      "Lower into a comfortable squat and keep the torso steady.",
+      "Raise both heels while maintaining the same knee angle.",
+      "Pause on the toes and lower without leaving the squat."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Squat%20Calf%20Raise%20exercise%20form%20tutorial",
+    "traits": [
+      "isolation",
+      "deep-knee"
+    ],
+    "metrics": {
+      "stimulus": 82,
+      "stability": 77,
+      "progression": 78,
+      "range": 87,
+      "fatigue": 85
     }
   },
   {
@@ -5052,6 +6170,164 @@
       "progression": 87,
       "range": 82,
       "fatigue": 92
+    }
+  },
+  {
+    "id": "barbell-rollout",
+    "name": "Barbell Rollout",
+    "group": "core",
+    "sub": "Deep core",
+    "score": 85,
+    "equipment": "Barbell / Smith",
+    "level": "Intermediate",
+    "pattern": "Brace / flexion",
+    "why": "A barbell with freely rolling plates creates a measurable anti-extension rollout using common gym equipment.",
+    "caution": "Use round plates that roll smoothly, clear the floor around the bar, and shorten the reach before the lower back arches.",
+    "sets": "3–4",
+    "reps": "6–12",
+    "rest": "1½–2 min",
+    "cues": [
+      "Kneel behind the bar and brace with the ribs drawn down.",
+      "Roll forward only as far as the trunk position stays steady.",
+      "Pull the bar back by tightening the abdomen and shoulders."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Barbell%20Rollout%20exercise%20form%20tutorial",
+    "traits": [
+      "overhead",
+      "floor"
+    ],
+    "metrics": {
+      "stimulus": 92,
+      "stability": 66,
+      "progression": 88,
+      "range": 96,
+      "fatigue": 71
+    }
+  },
+  {
+    "id": "weighted-situp",
+    "name": "Weighted Sit-Up",
+    "group": "core",
+    "sub": "Rectus abdominis",
+    "score": 84,
+    "equipment": "Dumbbells",
+    "level": "Intermediate",
+    "pattern": "Brace / flexion",
+    "why": "Adding a dumbbell makes the familiar sit-up progressively loadable across a controlled trunk-flexion range.",
+    "caution": "Hold the weight securely near the chest, avoid pulling on the neck, and choose another movement if repeated flexion causes back discomfort.",
+    "sets": "3–4",
+    "reps": "8–15",
+    "rest": "1–1½ min",
+    "cues": [
+      "Lie with the knees bent and hold one dumbbell at the chest.",
+      "Curl the ribs toward the pelvis before sitting taller.",
+      "Lower one segment at a time without dropping onto the floor."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Weighted%20Sit-Up%20exercise%20form%20tutorial",
+    "traits": [
+      "isolation",
+      "floor"
+    ],
+    "metrics": {
+      "stimulus": 84,
+      "stability": 85,
+      "progression": 90,
+      "range": 80,
+      "fatigue": 80
+    }
+  },
+  {
+    "id": "half-kneeling-cable-lift",
+    "name": "Half-Kneeling Cable Lift",
+    "group": "core",
+    "sub": "Obliques",
+    "score": 86,
+    "equipment": "Cables",
+    "level": "Intermediate",
+    "pattern": "Brace / flexion",
+    "why": "The low-to-high cable path challenges controlled trunk rotation and bracing from a stable half-kneeling base.",
+    "caution": "Pad the kneeling knee, begin with a light load, and rotate through a comfortable range without forcing the lower back.",
+    "sets": "3–4",
+    "reps": "8–15 / side",
+    "rest": "1–1½ min",
+    "cues": [
+      "Kneel beside a low pulley with the outside knee forward.",
+      "Guide the handle upward across the torso with both hands.",
+      "Control the return without letting the cable twist the hips."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Half-Kneeling%20Cable%20Lift%20exercise%20form%20tutorial",
+    "traits": [
+      "unilateral",
+      "floor"
+    ],
+    "metrics": {
+      "stimulus": 86,
+      "stability": 81,
+      "progression": 87,
+      "range": 90,
+      "fatigue": 84
+    }
+  },
+  {
+    "id": "machine-torso-rotation",
+    "name": "Machine Torso Rotation",
+    "group": "core",
+    "sub": "Obliques",
+    "score": 88,
+    "equipment": "Machine",
+    "level": "Beginner",
+    "pattern": "Brace / flexion",
+    "why": "A supported rotation machine provides a repeatable resistance path and straightforward load progression for the obliques.",
+    "caution": "Align with the machine pivot, use a modest range, and avoid forcing the hips or lower back against the restraints.",
+    "sets": "3–4",
+    "reps": "10–15 / side",
+    "rest": "1–1½ min",
+    "cues": [
+      "Adjust the seat and pads so the torso begins comfortably.",
+      "Rotate smoothly while keeping the hips against the support.",
+      "Pause briefly and resist the machine on the return."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Machine%20Torso%20Rotation%20exercise%20form%20tutorial",
+    "traits": [
+      "isolation"
+    ],
+    "metrics": {
+      "stimulus": 84,
+      "stability": 95,
+      "progression": 90,
+      "range": 84,
+      "fatigue": 89
+    }
+  },
+  {
+    "id": "hollow-body-hold",
+    "name": "Hollow Body Hold",
+    "group": "core",
+    "sub": "Deep core",
+    "score": 82,
+    "equipment": "Bodyweight",
+    "level": "Intermediate",
+    "pattern": "Brace / flexion",
+    "why": "This no-equipment isometric trains anti-extension control through scalable arm and leg lever positions.",
+    "caution": "Shorten the levers or bend the knees if the lower back lifts, and stop if the position creates back or neck pain.",
+    "sets": "3–4",
+    "reps": "15–40 s",
+    "rest": "1 min",
+    "cues": [
+      "Lie on the back and gently press the lower ribs downward.",
+      "Lift the shoulders and extend only as far as the back stays supported.",
+      "Breathe behind the brace without losing the hollow shape."
+    ],
+    "youtube": "https://www.youtube.com/results?search_query=Hollow%20Body%20Hold%20exercise%20form%20tutorial",
+    "traits": [
+      "floor"
+    ],
+    "metrics": {
+      "stimulus": 82,
+      "stability": 78,
+      "progression": 80,
+      "range": 88,
+      "fatigue": 86
     }
   }
 ]
