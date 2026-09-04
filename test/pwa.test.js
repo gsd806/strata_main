@@ -91,9 +91,9 @@ test("release version, cache keys, asset URLs, and catalog claims stay aligned",
   const exercises=JSON.parse(read("data/exercises.json"));
   const version=BUILD,versionPattern=escapeRegExp(version);
   const serviceWorker=read("service-worker.js");
-  const pages=["index.html","account.html","verify-email.html","planner.html","discover.html","install.html","offline.html","pricing.html","contact.html","terms.html","privacy.html","refunds.html"];
+  const pages=["index.html","account.html","verify-email.html","forgot-password.html","reset-password.html","delete-account.html","planner.html","discover.html","install.html","offline.html","pricing.html","contact.html","terms.html","privacy.html","refunds.html"];
 
-  assert.equal(version,"6.7.1");
+  assert.equal(version,"6.7.5");
   assert.match(serviceWorker,new RegExp(`const BUILD="${versionPattern}";`));
   assert.match(serviceWorker,/const CACHE_PREFIX="strata-static-";/);
   assert.match(serviceWorker,/const STATIC_CACHE=`\$\{CACHE_PREFIX\}\$\{BUILD\}`;/);
@@ -166,8 +166,8 @@ test("manifest has complete install metadata and correctly sized icons",()=>{
   assert.deepEqual(pngDimensions("icons/apple-touch-icon.png"),{width:180,height:180});
 });
 
-test("every app page exposes consistent PWA and mobile metadata",()=>{
-  const appPages=["index.html","account.html","verify-email.html","planner.html","discover.html","install.html","pricing.html","contact.html","terms.html","privacy.html","refunds.html"];
+test("every ordinary app page exposes consistent PWA and mobile metadata",()=>{
+  const appPages=["index.html","account.html","verify-email.html","forgot-password.html","planner.html","discover.html","install.html","pricing.html","contact.html","terms.html","privacy.html","refunds.html"];
   for(const page of appPages) {
     const html=read(`pages/${page}`);
     assert.match(html,/<meta\s+name="viewport"\s+content="[^"]*width=device-width[^"]*viewport-fit=cover[^"]*"\s*\/>/i,`${page} viewport`);
@@ -181,6 +181,18 @@ test("every app page exposes consistent PWA and mobile metadata",()=>{
   const offline=read("pages/offline.html");
   assert.match(offline,/href="\/manifest\.webmanifest"/);
   assert.match(offline,/Reconnect before signing in, syncing your plan, or saving changes\./);
+});
+
+test("bearer-link pages stay mobile friendly but do not initialize the PWA",()=>{
+  for(const page of ["reset-password.html","delete-account.html"]) {
+    const html=read(`pages/${page}`);
+    assert.match(html,/<meta\s+name="viewport"\s+content="[^"]*width=device-width[^"]*viewport-fit=cover[^"]*"\s*\/>/i,`${page} viewport`);
+    assert.match(html,/<meta\s+name="theme-color"\s+content="#[0-9a-f]{6}"\s*\/>/i,`${page} theme color`);
+    assert.match(html,/<meta\s+name="referrer"\s+content="no-referrer"\s*\/>/i,`${page} referrer policy`);
+    assert.doesNotMatch(html,/href="\/manifest\.webmanifest"/i,`${page} manifest`);
+    assert.doesNotMatch(html,/src="\/pwa\.js/i,`${page} PWA registration`);
+    assert.match(html,new RegExp(`src="/account-recovery\\.js\\?v=${escapeRegExp(BUILD)}"`),`${page} recovery script`);
+  }
 });
 
 test("service worker precaches only public assets and never handles account APIs",async()=>{
@@ -198,14 +210,14 @@ test("service worker precaches only public assets and never handles account APIs
   assert.ok(harness.precache.some((url)=>url.includes("strata-512.png")));
 
   const paths=harness.precache.map((entry)=>new URL(entry,"https://strata.test").pathname);
-  const privateHtml=["/","/index.html","/account.html","/verify-email","/verify-email.html","/planner.html","/discover.html"];
+  const privateHtml=["/","/index.html","/account.html","/verify-email","/verify-email.html","/forgot-password","/forgot-password.html","/reset-password","/reset-password.html","/delete-account","/delete-account.html","/planner.html","/discover.html"];
   for(const forbidden of privateHtml)assert.ok(!paths.includes(forbidden),`${forbidden} must not be precached`);
   assert.ok(!paths.some((entry)=>entry.startsWith("/api/")||entry.startsWith("/auth/")||entry==="/healthz"),"account and health routes must not be precached");
 
-  for(const endpoint of ["/api/status","/api/me","/api/verification-status","/api/verify-email","/api/resend-verification","/api/billing/config","/api/billing/checkout","/api/paddle/webhook","/auth/login","/auth/signup","/auth/verify-email","/auth/resend-verification","/healthz"]) {
+  for(const endpoint of ["/api/status","/api/me","/api/verification-status","/api/verify-email","/api/resend-verification","/api/password-reset/request","/api/password-reset/status","/api/password-reset/complete","/api/account/password-reset/request","/api/account/delete/request","/api/account/delete/cancel","/api/account/delete/status","/api/account/delete/complete","/api/billing/config","/api/billing/checkout","/api/paddle/webhook","/auth/login","/auth/signup","/auth/verify-email","/auth/resend-verification","/auth/password-reset/request","/auth/password-reset/complete","/auth/account-delete/complete","/healthz"]) {
     assert.equal(dispatchServiceWorkerFetch(harness.listeners.fetch,endpoint),undefined,`${endpoint} must bypass the service worker`);
   }
-  for(const privatePage of ["/index.html","/account.html","/verify-email","/verify-email.html","/planner.html","/discover.html"]) {
+  for(const privatePage of ["/index.html","/account.html","/verify-email","/verify-email.html","/forgot-password","/forgot-password.html","/reset-password","/reset-password.html","/delete-account","/delete-account.html","/planner.html","/discover.html"]) {
     assert.equal(dispatchServiceWorkerFetch(harness.listeners.fetch,privatePage),undefined,`${privatePage} must bypass runtime asset caching`);
   }
   assert.equal(dispatchServiceWorkerFetch(harness.listeners.fetch,"/styles.css",{method:"POST"}),undefined,"writes must never be intercepted");
@@ -219,6 +231,10 @@ test("private navigations are network-first and fall back to the non-sensitive o
   harness.setOffline(true);
   const offline=dispatchServiceWorkerFetch(harness.listeners.fetch,"/account.html",{mode:"navigate"});
   assert.equal(await offline,harness.offlineResponse);
+  for(const page of ["/forgot-password","/reset-password","/delete-account"]) {
+    const actionPage=dispatchServiceWorkerFetch(harness.listeners.fetch,page,{mode:"navigate"});
+    assert.equal(await actionPage,harness.offlineResponse,`${page} must use only the non-sensitive offline fallback`);
+  }
 });
 
 test("public information pages use their cached page when offline",async()=>{

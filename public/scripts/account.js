@@ -13,6 +13,7 @@ const authFields={
   login:[el("loginEmail"),el("loginPassword")]
 };
 let navigating=false;
+let currentCsrfToken="";
 
 function safeNext(raw,exerciseId){
   const addIsSafe=Boolean(exerciseId&&/^[a-z0-9-]{2,80}$/.test(exerciseId));
@@ -131,6 +132,7 @@ function showRequestedPanel(){
 }
 
 function showAccess(sessionError=""){
+  currentCsrfToken="";
   el("accountLoading").hidden=true;
   el("signedInCard").hidden=true;
   el("accountAccess").hidden=false;
@@ -141,7 +143,8 @@ function showAccess(sessionError=""){
   else showRequestedPanel();
 }
 
-function showSignedIn(user){
+function showSignedIn(user,csrfToken=""){
+  currentCsrfToken=String(csrfToken||"");
   el("accountLoading").hidden=true;
   el("accountAccess").hidden=true;
   el("signedInCard").hidden=false;
@@ -156,6 +159,10 @@ function showSignedIn(user){
     :discoveryPending
       ?"A Discovery checkout is pending. Open Pricing to finish checkout or check confirmation."
       :"The exercise index and weekly planner are free. Discovery is available as a $5.99 USD one-time purchase.";
+  const deletionPending=user?.accountDeletion?.pending===true;
+  el("accountDeleteCancel").hidden=!deletionPending;
+  if(deletionPending)showSecurityStatus("An account-deletion confirmation is pending. You can use the emailed link or cancel the request here.");
+  else showSecurityStatus("");
   el("accountPage").setAttribute("aria-busy","false");
 }
 
@@ -193,7 +200,7 @@ async function initialize(){
   void updateStorageStatus();
   try{
     const result=await readJson("/api/me");
-    showSignedIn(result.user);
+    showSignedIn(result.user,result.csrfToken);
   }catch(error){
     if(error.status===401){showAccess();return;}
     showAccess("We could not verify your current session. You can still try an account request.");
@@ -254,6 +261,53 @@ function enhanceForm(authMode){
 }
 
 el("accountRetry").addEventListener("click",()=>{void initialize();});
+
+function securityError(error){
+  if(error?.code==="network")return "Could not reach STRATA. Check your connection and try again.";
+  if(error?.status===409)return error.message||"Finish the pending checkout before deleting this account.";
+  if(error?.status===429)return "Too many account emails were requested. Please wait and try again.";
+  if(error?.status===401)return "Your session expired. Sign in again before changing account security.";
+  if(error?.status===403)return "The security check expired. Refresh this page and try again.";
+  return Number(error?.status)>=500?"Account email is temporarily unavailable. Please try again in a moment.":error?.message||"The account request could not be completed.";
+}
+
+function showSecurityStatus(message,{error=false}={}){
+  const status=el("accountSecurityStatus");
+  status.textContent=message;
+  status.classList.remove("bad");
+  if(error)status.classList.add("bad");
+}
+
+async function requestSecurityEmail(kind,event){
+  const button=event.currentTarget;
+  if(button.disabled)return;
+  button.disabled=true;
+  showSecurityStatus(kind==="delete"?"Preparing the deletion confirmation email…":"Preparing your password-reset email…");
+  try{
+    const path=kind==="delete"?"/api/account/delete/request":"/api/account/password-reset/request";
+    const result=await readJson(path,{method:"POST",headers:{"Content-Type":"application/json","X-CSRF-Token":currentCsrfToken},body:"{}"});
+    showSecurityStatus(kind==="delete"
+      ?`A deletion confirmation link was sent to ${result.maskedEmail||"your registered email"}. Nothing is deleted until you open it and type DELETE.`
+      :`A password-reset link was sent to ${result.maskedEmail||"your registered email"}. The link expires after 30 minutes.`);
+    if(kind==="delete")el("accountDeleteCancel").hidden=false;
+  }catch(error){
+    showSecurityStatus(securityError(error),{error:true});
+  }finally{button.disabled=false;}
+}
+
+el("accountPasswordReset").addEventListener("click",(event)=>{void requestSecurityEmail("password",event);});
+el("accountDeleteRequest").addEventListener("click",(event)=>{void requestSecurityEmail("delete",event);});
+el("accountDeleteCancel").addEventListener("click",async(event)=>{
+  const button=event.currentTarget;
+  button.disabled=true;
+  try{
+    await readJson("/api/account/delete/cancel",{method:"POST",headers:{"Content-Type":"application/json","X-CSRF-Token":currentCsrfToken},body:"{}"});
+    button.hidden=true;
+    showSecurityStatus("The pending deletion request was canceled. Any link from that email can no longer be used.");
+  }catch(error){showSecurityStatus(securityError(error),{error:true});}
+  finally{button.disabled=false;}
+});
+
 el("accountLogout").addEventListener("click",async(event)=>{
   const button=event.currentTarget;
   button.disabled=true;

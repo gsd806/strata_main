@@ -11,6 +11,7 @@ const {
   getEmailVerificationConfig,
   maskEmail,
   safeDigestEqual,
+  sendAccountActionEmail,
   sendVerificationEmail,
   verificationCodeDigest,
   verificationEmailHash
@@ -145,5 +146,48 @@ test("Resend delivery uses server credentials, escaped HTML, and an idempotency 
   await assert.rejects(
     ()=>sendVerificationEmail(config,{to:"person@example.com",name:"Person",code:"012345",challengeId:"challenge-2",generation:1},async()=>({ok:false,json:async()=>({message:"private provider detail"})})),
     (error)=>error.code==="EMAIL_DELIVERY_FAILED"&&!error.message.includes("private provider detail")
+  );
+});
+
+test("account-action emails use one-time fragment links and purpose-bound idempotency",async()=>{
+  const config=getEmailVerificationConfig(validEnv({NODE_ENV:"test",RESEND_API_BASE:"http://127.0.0.1:9999"}));
+  const calls=[];
+  const fetchImpl=async(url,options)=>{
+    calls.push({url,options});
+    return {ok:true,json:async()=>({id:`message-${calls.length}`})};
+  };
+  const token="a".repeat(43);
+  const reset=await sendAccountActionEmail(config,{
+    to:"Person@Example.com",
+    name:"Saeed <Admin>",
+    token,
+    requestId:"request-1",
+    purpose:"password_reset",
+    expiresInMinutes:30
+  },fetchImpl);
+  const deletion=await sendAccountActionEmail(config,{
+    to:"Person@Example.com",
+    name:"Saeed <Admin>",
+    token,
+    requestId:"request-1",
+    purpose:"account_delete",
+    expiresInMinutes:30
+  },fetchImpl);
+
+  assert.deepEqual(reset,{messageId:"message-1"});
+  assert.deepEqual(deletion,{messageId:"message-2"});
+  assert.equal(calls.length,2);
+  const resetBody=JSON.parse(calls[0].options.body);
+  const deleteBody=JSON.parse(calls[1].options.body);
+  assert.deepEqual(resetBody.to,["person@example.com"]);
+  assert.match(resetBody.text,new RegExp(`https://stratafitness\\.online/reset-password#token=${token}`));
+  assert.match(deleteBody.text,new RegExp(`https://stratafitness\\.online/delete-account#token=${token}`));
+  assert.match(deleteBody.text,/Merely opening this email will not delete anything/i);
+  assert.match(resetBody.html,/Saeed &lt;Admin&gt;/);
+  assert.notEqual(calls[0].options.headers["Idempotency-Key"],calls[1].options.headers["Idempotency-Key"]);
+  assert.match(calls[0].options.headers["Idempotency-Key"],/^strata-action-[a-f0-9]{64}$/);
+  await assert.rejects(
+    ()=>sendAccountActionEmail(config,{to:"person@example.com",token:"too-short",requestId:"request-2",purpose:"password_reset"},fetchImpl),
+    TypeError
   );
 });

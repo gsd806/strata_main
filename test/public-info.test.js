@@ -32,7 +32,7 @@ test("homepage publishes the founder story without exposing a residential addres
 });
 
 test("published Discovery price and refund promise are exact and consistent",()=>{
-  assert.equal(BUILD,"6.7.1");
+  assert.equal(BUILD,"6.7.5");
   const pricingHtml=read("pricing.html"),pricing=text("pricing.html"),refunds=text("refunds.html"),terms=text("terms.html");
   assert.match(pricing,/\$5\.99 USD/i);
   assert.match(pricing,/one[- ]time/i);

@@ -65,7 +65,7 @@ test.before(startServer);
 test.after(stopServer);
 
 test("serves rankings and gates private account pages",async()=>{
-  assert.equal(BUILD,"6.7.1");
+  assert.equal(BUILD,"6.7.5");
   const home=await request("/");
   assert.equal(home.response.status,200);
   assert.equal(home.response.headers.get("cache-control"),"private, no-store");
@@ -84,6 +84,8 @@ test("serves rankings and gates private account pages",async()=>{
   assert.equal(status.data.ok,true);
   assert.equal(status.data.build,BUILD);
   assert.equal(status.data.paymentsConfigured,false);
+  assert.equal(typeof status.data.passwordResetEnabled,"boolean");
+  assert.equal(typeof status.data.accountDeletionEnabled,"boolean");
   assert.equal(status.data.checkoutEnabled,false);
   const billing=await request("/api/billing/config");
   assert.equal(billing.response.status,200);
@@ -121,6 +123,20 @@ test("serves public pricing, contact, and policy pages at friendly routes",async
       assert.doesNotMatch(page.response.headers.get("vary")||"",/Cookie/i,`${path} must not vary by account`);
       assert.match(page.data,marker,`${path} page marker`);
       assert.match(page.data,BUILD_LABEL,`${path} build label`);
+    }
+  }
+});
+
+test("serves recovery pages at friendly private routes",async()=>{
+  const pages={"forgot-password":/CHECK YOUR EMAIL/,"reset-password":/NEW PASSWORD/,"delete-account":/THIS CANNOT BE UNDONE/};
+  for(const [slug,marker] of Object.entries(pages)) {
+    for(const path of [`/${slug}`,`/${slug}/`,`/${slug}.html`]) {
+      const page=await request(path);
+      assert.equal(page.response.status,200,path);
+      assert.equal(page.response.headers.get("cache-control"),"private, no-store",path);
+      assert.match(page.response.headers.get("vary"),/Cookie/i,path);
+      assert.match(page.data,marker,path);
+      assert.match(page.data,BUILD_LABEL,path);
     }
   }
 });

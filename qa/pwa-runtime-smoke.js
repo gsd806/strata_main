@@ -104,9 +104,19 @@ async function main() {
   assert.equal(protectedPage.response.status,302);
   assert.match(protectedPage.response.headers.get("location"),/^\/account\.html\?/);
 
+  for(const route of ["/forgot-password","/reset-password","/delete-account"]) {
+    const page=await get(route);
+    const pageText=Buffer.from(page.body).toString("utf8");
+    assert.equal(page.response.status,200,route);
+    assert.equal(page.response.headers.get("cache-control"),"private, no-store",route);
+    assert.match(pageText,new RegExp(`Build ${BUILD.replace(/\./g,"\\.")}`),route);
+  }
+
   const status=await fetch(`${base}/api/status`).then((response)=>response.json());
   assert.equal(status.ok,true);
   assert.equal(status.build,BUILD);
+  assert.equal(typeof status.passwordResetEnabled,"boolean");
+  assert.equal(typeof status.accountDeletionEnabled,"boolean");
 
   console.log(JSON.stringify({
     installGuide:true,
@@ -114,6 +124,7 @@ async function main() {
     serviceWorker:true,
     icons:true,
     privatePagesRemainNetworkOnly:true,
+    accountRecoveryPages:true,
     build:BUILD
   },null,2));
 }

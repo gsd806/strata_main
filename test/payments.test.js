@@ -9,6 +9,8 @@ const {
   getPaymentConfig,
   verifyPaddleSignature,
   createPaddleTransaction,
+  fetchPaddleTransaction,
+  cancelPaddleTransaction,
   fetchPaddleIpv4Cidrs,
   isPaddleWebhookAddress,
   validateCompletedTransaction,
@@ -97,6 +99,7 @@ test("live configuration is fail-closed and serializes browser-safe fields only"
   assert.equal(notRequested.enabled,false);
 
   for(const overrides of [
+    {PADDLE_CLIENT_TOKEN:"live_"},
     {PADDLE_CLIENT_TOKEN:"test_sandbox_token_fixture"},
     {PADDLE_CLIENT_TOKEN:"live_sandbox_mismatch_fixture"},
     {PADDLE_CLIENT_TOKEN:"live_replace-with-your-client-side-token"},
@@ -272,6 +275,52 @@ test("transaction creation fails closed with sanitized errors",async(t)=>{
       (error)=>error.status===502&&error.code==="PADDLE_INVALID_RESPONSE"&&!error.message.includes(WEBHOOK_SECRET)
     );
   });
+
+  await t.test("unexpected creation status",async()=>{
+    const config=getPaymentConfig(liveEnv());
+    await assert.rejects(
+      createPaddleTransaction(config,{userId:"user-1"},async()=>({
+        ok:true,
+        json:async()=>({data:{id:"txn_01m1kz00000000000000000000",status:"completed"}})
+      })),
+      (error)=>error.status===502&&error.code==="PADDLE_INVALID_RESPONSE"
+    );
+  });
+});
+
+test("transaction reconciliation reads and cancels only a specific live transaction",async()=>{
+  const config=getPaymentConfig(liveEnv());
+  const transactionId="txn_01m1kz00000000000000000000";
+  const calls=[];
+  const fetchImpl=async(url,options)=>{
+    calls.push({url,options});
+    const status=options.method==="PATCH"?"canceled":"ready";
+    return {ok:true,json:async()=>({data:{id:transactionId,status}})};
+  };
+  assert.deepEqual(await fetchPaddleTransaction(config,transactionId,fetchImpl),{transactionId,status:"ready",data:{id:transactionId,status:"ready"}});
+  assert.deepEqual(await cancelPaddleTransaction(config,transactionId,fetchImpl),{transactionId,status:"canceled"});
+  assert.equal(calls[0].url,`https://api.paddle.com/transactions/${transactionId}`);
+  assert.equal(calls[0].options.method,"GET");
+  assert.equal(calls[1].options.method,"PATCH");
+  assert.deepEqual(JSON.parse(calls[1].options.body),{status:"canceled"});
+  for(const call of calls)assert.equal(call.options.headers.Authorization,`Bearer ${API_KEY}`);
+});
+
+test("transaction reconciliation fails closed with sanitized provider errors",async()=>{
+  const config=getPaymentConfig(liveEnv());
+  const transactionId="txn_01m1kz00000000000000000000";
+  await assert.rejects(
+    ()=>fetchPaddleTransaction(config,transactionId,async()=>{throw new Error(`leak ${API_KEY}`);}),
+    (error)=>error.status===502&&error.code==="PADDLE_RECONCILIATION_UNAVAILABLE"&&!error.message.includes(API_KEY)
+  );
+  await assert.rejects(
+    ()=>fetchPaddleTransaction(config,transactionId,async()=>({ok:true,json:async()=>({data:{id:transactionId,status:"unknown"}})})),
+    (error)=>error.code==="PADDLE_RECONCILIATION_INVALID_RESPONSE"
+  );
+  await assert.rejects(
+    ()=>cancelPaddleTransaction(config,transactionId,async()=>({ok:true,json:async()=>({data:{id:transactionId,status:"completed"}})})),
+    (error)=>error.code==="PADDLE_RECONCILIATION_FAILED"
+  );
 });
 
 test("completed one-time transactions validate at full price or a zero total",()=>{

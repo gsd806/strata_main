@@ -11,14 +11,16 @@ const SCHEMA = [
     password_hash TEXT NOT NULL,
     password_salt TEXT NOT NULL,
     created_at INTEGER NOT NULL,
-    email_verified_at INTEGER
+    email_verified_at INTEGER,
+    auth_version INTEGER NOT NULL DEFAULT 1
   )`,
   `CREATE TABLE IF NOT EXISTS sessions (
     token_hash TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     csrf_token TEXT NOT NULL,
     expires_at INTEGER NOT NULL,
-    created_at INTEGER NOT NULL
+    created_at INTEGER NOT NULL,
+    auth_version INTEGER NOT NULL DEFAULT 1
   )`,
   "CREATE INDEX IF NOT EXISTS sessions_user_id ON sessions(user_id)",
   "CREATE INDEX IF NOT EXISTS sessions_expires_at ON sessions(expires_at)",
@@ -57,6 +59,37 @@ const SCHEMA = [
   "CREATE INDEX IF NOT EXISTS email_verification_sends_email_time ON email_verification_sends(email_hash,sent_at)",
   "CREATE INDEX IF NOT EXISTS email_verification_sends_time ON email_verification_sends(sent_at)",
   "CREATE UNIQUE INDEX IF NOT EXISTS email_verification_sends_challenge_generation ON email_verification_sends(challenge_id,generation)",
+  `CREATE TABLE IF NOT EXISTS account_action_requests (
+    request_id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    purpose TEXT NOT NULL CHECK(purpose IN ('password_reset','account_delete')),
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at INTEGER NOT NULL,
+    delivery_state TEXT NOT NULL,
+    consumed_at INTEGER,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    UNIQUE(user_id,purpose)
+  )`,
+  "CREATE INDEX IF NOT EXISTS account_action_requests_expiry ON account_action_requests(expires_at,consumed_at)",
+  `CREATE TABLE IF NOT EXISTS account_action_deliveries (
+    request_id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    purpose TEXT NOT NULL CHECK(purpose IN ('password_reset','account_delete')),
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL
+  )`,
+  "CREATE UNIQUE INDEX IF NOT EXISTS account_action_deliveries_user_purpose ON account_action_deliveries(user_id,purpose)",
+  "CREATE INDEX IF NOT EXISTS account_action_deliveries_expiry ON account_action_deliveries(expires_at)",
+  `CREATE TABLE IF NOT EXISTS account_action_sends (
+    send_id TEXT PRIMARY KEY,
+    email_hash TEXT NOT NULL,
+    purpose TEXT NOT NULL CHECK(purpose IN ('password_reset','account_delete')),
+    sent_at INTEGER NOT NULL
+  )`,
+  "CREATE INDEX IF NOT EXISTS account_action_sends_email_time ON account_action_sends(email_hash,purpose,sent_at)",
+  "CREATE INDEX IF NOT EXISTS account_action_sends_time ON account_action_sends(sent_at)",
   `CREATE TABLE IF NOT EXISTS plans (
     user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     plan_json TEXT NOT NULL,
@@ -118,10 +151,10 @@ const SCHEMA = [
 const SQL = {
   ping:"SELECT 1 AS ok",
   userByEmail:"SELECT * FROM users WHERE email = ?",
-  userById:"SELECT id,name,email,created_at,email_verified_at FROM users WHERE id = ?",
+  userById:"SELECT id,name,email,created_at,email_verified_at,auth_version FROM users WHERE id = ?",
   insertUser:"INSERT INTO users(id,name,email,password_hash,password_salt,created_at,email_verified_at) VALUES(?,?,?,?,?,?,?)",
-  insertSession:"INSERT INTO sessions(token_hash,user_id,csrf_token,expires_at,created_at) VALUES(?,?,?,?,?)",
-  session:"SELECT s.token_hash,s.csrf_token,s.expires_at,u.id,u.name,u.email,u.created_at,u.email_verified_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?",
+  insertSession:"INSERT INTO sessions(token_hash,user_id,csrf_token,expires_at,created_at,auth_version) SELECT ?,id,?,?,?,auth_version FROM users WHERE id=? AND auth_version=? RETURNING token_hash",
+  session:"SELECT s.token_hash,s.csrf_token,s.expires_at,u.id,u.name,u.email,u.created_at,u.email_verified_at,u.auth_version FROM sessions s JOIN users u ON u.id=s.user_id AND u.auth_version=s.auth_version WHERE s.token_hash=? AND s.expires_at>?",
   deleteSession:"DELETE FROM sessions WHERE token_hash=?",
   deleteExpired:"DELETE FROM sessions WHERE expires_at<=?",
   verificationByTokenHash:"SELECT challenge_id,browser_token_hash,user_id,purpose,email,name,password_hash,password_salt,code_digest,generation,attempts_used,send_count,last_sent_at,expires_at,hard_expires_at,delivery_state,consumed_at,created_at,updated_at FROM signup_verifications WHERE browser_token_hash=?",
@@ -131,12 +164,12 @@ const SQL = {
   markVerificationDelivery:"UPDATE signup_verifications SET delivery_state=?,updated_at=? WHERE challenge_id=? AND generation=? AND consumed_at IS NULL RETURNING challenge_id",
   claimVerificationAttempt:"UPDATE signup_verifications SET attempts_used=attempts_used+1,updated_at=? WHERE challenge_id=? AND generation=? AND consumed_at IS NULL AND expires_at>? AND hard_expires_at>? AND attempts_used<? RETURNING challenge_id,browser_token_hash,user_id,purpose,email,name,password_hash,password_salt,code_digest,generation,attempts_used,send_count,last_sent_at,expires_at,hard_expires_at,delivery_state,consumed_at,created_at,updated_at",
   consumeVerification:"UPDATE signup_verifications SET code_digest='',password_hash='',password_salt='',delivery_state='consumed',consumed_at=?,updated_at=? WHERE challenge_id=? AND generation=? AND consumed_at IS NULL RETURNING challenge_id,browser_token_hash,user_id,purpose,email,name,password_hash,password_salt,code_digest,generation,attempts_used,send_count,last_sent_at,expires_at,hard_expires_at,delivery_state,consumed_at,created_at,updated_at",
-  completeSignupInsert:"INSERT INTO users(id,name,email,password_hash,password_salt,created_at,email_verified_at) SELECT user_id,name,email,password_hash,password_salt,?,? FROM signup_verifications WHERE challenge_id=? AND generation=? AND purpose='signup' AND consumed_at IS NULL AND expires_at>? AND hard_expires_at>? RETURNING id,name,email,created_at,email_verified_at",
+  completeSignupInsert:"INSERT INTO users(id,name,email,password_hash,password_salt,created_at,email_verified_at) SELECT user_id,name,email,password_hash,password_salt,?,? FROM signup_verifications WHERE challenge_id=? AND generation=? AND purpose='signup' AND consumed_at IS NULL AND expires_at>? AND hard_expires_at>? RETURNING id,name,email,created_at,email_verified_at,auth_version",
   completeSignupConsume:"UPDATE signup_verifications SET code_digest='',password_hash='',password_salt='',delivery_state='consumed',consumed_at=?,updated_at=? WHERE changes()=1 AND challenge_id=? AND generation=? AND purpose='signup' AND consumed_at IS NULL AND expires_at>? AND hard_expires_at>? RETURNING challenge_id",
-  completeSignupSession:"INSERT INTO sessions(token_hash,user_id,csrf_token,expires_at,created_at) SELECT ?,user_id,?,?,? FROM signup_verifications WHERE changes()=1 AND challenge_id=? AND generation=? AND purpose='signup' AND consumed_at=? RETURNING token_hash",
-  completeLoginVerifyUser:"UPDATE users SET email_verified_at=? WHERE email_verified_at IS NULL AND id=(SELECT user_id FROM signup_verifications WHERE challenge_id=? AND generation=? AND purpose='login' AND consumed_at IS NULL AND expires_at>? AND hard_expires_at>?) RETURNING id,name,email,created_at,email_verified_at",
+  completeSignupSession:"INSERT INTO sessions(token_hash,user_id,csrf_token,expires_at,created_at,auth_version) SELECT ?,v.user_id,?,?,?,u.auth_version FROM signup_verifications v JOIN users u ON u.id=v.user_id WHERE changes()=1 AND v.challenge_id=? AND v.generation=? AND v.purpose='signup' AND v.consumed_at=? RETURNING token_hash",
+  completeLoginVerifyUser:"UPDATE users SET email_verified_at=? WHERE email_verified_at IS NULL AND id=(SELECT user_id FROM signup_verifications WHERE challenge_id=? AND generation=? AND purpose='login' AND consumed_at IS NULL AND expires_at>? AND hard_expires_at>?) RETURNING id,name,email,created_at,email_verified_at,auth_version",
   completeLoginConsume:"UPDATE signup_verifications SET code_digest='',password_hash='',password_salt='',delivery_state='consumed',consumed_at=?,updated_at=? WHERE changes()=1 AND challenge_id=? AND generation=? AND purpose='login' AND consumed_at IS NULL AND expires_at>? AND hard_expires_at>? RETURNING challenge_id",
-  completeLoginSession:"INSERT INTO sessions(token_hash,user_id,csrf_token,expires_at,created_at) SELECT ?,user_id,?,?,? FROM signup_verifications WHERE changes()=1 AND challenge_id=? AND generation=? AND purpose='login' AND consumed_at=? RETURNING token_hash",
+  completeLoginSession:"INSERT INTO sessions(token_hash,user_id,csrf_token,expires_at,created_at,auth_version) SELECT ?,v.user_id,?,?,?,u.auth_version FROM signup_verifications v JOIN users u ON u.id=v.user_id WHERE changes()=1 AND v.challenge_id=? AND v.generation=? AND v.purpose='login' AND v.consumed_at=? RETURNING token_hash",
   completeLoginDeleteOldSessions:"DELETE FROM sessions WHERE changes()=1 AND user_id=(SELECT user_id FROM signup_verifications WHERE challenge_id=? AND generation=? AND purpose='login' AND consumed_at=?) AND token_hash<>? RETURNING token_hash",
   countVerificationSends:"SELECT COUNT(*) AS send_count FROM email_verification_sends WHERE email_hash=? AND sent_at>=?",
   recordVerificationSend:"INSERT INTO email_verification_sends(send_id,email_hash,challenge_id,generation,sent_at) VALUES(?,?,?,?,?)",
@@ -144,6 +177,32 @@ const SQL = {
   verificationSendByChallengeGeneration:"SELECT send_id,email_hash,challenge_id,generation,sent_at FROM email_verification_sends WHERE challenge_id=? AND generation=?",
   deleteOldVerifications:"DELETE FROM signup_verifications WHERE hard_expires_at<=? OR (consumed_at IS NOT NULL AND consumed_at<=?)",
   deleteOldVerificationSends:"DELETE FROM email_verification_sends WHERE sent_at<?",
+  accountActionByTokenHash:"SELECT a.request_id,a.user_id,a.purpose,a.token_hash,a.expires_at,a.delivery_state,a.consumed_at,a.created_at,a.updated_at,u.email,u.name FROM account_action_requests a JOIN users u ON u.id=a.user_id WHERE a.token_hash=?",
+  accountActionForUser:"SELECT request_id,user_id,purpose,token_hash,expires_at,delivery_state,consumed_at,created_at,updated_at FROM account_action_requests WHERE user_id=? AND purpose=?",
+  upsertAccountAction:"INSERT INTO account_action_requests(request_id,user_id,purpose,token_hash,expires_at,delivery_state,consumed_at,created_at,updated_at) VALUES(?,?,?,?,?,?,NULL,?,?) ON CONFLICT(user_id,purpose) DO UPDATE SET request_id=excluded.request_id,token_hash=excluded.token_hash,expires_at=excluded.expires_at,delivery_state=excluded.delivery_state,consumed_at=NULL,created_at=excluded.created_at,updated_at=excluded.updated_at RETURNING request_id,user_id,purpose,token_hash,expires_at,delivery_state,consumed_at,created_at,updated_at",
+  markAccountActionDelivery:"UPDATE account_action_requests SET delivery_state=?,updated_at=? WHERE request_id=? AND token_hash=? AND consumed_at IS NULL RETURNING request_id",
+  stageAccountAction:"INSERT INTO account_action_deliveries(request_id,user_id,purpose,token_hash,expires_at,created_at) VALUES(?,?,?,?,?,?) ON CONFLICT(user_id,purpose) DO UPDATE SET request_id=excluded.request_id,token_hash=excluded.token_hash,expires_at=excluded.expires_at,created_at=excluded.created_at RETURNING request_id,user_id,purpose,token_hash,expires_at,created_at",
+  activateAccountAction:"INSERT INTO account_action_requests(request_id,user_id,purpose,token_hash,expires_at,delivery_state,consumed_at,created_at,updated_at) SELECT request_id,user_id,purpose,token_hash,expires_at,'sent',NULL,created_at,? FROM account_action_deliveries WHERE request_id=? AND token_hash=? AND expires_at>? ON CONFLICT(user_id,purpose) DO UPDATE SET request_id=excluded.request_id,token_hash=excluded.token_hash,expires_at=excluded.expires_at,delivery_state='sent',consumed_at=NULL,created_at=excluded.created_at,updated_at=excluded.updated_at WHERE account_action_requests.created_at<=excluded.created_at RETURNING request_id,user_id,purpose,token_hash,expires_at,delivery_state,consumed_at,created_at,updated_at",
+  discardStagedAccountAction:"DELETE FROM account_action_deliveries WHERE request_id=? AND token_hash=? RETURNING request_id",
+  claimAccountActionSend:"INSERT OR IGNORE INTO account_action_sends(send_id,email_hash,purpose,sent_at) SELECT ?,?,?,? WHERE (SELECT COUNT(*) FROM account_action_sends WHERE email_hash=? AND purpose=? AND sent_at>=?)<? RETURNING send_id",
+  countAccountActionSends:"SELECT COUNT(*) AS send_count FROM account_action_sends WHERE email_hash=? AND purpose=? AND sent_at>=?",
+  deleteOldAccountActions:"DELETE FROM account_action_requests WHERE expires_at<=? OR (consumed_at IS NOT NULL AND consumed_at<=?)",
+  deleteOldStagedAccountActions:"DELETE FROM account_action_deliveries WHERE expires_at<=?",
+  deleteOldAccountActionSends:"DELETE FROM account_action_sends WHERE sent_at<?",
+  activeAccountDeletion:"SELECT request_id,expires_at FROM account_action_requests WHERE user_id=? AND purpose='account_delete' AND delivery_state='sent' AND consumed_at IS NULL AND expires_at>?",
+  cancelAccountDeletion:"DELETE FROM account_action_requests WHERE user_id=? AND purpose='account_delete' AND delivery_state='sent' AND consumed_at IS NULL RETURNING request_id",
+  cancelStagedAccountDeletions:"DELETE FROM account_action_deliveries WHERE user_id=? AND purpose='account_delete' RETURNING request_id",
+  completePasswordResetUser:"UPDATE users SET password_hash=?,password_salt=?,email_verified_at=COALESCE(email_verified_at,?),auth_version=auth_version+1 WHERE id=(SELECT user_id FROM account_action_requests WHERE token_hash=? AND purpose='password_reset' AND delivery_state='sent' AND consumed_at IS NULL AND expires_at>?) RETURNING id,name,email,created_at,email_verified_at,auth_version",
+  completePasswordResetConsume:"UPDATE account_action_requests SET consumed_at=?,delivery_state='consumed',updated_at=? WHERE changes()=1 AND token_hash=? AND purpose='password_reset' AND delivery_state='sent' AND consumed_at IS NULL AND expires_at>? RETURNING user_id",
+  completePasswordResetDeleteSessions:"DELETE FROM sessions WHERE user_id=(SELECT user_id FROM account_action_requests WHERE token_hash=? AND purpose='password_reset' AND consumed_at=?) RETURNING token_hash",
+  completePasswordResetDeleteStagedActions:"DELETE FROM account_action_deliveries WHERE user_id=(SELECT user_id FROM account_action_requests WHERE token_hash=? AND purpose='password_reset' AND consumed_at=?) RETURNING request_id",
+  completePasswordResetDeleteActions:"DELETE FROM account_action_requests WHERE user_id=(SELECT user_id FROM account_action_requests WHERE token_hash=? AND purpose='password_reset' AND consumed_at=?) RETURNING request_id",
+  pendingPurchasesForUser:"SELECT COUNT(*) AS pending_count FROM paddle_purchases WHERE user_id=? AND paddle_status<>'canceled' AND completed_at IS NULL AND access_revoked_at IS NULL",
+  unsettledPurchasesForUser:"SELECT transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at FROM paddle_purchases WHERE user_id=? AND paddle_status<>'canceled' AND completed_at IS NULL AND access_revoked_at IS NULL ORDER BY created_at",
+  deleteUserWithAction:"DELETE FROM users WHERE id=(SELECT user_id FROM account_action_requests WHERE token_hash=? AND purpose='account_delete' AND delivery_state='sent' AND consumed_at IS NULL AND expires_at>?) AND NOT EXISTS (SELECT 1 FROM paddle_purchases p WHERE p.user_id=users.id AND p.paddle_status<>'canceled' AND p.completed_at IS NULL AND p.access_revoked_at IS NULL) RETURNING id,email",
+  deleteVerificationSendsForDeletedUser:"DELETE FROM email_verification_sends WHERE challenge_id IN (SELECT challenge_id FROM signup_verifications WHERE user_id=? OR email=?) AND NOT EXISTS (SELECT 1 FROM users WHERE id=?)",
+  deleteVerificationsForDeletedUser:"DELETE FROM signup_verifications WHERE (user_id=? OR email=?) AND NOT EXISTS (SELECT 1 FROM users WHERE id=?)",
+  deleteActionSendsForDeletedUser:"DELETE FROM account_action_sends WHERE email_hash=? AND NOT EXISTS (SELECT 1 FROM users WHERE id=?)",
   plan:"SELECT plan_json,updated_at FROM plans WHERE user_id=?",
   upsertPlan:"INSERT INTO plans(user_id,plan_json,updated_at) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan_json=excluded.plan_json,updated_at=excluded.updated_at",
   preferences:"SELECT preferences_json,updated_at FROM preferences WHERE user_id=?",
@@ -152,15 +211,15 @@ const SQL = {
   ratingAggregates:"SELECT exercise_id,COUNT(*) AS rating_count,AVG(comfort) AS comfort,AVG(pump) AS pump,AVG(enjoyment) AS enjoyment,AVG(stability) AS stability,AVG(setup) AS setup,AVG(overall) AS overall FROM ratings GROUP BY exercise_id",
   ratingAggregate:"SELECT exercise_id,COUNT(*) AS rating_count,AVG(comfort) AS comfort,AVG(pump) AS pump,AVG(enjoyment) AS enjoyment,AVG(stability) AS stability,AVG(setup) AS setup,AVG(overall) AS overall FROM ratings WHERE exercise_id=? GROUP BY exercise_id",
   upsertRating:"INSERT INTO ratings(user_id,exercise_id,comfort,pump,enjoyment,stability,setup,overall,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,exercise_id) DO UPDATE SET comfort=excluded.comfort,pump=excluded.pump,enjoyment=excluded.enjoyment,stability=excluded.stability,setup=excluded.setup,overall=excluded.overall,updated_at=excluded.updated_at",
-  insertPendingPurchase:"INSERT INTO paddle_purchases(transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at) VALUES(?,?,?,?,NULL,?,NULL,NULL,NULL,?,?)",
+  insertPendingPurchase:"INSERT INTO paddle_purchases(transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at) SELECT ?,u.id,?,?,NULL,?,NULL,NULL,NULL,?,? FROM users u WHERE u.id=? AND NOT EXISTS (SELECT 1 FROM account_action_requests a WHERE a.user_id=u.id AND a.purpose='account_delete' AND a.delivery_state='sent' AND a.consumed_at IS NULL AND a.expires_at>?) RETURNING transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at",
   purchaseByTransaction:"SELECT transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at FROM paddle_purchases WHERE transaction_id=?",
-  pendingPurchaseForUser:"SELECT transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at FROM paddle_purchases WHERE user_id=? AND price_id=? AND paddle_status IN ('draft','ready','paid') AND completed_at IS NULL AND access_revoked_at IS NULL ORDER BY created_at DESC LIMIT 1",
+  pendingPurchaseForUser:"SELECT transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at FROM paddle_purchases WHERE user_id=? AND price_id=? AND paddle_status IN ('draft','ready') AND completed_at IS NULL AND access_revoked_at IS NULL ORDER BY created_at DESC LIMIT 1",
   completePurchase:"UPDATE paddle_purchases SET customer_id=COALESCE(?,customer_id),paddle_status='completed',completed_at=COALESCE(completed_at,?),updated_at=MAX(updated_at,?) WHERE transaction_id=?",
   updatePurchaseStatus:"UPDATE paddle_purchases SET paddle_status=?,updated_at=? WHERE transaction_id=? AND paddle_status<>'completed' AND updated_at<=?",
   upsertAdjustment:"INSERT INTO paddle_adjustments(adjustment_id,transaction_id,action,type,status,occurred_at,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(adjustment_id) DO UPDATE SET action=excluded.action,type=excluded.type,status=excluded.status,occurred_at=excluded.occurred_at,updated_at=excluded.updated_at WHERE excluded.occurred_at>=paddle_adjustments.occurred_at RETURNING adjustment_id",
   revokePurchase:"UPDATE paddle_purchases SET access_revoked_at=?,revocation_reason=?,updated_at=MAX(updated_at,?) WHERE transaction_id=? AND access_revoked_at IS NULL",
   hasDiscoveryAccess:"SELECT 1 AS active FROM paddle_purchases WHERE user_id=? AND (? IS NULL OR price_id=?) AND paddle_status='completed' AND completed_at IS NOT NULL AND access_revoked_at IS NULL LIMIT 1",
-  discoveryAccessSummary:"SELECT COUNT(*) AS purchase_count,COALESCE(SUM(CASE WHEN paddle_status='completed' AND completed_at IS NOT NULL AND access_revoked_at IS NULL THEN 1 ELSE 0 END),0) AS active_purchase_count,COALESCE(SUM(CASE WHEN paddle_status IN ('draft','ready','paid') AND completed_at IS NULL AND access_revoked_at IS NULL THEN 1 ELSE 0 END),0) AS pending_purchase_count,MAX(CASE WHEN paddle_status='completed' AND access_revoked_at IS NULL THEN completed_at ELSE NULL END) AS latest_active_purchase_at,MAX(completed_at) AS latest_completed_at,MAX(access_revoked_at) AS latest_revoked_at FROM paddle_purchases WHERE user_id=? AND (? IS NULL OR price_id=?)",
+  discoveryAccessSummary:"SELECT COUNT(*) AS purchase_count,COALESCE(SUM(CASE WHEN paddle_status='completed' AND completed_at IS NOT NULL AND access_revoked_at IS NULL THEN 1 ELSE 0 END),0) AS active_purchase_count,COALESCE(SUM(CASE WHEN paddle_status<>'canceled' AND completed_at IS NULL AND access_revoked_at IS NULL THEN 1 ELSE 0 END),0) AS pending_purchase_count,MAX(CASE WHEN paddle_status='completed' AND access_revoked_at IS NULL THEN completed_at ELSE NULL END) AS latest_active_purchase_at,MAX(completed_at) AS latest_completed_at,MAX(access_revoked_at) AS latest_revoked_at FROM paddle_purchases WHERE user_id=? AND (? IS NULL OR price_id=?)",
   adjustmentById:"SELECT adjustment_id,transaction_id,action,type,status,occurred_at,updated_at FROM paddle_adjustments WHERE adjustment_id=?",
   webhookEvent:"SELECT event_id,notification_id,event_type,occurred_at,processed_at FROM paddle_webhook_events WHERE event_id=?",
   recordWebhookEvent:"INSERT INTO paddle_webhook_events(event_id,notification_id,event_type,occurred_at,processed_at) VALUES(?,?,?,?,?) ON CONFLICT(event_id) DO NOTHING RETURNING event_id"
@@ -207,6 +266,8 @@ function addLocalColumn(db,table,column,declaration) {
 
 function migrateLocalSchema(db) {
   addLocalColumn(db,"users","email_verified_at","INTEGER");
+  addLocalColumn(db,"users","auth_version","INTEGER NOT NULL DEFAULT 1");
+  addLocalColumn(db,"sessions","auth_version","INTEGER NOT NULL DEFAULT 1");
   // Turso/SQLite require a table rebuild to add a CHECK-constrained column to
   // a populated table. Runtime validation below preserves the invariant while
   // keeping this upgrade additive for existing verification rows.
@@ -231,6 +292,8 @@ async function addTursoColumn(client,table,column,declaration) {
 
 async function migrateTursoSchema(client) {
   await addTursoColumn(client,"users","email_verified_at","INTEGER");
+  await addTursoColumn(client,"users","auth_version","INTEGER NOT NULL DEFAULT 1");
+  await addTursoColumn(client,"sessions","auth_version","INTEGER NOT NULL DEFAULT 1");
   await addTursoColumn(client,"signup_verifications","purpose","TEXT NOT NULL DEFAULT 'signup'");
   await client.execute("DROP INDEX IF EXISTS signup_verifications_user_id");
   await client.execute("CREATE INDEX IF NOT EXISTS signup_verifications_user_id_idx ON signup_verifications(user_id)");
@@ -288,6 +351,52 @@ function verificationSendClaimArgs(send,since,maxSends) {
   return [...verificationSendArgs(send),send.emailHash,Number(since),Number(maxSends)];
 }
 
+function accountActionArgs(action) {
+  if (action.purpose!=="password_reset"&&action.purpose!=="account_delete") {
+    throw new TypeError("Account action purpose must be password_reset or account_delete.");
+  }
+  return [
+    action.requestId,
+    action.userId,
+    action.purpose,
+    action.tokenHash,
+    Number(action.expiresAt),
+    action.deliveryState,
+    Number(action.createdAt),
+    Number(action.updatedAt)
+  ];
+}
+
+function stagedAccountActionArgs(action) {
+  if (action.purpose!=="password_reset"&&action.purpose!=="account_delete") {
+    throw new TypeError("Account action purpose must be password_reset or account_delete.");
+  }
+  return [
+    action.requestId,
+    action.userId,
+    action.purpose,
+    action.tokenHash,
+    Number(action.expiresAt),
+    Number(action.createdAt)
+  ];
+}
+
+function accountActionSendArgs(send,since,maxSends) {
+  if (send.purpose!=="password_reset"&&send.purpose!=="account_delete") {
+    throw new TypeError("Account action send purpose must be password_reset or account_delete.");
+  }
+  return [
+    send.id,
+    send.emailHash,
+    send.purpose,
+    Number(send.sentAt),
+    send.emailHash,
+    send.purpose,
+    Number(since),
+    Number(maxSends)
+  ];
+}
+
 function accessSummary(row) {
   const purchaseCount=Number(row?.purchase_count || 0);
   const activePurchaseCount=Number(row?.active_purchase_count || 0);
@@ -324,7 +433,9 @@ function localStore(root) {
     async userByEmail(email) { return plainRow(statements.userByEmail.get(email)); },
     async userById(id) { return plainRow(statements.userById.get(id)); },
     async insertUser(user) { statements.insertUser.run(user.id,user.name,user.email,user.passwordHash,user.passwordSalt,user.createdAt,user.emailVerifiedAt??user.email_verified_at??null); },
-    async insertSession(session) { statements.insertSession.run(session.tokenHash,session.userId,session.csrfToken,session.expiresAt,session.createdAt); },
+    async insertSession(session) {
+      return Boolean(plainRow(statements.insertSession.get(session.tokenHash,session.csrfToken,session.expiresAt,session.createdAt,session.userId,Number(session.authVersion??1))));
+    },
     async session(tokenHash,now) { return plainRow(statements.session.get(tokenHash,now)); },
     async deleteSession(tokenHash) { statements.deleteSession.run(tokenHash); },
     async deleteExpired(now) { statements.deleteExpired.run(now); },
@@ -419,6 +530,140 @@ function localStore(root) {
       const sends=affectedRows(statements.deleteOldVerificationSends.run(sendBefore));
       return {verifications,sends};
     },
+    async accountActionByTokenHash(tokenHash) { return plainRow(statements.accountActionByTokenHash.get(tokenHash)); },
+    async accountActionForUser(userId,purpose) { return plainRow(statements.accountActionForUser.get(userId,purpose)); },
+    async upsertAccountAction(action) { return plainRow(statements.upsertAccountAction.get(...accountActionArgs(action))); },
+    async markAccountActionDelivery(requestId,tokenHash,state,updatedAt) {
+      return Boolean(plainRow(statements.markAccountActionDelivery.get(state,updatedAt,requestId,tokenHash)));
+    },
+    async stageAccountAction(action) {
+      return plainRow(statements.stageAccountAction.get(...stagedAccountActionArgs(action)));
+    },
+    async activateAccountAction(requestId,tokenHash,activatedAt) {
+      let transactionOpen=false;
+      try {
+        db.exec("BEGIN IMMEDIATE");
+        transactionOpen=true;
+        const action=plainRow(statements.activateAccountAction.get(activatedAt,requestId,tokenHash,activatedAt));
+        if (!action) {
+          db.exec("ROLLBACK");
+          transactionOpen=false;
+          return null;
+        }
+        if (!plainRow(statements.discardStagedAccountAction.get(requestId,tokenHash))) {
+          throw new Error("Staged account action could not be consumed atomically.");
+        }
+        db.exec("COMMIT");
+        transactionOpen=false;
+        return action;
+      } catch(error) {
+        if (transactionOpen) {
+          try { db.exec("ROLLBACK"); } catch { /* Preserve the original transaction error. */ }
+        }
+        throw error;
+      }
+    },
+    async discardStagedAccountAction(requestId,tokenHash) {
+      return Boolean(plainRow(statements.discardStagedAccountAction.get(requestId,tokenHash)));
+    },
+    async claimAccountActionSend(send,since,maxSends) {
+      return Boolean(plainRow(statements.claimAccountActionSend.get(...accountActionSendArgs(send,since,maxSends))));
+    },
+    async countAccountActionSends(emailHash,purpose,since) {
+      return Number(plainRow(statements.countAccountActionSends.get(emailHash,purpose,since))?.send_count||0);
+    },
+    async activeAccountDeletion(userId,now) { return plainRow(statements.activeAccountDeletion.get(userId,now)); },
+    async cancelAccountDeletion(userId) {
+      let transactionOpen=false;
+      try {
+        db.exec("BEGIN IMMEDIATE");
+        transactionOpen=true;
+        const active=plainRow(statements.cancelAccountDeletion.get(userId));
+        const staged=plainRows(statements.cancelStagedAccountDeletions.all(userId));
+        db.exec("COMMIT");
+        transactionOpen=false;
+        return Boolean(active||staged.length);
+      } catch(error) {
+        if (transactionOpen) {
+          try { db.exec("ROLLBACK"); } catch { /* Preserve the original transaction error. */ }
+        }
+        throw error;
+      }
+    },
+    async completePasswordReset(tokenHash,passwordHash,passwordSalt,completedAt) {
+      let transactionOpen=false;
+      try {
+        db.exec("BEGIN IMMEDIATE");
+        transactionOpen=true;
+        const action=plainRow(statements.accountActionByTokenHash.get(tokenHash));
+        if (!action||action.purpose!=="password_reset"||action.delivery_state!=="sent"||action.consumed_at!=null||Number(action.expires_at)<=completedAt) {
+          db.exec("ROLLBACK");
+          transactionOpen=false;
+          return null;
+        }
+        const user=plainRow(statements.completePasswordResetUser.get(passwordHash,passwordSalt,completedAt,tokenHash,completedAt));
+        if (!user) {
+          db.exec("ROLLBACK");
+          transactionOpen=false;
+          return null;
+        }
+        const consumed=plainRow(statements.completePasswordResetConsume.get(completedAt,completedAt,tokenHash,completedAt));
+        if (!consumed) throw new Error("Password reset could not be consumed atomically.");
+        statements.completePasswordResetDeleteSessions.all(tokenHash,completedAt);
+        statements.completePasswordResetDeleteStagedActions.all(tokenHash,completedAt);
+        statements.completePasswordResetDeleteActions.all(tokenHash,completedAt);
+        db.exec("COMMIT");
+        transactionOpen=false;
+        return user;
+      } catch(error) {
+        if (transactionOpen) {
+          try { db.exec("ROLLBACK"); } catch { /* Preserve the original transaction error. */ }
+        }
+        throw error;
+      }
+    },
+    async pendingPurchasesForUser(userId) {
+      return Number(plainRow(statements.pendingPurchasesForUser.get(userId))?.pending_count||0);
+    },
+    async unsettledPurchasesForUser(userId) { return plainRows(statements.unsettledPurchasesForUser.all(userId)); },
+    async deleteAccount(tokenHash,deletedAt,emailHash) {
+      let transactionOpen=false;
+      try {
+        db.exec("BEGIN IMMEDIATE");
+        transactionOpen=true;
+        const action=plainRow(statements.accountActionByTokenHash.get(tokenHash));
+        if (!action||action.purpose!=="account_delete"||action.delivery_state!=="sent"||action.consumed_at!=null||Number(action.expires_at)<=deletedAt) {
+          db.exec("ROLLBACK");
+          transactionOpen=false;
+          return {status:"invalid"};
+        }
+        if (Number(plainRow(statements.pendingPurchasesForUser.get(action.user_id))?.pending_count||0)>0) {
+          db.exec("ROLLBACK");
+          transactionOpen=false;
+          return {status:"purchase_pending"};
+        }
+        const user=plainRow(statements.deleteUserWithAction.get(tokenHash,deletedAt));
+        if (!user) throw new Error("Account deletion did not remove the requested user.");
+        statements.deleteVerificationSendsForDeletedUser.run(user.id,user.email,user.id);
+        statements.deleteVerificationsForDeletedUser.run(user.id,user.email,user.id);
+        statements.deleteActionSendsForDeletedUser.run(emailHash,user.id);
+        db.exec("COMMIT");
+        transactionOpen=false;
+        return {status:"deleted",user};
+      } catch(error) {
+        if (transactionOpen) {
+          try { db.exec("ROLLBACK"); } catch { /* Preserve the original transaction error. */ }
+        }
+        throw error;
+      }
+    },
+    async deleteOldAccountActionData(now,sendBefore=now-VERIFICATION_SEND_RETENTION_MS) {
+      const consumedBefore=now-CONSUMED_VERIFICATION_RETENTION_MS;
+      const actions=affectedRows(statements.deleteOldAccountActions.run(now,consumedBefore));
+      const staged=affectedRows(statements.deleteOldStagedAccountActions.run(now));
+      const sends=affectedRows(statements.deleteOldAccountActionSends.run(sendBefore));
+      return {actions:actions+staged,sends};
+    },
     async plan(userId) { return plainRow(statements.plan.get(userId)); },
     async upsertPlan(userId,planJson,updatedAt) { statements.upsertPlan.run(userId,planJson,updatedAt); },
     async preferences(userId) { return plainRow(statements.preferences.get(userId)); },
@@ -428,8 +673,7 @@ function localStore(root) {
     async ratingAggregate(exerciseId) { return plainRow(statements.ratingAggregate.get(exerciseId)); },
     async upsertRating(userId,exerciseId,rating,createdAt,updatedAt) { statements.upsertRating.run(userId,exerciseId,rating.comfort,rating.pump,rating.enjoyment,rating.stability,rating.setup,rating.overall,createdAt,updatedAt); },
     async insertPendingPurchase(purchase) {
-      statements.insertPendingPurchase.run(purchase.transactionId,purchase.userId,purchase.priceId,purchase.productId,purchase.paddleStatus||"ready",purchase.createdAt,purchase.updatedAt);
-      return plainRow(statements.purchaseByTransaction.get(purchase.transactionId));
+      return plainRow(statements.insertPendingPurchase.get(purchase.transactionId,purchase.priceId,purchase.productId,purchase.paddleStatus||"ready",purchase.createdAt,purchase.updatedAt,purchase.userId,purchase.updatedAt));
     },
     async purchaseByTransaction(transactionId) { return plainRow(statements.purchaseByTransaction.get(transactionId)); },
     async pendingPurchaseForUser(userId,priceId) { return plainRow(statements.pendingPurchaseForUser.get(userId,priceId)); },
@@ -501,7 +745,10 @@ async function tursoStore(url,authToken) {
     userByEmail:(email) => first(SQL.userByEmail,[email]),
     userById:(id) => first(SQL.userById,[id]),
     insertUser:(user) => run(SQL.insertUser,[user.id,user.name,user.email,user.passwordHash,user.passwordSalt,user.createdAt,user.emailVerifiedAt??user.email_verified_at??null]),
-    insertSession:(session) => run(SQL.insertSession,[session.tokenHash,session.userId,session.csrfToken,session.expiresAt,session.createdAt]),
+    async insertSession(session) {
+      const result=await run(SQL.insertSession,[session.tokenHash,session.csrfToken,session.expiresAt,session.createdAt,session.userId,Number(session.authVersion??1)]);
+      return Boolean(plainRow(result.rows?.[0],result.columns));
+    },
     session:(tokenHash,now) => first(SQL.session,[tokenHash,now]),
     deleteSession:(tokenHash) => run(SQL.deleteSession,[tokenHash]),
     deleteExpired:(now) => run(SQL.deleteExpired,[now]),
@@ -574,6 +821,97 @@ async function tursoStore(url,authToken) {
       ],"write");
       return {verifications:affectedRows(results[0]),sends:affectedRows(results[1])};
     },
+    accountActionByTokenHash:(tokenHash) => first(SQL.accountActionByTokenHash,[tokenHash]),
+    accountActionForUser:(userId,purpose) => first(SQL.accountActionForUser,[userId,purpose]),
+    async upsertAccountAction(action) {
+      const result=await run(SQL.upsertAccountAction,accountActionArgs(action));
+      return plainRow(result.rows?.[0],result.columns);
+    },
+    async markAccountActionDelivery(requestId,tokenHash,state,updatedAt) {
+      const result=await run(SQL.markAccountActionDelivery,[state,updatedAt,requestId,tokenHash]);
+      return Boolean(plainRow(result.rows?.[0],result.columns));
+    },
+    async stageAccountAction(action) {
+      const result=await run(SQL.stageAccountAction,stagedAccountActionArgs(action));
+      return plainRow(result.rows?.[0],result.columns);
+    },
+    async activateAccountAction(requestId,tokenHash,activatedAt) {
+      const results=await client.batch([
+        {sql:SQL.activateAccountAction,args:[activatedAt,requestId,tokenHash,activatedAt]},
+        {sql:SQL.discardStagedAccountAction,args:[requestId,tokenHash]}
+      ],"write");
+      const action=plainRow(results[0]?.rows?.[0],results[0]?.columns);
+      if (!action) return null;
+      if (!plainRow(results[1]?.rows?.[0],results[1]?.columns)) {
+        throw new Error("Staged account action could not be consumed atomically.");
+      }
+      return action;
+    },
+    async discardStagedAccountAction(requestId,tokenHash) {
+      const result=await run(SQL.discardStagedAccountAction,[requestId,tokenHash]);
+      return Boolean(plainRow(result.rows?.[0],result.columns));
+    },
+    async claimAccountActionSend(send,since,maxSends) {
+      const result=await run(SQL.claimAccountActionSend,accountActionSendArgs(send,since,maxSends));
+      return Boolean(plainRow(result.rows?.[0],result.columns));
+    },
+    async countAccountActionSends(emailHash,purpose,since) {
+      return Number((await first(SQL.countAccountActionSends,[emailHash,purpose,since]))?.send_count||0);
+    },
+    activeAccountDeletion:(userId,now) => first(SQL.activeAccountDeletion,[userId,now]),
+    async cancelAccountDeletion(userId) {
+      const results=await client.batch([
+        {sql:SQL.cancelAccountDeletion,args:[userId]},
+        {sql:SQL.cancelStagedAccountDeletions,args:[userId]}
+      ],"write");
+      const active=plainRow(results[0]?.rows?.[0],results[0]?.columns);
+      const staged=plainRows(results[1]?.rows,results[1]?.columns);
+      return Boolean(active||staged.length);
+    },
+    async completePasswordReset(tokenHash,passwordHash,passwordSalt,completedAt) {
+      const action=await first(SQL.accountActionByTokenHash,[tokenHash]);
+      if (!action||action.purpose!=="password_reset"||action.delivery_state!=="sent"||action.consumed_at!=null||Number(action.expires_at)<=completedAt) return null;
+      const results=await client.batch([
+        {sql:SQL.completePasswordResetUser,args:[passwordHash,passwordSalt,completedAt,tokenHash,completedAt]},
+        {sql:SQL.completePasswordResetConsume,args:[completedAt,completedAt,tokenHash,completedAt]},
+        {sql:SQL.completePasswordResetDeleteSessions,args:[tokenHash,completedAt]},
+        {sql:SQL.completePasswordResetDeleteStagedActions,args:[tokenHash,completedAt]},
+        {sql:SQL.completePasswordResetDeleteActions,args:[tokenHash,completedAt]}
+      ],"write");
+      const user=plainRow(results[0]?.rows?.[0],results[0]?.columns);
+      if (!user) return null;
+      if (!plainRow(results[1]?.rows?.[0],results[1]?.columns)) throw new Error("Password reset could not be consumed atomically.");
+      return user;
+    },
+    async pendingPurchasesForUser(userId) {
+      return Number((await first(SQL.pendingPurchasesForUser,[userId]))?.pending_count||0);
+    },
+    unsettledPurchasesForUser:(userId) => all(SQL.unsettledPurchasesForUser,[userId]),
+    async deleteAccount(tokenHash,deletedAt,emailHash) {
+      const action=await first(SQL.accountActionByTokenHash,[tokenHash]);
+      if (!action||action.purpose!=="account_delete"||action.delivery_state!=="sent"||action.consumed_at!=null||Number(action.expires_at)<=deletedAt) return {status:"invalid"};
+      if (Number((await first(SQL.pendingPurchasesForUser,[action.user_id]))?.pending_count||0)>0) return {status:"purchase_pending"};
+      const results=await client.batch([
+        {sql:SQL.deleteUserWithAction,args:[tokenHash,deletedAt]},
+        {sql:SQL.deleteVerificationSendsForDeletedUser,args:[action.user_id,action.email,action.user_id]},
+        {sql:SQL.deleteVerificationsForDeletedUser,args:[action.user_id,action.email,action.user_id]},
+        {sql:SQL.deleteActionSendsForDeletedUser,args:[emailHash,action.user_id]}
+      ],"write");
+      const user=plainRow(results[0]?.rows?.[0],results[0]?.columns);
+      if (user) return {status:"deleted",user};
+      return Number((await first(SQL.pendingPurchasesForUser,[action.user_id]))?.pending_count||0)>0
+        ? {status:"purchase_pending"}
+        : {status:"invalid"};
+    },
+    async deleteOldAccountActionData(now,sendBefore=now-VERIFICATION_SEND_RETENTION_MS) {
+      const consumedBefore=now-CONSUMED_VERIFICATION_RETENTION_MS;
+      const results=await client.batch([
+        {sql:SQL.deleteOldAccountActions,args:[now,consumedBefore]},
+        {sql:SQL.deleteOldStagedAccountActions,args:[now]},
+        {sql:SQL.deleteOldAccountActionSends,args:[sendBefore]}
+      ],"write");
+      return {actions:affectedRows(results[0])+affectedRows(results[1]),sends:affectedRows(results[2])};
+    },
     plan:(userId) => first(SQL.plan,[userId]),
     upsertPlan:(userId,planJson,updatedAt) => run(SQL.upsertPlan,[userId,planJson,updatedAt]),
     preferences:(userId) => first(SQL.preferences,[userId]),
@@ -583,8 +921,8 @@ async function tursoStore(url,authToken) {
     ratingAggregate:(exerciseId) => first(SQL.ratingAggregate,[exerciseId]),
     upsertRating:(userId,exerciseId,rating,createdAt,updatedAt) => run(SQL.upsertRating,[userId,exerciseId,rating.comfort,rating.pump,rating.enjoyment,rating.stability,rating.setup,rating.overall,createdAt,updatedAt]),
     async insertPendingPurchase(purchase) {
-      await run(SQL.insertPendingPurchase,[purchase.transactionId,purchase.userId,purchase.priceId,purchase.productId,purchase.paddleStatus||"ready",purchase.createdAt,purchase.updatedAt]);
-      return first(SQL.purchaseByTransaction,[purchase.transactionId]);
+      const result=await run(SQL.insertPendingPurchase,[purchase.transactionId,purchase.priceId,purchase.productId,purchase.paddleStatus||"ready",purchase.createdAt,purchase.updatedAt,purchase.userId,purchase.updatedAt]);
+      return plainRow(result.rows?.[0],result.columns);
     },
     purchaseByTransaction:(transactionId) => first(SQL.purchaseByTransaction,[transactionId]),
     pendingPurchaseForUser:(userId,priceId) => first(SQL.pendingPurchaseForUser,[userId,priceId]),

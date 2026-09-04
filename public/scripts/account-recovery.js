@@ -1,0 +1,185 @@
+"use strict";
+
+const el=(id)=>document.getElementById(id);
+const page=document.body?.dataset?.accountPage||"";
+
+async function readJson(path,options={}){
+  let response;
+  try{
+    response=await globalThis.fetch(path,{...options,credentials:"same-origin",headers:{Accept:"application/json",...(options.headers||{})}});
+  }catch(cause){
+    throw Object.assign(new Error("Could not reach STRATA. Check your connection and try again."),{code:"network",cause});
+  }
+  const contentType=String(response.headers?.get?.("content-type")||"").toLowerCase();
+  const data=contentType.includes("json")?await response.json().catch(()=>null):null;
+  if(!response.ok)throw Object.assign(new Error(data?.error||"Request failed."),{status:response.status,code:data?.code||"REQUEST_FAILED"});
+  if(!data||typeof data!=="object")throw Object.assign(new Error("STRATA returned an unexpected response."),{status:502,code:"INVALID_RESPONSE"});
+  return data;
+}
+
+function setBusy(form,button,busy){
+  if(!form||!button)return;
+  form.dataset.submitting=busy?"true":"";
+  if(busy)form.setAttribute("aria-busy","true");else form.removeAttribute("aria-busy");
+  button.disabled=busy;
+}
+
+function clearMessage(node){
+  if(!node)return;
+  node.hidden=true;
+  node.textContent="";
+}
+
+function showMessage(node,message){
+  node.textContent=message;
+  node.hidden=false;
+  requestAnimationFrame(()=>node.focus({preventScroll:false}));
+}
+
+function bearerToken(){
+  const raw=new URLSearchParams(String(location.hash||"").replace(/^#/,"")).get("token")||"";
+  const token=/^[A-Za-z0-9_-]{43}$/.test(raw)?raw:"";
+  if(location.hash)history.replaceState({},"",`${location.pathname}${location.search}`);
+  return token;
+}
+
+function errorMessage(error,fallback){
+  if(error?.code==="network")return error.message;
+  if(error?.status===429)return "Too many attempts. Please wait and try again.";
+  if(Number(error?.status)>=500)return "Account email is temporarily unavailable. Please try again in a moment.";
+  return error?.message||fallback;
+}
+
+function setupForgotPassword(){
+  const form=el("forgotPasswordForm"),button=el("recoverySubmit"),message=el("recoveryMessage"),success=el("recoverySuccess"),email=el("recoveryEmail");
+  form.addEventListener("input",()=>clearMessage(message));
+  form.addEventListener("submit",async(event)=>{
+    event.preventDefault();
+    if(form.dataset.submitting==="true")return;
+    clearMessage(message);
+    setBusy(form,button,true);
+    try{
+      await readJson("/api/password-reset/request",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:email.value})});
+      email.value="";
+      form.hidden=true;
+      success.hidden=false;
+      requestAnimationFrame(()=>success.focus({preventScroll:false}));
+    }catch(error){
+      showMessage(message,errorMessage(error,"Could not request a password-reset link. Please try again."));
+    }finally{setBusy(form,button,false);}
+  });
+  if(new URLSearchParams(location.search).get("sent")==="1"){
+    form.hidden=true;
+    success.hidden=false;
+  }
+}
+
+async function setupResetPassword(){
+  const token=bearerToken();
+  const form=el("resetPasswordForm"),button=el("resetSubmit"),message=el("resetMessage"),unavailable=el("resetUnavailable"),success=el("resetSuccess"),state=el("resetState"),intro=el("resetIntro");
+  const password=el("newPassword"),confirmation=el("confirmPassword");
+  function unavailableState(){
+    form.hidden=true;
+    unavailable.hidden=false;
+    state.classList.add("bad");
+    state.querySelector("span").textContent="This reset link cannot be used.";
+    requestAnimationFrame(()=>unavailable.focus({preventScroll:false}));
+  }
+  if(!token){unavailableState();return;}
+  el("resetToken").value=token;
+  try{
+    const status=await readJson("/api/password-reset/status",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token})});
+    if(status.active!==true){unavailableState();return;}
+    form.hidden=false;
+    state.classList.add("good");
+    state.querySelector("span").textContent="Your one-time reset link is ready.";
+    intro.textContent=`Choose a new password for ${status.maskedEmail||"your registered account"}.`;
+    requestAnimationFrame(()=>password.focus({preventScroll:false}));
+  }catch(error){
+    if(error.status===400){unavailableState();return;}
+    state.classList.add("warn");
+    state.querySelector("span").textContent="The link could not be checked yet. You can still try it below.";
+    form.hidden=false;
+  }
+  form.addEventListener("input",()=>clearMessage(message));
+  form.addEventListener("submit",async(event)=>{
+    event.preventDefault();
+    if(form.dataset.submitting==="true")return;
+    clearMessage(message);
+    if(password.value.length<10||password.value.length>128){showMessage(message,"Use a password of 10–128 characters.");password.focus();return;}
+    if(password.value!==confirmation.value){showMessage(message,"The two password entries do not match.");confirmation.focus();return;}
+    setBusy(form,button,true);
+    try{
+      await readJson("/api/password-reset/complete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token,password:password.value,confirmation:confirmation.value})});
+      password.value="";confirmation.value="";el("resetToken").value="";
+      form.hidden=true;unavailable.hidden=true;success.hidden=false;
+      state.classList.remove("warn","bad");state.classList.add("good");
+      state.querySelector("span").textContent="Your password was updated securely.";
+      requestAnimationFrame(()=>success.focus({preventScroll:false}));
+    }catch(error){
+      if(String(error.code||"").includes("INVALID_RESET_LINK")){unavailableState();return;}
+      showMessage(message,errorMessage(error,"Could not reset the password. Please try again."));
+    }finally{setBusy(form,button,false);}
+  });
+}
+
+async function setupDeleteAccount(){
+  const token=bearerToken();
+  const form=el("deleteAccountForm"),button=el("deleteSubmit"),message=el("deleteMessage"),unavailable=el("deleteUnavailable"),success=el("deleteSuccess"),state=el("deleteState"),confirmation=el("deleteConfirmation");
+  function unavailableState(text="This deletion link cannot be used."){
+    form.hidden=true;
+    unavailable.hidden=false;
+    state.classList.add("bad");
+    state.querySelector("span").textContent=text;
+    requestAnimationFrame(()=>unavailable.focus({preventScroll:false}));
+  }
+  if(new URLSearchParams(location.search).get("deleted")==="1"){
+    form.hidden=true;unavailable.hidden=true;success.hidden=false;
+    state.classList.add("good");
+    state.querySelector("span").textContent="The account was permanently deleted.";
+    try{sessionStorage.clear();}catch{}
+    requestAnimationFrame(()=>success.focus({preventScroll:false}));
+    return;
+  }
+  if(!token){unavailableState();return;}
+  el("deleteToken").value=token;
+  try{
+    const status=await readJson("/api/account/delete/status",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token})});
+    if(status.active!==true){unavailableState();return;}
+    form.hidden=false;
+    state.classList.add("warn");
+    state.querySelector("span").textContent=`Deletion is awaiting confirmation for ${status.maskedEmail||"your account"}.`;
+    requestAnimationFrame(()=>confirmation.focus({preventScroll:false}));
+  }catch(error){
+    if(error.status===400){unavailableState();return;}
+    state.classList.add("warn");
+    state.querySelector("span").textContent="The link could not be checked yet. You can still submit it below.";
+    form.hidden=false;
+  }
+  confirmation.addEventListener("input",()=>{confirmation.value=confirmation.value.toUpperCase().replace(/[^A-Z]/g,"").slice(0,6);clearMessage(message);});
+  form.addEventListener("submit",async(event)=>{
+    event.preventDefault();
+    if(form.dataset.submitting==="true")return;
+    clearMessage(message);
+    if(confirmation.value!=="DELETE"){showMessage(message,"Type DELETE exactly to confirm permanent account deletion.");confirmation.focus();return;}
+    setBusy(form,button,true);
+    try{
+      await readJson("/api/account/delete/complete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token,confirmation:"DELETE"})});
+      confirmation.value="";el("deleteToken").value="";
+      form.hidden=true;unavailable.hidden=true;success.hidden=false;
+      state.classList.remove("warn","bad");state.classList.add("good");
+      state.querySelector("span").textContent="The account was permanently deleted.";
+      try{sessionStorage.clear();}catch{}
+      requestAnimationFrame(()=>success.focus({preventScroll:false}));
+    }catch(error){
+      if(String(error.code||"").includes("INVALID_DELETE_LINK")){unavailableState();return;}
+      showMessage(message,errorMessage(error,"Could not delete the account. Nothing was removed; please try again."));
+    }finally{setBusy(form,button,false);}
+  });
+}
+
+if(typeof globalThis.fetch==="function"){
+  if(page==="forgot-password")setupForgotPassword();
+  if(page==="reset-password")void setupResetPassword();
+  if(page==="delete-account")void setupDeleteAccount();
+}

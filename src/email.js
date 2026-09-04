@@ -208,6 +208,74 @@ async function sendVerificationEmail(config,message,fetchImpl=globalThis.fetch) 
   return {messageId:clean(payload?.id,200)};
 }
 
+async function sendAccountActionEmail(config,message,fetchImpl=globalThis.fetch) {
+  const secrets=secretsByConfig.get(config);
+  if (!config?.enabled||!config.configured||!secrets?.apiKey) {
+    throw Object.assign(new Error("Account email is not available yet."),{status:503,code:"ACCOUNT_EMAIL_UNAVAILABLE"});
+  }
+  const to=normalizedEmail(message?.to);
+  const name=clean(message?.name,80)||"there";
+  const token=clean(message?.token,200);
+  const requestId=clean(message?.requestId,200);
+  const purpose=message?.purpose==="account_delete"?"account_delete":"password_reset";
+  const expiresInMinutes=Math.max(1,Math.min(60,Math.ceil(Number(message?.expiresInMinutes)||30)));
+  if (!mailboxAddress(to)||!/^[A-Za-z0-9_-]{43}$/.test(token)||!requestId) {
+    throw new TypeError("Invalid account-action email input.");
+  }
+
+  const isDeletion=purpose==="account_delete";
+  const page=isDeletion?"delete-account":"reset-password";
+  // The bearer token is kept in the URL fragment. Fragments are not sent in
+  // HTTP requests or Referer headers, so Render and third-party assets never
+  // receive the raw recovery credential.
+  const actionUrl=`${config.appBaseUrl}/${page}#token=${encodeURIComponent(token)}`;
+  const subject=isDeletion?"Confirm deletion of your STRATA account":"Reset your STRATA password";
+  const heading=isDeletion?"Confirm account deletion":"Reset your password";
+  const actionText=isDeletion
+    ? "Open the secure page below, review what will be erased, and type DELETE. Merely opening this email will not delete anything."
+    : "Open the secure page below and choose a new password. Completing the reset signs your account out on every device.";
+  const ignoreText=isDeletion
+    ? "If you did not request account deletion, ignore this email and your account will remain unchanged."
+    : "If you did not request a password reset, ignore this email and your password will remain unchanged.";
+  const buttonText=isDeletion?"Review account deletion":"Reset password";
+  const text=[
+    `Hi ${name},`,
+    "",
+    actionText,
+    `This link expires in ${expiresInMinutes} minutes and works once.`,
+    "",
+    actionUrl,
+    "",
+    ignoreText
+  ].join("\n");
+  const html=`<!doctype html><html><body style="margin:0;padding:24px;background:#f4f2ec;color:#10110f;font-family:Arial,sans-serif"><main style="max-width:560px;margin:auto;background:#fff;padding:32px;border:1px solid #bbb"><p>Hi ${escapeHtml(name)},</p><h1 style="font-size:24px">${heading}</h1><p>${escapeHtml(actionText)}</p><p>This link expires in ${expiresInMinutes} minutes and works once.</p><p style="margin:28px 0"><a href="${escapeHtml(actionUrl)}" style="display:inline-block;padding:14px 20px;background:#10110f;color:#fff;text-decoration:none;font-weight:700">${buttonText}</a></p><p>${escapeHtml(ignoreText)}</p></main></body></html>`;
+  const idempotencyDigest=digestParts(requireVerificationSecret(config),"account-action-delivery-v1",[requestId,purpose]);
+  const body={from:config.from,to:[to],subject,text,html};
+  if (config.replyTo) body.reply_to=config.replyTo;
+
+  let response;
+  try {
+    response=await fetchImpl(`${secrets.apiBase}/emails`,{
+      method:"POST",
+      headers:{
+        Authorization:`Bearer ${secrets.apiKey}`,
+        "Content-Type":"application/json",
+        "Idempotency-Key":`strata-action-${idempotencyDigest}`
+      },
+      signal:timeoutSignal(10_000),
+      body:JSON.stringify(body)
+    });
+  } catch {
+    throw Object.assign(new Error("The account email could not be sent. Please try again."),{status:502,code:"ACCOUNT_EMAIL_DELIVERY_UNAVAILABLE"});
+  }
+  if (!response?.ok) {
+    throw Object.assign(new Error("The account email could not be sent. Please try again."),{status:502,code:"ACCOUNT_EMAIL_DELIVERY_FAILED"});
+  }
+  let payload;
+  try { payload=await response.json(); } catch { payload=null; }
+  return {messageId:clean(payload?.id,200)};
+}
+
 module.exports = {
   directSignupAllowed,
   escapeHtml,
@@ -215,6 +283,7 @@ module.exports = {
   getEmailVerificationConfig,
   maskEmail,
   safeDigestEqual,
+  sendAccountActionEmail,
   sendVerificationEmail,
   verificationCodeDigest,
   verificationEmailHash

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#10110f" />
+    <meta name="description" content="Review and confirm permanent STRATA account deletion." />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Delete account — STRATA</title>
+    <link rel="icon" href="/icons/strata-icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Manrope:wght@400;500;600;700&amp;family=Oswald:wght@500;600;700&amp;display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/account.css?v=6.7.5" />
+  </head>
+  <body data-account-page="delete-account">
+    <a class="skip-link" href="#deletePanel">Skip to account deletion</a>
+    <header class="account-header">
+      <a class="brand" href="/" aria-label="STRATA home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>STRATA</span></a>
+      <nav class="account-nav" aria-label="Account deletion navigation"><a class="back-link" href="/account.html">← Keep my account</a></nav>
+    </header>
+    <main class="account-page verification-page">
+      <section class="account-intro danger-intro">
+        <p class="kicker"><span></span> Permanent account removal</p>
+        <h1>DELETE YOUR.<br /><em>ACCOUNT.</em></h1>
+        <p>Opening this page does not delete anything. STRATA only proceeds after you review the consequences and submit the confirmation below.</p>
+        <div class="storage-state verification-state" id="deleteState" role="status" aria-live="polite"><i></i><span>Checking your deletion link…</span></div>
+      </section>
+      <section class="account-access verification-access" aria-label="Confirm account deletion">
+        <article class="auth-panel verification-panel danger-zone" id="deletePanel" aria-labelledby="deleteTitle">
+          <p class="panel-index">Final confirmation</p>
+          <h2 id="deleteTitle" tabindex="-1">THIS CANNOT BE UNDONE</h2>
+          <div class="deletion-warning">
+            <p>Permanent deletion removes:</p>
+            <ul><li>Your account and every signed-in session</li><li>Your weekly plan and Discovery preferences</li><li>Your ratings and their contribution to community scores</li><li>Your local Discovery purchase record and access</li></ul>
+            <p><strong>Deletion is not a refund.</strong> A used Paddle purchase or discount is not restored if you create a new account. Request an eligible refund before deleting if needed.</p>
+          </div>
+          <form id="deleteAccountForm" action="/auth/account-delete/complete" method="post" aria-describedby="deleteMessage" hidden>
+            <div class="account-message panel-message" id="deleteMessage" role="alert" tabindex="-1" hidden></div>
+            <input id="deleteToken" name="token" type="hidden" value="" />
+            <label for="deleteConfirmation">Type DELETE to confirm</label>
+            <input id="deleteConfirmation" name="confirmation" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" pattern="DELETE" maxlength="6" required />
+            <button class="danger-action" id="deleteSubmit" type="submit">Delete my account permanently <span aria-hidden="true">→</span></button>
+          </form>
+          <div class="verification-ended" id="deleteUnavailable" role="status" aria-live="assertive" tabindex="-1" hidden>
+            <h3>LINK UNAVAILABLE</h3>
+            <p>This deletion link is invalid, expired, already used, or was canceled.</p>
+            <div class="verification-ended-actions"><a href="/account.html">Return to account <span aria-hidden="true">→</span></a><a href="/contact">Contact support <span aria-hidden="true">→</span></a></div>
+          </div>
+          <div class="recovery-success" id="deleteSuccess" role="status" aria-live="assertive" tabindex="-1" hidden>
+            <h3>ACCOUNT DELETED</h3>
+            <p>Your STRATA account and its local data were permanently removed. Paddle may retain transaction records required for payments, refunds, fraud prevention, tax, or legal obligations.</p>
+            <a href="/">Return to STRATA <span aria-hidden="true">→</span></a>
+          </div>
+        </article>
+      </section>
+    </main>
+    <footer class="build-footer">STRATA · Build 6.7.5 · <a href="/refunds">Refunds</a> · <a href="/contact">Contact</a> · <a href="/privacy">Privacy</a></footer>
+    <script src="/account-recovery.js?v=6.7.5"></script>
+  </body>
+</html>

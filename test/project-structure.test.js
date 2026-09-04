@@ -24,8 +24,9 @@ function walk(directory){
 test("keeps root, private server, and public browser files separated",()=>{
   for(const required of [
     "server.js","src/server.js","src/database.js","src/email.js","src/payments.js",
-    "src/data/discovery-data.json","public/pages/index.html",
-    "public/scripts/app.js","public/styles/styles.css",
+    "src/data/discovery-data.json","public/pages/index.html","public/pages/forgot-password.html",
+    "public/pages/reset-password.html","public/pages/delete-account.html",
+    "public/scripts/app.js","public/scripts/account-recovery.js","public/styles/styles.css",
     "public/data/exercises.json","public/service-worker.js","public/manifest.webmanifest"
   ])assert.ok(existsSync(join(PROJECT_ROOT,required)),`${required} must exist`);
 

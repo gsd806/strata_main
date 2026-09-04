@@ -15,6 +15,7 @@ const {
   generateVerificationCode,
   maskEmail,
   verificationEmailHash,
+  sendAccountActionEmail,
   sendVerificationEmail,
   directSignupAllowed
 } = require("./email");
@@ -24,6 +25,8 @@ const {
   webhookSecretFor,
   verifyPaddleSignature,
   createPaddleTransaction,
+  fetchPaddleTransaction,
+  cancelPaddleTransaction,
   fetchPaddleIpv4Cidrs,
   isPaddleWebhookAddress,
   validateCompletedTransaction,
@@ -47,6 +50,12 @@ const VERIFICATION_MAX_SENDS = 4;
 const VERIFICATION_EMAIL_SENDS_PER_HOUR = 5;
 const VERIFICATION_SEND_WINDOW_MS = 60 * 60 * 1000;
 const VERIFICATION_RETENTION_MS = 24 * 60 * 60 * 1000;
+const ACCOUNT_ACTION_MS = 30 * 60 * 1000;
+const ACCOUNT_ACTION_EMAILS_PER_HOUR = 5;
+const ACCOUNT_ACTION_SEND_WINDOW_MS = 60 * 60 * 1000;
+const ACCOUNT_ACTION_RETENTION_MS = 24 * 60 * 60 * 1000;
+const ABANDONED_CHECKOUT_MS = 30 * 60 * 1000;
+const MAX_DELETION_RECONCILIATIONS = 8;
 const MAX_BODY_BYTES = 64 * 1024;
 const MAX_WEBHOOK_BYTES = 256 * 1024;
 const MIN_GZIP_BYTES = 1024;
@@ -66,6 +75,9 @@ const STATIC_FILES = new Map([
   ["index.html","pages/index.html"],
   ["account.html","pages/account.html"],
   ["verify-email.html","pages/verify-email.html"],
+  ["forgot-password.html","pages/forgot-password.html"],
+  ["reset-password.html","pages/reset-password.html"],
+  ["delete-account.html","pages/delete-account.html"],
   ["planner.html","pages/planner.html"],
   ["discover.html","pages/discover.html"],
   ["install.html","pages/install.html"],
@@ -84,6 +96,7 @@ const STATIC_FILES = new Map([
   ["app.js","scripts/app.js"],
   ["account.js","scripts/account.js"],
   ["verify-email.js","scripts/verify-email.js"],
+  ["account-recovery.js","scripts/account-recovery.js"],
   ["planner.js","scripts/planner.js"],
   ["discovery-core.js","scripts/discovery-core.js"],
   ["discover.js","scripts/discover.js"],
@@ -106,10 +119,13 @@ const PAGE_ALIASES = new Map([
   ["/terms","terms.html"],
   ["/privacy","privacy.html"],
   ["/refunds","refunds.html"],
-  ["/verify-email","verify-email.html"]
+  ["/verify-email","verify-email.html"],
+  ["/forgot-password","forgot-password.html"],
+  ["/reset-password","reset-password.html"],
+  ["/delete-account","delete-account.html"]
 ]);
 const PROTECTED_HTML = new Set(["planner.html","discover.html"]);
-const PRIVATE_HTML = new Set(["index.html","account.html","verify-email.html",...PROTECTED_HTML]);
+const PRIVATE_HTML = new Set(["index.html","account.html","verify-email.html","forgot-password.html","reset-password.html","delete-account.html",...PROTECTED_HTML]);
 const MIME = {
   ".html":"text/html; charset=utf-8",
   ".css":"text/css; charset=utf-8",
@@ -154,7 +170,7 @@ function accountStorageUnavailable(error) {
 
 function authAudit(event,{purpose="",email=""}={}) {
   const entry={event:String(event),at:new Date().toISOString()};
-  if (purpose==="signup"||purpose==="login") entry.purpose=purpose;
+  if (["signup","login","password_reset","account_delete"].includes(purpose)) entry.purpose=purpose;
   if (email) entry.email=maskEmail(email);
   console.info(`Auth audit ${JSON.stringify(entry)}`);
 }
@@ -202,19 +218,21 @@ function signupTokenFor(req) {
   return token&&token.length<=200?token:null;
 }
 
-function prepareSession(userId,now=Date.now()) {
+function prepareSession(userId,now=Date.now(),authVersion=1) {
   const token = randomBytes(32).toString("base64url");
   const csrfToken = randomBytes(24).toString("base64url");
   return {
     token,
     csrfToken,
-    record:{tokenHash:hashToken(token),userId,csrfToken,expiresAt:now+SESSION_SECONDS*1000,createdAt:now}
+    record:{tokenHash:hashToken(token),userId,csrfToken,expiresAt:now+SESSION_SECONDS*1000,createdAt:now,authVersion:Number(authVersion)||1}
   };
 }
 
-async function createSession(userId) {
-  const session=prepareSession(userId);
-  await store.insertSession(session.record);
+async function createSession(userId,authVersion=1) {
+  const session=prepareSession(userId,Date.now(),authVersion);
+  if (!await store.insertSession(session.record)) {
+    throw Object.assign(new Error("Your credentials changed while signing in. Please try again."),{status:409,code:"AUTHENTICATION_RETRY"});
+  }
   return {token:session.token,csrfToken:session.csrfToken};
 }
 
@@ -231,11 +249,20 @@ function planStats(plan) {
 }
 
 async function userPayload(session) {
-  const [plan,discovery]=await Promise.all([
+  const [plan,discovery,deletion]=await Promise.all([
     planFor(session.id),
-    store.discoveryAccessSummary(session.id)
+    store.discoveryAccessSummary(session.id),
+    store.activeAccountDeletion(session.id,Date.now())
   ]);
-  return {id:session.id,name:session.name,email:session.email,createdAt:session.created_at,...planStats(plan),discovery};
+  return {
+    id:session.id,
+    name:session.name,
+    email:session.email,
+    createdAt:session.created_at,
+    ...planStats(plan),
+    discovery,
+    accountDeletion:{pending:Boolean(deletion),expiresAt:deletion?Number(deletion.expires_at):null}
+  };
 }
 
 function cleanChoiceList(value,allowed,max=20) {
@@ -533,7 +560,7 @@ async function registerAccountDirect(input) {
     const id=randomUUID(),salt=randomBytes(16).toString("base64"),hash=await passwordHash(password,salt),now=Date.now();
     try { await store.insertUser({id,name,email,passwordHash:hash,passwordSalt:salt,createdAt:now}); }
     catch(error) { if (isUniqueViolation(error)) throw Object.assign(new Error("An account with that email already exists."),{status:409}); throw error; }
-    const session=await createSession(id),user=await store.userById(id);
+    const session=await createSession(id,1),user=await store.userById(id);
     return {session,user};
   } catch(error) {
     if (error.status) throw error;
@@ -829,7 +856,209 @@ async function authenticateAccount(input) {
         name:user.name
       });
     }
-    return {session:await createSession(user.id),user};
+    return {session:await createSession(user.id,user.auth_version),user};
+  } catch(error) {
+    if (error.status) throw error;
+    throw accountStorageUnavailable(error);
+  }
+}
+
+const PASSWORD_RESET_RESPONSE = "If an account uses that email, a password-reset link has been sent. Check the inbox and spam folder.";
+
+function ensureAccountEmailConfigured() {
+  if (!EMAIL_CONFIG.enabled) {
+    throw Object.assign(new Error("Account recovery email is temporarily unavailable. Please try again later."),{status:503,code:"ACCOUNT_EMAIL_UNAVAILABLE"});
+  }
+}
+
+function validAccountActionToken(value) {
+  const token=String(value||"").trim();
+  return /^[A-Za-z0-9_-]{43}$/.test(token)?token:"";
+}
+
+function accountActionError(message,status,code) {
+  return Object.assign(new Error(message),{status,code});
+}
+
+async function claimAccountActionSend(email,purpose) {
+  const now=Date.now();
+  const emailHash=verificationEmailHash(EMAIL_CONFIG,email);
+  const send={id:randomUUID(),emailHash,purpose,sentAt:now};
+  const claimed=await store.claimAccountActionSend(send,now-ACCOUNT_ACTION_SEND_WINDOW_MS,ACCOUNT_ACTION_EMAILS_PER_HOUR);
+  return {claimed,emailHash};
+}
+
+async function createAndDeliverAccountAction(user,purpose) {
+  const token=randomBytes(32).toString("base64url");
+  const now=Date.now();
+  const staged=await store.stageAccountAction({
+    requestId:randomUUID(),
+    userId:user.id,
+    purpose,
+    tokenHash:hashToken(token),
+    expiresAt:now+ACCOUNT_ACTION_MS,
+    createdAt:now
+  });
+  if (!staged) throw new Error("Account action could not be staged.");
+  try {
+    await sendAccountActionEmail(EMAIL_CONFIG,{
+      to:user.email,
+      name:user.name,
+      token,
+      requestId:staged.request_id,
+      purpose,
+      expiresInMinutes:Math.ceil(ACCOUNT_ACTION_MS/60000)
+    });
+    const action=await store.activateAccountAction(staged.request_id,staged.token_hash,Date.now());
+    if (!action) throw new Error("Delivered account action could not be activated.");
+    authAudit("account_action_sent",{purpose,email:user.email});
+    return {expiresAt:Number(action.expires_at),maskedEmail:maskEmail(user.email)};
+  } catch(error) {
+    try { await store.discardStagedAccountAction(staged.request_id,staged.token_hash); }
+    catch(discardError) { console.error("Staged account-action cleanup failed:",discardError); }
+    console.error(`Account action email delivery failed: ${error?.code||"provider-error"}`);
+    throw accountActionError("The account email could not be sent. Please try again in a moment.",503,"ACCOUNT_EMAIL_DELIVERY_UNAVAILABLE");
+  }
+}
+
+async function requestForgotPassword(input) {
+  ensureAccountEmailConfigured();
+  const email=normalizeEmail(input?.email);
+  if (!validEmail(email)) throw accountActionError("Enter a valid email address.",400,"INVALID_EMAIL");
+  try {
+    const reservation=await claimAccountActionSend(email,"password_reset");
+    if (reservation.claimed) {
+      const user=await store.userByEmail(email);
+      if (user) {
+        // Public recovery always returns on the same short schedule. Provider
+        // latency must not reveal whether the address has an account.
+        void createAndDeliverAccountAction(user,"password_reset").catch((error) => {
+          console.error(`Background password-reset delivery failed: ${error?.code||"provider-error"}`);
+        });
+      }
+    }
+    await new Promise((resolve)=>setTimeout(resolve,400));
+    authAudit("password_reset_requested",{purpose:"password_reset",email});
+    return {ok:true,message:PASSWORD_RESET_RESPONSE};
+  } catch(error) {
+    if (error.status) throw error;
+    throw accountStorageUnavailable(error);
+  }
+}
+
+async function requestSignedInAccountAction(session,purpose) {
+  ensureAccountEmailConfigured();
+  try {
+    const reservation=await claimAccountActionSend(session.email,purpose);
+    if (!reservation.claimed) throw accountActionError("Too many account emails were requested. Please wait and try again.",429,"ACCOUNT_EMAIL_LIMIT");
+    return await createAndDeliverAccountAction(session,purpose);
+  } catch(error) {
+    if (error.status) throw error;
+    throw accountStorageUnavailable(error);
+  }
+}
+
+async function reconcilePurchasesBeforeDeletion(userId) {
+  const purchases=await store.unsettledPurchasesForUser(userId);
+  const staleBefore=Date.now()-ABANDONED_CHECKOUT_MS;
+  const stale=purchases.filter((purchase)=>Number(purchase.updated_at)<=staleBefore).slice(0,MAX_DELETION_RECONCILIATIONS);
+  const reconciled=await Promise.allSettled(stale.map(async(purchase)=>{
+    let remote;
+    try { remote=await fetchPaddleTransaction(PAYMENT_CONFIG,purchase.transaction_id); }
+    catch {
+      throw accountActionError("STRATA could not safely confirm an older Discovery checkout. Nothing was deleted; please try again later.",503,"PURCHASE_RECONCILIATION_UNAVAILABLE");
+    }
+    if (remote.status==="canceled") {
+      await store.updatePurchaseStatus(purchase.transaction_id,"canceled",Date.now());
+      return;
+    }
+    if (remote.status==="draft"||remote.status==="ready") {
+      try { await cancelPaddleTransaction(PAYMENT_CONFIG,purchase.transaction_id); }
+      catch {
+        throw accountActionError("STRATA could not safely close an abandoned Discovery checkout. Nothing was deleted; please try again later.",503,"PURCHASE_RECONCILIATION_UNAVAILABLE");
+      }
+      await store.updatePurchaseStatus(purchase.transaction_id,"canceled",Date.now());
+      return;
+    }
+    if (remote.status==="completed") {
+      const validation=validateCompletedTransaction(remote.data,PAYMENT_CONFIG);
+      const claimedUser=cleanText(remote.data?.custom_data?.strata_user_id,100);
+      if (!validation.ok||claimedUser!==purchase.user_id) {
+        throw accountActionError("STRATA could not safely validate a completed Discovery checkout. Nothing was deleted; please contact support.",503,"PURCHASE_RECONCILIATION_INVALID");
+      }
+      const completedAt=eventTime(remote.data.updated_at,Date.now());
+      await store.completePurchase(purchase.transaction_id,{
+        customerId:cleanText(remote.data.customer_id,100)||null,
+        completedAt,
+        updatedAt:completedAt
+      });
+    }
+  }));
+  const failure=reconciled.find((result)=>result.status==="rejected");
+  if (failure) throw failure.reason;
+  return store.pendingPurchasesForUser(userId);
+}
+
+async function inspectAccountAction(input,expectedPurpose) {
+  const token=validAccountActionToken(input?.token);
+  if (!token) return {active:false};
+  try {
+    const row=await store.accountActionByTokenHash(hashToken(token));
+    const active=Boolean(row&&row.purpose===expectedPurpose&&row.delivery_state==="sent"&&row.consumed_at==null&&Number(row.expires_at)>Date.now());
+    return active
+      ? {active:true,expiresAt:Number(row.expires_at),maskedEmail:maskEmail(row.email)}
+      : {active:false};
+  } catch(error) {
+    throw accountStorageUnavailable(error);
+  }
+}
+
+async function resetPassword(input) {
+  const token=validAccountActionToken(input?.token);
+  const password=String(input?.password||"");
+  const confirmation=String(input?.confirmation||"");
+  if (!token) throw accountActionError("This password-reset link is invalid or expired. Request a new one.",400,"INVALID_RESET_LINK");
+  if (password.length<10||password.length>128) throw accountActionError("Use a password of 10–128 characters.",400,"INVALID_PASSWORD");
+  if (password!==confirmation) throw accountActionError("The two password entries do not match.",400,"PASSWORD_MISMATCH");
+  try {
+    const action=await store.accountActionByTokenHash(hashToken(token));
+    if (!action||action.purpose!=="password_reset"||action.delivery_state!=="sent"||action.consumed_at!=null||Number(action.expires_at)<=Date.now()) {
+      throw accountActionError("This password-reset link is invalid or expired. Request a new one.",400,"INVALID_RESET_LINK");
+    }
+    const salt=randomBytes(16).toString("base64");
+    const hash=await passwordHash(password,salt);
+    const user=await store.completePasswordReset(hashToken(token),hash,salt,Date.now());
+    if (!user) throw accountActionError("This password-reset link is invalid or expired. Request a new one.",400,"INVALID_RESET_LINK");
+    authAudit("password_reset_completed",{purpose:"password_reset",email:user.email});
+    return user;
+  } catch(error) {
+    if (error.status) throw error;
+    throw accountStorageUnavailable(error);
+  }
+}
+
+async function deleteAccountWithToken(input) {
+  const token=validAccountActionToken(input?.token);
+  if (!token) throw accountActionError("This deletion link is invalid or expired. Request a new one from your account.",400,"INVALID_DELETE_LINK");
+  if (String(input?.confirmation||"").trim()!=="DELETE") {
+    throw accountActionError("Type DELETE exactly to confirm permanent account deletion.",400,"DELETE_CONFIRMATION_REQUIRED");
+  }
+  try {
+    const action=await store.accountActionByTokenHash(hashToken(token));
+    if (!action||action.purpose!=="account_delete"||action.delivery_state!=="sent"||action.consumed_at!=null||Number(action.expires_at)<=Date.now()) {
+      throw accountActionError("This deletion link is invalid or expired. Request a new one from your account.",400,"INVALID_DELETE_LINK");
+    }
+    if (await reconcilePurchasesBeforeDeletion(action.user_id)>0) {
+      throw accountActionError("A Discovery payment is still being processed. Nothing was deleted; please try again later.",409,"PURCHASE_PENDING");
+    }
+    const emailHash=verificationEmailHash(EMAIL_CONFIG,action.email);
+    const result=await store.deleteAccount(hashToken(token),Date.now(),emailHash);
+    if (result.status==="purchase_pending") {
+      throw accountActionError("A Discovery payment is still being processed. Nothing was deleted; please try again later.",409,"PURCHASE_PENDING");
+    }
+    if (result.status!=="deleted") throw accountActionError("This deletion link is invalid or expired. Request a new one from your account.",400,"INVALID_DELETE_LINK");
+    authAudit("account_deleted",{purpose:"account_delete",email:action.email});
+    return result.user;
   } catch(error) {
     if (error.status) throw error;
     throw accountStorageUnavailable(error);
@@ -966,6 +1195,34 @@ function redirect(res,location,headers={}) {
 }
 
 async function handleAuthForm(req,res,url) {
+  const recoveryRoutes=new Set(["/auth/password-reset/request","/auth/password-reset/complete","/auth/account-delete/complete"]);
+  if (recoveryRoutes.has(url.pathname)) {
+    if (req.method!=="POST") { json(res,405,{error:"Method not allowed."},{Allow:"POST"}); return; }
+    const input=await bodyForm(req);
+    if (!trustedAuthOrigin(req)) {
+      const location=url.pathname==="/auth/password-reset/request"?"/forgot-password?error=security":url.pathname==="/auth/password-reset/complete"?"/reset-password?error=security":"/delete-account?error=security";
+      redirect(res,location); return;
+    }
+    try {
+      if (url.pathname==="/auth/password-reset/request") {
+        if (rateAllowed(req,"password-reset-request",8)) await requestForgotPassword(input);
+        redirect(res,"/forgot-password?sent=1"); return;
+      }
+      if (url.pathname==="/auth/password-reset/complete") {
+        if (!rateAllowed(req,"password-reset-complete",10)) throw accountActionError("Too many attempts. Try again later.",429,"PASSWORD_RESET_RATE_LIMIT");
+        await resetPassword(input);
+        redirect(res,"/account.html?mode=login&reset=1",{"Set-Cookie":sessionCookie("",0)}); return;
+      }
+      if (!rateAllowed(req,"account-delete-complete",10)) throw accountActionError("Too many attempts. Try again later.",429,"ACCOUNT_DELETE_RATE_LIMIT");
+      await deleteAccountWithToken(input);
+      redirect(res,"/delete-account?deleted=1",{"Set-Cookie":[sessionCookie("",0),signupCookie("",0)]}); return;
+    } catch(error) {
+      if (!error.status) console.error(error);
+      const location=url.pathname==="/auth/password-reset/request"?"/forgot-password?sent=1":url.pathname==="/auth/password-reset/complete"?"/reset-password?error=invalid":"/delete-account?error=invalid";
+      redirect(res,location);
+      return;
+    }
+  }
   const routes=new Set(["/auth/signup","/auth/login","/auth/verify-email","/auth/resend-verification"]);
   if (!routes.has(url.pathname)) { json(res,404,{error:"Account route not found."}); return; }
   if (req.method!=="POST") { json(res,405,{error:"Method not allowed."},{Allow:"POST"}); return; }
@@ -1194,8 +1451,85 @@ async function handleApi(req,res,url) {
     }
     return;
   }
+  if (url.pathname === "/api/password-reset/request" && req.method === "POST") {
+    if (!trustedAuthOrigin(req)) { json(res,403,{error:"Cross-origin request rejected."}); return; }
+    if (!rateAllowed(req,"password-reset-request",8)) {
+      json(res,202,{ok:true,message:PASSWORD_RESET_RESPONSE}); return;
+    }
+    try { json(res,202,await requestForgotPassword(await bodyJson(req))); }
+    catch(error) {
+      if (!error.status) throw error;
+      json(res,error.status,{error:error.message,code:error.code||"PASSWORD_RESET_REQUEST_FAILED"});
+    }
+    return;
+  }
+  if (url.pathname === "/api/account/password-reset/request" && req.method === "POST") {
+    const session=await requireSession(req,res); if (!session) return;
+    if (!validCsrf(req,session)) { json(res,403,{error:"Security check failed. Refresh and try again.",code:"INVALID_CSRF"}); return; }
+    await bodyJson(req);
+    if (!rateAllowed(req,`password-reset-account:${session.id}`,5)) { json(res,429,{error:"Too many account emails were requested. Please wait and try again.",code:"ACCOUNT_EMAIL_LIMIT"}); return; }
+    try { json(res,202,{ok:true,...await requestSignedInAccountAction(session,"password_reset")}); }
+    catch(error) {
+      if (!error.status) throw error;
+      json(res,error.status,{error:error.message,code:error.code||"PASSWORD_RESET_REQUEST_FAILED"});
+    }
+    return;
+  }
+  if (url.pathname === "/api/password-reset/status" && req.method === "POST") {
+    if (!trustedAuthOrigin(req)) { json(res,403,{error:"Cross-origin request rejected."}); return; }
+    if (!rateAllowed(req,"password-reset-status",30)) { json(res,429,{error:"Too many attempts. Try again later."}); return; }
+    json(res,200,await inspectAccountAction(await bodyJson(req),"password_reset")); return;
+  }
+  if (url.pathname === "/api/password-reset/complete" && req.method === "POST") {
+    if (!trustedAuthOrigin(req)) { json(res,403,{error:"Cross-origin request rejected."}); return; }
+    if (!rateAllowed(req,"password-reset-complete",10)) { json(res,429,{error:"Too many attempts. Try again later.",code:"PASSWORD_RESET_RATE_LIMIT"}); return; }
+    try {
+      await resetPassword(await bodyJson(req));
+      json(res,200,{ok:true,message:"Password reset complete. Sign in with your new password."},{"Set-Cookie":sessionCookie("",0)});
+    } catch(error) {
+      if (!error.status) throw error;
+      json(res,error.status,{error:error.message,code:error.code||"PASSWORD_RESET_FAILED"});
+    }
+    return;
+  }
+  if (url.pathname === "/api/account/delete/request" && req.method === "POST") {
+    const session=await requireSession(req,res); if (!session) return;
+    if (!validCsrf(req,session)) { json(res,403,{error:"Security check failed. Refresh and try again.",code:"INVALID_CSRF"}); return; }
+    await bodyJson(req);
+    if (!rateAllowed(req,`account-delete-request:${session.id}`,5)) { json(res,429,{error:"Too many account emails were requested. Please wait and try again.",code:"ACCOUNT_EMAIL_LIMIT"}); return; }
+    try { json(res,202,{ok:true,...await requestSignedInAccountAction(session,"account_delete")}); }
+    catch(error) {
+      if (!error.status) throw error;
+      json(res,error.status,{error:error.message,code:error.code||"ACCOUNT_DELETE_REQUEST_FAILED"});
+    }
+    return;
+  }
+  if (url.pathname === "/api/account/delete/cancel" && req.method === "POST") {
+    const session=await requireSession(req,res); if (!session) return;
+    if (!validCsrf(req,session)) { json(res,403,{error:"Security check failed. Refresh and try again.",code:"INVALID_CSRF"}); return; }
+    await bodyJson(req);
+    await store.cancelAccountDeletion(session.id);
+    json(res,200,{ok:true}); return;
+  }
+  if (url.pathname === "/api/account/delete/status" && req.method === "POST") {
+    if (!trustedAuthOrigin(req)) { json(res,403,{error:"Cross-origin request rejected."}); return; }
+    if (!rateAllowed(req,"account-delete-status",30)) { json(res,429,{error:"Too many attempts. Try again later."}); return; }
+    json(res,200,await inspectAccountAction(await bodyJson(req),"account_delete")); return;
+  }
+  if (url.pathname === "/api/account/delete/complete" && req.method === "POST") {
+    if (!trustedAuthOrigin(req)) { json(res,403,{error:"Cross-origin request rejected."}); return; }
+    if (!rateAllowed(req,"account-delete-complete",10)) { json(res,429,{error:"Too many attempts. Try again later.",code:"ACCOUNT_DELETE_RATE_LIMIT"}); return; }
+    try {
+      await deleteAccountWithToken(await bodyJson(req));
+      json(res,200,{ok:true,message:"Your STRATA account was permanently deleted."},{"Set-Cookie":[sessionCookie("",0),signupCookie("",0)]});
+    } catch(error) {
+      if (!error.status) throw error;
+      json(res,error.status,{error:error.message,code:error.code||"ACCOUNT_DELETE_FAILED"});
+    }
+    return;
+  }
   if (url.pathname === "/api/status" && req.method === "GET") {
-    json(res,200,{ok:true,build:BUILD_NUMBER,storage:store.kind,persistent:store.kind==="turso"||process.env.NODE_ENV!=="production",paymentsConfigured:PAYMENT_CONFIG.configured,checkoutEnabled:PAYMENT_CONFIG.enabled,webhookIpAllowlist:ENFORCE_PADDLE_IPS,emailVerificationEnabled:EMAIL_CONFIG.enabled,emailVerificationConfigured:EMAIL_CONFIG.configured}); return;
+    json(res,200,{ok:true,build:BUILD_NUMBER,storage:store.kind,persistent:store.kind==="turso"||process.env.NODE_ENV!=="production",paymentsConfigured:PAYMENT_CONFIG.configured,checkoutEnabled:PAYMENT_CONFIG.enabled,webhookIpAllowlist:ENFORCE_PADDLE_IPS,emailVerificationEnabled:EMAIL_CONFIG.enabled,emailVerificationConfigured:EMAIL_CONFIG.configured,passwordResetEnabled:EMAIL_CONFIG.enabled,accountDeletionEnabled:EMAIL_CONFIG.enabled}); return;
   }
   if (url.pathname === "/api/billing/config" && req.method === "GET") {
     json(res,200,publicPaymentConfig(PAYMENT_CONFIG)); return;
@@ -1210,17 +1544,21 @@ async function handleApi(req,res,url) {
     if (!validCsrf(req,session)) { json(res,403,{error:"Security check failed. Refresh and try again.",code:"INVALID_CSRF"}); return; }
     await bodyJson(req);
     if (!PAYMENT_CONFIG.enabled) { json(res,503,{error:"Checkout is not available yet.",code:"CHECKOUT_UNAVAILABLE"}); return; }
+    if (await store.activeAccountDeletion(session.id,Date.now())) { json(res,409,{error:"Cancel the pending account-deletion request before starting checkout.",code:"ACCOUNT_DELETION_PENDING"}); return; }
     if (!rateAllowed(req,`checkout:${session.id}`,8)) { json(res,429,{error:"Too many checkout attempts. Try again later."}); return; }
     if (await store.hasDiscoveryAccess(session.id)) {
       json(res,409,{error:"Discovery is already unlocked for this account.",code:"ALREADY_ENTITLED"}); return;
     }
     const pending=await store.pendingPurchaseForUser(session.id,PAYMENT_CONFIG.priceId);
-    if (pending&&Number(pending.updated_at)>Date.now()-30*60*1000) {
+    if (pending) {
       json(res,200,{transactionId:pending.transaction_id,reused:true}); return;
+    }
+    if (await store.pendingPurchasesForUser(session.id)>0) {
+      json(res,409,{error:"A previous Discovery payment is still being confirmed. Please wait before starting another checkout.",code:"CHECKOUT_PENDING_CONFIRMATION"}); return;
     }
     const created=await createPaddleTransaction(PAYMENT_CONFIG,{userId:session.id});
     const now=Date.now();
-    await store.insertPendingPurchase({
+    const storedPurchase=await store.insertPendingPurchase({
       transactionId:created.transactionId,
       userId:session.id,
       priceId:PAYMENT_CONFIG.priceId,
@@ -1229,6 +1567,7 @@ async function handleApi(req,res,url) {
       createdAt:now,
       updatedAt:now
     });
+    if (!storedPurchase) { json(res,409,{error:"Checkout could not be attached because account deletion is pending. Cancel deletion and try again.",code:"ACCOUNT_DELETION_PENDING"}); return; }
     json(res,201,{transactionId:created.transactionId}); return;
   }
   if (url.pathname === "/api/logout" && req.method === "POST") {
@@ -1358,10 +1697,12 @@ async function start() {
   store = await createStore(PROJECT_ROOT);
   await store.deleteExpired(Date.now());
   await store.deleteOldVerificationData(Date.now(),Date.now()-VERIFICATION_RETENTION_MS);
+  await store.deleteOldAccountActionData(Date.now(),Date.now()-ACCOUNT_ACTION_RETENTION_MS);
   if (ENFORCE_PADDLE_IPS) void currentPaddleIps().catch((error)=>console.error(error.message));
   cleanup=setInterval(() => {
     void store.deleteExpired(Date.now()).catch(console.error);
     void store.deleteOldVerificationData(Date.now(),Date.now()-VERIFICATION_RETENTION_MS).catch(console.error);
+    void store.deleteOldAccountActionData(Date.now(),Date.now()-ACCOUNT_ACTION_RETENTION_MS).catch(console.error);
     for (const [key,times] of rateBuckets) if (!times.some((time) => Date.now()-time<15*60*1000)) rateBuckets.delete(key);
   },60*60*1000);
   cleanup.unref();

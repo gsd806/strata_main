@@ -134,7 +134,7 @@ test("verification storage rotates, limits, consumes, and records verified signu
 
     const completedAt=now+90_000;
     const user=await store.completeSignup(first.challenge_id,2,completedAt,session("completed",completedAt));
-    assert.deepEqual(user,{id:"user-one",name:"Pending one",email:"pending@example.test",created_at:completedAt,email_verified_at:completedAt});
+    assert.deepEqual(user,{id:"user-one",name:"Pending one",email:"pending@example.test",created_at:completedAt,email_verified_at:completedAt,auth_version:1});
     assert.equal((await store.userByEmail("pending@example.test")).email_verified_at,completedAt);
     const consumed=await store.verificationByTokenHash(first.browser_token_hash);
     assert.equal(consumed.consumed_at,completedAt);
@@ -155,7 +155,7 @@ test("verification storage rotates, limits, consumes, and records verified signu
     const db=new DatabaseSync(join(root,"strata.sqlite"));
     const userColumns=db.prepare("PRAGMA table_info(users)").all().map((row)=>row.name);
     db.close();
-    assert.deepEqual(userColumns,["id","name","email","password_hash","password_salt","created_at","email_verified_at"]);
+    assert.deepEqual(userColumns,["id","name","email","password_hash","password_salt","created_at","email_verified_at","auth_version"]);
     if(prior.nodeEnv===undefined)delete process.env.NODE_ENV;else process.env.NODE_ENV=prior.nodeEnv;
     if(prior.tursoUrl===undefined)delete process.env.TURSO_DATABASE_URL;else process.env.TURSO_DATABASE_URL=prior.tursoUrl;
     if(prior.dataDir===undefined)delete process.env.STRATA_DATA_DIR;else process.env.STRATA_DATA_DIR=prior.dataDir;
@@ -360,7 +360,7 @@ test("login verification atomically verifies an existing user, consumes its chal
 
     const verifiedAt=now+200;
     const verified=await store.completeLoginVerification(login.challenge_id,1,verifiedAt,session("verified-login",verifiedAt));
-    assert.deepEqual(verified,{id:"login-user",name:"Login User",email:"login@example.test",created_at:now,email_verified_at:verifiedAt});
+    assert.deepEqual(verified,{id:"login-user",name:"Login User",email:"login@example.test",created_at:now,email_verified_at:verifiedAt,auth_version:1});
     assert.equal((await store.userById("login-user")).email_verified_at,verifiedAt);
     assert.equal((await store.session("session-token-hash-verified-login",verifiedAt)).email_verified_at,verifiedAt);
     assert.equal(await store.session("session-token-hash-legacy-login",verifiedAt),null,"pre-verification sessions must be revoked");

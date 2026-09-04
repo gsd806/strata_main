@@ -5,6 +5,7 @@ const { createHmac,timingSafeEqual } = require("node:crypto");
 const DEFAULT_PRODUCT_ID="pro_01m1ky8j916ybyacs836dxbz8x";
 const DEFAULT_PRICE_ID="pri_01m1kyc2zd313d7a3ssmg02424";
 const LIVE_API_BASE="https://api.paddle.com";
+const TRANSACTION_STATUSES=new Set(["draft","ready","billed","paid","completed","canceled","past_due"]);
 const secretsByConfig=new WeakMap();
 
 function clean(value) { return String(value||"").trim(); }
@@ -19,7 +20,7 @@ function getPaymentConfig(env=process.env) {
   const apiKey=clean(env.PADDLE_API_KEY);
   const webhookSecret=clean(env.PADDLE_WEBHOOK_SECRET);
   const requestedEnabled=clean(env.PADDLE_CHECKOUT_ENABLED).toLowerCase()==="true";
-  const validClientToken=clientToken.startsWith("live_")&&!/sandbox|sdbx/i.test(clientToken)&&!placeholderCredential(clientToken);
+  const validClientToken=clientToken.startsWith("live_")&&clientToken.length>=20&&!/sandbox|sdbx/i.test(clientToken)&&!placeholderCredential(clientToken);
   const validApiKey=apiKey.startsWith("pdl_live_apikey_")&&apiKey.length>=40&&!/sandbox|sdbx/i.test(apiKey)&&!placeholderCredential(apiKey);
   const validWebhookSecret=webhookSecret.startsWith("pdl_ntfset_")&&webhookSecret.length>=20&&!placeholderCredential(webhookSecret);
   const validCatalog=validId(productId,"pro")&&validId(priceId,"pri");
@@ -126,10 +127,60 @@ async function createPaddleTransaction(config,{userId}={},fetchImpl=globalThis.f
   let payload;
   try { payload=await response.json(); } catch { payload=null; }
   const transactionId=payload?.data?.id;
-  if (!/^txn_[a-z0-9]{20,}$/.test(String(transactionId||""))) {
+  const status=clean(payload?.data?.status);
+  if (!/^txn_[a-z0-9]{20,}$/.test(String(transactionId||""))||!new Set(["draft","ready"]).has(status)) {
     throw Object.assign(new Error("Checkout could not be prepared. Please try again."),{status:502,code:"PADDLE_INVALID_RESPONSE"});
   }
-  return {transactionId,status:payload.data.status||"draft"};
+  return {transactionId,status};
+}
+
+function validTransactionId(value) {
+  const id=clean(value);
+  return /^txn_[a-z0-9]{20,}$/.test(id)?id:"";
+}
+
+function paddleTransactionError(message,code) {
+  return Object.assign(new Error(message),{status:502,code});
+}
+
+async function paddleTransactionRequest(config,transactionId,{method="GET",body,fetchImpl=globalThis.fetch}={}) {
+  const secrets=secretsByConfig.get(config);
+  const id=validTransactionId(transactionId);
+  if (!secrets?.apiKey) throw paddleTransactionError("Paddle transaction status is temporarily unavailable.","PADDLE_RECONCILIATION_UNAVAILABLE");
+  if (!id) throw new TypeError("A valid Paddle transaction ID is required.");
+  const options={
+    method,
+    headers:{Authorization:`Bearer ${secrets.apiKey}`,"Paddle-Version":"1"},
+    signal:timeoutSignal(10_000)
+  };
+  if (body!==undefined) {
+    options.headers["Content-Type"]="application/json";
+    options.body=JSON.stringify(body);
+  }
+  let response;
+  try { response=await fetchImpl(`${secrets.apiBase}/transactions/${encodeURIComponent(id)}`,options); }
+  catch { throw paddleTransactionError("Paddle transaction status is temporarily unavailable.","PADDLE_RECONCILIATION_UNAVAILABLE"); }
+  if (!response?.ok) throw paddleTransactionError("Paddle transaction status could not be confirmed.","PADDLE_RECONCILIATION_FAILED");
+  let payload;
+  try { payload=await response.json(); } catch { payload=null; }
+  const returnedId=validTransactionId(payload?.data?.id);
+  const status=clean(payload?.data?.status);
+  if (returnedId!==id||!TRANSACTION_STATUSES.has(status)) {
+    throw paddleTransactionError("Paddle returned an invalid transaction status.","PADDLE_RECONCILIATION_INVALID_RESPONSE");
+  }
+  return {transactionId:returnedId,status,data:payload.data};
+}
+
+async function fetchPaddleTransaction(config,transactionId,fetchImpl=globalThis.fetch) {
+  return paddleTransactionRequest(config,transactionId,{fetchImpl});
+}
+
+async function cancelPaddleTransaction(config,transactionId,fetchImpl=globalThis.fetch) {
+  const transaction=await paddleTransactionRequest(config,transactionId,{method:"PATCH",body:{status:"canceled"},fetchImpl});
+  if (transaction.status!=="canceled") {
+    throw paddleTransactionError("Paddle did not cancel the abandoned checkout.","PADDLE_RECONCILIATION_FAILED");
+  }
+  return {transactionId:transaction.transactionId,status:transaction.status};
 }
 
 async function fetchPaddleIpv4Cidrs(config,fetchImpl=globalThis.fetch) {
@@ -203,6 +254,8 @@ module.exports={
   webhookSecretFor,
   verifyPaddleSignature,
   createPaddleTransaction,
+  fetchPaddleTransaction,
+  cancelPaddleTransaction,
   fetchPaddleIpv4Cidrs,
   isPaddleWebhookAddress,
   validateCompletedTransaction,

@@ -1,6 +1,6 @@
 "use strict";
 
-const BUILD="6.7.1";
+const BUILD="6.7.5";
 const CACHE_PREFIX="strata-static-";
 const STATIC_CACHE=`${CACHE_PREFIX}${BUILD}`;
 const PRECACHE_URLS=[
@@ -11,21 +11,22 @@ const PRECACHE_URLS=[
   "/terms.html",
   "/privacy.html",
   "/refunds.html",
-  "/install.css?v=6.7.1",
-  "/install.js?v=6.7.1",
-  "/site-info.css?v=6.7.1",
-  "/pricing.js?v=6.7.1",
-  "/pwa.js?v=6.7.1",
-  "/styles.css?v=6.7.1",
-  "/app.js?v=6.7.1",
-  "/account.css?v=6.7.1",
-  "/account.js?v=6.7.1",
-  "/planner.css?v=6.7.1",
-  "/planner.js?v=6.7.1",
-  "/discover.css?v=6.7.1",
-  "/discovery-core.js?v=6.7.1",
-  "/discover.js?v=6.7.1",
-  "/exercises.json?v=6.7.1",
+  "/install.css?v=6.7.5",
+  "/install.js?v=6.7.5",
+  "/site-info.css?v=6.7.5",
+  "/pricing.js?v=6.7.5",
+  "/pwa.js?v=6.7.5",
+  "/styles.css?v=6.7.5",
+  "/app.js?v=6.7.5",
+  "/account.css?v=6.7.5",
+  "/account.js?v=6.7.5",
+  "/account-recovery.js?v=6.7.5",
+  "/planner.css?v=6.7.5",
+  "/planner.js?v=6.7.5",
+  "/discover.css?v=6.7.5",
+  "/discovery-core.js?v=6.7.5",
+  "/discover.js?v=6.7.5",
+  "/exercises.json?v=6.7.5",
   "/manifest.webmanifest",
   "/icons/strata-icon.svg",
   "/icons/strata-192.png",
@@ -34,7 +35,7 @@ const PRECACHE_URLS=[
   "/icons/apple-touch-icon.png"
 ];
 const PUBLIC_ASSET_PATHS=new Set(PRECACHE_URLS.map((entry) => new URL(entry,self.location.origin).pathname));
-const PRIVATE_HTML_PATHS=new Set(["/","/index.html","/account.html","/verify-email","/verify-email.html","/planner.html","/discover.html"]);
+const PRIVATE_HTML_PATHS=new Set(["/","/index.html","/account.html","/verify-email","/verify-email.html","/forgot-password","/forgot-password.html","/reset-password","/reset-password.html","/delete-account","/delete-account.html","/planner.html","/discover.html"]);
 const PUBLIC_HTML_FALLBACKS=new Map([
   ["/install","/install.html"],
   ["/pricing","/pricing.html"],
