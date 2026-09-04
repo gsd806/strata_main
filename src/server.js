@@ -597,7 +597,7 @@ async function requireDiscoveryAccess(req,res) {
   const session=await requireSession(req,res);
   if (!session) return null;
   if (!await store.hasDiscoveryAccess(session.id)) {
-    json(res,402,{error:"Discovery purchase required.",code:"DISCOVERY_ACCESS_REQUIRED"});
+    json(res,402,{error:"Strata+ purchase required.",code:"DISCOVERY_ACCESS_REQUIRED"});
     return null;
   }
   return session;
@@ -1092,7 +1092,7 @@ async function reconcilePurchasesBeforeDeletion(userId) {
     let remote;
     try { remote=await fetchPaddleTransaction(PAYMENT_CONFIG,purchase.transaction_id); }
     catch {
-      throw accountActionError("STRATA could not safely confirm an older Discovery checkout. Nothing was deleted; please try again later.",503,"PURCHASE_RECONCILIATION_UNAVAILABLE");
+      throw accountActionError("STRATA could not safely confirm an older Strata+ checkout. Nothing was deleted; please try again later.",503,"PURCHASE_RECONCILIATION_UNAVAILABLE");
     }
     if (remote.status==="canceled") {
       await store.updatePurchaseStatus(purchase.transaction_id,"canceled",Date.now());
@@ -1101,7 +1101,7 @@ async function reconcilePurchasesBeforeDeletion(userId) {
     if (remote.status==="draft"||remote.status==="ready") {
       try { await cancelPaddleTransaction(PAYMENT_CONFIG,purchase.transaction_id); }
       catch {
-        throw accountActionError("STRATA could not safely close an abandoned Discovery checkout. Nothing was deleted; please try again later.",503,"PURCHASE_RECONCILIATION_UNAVAILABLE");
+        throw accountActionError("STRATA could not safely close an abandoned Strata+ checkout. Nothing was deleted; please try again later.",503,"PURCHASE_RECONCILIATION_UNAVAILABLE");
       }
       await store.updatePurchaseStatus(purchase.transaction_id,"canceled",Date.now());
       return;
@@ -1110,7 +1110,7 @@ async function reconcilePurchasesBeforeDeletion(userId) {
       const validation=validateCompletedTransaction(remote.data,PAYMENT_CONFIG);
       const claimedUser=cleanText(remote.data?.custom_data?.strata_user_id,100);
       if (!validation.ok||claimedUser!==purchase.user_id) {
-        throw accountActionError("STRATA could not safely validate a completed Discovery checkout. Nothing was deleted; please contact support.",503,"PURCHASE_RECONCILIATION_INVALID");
+        throw accountActionError("STRATA could not safely validate a completed Strata+ checkout. Nothing was deleted; please contact support.",503,"PURCHASE_RECONCILIATION_INVALID");
       }
       const completedAt=eventTime(remote.data.updated_at,Date.now());
       await store.completePurchase(purchase.transaction_id,{
@@ -1179,12 +1179,12 @@ async function deleteAccountWithToken(input) {
       throw accountActionError("The primary administrator account cannot be deleted while it owns site management.",409,"ADMIN_ACCOUNT_PROTECTED");
     }
     if (await reconcilePurchasesBeforeDeletion(action.user_id)>0) {
-      throw accountActionError("A Discovery payment is still being processed. Nothing was deleted; please try again later.",409,"PURCHASE_PENDING");
+      throw accountActionError("A Strata+ payment is still being processed. Nothing was deleted; please try again later.",409,"PURCHASE_PENDING");
     }
     const emailHash=verificationEmailHash(EMAIL_CONFIG,action.email);
     const result=await store.deleteAccount(hashToken(token),Date.now(),emailHash);
     if (result.status==="purchase_pending") {
-      throw accountActionError("A Discovery payment is still being processed. Nothing was deleted; please try again later.",409,"PURCHASE_PENDING");
+      throw accountActionError("A Strata+ payment is still being processed. Nothing was deleted; please try again later.",409,"PURCHASE_PENDING");
     }
     if (result.status!=="deleted") throw accountActionError("This deletion link is invalid or expired. Request a new one from your account.",400,"INVALID_DELETE_LINK");
     authAudit("account_deleted",{purpose:"account_delete",email:action.email});
@@ -2012,14 +2012,14 @@ async function handleApi(req,res,url) {
     if (await store.activeAccountDeletion(session.id,Date.now())) { json(res,409,{error:"Cancel the pending account-deletion request before starting checkout.",code:"ACCOUNT_DELETION_PENDING"}); return; }
     if (!rateAllowed(req,`checkout:${session.id}`,8)) { json(res,429,{error:"Too many checkout attempts. Try again later."}); return; }
     if (await store.hasDiscoveryAccess(session.id)) {
-      json(res,409,{error:"Discovery is already unlocked for this account.",code:"ALREADY_ENTITLED"}); return;
+      json(res,409,{error:"Strata+ is already unlocked for this account.",code:"ALREADY_ENTITLED"}); return;
     }
     const pending=await store.pendingPurchaseForUser(session.id,PAYMENT_CONFIG.priceId);
     if (pending) {
       json(res,200,{transactionId:pending.transaction_id,reused:true}); return;
     }
     if (await store.pendingPurchasesForUser(session.id)>0) {
-      json(res,409,{error:"A previous Discovery payment is still being confirmed. Please wait before starting another checkout.",code:"CHECKOUT_PENDING_CONFIRMATION"}); return;
+      json(res,409,{error:"A previous Strata+ payment is still being confirmed. Please wait before starting another checkout.",code:"CHECKOUT_PENDING_CONFIRMATION"}); return;
     }
     const created=await createPaddleTransaction(PAYMENT_CONFIG,{userId:session.id});
     const now=Date.now();
@@ -2139,7 +2139,7 @@ async function serveStatic(req,res,url) {
   if (requested==="index.html") {
     const user=activeSession?await userPayload(activeSession):null;
     const actions=user
-      ? `<a class="account-button discover-button" id="discoverButton" href="${user.discovery.active?"/discover.html":"/pricing"}">${user.discovery.active?"Discover":"Unlock Discovery"}</a>\n        <a class="account-button account-create" id="signupButton" href="/account.html?mode=signup" hidden>Sign up</a>\n        <a class="account-button account-link signed-in" id="accountButton" href="/account.html">${escapeHtml(user.name.split(/\s+/)[0])} profile</a>\n        <a class="session-button" id="planButton" href="/planner.html">Plan <span id="planCount">${user.planCount}</span></a>`
+      ? `<a class="account-button discover-button" id="discoverButton" href="${user.discovery.active?"/discover.html":"/pricing"}">${user.discovery.active?"Strata+":"Unlock Strata+"}</a>\n        <a class="account-button account-create" id="signupButton" href="/account.html?mode=signup" hidden>Sign up</a>\n        <a class="account-button account-link signed-in" id="accountButton" href="/account.html">${escapeHtml(user.name.split(/\s+/)[0])} profile</a>\n        <a class="session-button" id="planButton" href="/planner.html">Plan <span id="planCount">${user.planCount}</span></a>`
       : `<a class="account-button discover-button" id="discoverButton" href="/discover.html" hidden>Discover</a>\n        <a class="account-button account-create" id="signupButton" href="/account.html?mode=signup">Sign up</a>\n        <a class="account-button account-link" id="accountButton" href="/account.html?mode=login">Log in</a>\n        <a class="session-button" id="planButton" href="/account.html?mode=login&amp;next=planner">Plan <span id="planCount">0</span></a>`;
     body=Buffer.from(body.toString("utf8").replace(/<!-- ACCOUNT_ACTIONS_START -->[\s\S]*?<!-- ACCOUNT_ACTIONS_END -->/,`<!-- ACCOUNT_ACTIONS_START -->\n        ${actions}\n        <!-- ACCOUNT_ACTIONS_END -->`));
   }

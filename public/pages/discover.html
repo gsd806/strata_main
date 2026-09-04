@@ -4,25 +4,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#10110f" />
-    <meta name="description" content="Your private STRATA exercise discovery, comparison, evidence, and personalization workspace." />
+    <meta name="description" content="Your private Strata+ exercise comparison, evidence, and personalization workspace." />
     <meta name="application-name" content="STRATA" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="STRATA" />
-    <title>Discovery Studio — STRATA</title>
+    <title>Strata+ Studio — STRATA</title>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icons/strata-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="discover.css?v=6.8.0" />
+    <link rel="stylesheet" href="discover.css?v=6.8.1" />
   </head>
   <body>
-    <a class="skip-link" href="#exerciseExplorer">Skip to exercise discovery</a>
+    <a class="skip-link" href="#exerciseExplorer">Skip to exercise explorer</a>
     <header class="studio-header">
       <a class="brand" href="/" aria-label="STRATA home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>STRATA</span></a>
-      <nav class="studio-nav" aria-label="Primary navigation"><a class="active" href="/discover.html" aria-current="page">Discover</a><a href="/planner.html">Plan week</a><a href="/">Index</a><a href="/install.html">Install</a></nav>
+      <nav class="studio-nav" aria-label="Primary navigation"><a class="active" href="/discover.html" aria-current="page">Strata+</a><a href="/planner.html">Plan week</a><a href="/">Index</a><a href="/install.html">Install</a></nav>
       <div class="studio-user"><span id="userName">Account</span><button id="logoutButton" type="button">Sign out</button></div>
     </header>
 
@@ -31,12 +31,12 @@
         <div class="hero-orbit" aria-hidden="true"></div>
         <div class="studio-container hero-layout">
           <div>
-            <p class="eyebrow"><span></span> Private discovery studio</p>
+            <p class="eyebrow"><span></span> Private Strata+ studio</p>
             <h1>CHOOSE BETTER.<br /><em>KNOW WHY.</em></h1>
             <p>Compare movements, audit every FitScore, find close alternatives, and rank the library around the equipment and constraints that actually apply to you.</p>
             <div class="hero-actions"><a class="button button-accent" href="#recommendations">Best for you <span>↘</span></a><a class="text-link" href="#methodology">Audit the method →</a></div>
           </div>
-          <div class="hero-stats" aria-label="Discovery workspace statistics"><div><strong id="catalogTotal">160</strong><span>Exercises</span></div><div><strong>2–4</strong><span>Compare</span></div><div><strong>5</strong><span>Score factors</span></div></div>
+          <div class="hero-stats" aria-label="Strata+ workspace statistics"><div><strong id="catalogTotal">160</strong><span>Exercises</span></div><div><strong>2–4</strong><span>Compare</span></div><div><strong>5</strong><span>Score factors</span></div></div>
         </div>
       </section>
 
@@ -79,8 +79,8 @@
 
       <section class="explorer-section" id="exerciseExplorer" aria-labelledby="explorerTitle" tabindex="-1">
         <div class="studio-container">
-          <div class="section-heading"><div><p class="kicker">04 / Search and discovery</p><h2 id="explorerTitle">EXPLORE EVERY <em>TRADE-OFF.</em></h2></div><p>Search by exercise, muscle, equipment, pattern, or difficulty. Select up to four movements for a deeper comparison.</p></div>
-          <div class="collection-row" role="group" aria-label="Quick discovery collections"><button data-collection="all" class="active" type="button" aria-pressed="true">All exercises</button><button data-collection="top-chest" type="button" aria-pressed="false">Highest-rated chest</button><button data-collection="dumbbells" type="button" aria-pressed="false">Best with dumbbells</button><button data-collection="bodyweight" type="button" aria-pressed="false">Bodyweight only</button><button data-collection="beginner" type="button" aria-pressed="false">Beginner-friendly</button><button data-collection="community" type="button" aria-pressed="false">Community rated</button></div>
+          <div class="section-heading"><div><p class="kicker">04 / Search and explore</p><h2 id="explorerTitle">EXPLORE EVERY <em>TRADE-OFF.</em></h2></div><p>Search by exercise, muscle, equipment, pattern, or difficulty. Select up to four movements for a deeper comparison.</p></div>
+          <div class="collection-row" role="group" aria-label="Quick exercise collections"><button data-collection="all" class="active" type="button" aria-pressed="true">All exercises</button><button data-collection="top-chest" type="button" aria-pressed="false">Highest-rated chest</button><button data-collection="dumbbells" type="button" aria-pressed="false">Best with dumbbells</button><button data-collection="bodyweight" type="button" aria-pressed="false">Bodyweight only</button><button data-collection="beginner" type="button" aria-pressed="false">Beginner-friendly</button><button data-collection="community" type="button" aria-pressed="false">Community rated</button></div>
           <div class="explorer-toolbar" role="search" aria-label="Filter exercises">
             <label class="search-control"><span aria-hidden="true">⌕</span><span class="sr-only">Search exercises</span><input id="searchInput" type="search" placeholder="Exercise, muscle, equipment, pattern…" autocomplete="off" /></label>
             <label><span class="sr-only">Muscle group</span><select id="groupFilter"><option value="all">All muscles</option></select></label>
@@ -89,9 +89,9 @@
             <label><span class="sr-only">Difficulty</span><select id="levelFilter"><option value="all">All difficulty</option><option>Beginner</option><option>Intermediate</option><option>Advanced</option></select></label>
             <label><span class="sr-only">Sort exercises</span><select id="sortSelect"><option value="personal">Personal match</option><option value="score">STRATA FitScore</option><option value="community">Community score</option><option value="practicality">Practicality</option><option value="difficulty">Difficulty</option></select></label>
           </div>
-          <div class="results-line"><p id="resultStatus" role="status" aria-live="polite" aria-atomic="true"><strong id="resultCount">0</strong> matching <span id="resultNoun">exercises</span></p><button class="plain-button" id="clearFilters" type="button">Reset discovery</button></div>
+          <div class="results-line"><p id="resultStatus" role="status" aria-live="polite" aria-atomic="true"><strong id="resultCount">0</strong> matching <span id="resultNoun">exercises</span></p><button class="plain-button" id="clearFilters" type="button">Reset search</button></div>
           <div class="exercise-grid" id="exerciseGrid"><div class="loading-card">Loading exercise intelligence…</div></div>
-          <div class="empty-state" id="emptyState" hidden><strong>No exercise matches every filter.</strong><p>Try clearing the search or one of the discovery filters.</p><button class="button button-dark" data-reset-filters type="button">Reset filters</button></div>
+          <div class="empty-state" id="emptyState" hidden><strong>No exercise matches every filter.</strong><p>Try clearing the search or one of the exercise filters.</p><button class="button button-dark" data-reset-filters type="button">Reset filters</button></div>
         </div>
       </section>
 
@@ -103,7 +103,7 @@
       </section>
     </main>
 
-    <footer class="build-footer">STRATA · Build 6.8.0 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
+    <footer class="build-footer">STRATA · Build 6.8.1 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
 
     <aside class="compare-tray" id="compareTray" hidden aria-label="Exercise comparison tray">
       <div><span>EXERCISE BATTLE</span><p id="compareNames">Choose 2–4 exercises</p></div>
@@ -112,8 +112,8 @@
 
     <dialog class="detail-dialog" id="detailDialog" aria-labelledby="detailTitle"><div id="detailContent"></div></dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=6.8.0"></script>
-    <script src="discovery-core.js?v=6.8.0"></script>
-    <script src="discover.js?v=6.8.0"></script>
+    <script src="/pwa.js?v=6.8.1"></script>
+    <script src="discovery-core.js?v=6.8.1"></script>
+    <script src="discover.js?v=6.8.1"></script>
   </body>
 </html>

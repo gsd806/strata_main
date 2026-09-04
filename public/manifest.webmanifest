@@ -2,7 +2,7 @@
   "id": "/",
   "name": "STRATA Fitness",
   "short_name": "STRATA",
-  "description": "Exercise rankings, personalized discovery, and a weekly workout planner that stays synced to your account.",
+  "description": "Exercise rankings, personalized Strata+ recommendations, and a weekly workout planner that stays synced to your account.",
   "lang": "en",
   "start_url": "/",
   "scope": "/",
@@ -34,9 +34,9 @@
   ],
   "shortcuts": [
     {
-      "name": "Discovery Studio",
-      "short_name": "Discover",
-      "description": "Open your personalized exercise discovery studio.",
+      "name": "Strata+ Studio",
+      "short_name": "Strata+",
+      "description": "Open your personalized Strata+ exercise studio.",
       "url": "/discover.html",
       "icons": [{"src": "/icons/strata-192.png", "sizes": "192x192", "type": "image/png"}]
     },

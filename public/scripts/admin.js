@@ -297,7 +297,7 @@ function renderUsers(items,total) {
     primary.append(create("span","",userId(user)||"Account"),create("strong","",userName(user)),create("p","",userEmail(user)));
     const meta=create("div","record-meta");
     appendBadge(meta,userVerified(user)?"Verified":"Unverified",userVerified(user)?"good":"warn");
-    appendBadge(meta,discoveryActive(user)?"Discovery":"Free",discoveryActive(user)?"good":"");
+    appendBadge(meta,discoveryActive(user)?"Strata+":"Free",discoveryActive(user)?"good":"");
     if(deletionPending(user))appendBadge(meta,"Deletion pending","bad");
     if(userSuspended(user))appendBadge(meta,"Suspended","bad");
     primary.append(meta);
@@ -377,7 +377,7 @@ function renderUserDetails(user) {
   addFact(facts,"Joined",formatDate(firstValue(user,["createdAt","created_at","joinedAt"])));
   addFact(facts,"Email status",userVerified(user)?"Verified":"Unverified");
   addFact(facts,"Account status",userSuspended(user)?"Suspended":"Active");
-  addFact(facts,"Discovery",discoveryActive(user)?"Unlocked":"Not unlocked");
+  addFact(facts,"Strata+",discoveryActive(user)?"Unlocked":"Not unlocked");
   addFact(facts,"Purchase records",`${formatCount(firstValue(user?.discovery||{},["purchaseCount","purchase_count"],0))} total · ${formatCount(firstValue(user?.discovery||{},["pendingPurchaseCount","pending_purchase_count"],0))} pending`);
   addFact(facts,"Latest purchase activity",formatDate(firstValue(user?.discovery||{},["latestPurchaseAt","latest_purchase_at"],null)));
   addFact(facts,"Weekly plan",planSummary(user));
@@ -410,7 +410,7 @@ const actionDetails={
   "cancel-deletion":{title:"CANCEL DELETION?",phrase:"CANCEL",description:"The pending deletion request will be revoked and its emailed link will stop working."},
   "revoke-sessions":{title:"REVOKE ALL SESSIONS?",phrase:"REVOKE",description:"Every active session for this account will be signed out. The account owner can sign in again with the current password."},
   suspend:{title:"SUSPEND ACCOUNT?",phrase:"SUSPEND",description:"The account will lose signed-in access until an administrator restores it. Existing payment records must remain intact."},
-  restore:{title:"RESTORE ACCOUNT?",phrase:"RESTORE",description:"Signed-in access will be restored. This does not create or change Discovery payment entitlement."}
+  restore:{title:"RESTORE ACCOUNT?",phrase:"RESTORE",description:"Signed-in access will be restored. This does not create or change Strata+ payment entitlement."}
 };
 
 function openActionConfirmation(action,trigger) {

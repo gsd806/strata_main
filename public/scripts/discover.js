@@ -1,7 +1,7 @@
 "use strict";
 
 const Core=globalThis.StrataDiscovery;
-if(!Core)throw new Error("STRATA discovery engine did not load.");
+if(!Core)throw new Error("The Strata+ engine did not load.");
 const GROUP_LABELS={chest:"Chest",back:"Back",shoulders:"Shoulders",arms:"Arms",legs:"Legs",glutes:"Glutes",calves:"Calves",core:"Core"};
 const PREFERENCE_OPTIONS={stable:"Stable setup","long-range":"Long-range friendly","simple-setup":"Simple setup",compound:"Compound lifts",isolation:"Isolation work"};
 const LIMITATION_OPTIONS={"no-overhead":"Avoid overhead positions","no-deep-knee":"Avoid deep knee flexion","no-unsupported-hinge":"Avoid unsupported hinges","no-floor":"Avoid floor exercises","no-unilateral":"Avoid unilateral work"};
@@ -209,7 +209,7 @@ let toastTimer;function showToast(message){const toast=el("toast");toast.textCon
 
 function cardLines(kind,id){
   if(kind==="exercise"){
-    const exercise=exerciseById(id),personal=personalResult(exercise);return {eyebrow:`${GROUP_LABELS[exercise.group]||titleCase(exercise.group)} / ${exercise.sub}`,title:exercise.name,score:`${exercise.score}`,scoreLabel:"OFFICIAL FITSCORE",lines:[personalLabel(personal,{long:true}),`${exercise.equipment} · ${exercise.pattern}`,exercise.why],footer:"Evidence-aware exercise discovery"};
+    const exercise=exerciseById(id),personal=personalResult(exercise);return {eyebrow:`${GROUP_LABELS[exercise.group]||titleCase(exercise.group)} / ${exercise.sub}`,title:exercise.name,score:`${exercise.score}`,scoreLabel:"OFFICIAL FITSCORE",lines:[personalLabel(personal,{long:true}),`${exercise.equipment} · ${exercise.pattern}`,exercise.why],footer:"Evidence-aware Strata+ comparison"};
   }
   if(kind==="comparison"){
     const exercises=state.compare.map(exerciseById).filter(Boolean),verdict=comparisonWinner(exercises);return {eyebrow:"EXERCISE BATTLE",title:exercises.map((exercise)=>exercise.name).join(" vs. "),score:verdict.winner?String(verdict.winner.score):"—",scoreLabel:verdict.winner?"LEADING FITSCORE":"NO UNIVERSAL WINNER",lines:exercises.map((exercise)=>`${exercise.score} FitScore · ${personalLabel(personalResult(exercise))} — ${exercise.name}`),footer:"Compare the trade-offs, not just the score"};

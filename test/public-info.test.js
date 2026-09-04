@@ -31,9 +31,10 @@ test("homepage publishes the founder story without exposing a residential addres
   assert.doesNotMatch(copy,/Zahkir|Malad|street 13|st\.?\s*13/i);
 });
 
-test("published Discovery price and refund promise are exact and consistent",()=>{
-  assert.equal(BUILD,"6.8.0");
+test("published Strata+ price and refund promise are exact and consistent",()=>{
+  assert.equal(BUILD,"6.8.1");
   const pricingHtml=read("pricing.html"),pricing=text("pricing.html"),refunds=text("refunds.html"),terms=text("terms.html");
+  assert.match(pricing,/Strata\+/);
   assert.match(pricing,/\$5\.99 USD/i);
   assert.match(pricing,/one[- ]time/i);
   assert.match(pricing,/no recurring subscription/i);
@@ -43,11 +44,22 @@ test("published Discovery price and refund promise are exact and consistent",()=
   assert.match(pricingHtml,new RegExp(`src="/pricing\\.js\\?v=${BUILD.replace(/\./g,"\\.")}"`));
   assert.match(pricing,/Paddle is the merchant of record/i);
   assert.match(pricing,/unlocks after STRATA securely confirms the completed transaction/i);
-  assert.match(refunds,/14 calendar days after the (?:date of your )?(?:paid )?Discovery purchase|14 calendar days after the purchase date/i);
+  assert.match(refunds,/14 calendar days after the (?:date of your )?(?:paid )?Strata\+ purchase|14 calendar days after the purchase date/i);
   assert.match(refunds,/original payment method/i);
   assert.match(terms,/\$5\.99 USD/i);
   assert.match(terms,/not a subscription/i);
   assert.match(terms,/Paddle acts as merchant of record/i);
+});
+
+test("customer-facing product branding is Strata+ while compatibility identifiers stay stable",()=>{
+  const pages=["index.html","pricing.html","account.html","discover.html","planner.html","contact.html","terms.html","privacy.html","refunds.html","delete-account.html","admin.html"];
+  const visibleCopy=pages.map(text).join(" ");
+  const manifest=fs.readFileSync(path.join(PUBLIC_ROOT,"manifest.webmanifest"),"utf8");
+  assert.match(visibleCopy,/Strata\+/);
+  assert.doesNotMatch(visibleCopy,/\bDiscovery\b/);
+  assert.match(manifest,/"name": "Strata\+ Studio"/);
+  assert.match(read("pricing.html"),/id="buyDiscovery"/);
+  assert.match(read("discover.html"),/href="\/discover\.html"/);
 });
 
 test("contact and policy pages publish the official support address and cross-links",()=>{
@@ -68,5 +80,5 @@ test("public copy describes active secure checkout without overpromising access"
   assert.doesNotMatch(publicCopy,/lifetime access|permanent access/i);
   assert.doesNotMatch(publicCopy,/prelaunch|until checkout is activated|when paid checkout launches|when purchasing is available/i);
   assert.match(text("privacy.html"),/Paddle handles checkout and payment information/i);
-  assert.match(text("refunds.html"),/Discovery access for the refunded account ends when the refund is processed/i);
+  assert.match(text("refunds.html"),/Strata\+ access for the refunded account ends when the refund is processed/i);
 });

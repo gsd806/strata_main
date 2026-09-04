@@ -72,8 +72,8 @@
     if(!config.enabled)throw new Error("Secure checkout is temporarily unavailable.");
     if(!config.clientToken.startsWith("live_"))throw new Error("Live checkout is not configured correctly.");
     if(config.environment!=="live"&&config.environment!=="production")throw new Error("Checkout is not configured for the live Paddle environment.");
-    if(config.productId!==EXPECTED_PRODUCT_ID)throw new Error("The configured Discovery product does not match this release.");
-    if(config.priceId!==EXPECTED_PRICE_ID)throw new Error("The configured Discovery price does not match $5.99 live access.");
+    if(config.productId!==EXPECTED_PRODUCT_ID)throw new Error("The configured Strata+ product does not match this release.");
+    if(config.priceId!==EXPECTED_PRICE_ID)throw new Error("The configured Strata+ price does not match $5.99 live access.");
   }
 
   function initializePaddle(){
@@ -108,10 +108,10 @@
 
     if(state.busy&&state.awaitingAccess){setStatus("Your checkout completed. STRATA is securely confirming access…","warn");return;}
     if(state.busy){setStatus("Checking your account and secure checkout…");return;}
-    if(active){setStatus("Discovery is unlocked on this account.","good");return;}
+    if(active){setStatus("Strata+ is unlocked on this account.","good");return;}
     if(!signedIn){
       const message=pageReason==="access"||pageReason==="discovery-required"
-        ? "Sign in or create an account, then purchase Discovery to continue."
+        ? "Sign in or create an account, then purchase Strata+ to continue."
         : "Create an account or sign in before purchasing so access can follow you across devices.";
       setStatus(message);
       return;
@@ -120,13 +120,13 @@
     if(state.configError){setStatus(state.configError,"error");return;}
     if(state.actionError){setStatus(state.actionError,"error");return;}
     if(state.awaitingAccess){setStatus("Your checkout completed. STRATA is securely confirming access…","warn");return;}
-    if(state.checkoutOpen){setStatus("Secure checkout is open. Complete it with Paddle to unlock Discovery.");return;}
+    if(state.checkoutOpen){setStatus("Secure checkout is open. Complete it with Paddle to unlock Strata+.");return;}
     if(pageReason==="access-revoked"){
-      setStatus("Discovery access is no longer active, usually because its purchase was refunded or reversed. You may purchase again or contact STRATA if this is unexpected.","warn");
+      setStatus("Strata+ access is no longer active, usually because its purchase was refunded or reversed. You may purchase again or contact STRATA if this is unexpected.","warn");
       return;
     }
     if(pageReason==="access"||pageReason==="discovery-required"){
-      setStatus("Discovery requires a $5.99 USD one-time purchase on this account.");
+      setStatus("Strata+ requires a $5.99 USD one-time purchase on this account.");
       return;
     }
     setStatus("Signed in and ready for secure Paddle checkout.");
@@ -244,7 +244,7 @@
       await readAccount();
       if(discoveryIsActive(state.user)){
         state.awaitingAccess=false;
-        setStatus("Discovery is unlocked on this account.","good",{focus});
+        setStatus("Strata+ is unlocked on this account.","good",{focus});
       }else{
         state.awaitingAccess=true;
         setStatus("Access is still being confirmed. Wait a moment, then check again. You will not be charged twice.","warn",{focus});
@@ -283,12 +283,12 @@
     state.actionError="";
     state.awaitingAccess=true;
     renderPurchaseState();
-    setStatus("Payment completed. STRATA is securely confirming your Discovery access…","warn",{focus:true});
+    setStatus("Payment completed. STRATA is securely confirming your Strata+ access…","warn",{focus:true});
     const unlocked=await pollForAccess();
     state.busy=false;
     state.awaitingAccess=!unlocked;
     renderPurchaseState();
-    if(unlocked)setStatus("Purchase confirmed. Discovery is now unlocked on this account.","good",{focus:true});
+    if(unlocked)setStatus("Purchase confirmed. Strata+ is now unlocked on this account.","good",{focus:true});
     else setStatus("Paddle completed the checkout, but access is still processing. Wait a moment, then choose Check access. Do not purchase again.","warn",{focus:true});
   }
 

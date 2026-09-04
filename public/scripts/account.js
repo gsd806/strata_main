@@ -158,12 +158,12 @@ function showSignedIn(user,csrfToken=""){
   const discoveryPending=Number(user?.discovery?.pendingPurchaseCount||0)>0;
   const discoveryAction=el("accountDiscoveryAction");
   discoveryAction.href=discoveryActive?"/discover.html":"/pricing";
-  discoveryAction.textContent=discoveryActive?"Open Discovery studio →":discoveryPending?"Check Discovery purchase →":"Unlock Discovery →";
+  discoveryAction.textContent=discoveryActive?"Open Strata+ studio →":discoveryPending?"Check Strata+ purchase →":"Unlock Strata+ →";
   el("accountDiscoveryStatus").textContent=discoveryActive
-    ?"Discovery is unlocked on this account."
+    ?"Strata+ is unlocked on this account."
     :discoveryPending
-      ?"A Discovery checkout is pending. Open Pricing to finish checkout or check confirmation."
-      :"The exercise index and weekly planner are free. Discovery is available as a $5.99 USD one-time purchase.";
+      ?"A Strata+ checkout is pending. Open Pricing to finish checkout or check confirmation."
+      :"The exercise index and weekly planner are free. Strata+ is available as a $5.99 USD one-time purchase.";
   const deletionPending=user?.accountDeletion?.pending===true;
   el("accountDeleteCancel").hidden=!deletionPending;
   if(deletionPending)showSecurityStatus("An account-deletion confirmation is pending. You can use the emailed link or cancel the request here.");

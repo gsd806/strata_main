@@ -65,7 +65,7 @@ test.before(startServer);
 test.after(stopServer);
 
 test("serves rankings and gates private account pages",async()=>{
-  assert.equal(BUILD,"6.8.0");
+  assert.equal(BUILD,"6.8.1");
   const home=await request("/");
   assert.equal(home.response.status,200);
   assert.equal(home.response.headers.get("cache-control"),"private, no-store");
@@ -164,7 +164,7 @@ test("creates an account with a private default plan",async()=>{
   assert.equal(signedInHome.response.headers.get("cache-control"),"private, no-store");
   assert.match(signedInHome.data,/Test profile/);
   assert.match(signedInHome.data,/id="signupButton"[^>]* hidden/);
-  assert.match(signedInHome.data,/id="discoverButton"[^>]*href="\/pricing"[^>]*>Unlock Discovery/);
+  assert.match(signedInHome.data,/id="discoverButton"[^>]*href="\/pricing"[^>]*>Unlock Strata\+/);
 
   const plannerPage=await request("/planner.html",{headers:{Cookie:signup.cookie}});
   assert.equal(plannerPage.response.status,200);
@@ -302,7 +302,7 @@ test("native account forms create and restore an account without modal JavaScrip
   assert.equal(restored.data.user.email,email);
 });
 
-test("keeps unpaid accounts out of Discovery while the free planner remains available",async()=>{
+test("keeps unpaid accounts out of Strata+ while the free planner remains available",async()=>{
   const signup=await request("/api/signup",{method:"POST",headers:{Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({name:"Discovery Tester",email:"discover@example.test",password:"discovery-safe-789"})});
   assert.equal(signup.response.status,201);
   assert.equal(signup.data.user.discovery.active,false);
