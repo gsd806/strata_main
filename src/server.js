@@ -16,6 +16,9 @@ const {
   maskEmail,
   verificationEmailHash,
   sendAccountActionEmail,
+  sendSupportAcknowledgment,
+  sendSupportNotification,
+  sendSupportResponse,
   sendVerificationEmail,
   directSignupAllowed
 } = require("./email");
@@ -54,10 +57,16 @@ const ACCOUNT_ACTION_MS = 30 * 60 * 1000;
 const ACCOUNT_ACTION_EMAILS_PER_HOUR = 5;
 const ACCOUNT_ACTION_SEND_WINDOW_MS = 60 * 60 * 1000;
 const ACCOUNT_ACTION_RETENTION_MS = 24 * 60 * 60 * 1000;
+const SUPPORT_REQUEST_WINDOW_MS = 60 * 60 * 1000;
+const SUPPORT_REQUEST_RETENTION_MS = 24 * 60 * 60 * 1000;
+const SUPPORT_REQUESTS_PER_IP = 5;
+const SUPPORT_REQUESTS_PER_EMAIL = 4;
+const SUPPORT_REQUESTS_GLOBAL = 100;
 const ABANDONED_CHECKOUT_MS = 30 * 60 * 1000;
 const MAX_DELETION_RECONCILIATIONS = 8;
 const MAX_BODY_BYTES = 64 * 1024;
 const MAX_WEBHOOK_BYTES = 256 * 1024;
+const ADMIN_ELEVATION_MS = 30 * 60 * 1000;
 const MIN_GZIP_BYTES = 1024;
 const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 const EXERCISES = JSON.parse(readFileSync(join(PUBLIC_ROOT,"data","exercises.json"),"utf8"));
@@ -65,6 +74,7 @@ const DISCOVERY_DATA = JSON.parse(readFileSync(join(__dirname,"data","discovery-
 const BUILD_NUMBER = JSON.parse(readFileSync(join(PROJECT_ROOT,"package.json"),"utf8")).version;
 const PAYMENT_CONFIG = getPaymentConfig(process.env);
 const EMAIL_CONFIG = getEmailVerificationConfig(process.env);
+const ADMIN_EMAIL = configuredAdminEmail(process.env.ADMIN_EMAIL);
 const ENFORCE_PADDLE_IPS=String(process.env.PADDLE_ENFORCE_IP_ALLOWLIST||"").toLowerCase()==="true";
 const PADDLE_IP_CACHE_MS=6*60*60*1000;
 const EXERCISE_IDS = new Set(EXERCISES.map((exercise) => exercise.id));
@@ -78,6 +88,7 @@ const STATIC_FILES = new Map([
   ["forgot-password.html","pages/forgot-password.html"],
   ["reset-password.html","pages/reset-password.html"],
   ["delete-account.html","pages/delete-account.html"],
+  ["admin.html","pages/admin.html"],
   ["planner.html","pages/planner.html"],
   ["discover.html","pages/discover.html"],
   ["install.html","pages/install.html"],
@@ -93,6 +104,7 @@ const STATIC_FILES = new Map([
   ["discover.css","styles/discover.css"],
   ["install.css","styles/install.css"],
   ["site-info.css","styles/site-info.css"],
+  ["admin.css","styles/admin.css"],
   ["app.js","scripts/app.js"],
   ["account.js","scripts/account.js"],
   ["verify-email.js","scripts/verify-email.js"],
@@ -102,6 +114,8 @@ const STATIC_FILES = new Map([
   ["discover.js","scripts/discover.js"],
   ["install.js","scripts/install.js"],
   ["pricing.js","scripts/pricing.js"],
+  ["contact.js","scripts/contact.js"],
+  ["admin.js","scripts/admin.js"],
   ["pwa.js","scripts/pwa.js"],
   ["service-worker.js","service-worker.js"],
   ["manifest.webmanifest","manifest.webmanifest"],
@@ -122,10 +136,11 @@ const PAGE_ALIASES = new Map([
   ["/verify-email","verify-email.html"],
   ["/forgot-password","forgot-password.html"],
   ["/reset-password","reset-password.html"],
-  ["/delete-account","delete-account.html"]
+  ["/delete-account","delete-account.html"],
+  ["/admin","admin.html"]
 ]);
 const PROTECTED_HTML = new Set(["planner.html","discover.html"]);
-const PRIVATE_HTML = new Set(["index.html","account.html","verify-email.html","forgot-password.html","reset-password.html","delete-account.html",...PROTECTED_HTML]);
+const PRIVATE_HTML = new Set(["index.html","account.html","verify-email.html","forgot-password.html","reset-password.html","delete-account.html","admin.html",...PROTECTED_HTML]);
 const MIME = {
   ".html":"text/html; charset=utf-8",
   ".css":"text/css; charset=utf-8",
@@ -149,6 +164,11 @@ function defaultPreferences() {
 function cleanText(value,max) { return String(value ?? "").trim().slice(0,max); }
 function normalizeEmail(value) { return cleanText(value,254).toLowerCase(); }
 function validEmail(email) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email); }
+function configuredAdminEmail(value) {
+  const email=normalizeEmail(value);
+  if (!email||email!==String(value||"").trim().toLowerCase()||!validEmail(email)||email.includes(",")||/<[^>]+>|replace|example\.(?:com|org|net)$/i.test(email)) return "";
+  return email;
+}
 function hashToken(token) { return createHash("sha256").update(token).digest("hex"); }
 function escapeHtml(value) { return String(value ?? "").replace(/[&<>'"]/g,(char) => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[char])); }
 
@@ -249,10 +269,11 @@ function planStats(plan) {
 }
 
 async function userPayload(session) {
-  const [plan,discovery,deletion]=await Promise.all([
+  const [plan,discovery,deletion,admin]=await Promise.all([
     planFor(session.id),
     store.discoveryAccessSummary(session.id),
-    store.activeAccountDeletion(session.id,Date.now())
+    store.activeAccountDeletion(session.id,Date.now()),
+    adminIdentity(session)
   ]);
   return {
     id:session.id,
@@ -261,6 +282,7 @@ async function userPayload(session) {
     createdAt:session.created_at,
     ...planStats(plan),
     discovery,
+    isAdmin:admin.active,
     accountDeletion:{pending:Boolean(deletion),expiresAt:deletion?Number(deletion.expires_at):null}
   };
 }
@@ -466,6 +488,99 @@ async function requireSession(req,res) {
   const session = await sessionFor(req);
   if (!session) { json(res,401,{error:"Sign in required."}); return null; }
   return session;
+}
+
+function adminPrincipalMatches(principal) {
+  return Boolean(
+    ADMIN_EMAIL&&principal&&
+    normalizeEmail(principal.configured_email)===ADMIN_EMAIL&&
+    normalizeEmail(principal.email)===ADMIN_EMAIL&&
+    Number(principal.email_verified_at)&&
+    !principal.suspended_at
+  );
+}
+
+async function adminIdentity(session,{allowBootstrap=false}={}) {
+  if (!ADMIN_EMAIL||!session||!Number(session.email_verified_at)||session.suspended_at) return {active:false,boundNow:false,principal:null};
+  let principal=await store.adminPrincipal();
+  let boundNow=false;
+  if (!principal&&allowBootstrap&&normalizeEmail(session.email)===ADMIN_EMAIL) {
+    const claimed=await store.claimAdminPrincipal(session.id,ADMIN_EMAIL,Date.now());
+    principal=claimed.principal;
+    boundNow=claimed.boundNow;
+  }
+  const active=adminPrincipalMatches(principal)&&principal.user_id===session.id;
+  return {active,boundNow,principal};
+}
+
+async function maybeClaimAdminForLogin(user) {
+  if (!ADMIN_EMAIL||!user||normalizeEmail(user.email)!==ADMIN_EMAIL||!Number(user.email_verified_at)||user.suspended_at) return user;
+  await store.claimAdminPrincipal(user.id,ADMIN_EMAIL,Date.now());
+  return await store.userById(user.id);
+}
+
+async function requireAdmin(req,res,{elevated=true,allowBootstrap=false}={}) {
+  const session=await requireSession(req,res);
+  if (!session) return null;
+  const identity=await adminIdentity(session,{allowBootstrap});
+  if (identity.boundNow) {
+    json(res,409,{error:"Admin ownership is secured. Sign in again to continue.",code:"ADMIN_RELOGIN_REQUIRED"},{"Set-Cookie":sessionCookie("",0)});
+    return null;
+  }
+  if (!identity.active) {
+    json(res,403,{error:"Administrator access required.",code:"ADMIN_REQUIRED"});
+    return null;
+  }
+  if (elevated&&!await store.adminElevation(session.token_hash,Date.now())) {
+    json(res,428,{error:"Confirm your password to continue in Admin.",code:"ADMIN_ELEVATION_REQUIRED"});
+    return null;
+  }
+  return session;
+}
+
+function requireAdminMutation(req,res,session) {
+  if (!trustedAuthOrigin(req)) {
+    json(res,403,{error:"Admin security check failed. Refresh and try again.",code:"ADMIN_ORIGIN_REQUIRED"});
+    return false;
+  }
+  if (!validCsrf(req,session)) {
+    json(res,403,{error:"Security check failed. Refresh and try again.",code:"INVALID_CSRF"});
+    return false;
+  }
+  if (!String(req.headers["content-type"]||"").toLowerCase().startsWith("application/json")) {
+    json(res,415,{error:"Admin requests must use JSON.",code:"JSON_REQUIRED"});
+    return false;
+  }
+  return true;
+}
+
+function adminReason(value) {
+  const reason=cleanText(value,200);
+  if (reason.length<4) throw Object.assign(new Error("Add a short reason for this admin action."),{status:400,code:"ADMIN_REASON_REQUIRED"});
+  if (sensitiveAdminText(reason)) throw Object.assign(new Error("Do not put passwords, codes, API keys, tokens, or private action links in an admin reason."),{status:400,code:"ADMIN_SENSITIVE_REASON"});
+  return reason;
+}
+
+function sensitiveAdminText(value) {
+  const text=String(value||"");
+  return /\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/i.test(text)
+    || /\b(?:password|passcode|secret|token|api[\s_-]*key)\s*[:=]\s*\S{6,}/i.test(text)
+    || /\b(?:verification|security|recovery)\s+code\s*[:=]?\s*\d{6}\b/i.test(text)
+    || /\b(?:re_|pdl_(?:live|sdbx|ntfset)_|live_)[A-Za-z0-9_-]{12,}/i.test(text)
+    || /(?:[#?&](?:token|code)=)[A-Za-z0-9_-]{6,}/i.test(text);
+}
+
+function cleanAdminTarget(value) {
+  const id=cleanText(value,100);
+  return /^[A-Za-z0-9_-]{8,100}$/.test(id)?id:"";
+}
+
+async function recordAdminAudit(actorUserId,targetUserId,action,reason,result="success") {
+  await store.recordAdminAudit({id:randomUUID(),actorUserId,targetUserId,action,reason,result,createdAt:Date.now()});
+}
+
+function adminAuditEvent(actorUserId,targetUserId,action,reason,result="success") {
+  return {id:randomUUID(),actorUserId,targetUserId,action,reason,result,createdAt:Date.now()};
 }
 
 function safeTokenEqual(actual,expected) {
@@ -846,7 +961,13 @@ async function authenticateAccount(input) {
   const email=normalizeEmail(input.email),password=String(input.password||"");
   try {
     const user=await store.userByEmail(email);
-    if (!user || !await passwordMatches(password,user)) throw Object.assign(new Error("Email or password is incorrect."),{status:401});
+    if (!user) {
+      await passwordHash(password,Buffer.alloc(16).toString("base64"));
+      throw Object.assign(new Error("Email or password is incorrect."),{status:401});
+    }
+    const matches=await passwordMatches(password,user);
+    if (!matches) throw Object.assign(new Error("Email or password is incorrect."),{status:401});
+    if (user.suspended_at) throw Object.assign(new Error("This account is temporarily paused. Contact STRATA support for help."),{status:403,code:"ACCOUNT_SUSPENDED"});
     if (EMAIL_CONFIG.requestedEnabled&&!Number(user.email_verified_at)) {
       ensureVerificationDeliveryConfigured();
       return await createVerificationChallenge({
@@ -856,7 +977,8 @@ async function authenticateAccount(input) {
         name:user.name
       });
     }
-    return {session:await createSession(user.id,user.auth_version),user};
+    const currentUser=await maybeClaimAdminForLogin(user);
+    return {session:await createSession(currentUser.id,currentUser.auth_version),user:currentUser};
   } catch(error) {
     if (error.status) throw error;
     throw accountStorageUnavailable(error);
@@ -949,6 +1071,10 @@ async function requestForgotPassword(input) {
 async function requestSignedInAccountAction(session,purpose) {
   ensureAccountEmailConfigured();
   try {
+    const principal=purpose==="account_delete"?await store.adminPrincipal():null;
+    if (principal?.user_id===session.id) {
+      throw accountActionError("The primary administrator account cannot be deleted while it owns site management.",409,"ADMIN_ACCOUNT_PROTECTED");
+    }
     const reservation=await claimAccountActionSend(session.email,purpose);
     if (!reservation.claimed) throw accountActionError("Too many account emails were requested. Please wait and try again.",429,"ACCOUNT_EMAIL_LIMIT");
     return await createAndDeliverAccountAction(session,purpose);
@@ -1048,6 +1174,10 @@ async function deleteAccountWithToken(input) {
     if (!action||action.purpose!=="account_delete"||action.delivery_state!=="sent"||action.consumed_at!=null||Number(action.expires_at)<=Date.now()) {
       throw accountActionError("This deletion link is invalid or expired. Request a new one from your account.",400,"INVALID_DELETE_LINK");
     }
+    const principal=await store.adminPrincipal();
+    if (principal?.user_id===action.user_id) {
+      throw accountActionError("The primary administrator account cannot be deleted while it owns site management.",409,"ADMIN_ACCOUNT_PROTECTED");
+    }
     if (await reconcilePurchasesBeforeDeletion(action.user_id)>0) {
       throw accountActionError("A Discovery payment is still being processed. Nothing was deleted; please try again later.",409,"PURCHASE_PENDING");
     }
@@ -1067,6 +1197,7 @@ async function deleteAccountWithToken(input) {
 
 function safeAccountNext(value) {
   const next=String(value||"");
+  if (next==="admin"||next==="/admin"||next==="/admin.html") return "/admin";
   if (next==="pricing"||next==="/pricing"||next==="/pricing.html") return "/pricing";
   if (next==="/planner.html"||next==="/discover.html"||/^\/planner\.html\?add=[a-z0-9-]{2,80}$/.test(next)) return next;
   return "/planner.html";
@@ -1081,6 +1212,8 @@ function accountErrorLocation(mode,message,requestedNext) {
     if (add) params.set("add",add);
   } else if (next==="/pricing") {
     params.set("next","pricing");
+  } else if (next==="/admin") {
+    params.set("next","admin");
   }
   return `/account.html?${params}`;
 }
@@ -1094,6 +1227,7 @@ function verificationLocation(requestedNext,{error="",sent=false,purpose=""}={})
     if (add) params.set("add",add);
   } else if (next==="/pricing") params.set("next","pricing");
   else if (next==="/discover.html") params.set("next","discover");
+  else if (next==="/admin") params.set("next","admin");
   if (purpose==="login"||purpose==="signup") params.set("purpose",purpose);
   if (error) params.set("error",error);
   if (sent) params.set("sent","1");
@@ -1110,6 +1244,7 @@ function requestedPageNext(url) {
   }
   if (requested==="pricing") return "/pricing";
   if (requested==="discover") return "/discover.html";
+  if (requested==="admin") return "/admin";
   return safeAccountNext(requested);
 }
 
@@ -1137,6 +1272,9 @@ function safeAccountPageError(value) {
     "Use a valid name, email, and password of 10–128 characters.",
     "An account with that email already exists.",
     "Email or password is incorrect.",
+    "This account is temporarily paused. Contact STRATA support for help.",
+    "Admin ownership is secured. Sign in again to continue.",
+    "Administrator access required.",
     "Unable to complete the account request.",
     "Account storage is temporarily unavailable. Please try again.",
     "Email verification is temporarily unavailable. Please try again later."
@@ -1373,6 +1511,214 @@ async function handlePaddleWebhook(req,res) {
   json(res,200,{ok:true,outcome});
 }
 
+function numericAdminRow(row) {
+  const output={...row};
+  for (const key of ["created_at","email_verified_at","suspended_at","active_session_count","active_purchase_count","pending_purchase_count","purchase_count","rating_count","latest_purchase_at","deletion_expires_at","updated_at","last_response_at","bound_at"]) {
+    if (output[key]!=null) output[key]=Number(output[key]);
+  }
+  return output;
+}
+
+function adminUserPayload(row,{detail=false}={}) {
+  if (!row) return null;
+  const output=numericAdminRow(row);
+  const result={
+    id:output.id,
+    name:output.name,
+    email:output.email,
+    createdAt:output.created_at,
+    verifiedAt:output.email_verified_at??null,
+    suspendedAt:output.suspended_at??null,
+    activeSessions:Number(output.active_session_count||0),
+    discovery:{
+      active:Number(output.active_purchase_count||0)>0,
+      activePurchaseCount:Number(output.active_purchase_count||0),
+      pendingPurchaseCount:Number(output.pending_purchase_count||0),
+      purchaseCount:Number(output.purchase_count||0),
+      latestPurchaseAt:output.latest_purchase_at??null,
+      transactionId:output.transaction_id||null,
+      transactionStatus:output.transaction_status||null
+    },
+    accountDeletion:{pending:Boolean(output.deletion_expires_at),expiresAt:output.deletion_expires_at??null}
+  };
+  if (detail) {
+    let plan=defaultPlan();
+    try { if (output.plan_json) plan=sanitizePlan(JSON.parse(output.plan_json),{repair:true}); } catch { /* Show safe zero/default plan stats. */ }
+    Object.assign(result,planStats(plan),{ratingCount:Number(output.rating_count||0)});
+  }
+  return result;
+}
+
+function adminOverviewPayload(row) {
+  const value=(key)=>Number(row?.[key]||0);
+  return {
+    accounts:{total:value("total_users"),verified:value("verified_users"),suspended:value("suspended_users"),activeSessions:value("active_sessions")},
+    discovery:{activeUsers:value("discovery_users"),pendingPayments:value("pending_payments")},
+    support:{open:value("open_support"),pendingDeletions:value("pending_deletions")},
+    services:{storage:store.kind,persistent:store.kind==="turso"||process.env.NODE_ENV!=="production",email:EMAIL_CONFIG.enabled,checkout:PAYMENT_CONFIG.enabled,webhookProtection:ENFORCE_PADDLE_IPS}
+  };
+}
+
+function supportTicketPayload(row) {
+  return {
+    id:row.id,
+    reference:row.reference,
+    userId:row.user_id||null,
+    name:row.name,
+    email:row.email,
+    category:row.category,
+    subject:row.subject,
+    customerReference:row.reference_id||"",
+    message:row.message,
+    status:row.status,
+    note:row.admin_note||"",
+    lastResponseAt:row.last_response_at==null?null:Number(row.last_response_at),
+    createdAt:Number(row.created_at),
+    updatedAt:Number(row.updated_at)
+  };
+}
+
+const SUPPORT_CATEGORIES=new Set(["account","password","payment","privacy","exercise","other"]);
+const SUPPORT_STATUSES=new Set(["new","open","waiting","resolved"]);
+
+function cleanSupportLine(value,max) {
+  return cleanText(value,max).replace(/[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]+/g," ").replace(/\s+/g," ").trim();
+}
+
+function cleanSupportMessage(value,max) {
+  return cleanText(value,max).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u202a-\u202e\u2066-\u2069]/g,"");
+}
+
+function luhnValid(value) {
+  const digits=String(value||"").replace(/[^0-9]/g,"");
+  if (digits.length<13||digits.length>19||/^0+$/.test(digits)) return false;
+  let sum=0,double=false;
+  for (let index=digits.length-1;index>=0;index-=1) {
+    let digit=Number(digits[index]);
+    if (double) { digit*=2; if (digit>9) digit-=9; }
+    sum+=digit; double=!double;
+  }
+  return sum%10===0;
+}
+
+function sensitiveSupportText(...values) {
+  const text=values.join("\n");
+  if (sensitiveAdminText(text)) return true;
+  return (text.match(/\b(?:\d[ -]?){12,18}\d\b/g)||[]).some(luhnValid);
+}
+
+function validateSupportRequest(input,session) {
+  const name=cleanSupportLine(session?.name||input?.name,80);
+  const email=session?.email||normalizeEmail(input?.email);
+  const category=cleanSupportLine(input?.category,30).toLowerCase();
+  const subject=cleanSupportLine(input?.subject,100);
+  const referenceId=cleanSupportLine(input?.referenceId,80);
+  const message=cleanSupportMessage(input?.message,2000);
+  const website=cleanText(input?.website,200);
+  if (website) return {honeypot:true};
+  if (name.length<2||!validEmail(email)||!SUPPORT_CATEGORIES.has(category)||subject.length<3||message.length<10) {
+    throw Object.assign(new Error("Add a valid name, email, category, subject, and message."),{status:400,code:"INVALID_SUPPORT_REQUEST"});
+  }
+  if (sensitiveSupportText(subject,referenceId,message)) {
+    throw Object.assign(new Error("Remove passwords, verification codes, private links, API keys, tokens, and payment-card numbers before sending."),{status:400,code:"SENSITIVE_SUPPORT_CONTENT"});
+  }
+  return {name,email,category,subject,referenceId,message};
+}
+
+function newSupportReference(now=Date.now()) {
+  return `STR-${new Date(now).getUTCFullYear()}-${randomBytes(4).toString("hex").slice(0,6).toUpperCase()}`;
+}
+
+async function createSupportRequest(req,input) {
+  const session=await sessionFor(req);
+  const clean=validateSupportRequest(input,session);
+  if (clean.honeypot) return {reference:newSupportReference(),accepted:true};
+  let emailKey;
+  try { emailKey=verificationEmailHash(EMAIL_CONFIG,clean.email); }
+  catch { emailKey=hashToken(clean.email); }
+  const now=Date.now();
+  const reserved=await store.claimSupportRequestEvent({
+    id:randomUUID(),
+    ipHash:hashToken(`support-ip:${requestAddress(req)}`),
+    emailHash:emailKey,
+    createdAt:now
+  },{
+    since:now-SUPPORT_REQUEST_WINDOW_MS,
+    ipLimit:SUPPORT_REQUESTS_PER_IP,
+    emailLimit:SUPPORT_REQUESTS_PER_EMAIL,
+    globalLimit:SUPPORT_REQUESTS_GLOBAL
+  });
+  if (!reserved) throw Object.assign(new Error("Too many support requests were sent. Please wait and try again."),{status:429,code:"SUPPORT_RATE_LIMIT"});
+  let ticket;
+  for (let attempt=0;attempt<3&&!ticket;attempt+=1) {
+    try {
+      ticket=await store.insertSupportTicket({id:randomUUID(),reference:newSupportReference(now),userId:session?.id||null,...clean,createdAt:now,updatedAt:now});
+    } catch(error) {
+      if (!isUniqueViolation(error)||attempt===2) throw error;
+    }
+  }
+  if (!ticket) throw new Error("Support request could not be stored.");
+  const deliveries=await Promise.allSettled([
+    sendSupportAcknowledgment(EMAIL_CONFIG,ticket),
+    sendSupportNotification(EMAIL_CONFIG,ticket)
+  ]);
+  for (const delivery of deliveries) if (delivery.status==="rejected") console.error(`Support email delivery failed: ${delivery.reason?.code||"provider-error"}`);
+  return {reference:ticket.reference,accepted:true,emailSent:deliveries[0]?.status==="fulfilled"};
+}
+
+function validAdminConfirmation(action,value,target) {
+  const expected={
+    "send-password-reset":"SEND RESET",
+    "send-delete-link":target?.email||"",
+    "cancel-deletion":"CANCEL",
+    "revoke-sessions":"REVOKE",
+    suspend:"SUSPEND",
+    restore:"RESTORE"
+  }[action];
+  return Boolean(expected&&String(value||"").trim()===expected);
+}
+
+async function performAdminUserAction(session,targetId,input) {
+  const target=await store.adminUserById(targetId,Date.now());
+  if (!target) throw Object.assign(new Error("Account not found."),{status:404,code:"ADMIN_TARGET_NOT_FOUND"});
+  const principal=await store.adminPrincipal();
+  if (principal?.user_id===target.id) throw Object.assign(new Error("Use Account Security for the primary administrator account."),{status:409,code:"ADMIN_SELF_PROTECTED"});
+  const action=cleanText(input?.action,40);
+  if (!["send-password-reset","send-delete-link","cancel-deletion","revoke-sessions","suspend","restore"].includes(action)) throw Object.assign(new Error("Unknown admin action."),{status:400,code:"UNKNOWN_ADMIN_ACTION"});
+  const reason=adminReason(input?.reason);
+  if (!validAdminConfirmation(action,input?.confirmation,target)) throw Object.assign(new Error("The confirmation text does not match this action."),{status:400,code:"ADMIN_CONFIRMATION_REQUIRED"});
+
+  let message="Action completed.";
+  if (action==="send-password-reset") {
+    await recordAdminAudit(session.id,target.id,action,reason,"requested");
+    const delivery=await requestSignedInAccountAction(target,"password_reset");
+    return {ok:true,message:`Password-reset email sent to ${delivery.maskedEmail}.`,user:adminUserPayload(await store.adminUserById(target.id,Date.now()),{detail:true})};
+  }
+  if (action==="send-delete-link") {
+    await recordAdminAudit(session.id,target.id,action,reason,"requested");
+    const delivery=await requestSignedInAccountAction(target,"account_delete");
+    return {ok:true,message:`Deletion-confirmation email sent to ${delivery.maskedEmail}.`,user:adminUserPayload(await store.adminUserById(target.id,Date.now()),{detail:true})};
+  }
+  if (action==="cancel-deletion") {
+    const canceled=await store.cancelAccountDeletionWithAudit(target.id,adminAuditEvent(session.id,target.id,action,reason));
+    if (!canceled) throw Object.assign(new Error("This account has no pending deletion request."),{status:409,code:"NO_PENDING_DELETION"});
+    message="Pending account deletion canceled.";
+  } else if (action==="revoke-sessions") {
+    const result=await store.revokeUserSessions(target.id,adminAuditEvent(session.id,target.id,action,reason));
+    if (!result) throw Object.assign(new Error("Account not found."),{status:404,code:"ADMIN_TARGET_NOT_FOUND"});
+    message=`Signed the account out on ${result.revoked} active ${result.revoked===1?"session":"sessions"}.`;
+  } else if (action==="suspend") {
+    if (target.suspended_at) throw Object.assign(new Error("This account is already paused."),{status:409,code:"ACCOUNT_ALREADY_SUSPENDED"});
+    if (!await store.suspendUser(target.id,Date.now(),adminAuditEvent(session.id,target.id,action,reason))) throw Object.assign(new Error("The account state changed. Refresh and try again."),{status:409,code:"ADMIN_STATE_CHANGED"});
+    message="Account paused and all sessions revoked.";
+  } else if (action==="restore") {
+    if (!target.suspended_at) throw Object.assign(new Error("This account is already active."),{status:409,code:"ACCOUNT_ALREADY_ACTIVE"});
+    if (!await store.restoreUser(target.id,adminAuditEvent(session.id,target.id,action,reason))) throw Object.assign(new Error("The account state changed. Refresh and try again."),{status:409,code:"ADMIN_STATE_CHANGED"});
+    message="Account restored. The user can sign in again.";
+  }
+  return {ok:true,message,user:adminUserPayload(await store.adminUserById(target.id,Date.now()),{detail:true})};
+}
+
 function sendVerificationApiError(res,error) {
   const headers={};
   if (error.signupToken) headers["Set-Cookie"]=signupCookie(error.signupToken);
@@ -1391,6 +1737,16 @@ function sendVerificationApiError(res,error) {
 async function handleApi(req,res,url) {
   if (url.pathname==="/api/paddle/webhook") { await handlePaddleWebhook(req,res); return; }
   if (["POST","PUT","PATCH","DELETE"].includes(req.method) && !sameOrigin(req)) { json(res,403,{error:"Cross-origin request rejected."}); return; }
+  if (url.pathname==="/api/support"&&req.method==="POST") {
+    if (!trustedAuthOrigin(req)) { json(res,403,{error:"Support security check failed. Refresh and try again.",code:"SUPPORT_ORIGIN_REQUIRED"}); return; }
+    if (!String(req.headers["content-type"]||"").toLowerCase().startsWith("application/json")) { json(res,415,{error:"Support requests must use JSON.",code:"JSON_REQUIRED"}); return; }
+    try { json(res,201,{ok:true,...await createSupportRequest(req,await bodyJson(req))}); }
+    catch(error) {
+      if (!error.status) throw error;
+      json(res,error.status,{error:error.message,code:error.code||"SUPPORT_REQUEST_FAILED"});
+    }
+    return;
+  }
   if (url.pathname === "/api/signup" && req.method === "POST") {
     if (!trustedAuthOrigin(req)) { json(res,403,{error:"Cross-origin request rejected."}); return; }
     if (!rateAllowed(req,"auth")) { json(res,429,{error:"Too many attempts. Try again later."}); return; }
@@ -1528,8 +1884,117 @@ async function handleApi(req,res,url) {
     }
     return;
   }
+  if (url.pathname==="/api/admin/session"&&req.method==="GET") {
+    const session=await requireAdmin(req,res,{elevated:false,allowBootstrap:true});
+    if (!session) return;
+    const elevation=await store.adminElevation(session.token_hash,Date.now());
+    json(res,200,{admin:true,elevated:Boolean(elevation),elevatedUntil:elevation?Number(elevation.expires_at):null}); return;
+  }
+  if (url.pathname==="/api/admin/elevate"&&req.method==="POST") {
+    const session=await requireAdmin(req,res,{elevated:false,allowBootstrap:true});
+    if (!session) return;
+    if (!requireAdminMutation(req,res,session)) return;
+    if (!rateAllowed(req,`admin-elevate:${session.id}`,8,15*60*1000)) { json(res,429,{error:"Too many admin confirmation attempts. Wait and try again.",code:"ADMIN_RATE_LIMIT"}); return; }
+    const input=await bodyJson(req),password=String(input?.password||"");
+    const user=await store.accountCredentialsById(session.id);
+    if (!user||password.length<1||password.length>128||!await passwordMatches(password,user)) { json(res,401,{error:"Password is incorrect.",code:"ADMIN_PASSWORD_INCORRECT"}); return; }
+    const now=Date.now(),elevatedUntil=now+ADMIN_ELEVATION_MS;
+    const nextSession=prepareSession(session.id,now,session.auth_version);
+    const rotated=await store.rotateAdminSessionForElevation(
+      session.token_hash,
+      nextSession.record,
+      elevatedUntil,
+      adminAuditEvent(session.id,session.id,"admin-elevated","Owner password confirmed"),
+      now
+    );
+    if (!rotated) { json(res,409,{error:"Your session changed. Sign in and try again.",code:"ADMIN_SESSION_CHANGED"}); return; }
+    json(res,200,{ok:true,elevatedUntil,csrfToken:nextSession.csrfToken},{"Set-Cookie":sessionCookie(nextSession.token)}); return;
+  }
+  if (url.pathname==="/api/admin/overview"&&req.method==="GET") {
+    const session=await requireAdmin(req,res); if (!session) return;
+    json(res,200,{overview:adminOverviewPayload(await store.adminOverview(Date.now()))}); return;
+  }
+  if (url.pathname==="/api/admin/users"&&req.method==="GET") {
+    const session=await requireAdmin(req,res); if (!session) return;
+    const query=cleanText(url.searchParams.get("q"),100);
+    const limit=Math.max(1,Math.min(50,Math.floor(Number(url.searchParams.get("limit"))||20)));
+    const offset=Math.max(0,Math.min(10000,Math.floor(Number(url.searchParams.get("offset"))||0)));
+    const result=await store.adminUsers(query,limit,offset,Date.now());
+    json(res,200,{users:result.users.map((user)=>adminUserPayload(user)),total:result.total,limit,offset}); return;
+  }
+  const adminUserDetailMatch=url.pathname.match(/^\/api\/admin\/users\/([^/]+)$/);
+  if (adminUserDetailMatch&&req.method==="GET") {
+    const session=await requireAdmin(req,res); if (!session) return;
+    const targetId=cleanAdminTarget(adminUserDetailMatch[1]);
+    const user=targetId?await store.adminUserById(targetId,Date.now()):null;
+    if (!user) { json(res,404,{error:"Account not found.",code:"ADMIN_TARGET_NOT_FOUND"}); return; }
+    json(res,200,{user:adminUserPayload(user,{detail:true})}); return;
+  }
+  const adminUserActionMatch=url.pathname.match(/^\/api\/admin\/users\/([^/]+)\/actions$/);
+  if (adminUserActionMatch&&req.method==="POST") {
+    const session=await requireAdmin(req,res); if (!session) return;
+    if (!requireAdminMutation(req,res,session)) return;
+    if (!rateAllowed(req,`admin-user-action:${session.id}`,30,15*60*1000)) { json(res,429,{error:"Too many admin actions. Wait and try again.",code:"ADMIN_RATE_LIMIT"}); return; }
+    const targetId=cleanAdminTarget(adminUserActionMatch[1]);
+    if (!targetId) { json(res,404,{error:"Account not found.",code:"ADMIN_TARGET_NOT_FOUND"}); return; }
+    try { json(res,200,await performAdminUserAction(session,targetId,await bodyJson(req))); }
+    catch(error) {
+      if (!error.status) throw error;
+      json(res,error.status,{error:error.message,code:error.code||"ADMIN_ACTION_FAILED"});
+    }
+    return;
+  }
+  if (url.pathname==="/api/admin/audit"&&req.method==="GET") {
+    const session=await requireAdmin(req,res); if (!session) return;
+    const limit=Math.max(1,Math.min(100,Math.floor(Number(url.searchParams.get("limit"))||40)));
+    const events=(await store.adminAudit(limit)).map((event)=>({id:event.id,action:event.action,reason:event.reason,result:event.result,createdAt:Number(event.created_at),actor:{id:event.actor_id,name:event.actor_name,email:event.actor_email},target:event.target_id||event.target_user_id?{id:event.target_id||event.target_user_id,name:event.target_name||null,email:event.target_email||null}:null}));
+    json(res,200,{events,limit}); return;
+  }
+  if (url.pathname==="/api/admin/support"&&req.method==="GET") {
+    const session=await requireAdmin(req,res); if (!session) return;
+    const requestedStatus=cleanText(url.searchParams.get("status"),20);
+    const status=SUPPORT_STATUSES.has(requestedStatus)?requestedStatus:"";
+    const limit=Math.max(1,Math.min(50,Math.floor(Number(url.searchParams.get("limit"))||20)));
+    const offset=Math.max(0,Math.min(10000,Math.floor(Number(url.searchParams.get("offset"))||0)));
+    const result=await store.adminSupportTickets(status,limit,offset);
+    json(res,200,{tickets:result.tickets.map(supportTicketPayload),total:result.total,limit,offset,status}); return;
+  }
+  const adminSupportMatch=url.pathname.match(/^\/api\/admin\/support\/([^/]+)$/);
+  if (adminSupportMatch&&req.method==="POST") {
+    const session=await requireAdmin(req,res); if (!session) return;
+    if (!requireAdminMutation(req,res,session)) return;
+    if (!rateAllowed(req,`admin-support:${session.id}`,30,15*60*1000)) { json(res,429,{error:"Too many support updates. Wait and try again.",code:"ADMIN_RATE_LIMIT"}); return; }
+    const ticketId=cleanAdminTarget(adminSupportMatch[1]);
+    const ticket=ticketId?await store.supportTicketById(ticketId):null;
+    if (!ticket) { json(res,404,{error:"Support request not found.",code:"SUPPORT_NOT_FOUND"}); return; }
+    const input=await bodyJson(req);
+    const status=SUPPORT_STATUSES.has(cleanText(input?.status,20))?cleanText(input.status,20):ticket.status;
+    const note=cleanSupportMessage(input?.note,1000);
+    const response=cleanSupportMessage(input?.response,2000);
+    const expectedUpdatedAt=Number(input?.expectedUpdatedAt);
+    if (sensitiveAdminText(note)||sensitiveAdminText(response)) { json(res,400,{error:"Do not put passwords, codes, API keys, tokens, or private action links in support notes or responses.",code:"SENSITIVE_SUPPORT_CONTENT"}); return; }
+    if (!Number.isSafeInteger(expectedUpdatedAt)||expectedUpdatedAt<=0) { json(res,400,{error:"Refresh the help request before updating it.",code:"SUPPORT_VERSION_REQUIRED"}); return; }
+    if (expectedUpdatedAt!==Number(ticket.updated_at)) { json(res,409,{error:"The support request changed in another tab. Refresh and try again.",code:"SUPPORT_STATE_CHANGED"}); return; }
+    if (!note&&!response&&status===ticket.status) { json(res,400,{error:"Change the status, add a private note, or write a response.",code:"EMPTY_SUPPORT_UPDATE"}); return; }
+    const updatedAt=Math.max(Date.now(),expectedUpdatedAt+1);
+    let updated=await store.updateSupportTicket(ticket.id,{
+      status,note,responseSent:false,updatedAt,expectedUpdatedAt
+    },adminAuditEvent(session.id,ticket.user_id||null,"support-updated",note||`Support request ${status}`,response?"response-pending":"success"));
+    if (!updated) { json(res,409,{error:"The support request changed. Refresh and try again.",code:"SUPPORT_STATE_CHANGED"}); return; }
+    if (response.length>0) {
+      try {
+        await sendSupportResponse(EMAIL_CONFIG,updated,response);
+      } catch {
+        json(res,502,{error:"The help-request workflow was saved, but the email response was not sent. Open the request and try the response again.",code:"SUPPORT_RESPONSE_DELIVERY_FAILED",ticket:supportTicketPayload(updated)});
+        return;
+      }
+      updated=await store.markSupportResponseSent(ticket.id,Date.now())||updated;
+      await recordAdminAudit(session.id,ticket.user_id||null,"support-response-sent","Response delivered through the configured support email");
+    }
+    json(res,200,{ok:true,ticket:supportTicketPayload(updated),message:response?"Response sent and support request updated.":"Support request updated."}); return;
+  }
   if (url.pathname === "/api/status" && req.method === "GET") {
-    json(res,200,{ok:true,build:BUILD_NUMBER,storage:store.kind,persistent:store.kind==="turso"||process.env.NODE_ENV!=="production",paymentsConfigured:PAYMENT_CONFIG.configured,checkoutEnabled:PAYMENT_CONFIG.enabled,webhookIpAllowlist:ENFORCE_PADDLE_IPS,emailVerificationEnabled:EMAIL_CONFIG.enabled,emailVerificationConfigured:EMAIL_CONFIG.configured,passwordResetEnabled:EMAIL_CONFIG.enabled,accountDeletionEnabled:EMAIL_CONFIG.enabled}); return;
+    json(res,200,{ok:true,build:BUILD_NUMBER,storage:store.kind,persistent:store.kind==="turso"||process.env.NODE_ENV!=="production",paymentsConfigured:PAYMENT_CONFIG.configured,checkoutEnabled:PAYMENT_CONFIG.enabled,webhookIpAllowlist:ENFORCE_PADDLE_IPS,emailVerificationEnabled:EMAIL_CONFIG.enabled,emailVerificationConfigured:EMAIL_CONFIG.configured,passwordResetEnabled:EMAIL_CONFIG.enabled,accountDeletionEnabled:EMAIL_CONFIG.enabled,adminConfigured:Boolean(ADMIN_EMAIL)}); return;
   }
   if (url.pathname === "/api/billing/config" && req.method === "GET") {
     json(res,200,publicPaymentConfig(PAYMENT_CONFIG)); return;
@@ -1626,7 +2091,27 @@ async function serveStatic(req,res,url) {
       ? PAGE_ALIASES.get(aliasPath)
       : normalize(url.pathname).replace(/^[/\\]+/,"");
   if (!STATIC_FILES.has(requested)) { json(res,404,{error:"Page not found."}); return; }
-  const activeSession=(PROTECTED_HTML.has(requested)||requested==="index.html")?await sessionFor(req):null;
+  const activeSession=(PROTECTED_HTML.has(requested)||requested==="index.html"||requested==="admin.html")?await sessionFor(req):null;
+  if (requested==="admin.html") {
+    if (!activeSession) {
+      res.writeHead(302,{...securityHeaders(),Location:"/account.html?mode=login&next=admin","Cache-Control":"no-store"});
+      res.end();
+      return;
+    }
+    const identity=await adminIdentity(activeSession,{allowBootstrap:true});
+    if (identity.boundNow) {
+      const params=new URLSearchParams({mode:"login",next:"admin",error:"Admin ownership is secured. Sign in again to continue."});
+      res.writeHead(302,{...securityHeaders(),Location:`/account.html?${params}`,"Cache-Control":"no-store","Set-Cookie":sessionCookie("",0)});
+      res.end();
+      return;
+    }
+    if (!identity.active) {
+      const params=new URLSearchParams({mode:"login",next:"admin",error:"Administrator access required."});
+      res.writeHead(302,{...securityHeaders(),Location:`/account.html?${params}`,"Cache-Control":"no-store"});
+      res.end();
+      return;
+    }
+  }
   if (PROTECTED_HTML.has(requested) && !activeSession) {
     const params=new URLSearchParams({mode:"login"});
     if (requested==="planner.html") {
@@ -1670,6 +2155,7 @@ async function serveStatic(req,res,url) {
           : "public, max-age=300";
   const headers={...securityHeaders(),"Content-Type":MIME[extname(filePath)]||"application/octet-stream","Cache-Control":cacheControl};
   if (requested==="service-worker.js") headers["Service-Worker-Allowed"]="/";
+  if (requested==="admin.html") headers["X-Robots-Tag"]="noindex, nofollow, noarchive";
   if (privateHtml) headers.Vary="Cookie";
   body=responseBody(req,body,headers);
   res.writeHead(200,headers); if (req.method === "HEAD") res.end(); else res.end(body);
@@ -1695,14 +2181,24 @@ async function start() {
     throw new Error("EMAIL_VERIFICATION_ENABLED must be set explicitly to true or false in production.");
   }
   store = await createStore(PROJECT_ROOT);
+  if (ADMIN_EMAIL) {
+    const configuredUser=await store.userByEmail(ADMIN_EMAIL);
+    if (configuredUser&&Number(configuredUser.email_verified_at)&&!configuredUser.suspended_at) {
+      await store.claimAdminPrincipal(configuredUser.id,ADMIN_EMAIL,Date.now());
+    }
+  }
   await store.deleteExpired(Date.now());
+  await store.deleteExpiredAdminElevations(Date.now());
   await store.deleteOldVerificationData(Date.now(),Date.now()-VERIFICATION_RETENTION_MS);
   await store.deleteOldAccountActionData(Date.now(),Date.now()-ACCOUNT_ACTION_RETENTION_MS);
+  await store.deleteOldSupportRequestEvents(Date.now()-SUPPORT_REQUEST_RETENTION_MS);
   if (ENFORCE_PADDLE_IPS) void currentPaddleIps().catch((error)=>console.error(error.message));
   cleanup=setInterval(() => {
     void store.deleteExpired(Date.now()).catch(console.error);
+    void store.deleteExpiredAdminElevations(Date.now()).catch(console.error);
     void store.deleteOldVerificationData(Date.now(),Date.now()-VERIFICATION_RETENTION_MS).catch(console.error);
     void store.deleteOldAccountActionData(Date.now(),Date.now()-ACCOUNT_ACTION_RETENTION_MS).catch(console.error);
+    void store.deleteOldSupportRequestEvents(Date.now()-SUPPORT_REQUEST_RETENTION_MS).catch(console.error);
     for (const [key,times] of rateBuckets) if (!times.some((time) => Date.now()-time<15*60*1000)) rateBuckets.delete(key);
   },60*60*1000);
   cleanup.unref();

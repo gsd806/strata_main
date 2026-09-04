@@ -16,10 +16,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/site-info.css?v=6.7.5" />
+    <link rel="stylesheet" href="/site-info.css?v=6.8.0" />
   </head>
   <body>
-    <a class="skip-link" href="#main">Skip to contact details</a>
+    <a class="skip-link" href="#main">Skip to support form</a>
     <header class="info-header">
       <a class="brand" href="/" aria-label="STRATA home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>STRATA</span></a>
       <nav class="info-nav" aria-label="Public navigation"><a href="/">Home</a><a href="/pricing">Pricing</a><a href="/contact" aria-current="page">Contact</a><a href="/install">Install</a></nav>
@@ -29,24 +29,80 @@
       <section class="info-hero" aria-labelledby="pageTitle">
         <div class="info-container info-hero-grid">
           <div><p class="eyebrow">Support and questions</p><h1 id="pageTitle">TALK TO<br /><em>STRATA.</em></h1></div>
-          <p class="info-lede">Need help with email verification, password reset, account deletion, a Discovery purchase, checkout, a refund, or privacy? Email STRATA directly from any device.</p>
+          <p class="info-lede">Need help with email verification, password reset, account deletion, a Discovery purchase, checkout, a refund, or privacy? Send a support request here or email STRATA directly.</p>
         </div>
       </section>
 
       <section class="info-main">
         <div class="info-container contact-grid">
-          <article class="contact-card" aria-labelledby="emailTitle">
-            <p class="card-kicker">Primary contact</p>
-            <h2 id="emailTitle">EMAIL SUPPORT</h2>
-            <a class="contact-email" href="mailto:stratafitness.official@gmail.com?subject=STRATA%20support">stratafitness.official@gmail.com</a>
-            <p>This is the official support address linked from the STRATA homepage. Messages can cover:</p>
-            <ul class="contact-list"><li>Signup verification, password reset, account deletion, or cross-device syncing</li><li>Discovery pricing, checkout, or access</li><li>Refund requests made within 14 days of purchase</li><li>Privacy questions, data access, correction, or deletion requests</li><li>Exercise-data corrections and general feedback</li></ul>
-            <div class="button-row"><a class="button button-dark" href="mailto:stratafitness.official@gmail.com?subject=STRATA%20support">Open email <span aria-hidden="true">↗</span></a></div>
+          <article class="contact-card support-form-card" aria-labelledby="supportFormTitle">
+            <p class="card-kicker">Support request</p>
+            <h2 id="supportFormTitle">HOW CAN WE HELP?</h2>
+            <p id="supportFormHelp">Share enough detail for STRATA to understand the issue. Required fields are marked with an asterisk. If you are signed in, the request stays attached to your registered account name and email.</p>
+
+            <form class="support-form" id="supportForm" action="/api/support" method="post" aria-describedby="supportFormHelp supportStatus">
+              <div class="support-field">
+                <label for="supportName">Name <span aria-hidden="true">*</span></label>
+                <input id="supportName" name="name" type="text" autocomplete="name" minlength="2" maxlength="80" required />
+              </div>
+
+              <div class="support-field">
+                <label for="supportEmail">Email <span aria-hidden="true">*</span></label>
+                <input id="supportEmail" name="email" type="email" autocomplete="email" inputmode="email" maxlength="254" required />
+              </div>
+
+              <div class="support-field">
+                <label for="supportCategory">Category <span aria-hidden="true">*</span></label>
+                <select id="supportCategory" name="category" required>
+                  <option value="" selected disabled>Choose a category</option>
+                  <option value="account">Account or sign-in</option>
+                  <option value="password">Password or verification</option>
+                  <option value="payment">Payment, Discovery, or refund</option>
+                  <option value="privacy">Privacy or data request</option>
+                  <option value="exercise">Exercise data or feedback</option>
+                  <option value="other">Something else</option>
+                </select>
+              </div>
+
+              <div class="support-field">
+                <label for="supportReference">Order or transaction reference <span class="field-optional">Optional</span></label>
+                <input id="supportReference" name="referenceId" type="text" autocomplete="off" maxlength="80" aria-describedby="supportReferenceHelp" />
+                <p class="field-help" id="supportReferenceHelp">For payment questions, enter the Paddle reference if you have it. Never enter card details.</p>
+              </div>
+
+              <div class="support-field support-field-full">
+                <label for="supportSubject">Subject <span aria-hidden="true">*</span></label>
+                <input id="supportSubject" name="subject" type="text" autocomplete="off" minlength="3" maxlength="100" required />
+              </div>
+
+              <div class="support-field support-field-full">
+                <label for="supportMessageBody">What happened? <span aria-hidden="true">*</span></label>
+                <textarea id="supportMessageBody" name="message" rows="7" minlength="10" maxlength="2000" aria-describedby="supportMessageHelp" required></textarea>
+                <p class="field-help" id="supportMessageHelp">Include what you expected, what happened instead, and the device or browser you used. Do not include passwords, codes, recovery links, or card details. Maximum 2,000 characters.</p>
+              </div>
+
+              <div class="support-honeypot">
+                <label for="supportWebsite">Website</label>
+                <input id="supportWebsite" name="website" type="text" tabindex="-1" autocomplete="off" maxlength="200" />
+              </div>
+
+              <div class="support-form-actions support-field-full">
+                <button class="button button-dark" id="supportSubmit" type="submit"><span id="supportSubmitLabel">Send request</span><span aria-hidden="true">→</span></button>
+                <p class="support-response-time">Keep the reference number shown after sending so STRATA can locate your request.</p>
+              </div>
+
+              <div class="support-status support-field-full" id="supportStatus" role="status" aria-live="polite" aria-atomic="true" tabindex="-1" hidden></div>
+            </form>
           </article>
 
-          <aside class="contact-card" aria-labelledby="helpTitle">
-            <p class="card-kicker">Help us locate it</p>
-            <h2 id="helpTitle">WHAT TO INCLUDE</h2>
+          <aside class="contact-card contact-details-card" aria-labelledby="emailTitle">
+            <p class="card-kicker">Email fallback</p>
+            <h2 id="emailTitle">EMAIL SUPPORT</h2>
+            <a class="contact-email" href="mailto:stratafitness.official@gmail.com?subject=STRATA%20support">stratafitness.official@gmail.com</a>
+            <p>If the form does not work, send your request to the official support address from any email app.</p>
+            <noscript><p class="plain-note">JavaScript is unavailable, so use this email link to contact STRATA.</p></noscript>
+            <div class="button-row"><a class="button button-light" href="mailto:stratafitness.official@gmail.com?subject=STRATA%20support">Open email <span aria-hidden="true">↗</span></a></div>
+            <h3 class="contact-subheading">WHAT TO INCLUDE</h3>
             <p>For account support, include the email address used for STRATA. If a verification, password-reset, or deletion email has not arrived, wait briefly and check the spam or junk folder before requesting another. For a payment or refund request, include the account email and Paddle order or transaction reference if one was provided.</p>
             <div class="safety-note"><strong>Keep secrets private.</strong><br />Never email or forward a verification code, password-reset link, account-deletion link, password, full card number, security code, Turso token, Resend key, email-verification secret, Paddle API key or webhook secret, or Render credentials. STRATA support does not need them.</div>
             <p class="plain-note">For urgent medical concerns, contact a qualified medical professional or local emergency service. STRATA provides general fitness education, not medical care.</p>
@@ -59,9 +115,10 @@
       <div class="info-container info-footer-grid">
         <div><a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>STRATA</span></a><p class="footer-tagline">Move selection, made legible.</p></div>
         <nav class="footer-nav" aria-label="Footer navigation"><a href="/pricing">Pricing</a><a href="/contact">Contact</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/refunds">Refunds</a><a href="/install">Install</a></nav>
-        <p class="footer-meta">© 2026 Strata Index<br />Build 6.7.5</p>
+        <p class="footer-meta">© 2026 Strata Index<br />Build 6.8.0</p>
       </div>
     </footer>
-    <script src="/pwa.js?v=6.7.5"></script>
+    <script src="/contact.js?v=6.8.0"></script>
+    <script src="/pwa.js?v=6.8.0"></script>
   </body>
 </html>

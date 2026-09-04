@@ -373,7 +373,7 @@ async function init(){
   el("weekSummary").innerHTML="";
   el("weekBoard").innerHTML='<div class="planner-load-state">Loading your weekly plan…</div>';
   try{
-    const [exercises,result]=await Promise.all([api("/exercises.json?v=6.7.5"),api("/api/plan")]);
+    const [exercises,result]=await Promise.all([api("/exercises.json?v=6.8.0"),api("/api/plan")]);
     if(!Array.isArray(exercises)||!result.plan?.days)throw new Error("STRATA returned an incomplete plan.");
     state.exercises=exercises;state.plan=result.plan;state.user=result.user;
     state.revision=0;state.savedRevision=0;state.savePromise=null;

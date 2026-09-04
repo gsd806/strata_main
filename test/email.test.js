@@ -12,6 +12,9 @@ const {
   maskEmail,
   safeDigestEqual,
   sendAccountActionEmail,
+  sendSupportAcknowledgment,
+  sendSupportNotification,
+  sendSupportResponse,
   sendVerificationEmail,
   verificationCodeDigest,
   verificationEmailHash
@@ -190,4 +193,39 @@ test("account-action emails use one-time fragment links and purpose-bound idempo
     ()=>sendAccountActionEmail(config,{to:"person@example.com",token:"too-short",requestId:"request-2",purpose:"password_reset"},fetchImpl),
     TypeError
   );
+});
+
+test("support mail keeps ticket bodies in Admin and keys each distinct response safely",async()=>{
+  const config=getEmailVerificationConfig(validEnv({NODE_ENV:"test",RESEND_API_BASE:"http://127.0.0.1:9999"}));
+  const calls=[];
+  const fetchImpl=async(url,options)=>{
+    calls.push({url,options});
+    return {ok:true,json:async()=>({id:`support-message-${calls.length}`})};
+  };
+  const ticket={
+    id:"ticket-1",reference:"STR-2026-A1B2C3",name:"Saeed <Owner>",
+    email:"person@example.com",category:"account",subject:"Account help",
+    referenceId:"txn_reference",message:"Private ticket body <script>alert(1)</script>",
+    updated_at:1_810_000_000_000
+  };
+
+  await sendSupportAcknowledgment(config,ticket,fetchImpl);
+  await sendSupportNotification(config,ticket,fetchImpl);
+  await sendSupportResponse(config,ticket,"First safe response.",fetchImpl);
+  await sendSupportResponse(config,ticket,"Second safe response.",fetchImpl);
+  await sendSupportResponse(config,ticket,"First safe response.",fetchImpl);
+
+  const notification=JSON.parse(calls[1].options.body);
+  assert.deepEqual(notification.to,["support@stratafitness.online"]);
+  assert.equal(notification.reply_to,"person@example.com");
+  assert.match(notification.text,/https:\/\/stratafitness\.online\/admin#support/);
+  assert.doesNotMatch(notification.text,/Private ticket body|script/i,"support content belongs in the private dashboard, not the owner notification");
+  assert.doesNotMatch(notification.html,/Private ticket body|<script/i);
+
+  const firstKey=calls[2].options.headers["Idempotency-Key"];
+  const secondKey=calls[3].options.headers["Idempotency-Key"];
+  const retryKey=calls[4].options.headers["Idempotency-Key"];
+  assert.notEqual(firstKey,secondKey,"different reply text must not reuse a provider idempotency key");
+  assert.equal(firstKey,retryKey,"retrying the same reply against the same ticket version must be idempotent");
+  assert.match(JSON.parse(calls[2].options.body).html,/First safe response\./);
 });

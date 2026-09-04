@@ -91,9 +91,9 @@ test("release version, cache keys, asset URLs, and catalog claims stay aligned",
   const exercises=JSON.parse(read("data/exercises.json"));
   const version=BUILD,versionPattern=escapeRegExp(version);
   const serviceWorker=read("service-worker.js");
-  const pages=["index.html","account.html","verify-email.html","forgot-password.html","reset-password.html","delete-account.html","planner.html","discover.html","install.html","offline.html","pricing.html","contact.html","terms.html","privacy.html","refunds.html"];
+  const pages=["index.html","account.html","verify-email.html","forgot-password.html","reset-password.html","delete-account.html","admin.html","planner.html","discover.html","install.html","offline.html","pricing.html","contact.html","terms.html","privacy.html","refunds.html"];
 
-  assert.equal(version,"6.7.5");
+  assert.equal(version,"6.8.0");
   assert.match(serviceWorker,new RegExp(`const BUILD="${versionPattern}";`));
   assert.match(serviceWorker,/const CACHE_PREFIX="strata-static-";/);
   assert.match(serviceWorker,/const STATIC_CACHE=`\$\{CACHE_PREFIX\}\$\{BUILD\}`;/);
@@ -102,7 +102,7 @@ test("release version, cache keys, asset URLs, and catalog claims stay aligned",
 
   for(const page of pages){
     const html=read(`pages/${page}`);
-    assert.match(html,new RegExp(`Build ${versionPattern}`),`${page} visible build label`);
+    if(page!=="admin.html")assert.match(html,new RegExp(`Build ${versionPattern}`),`${page} visible build label`);
     const localAssets=[...html.matchAll(/(?:src|href)="([^"]+\.(?:js|css)(?:\?[^"]*)?)"/g)]
       .map((match)=>new URL(match[1],"https://strata.test"))
       .filter((url)=>url.origin==="https://strata.test");
@@ -195,6 +195,17 @@ test("bearer-link pages stay mobile friendly but do not initialize the PWA",()=>
   }
 });
 
+test("the private admin surface is versioned but never initialized as an offline PWA page",()=>{
+  const html=read("pages/admin.html");
+  assert.match(html,/<meta\s+name="viewport"\s+content="[^"]*width=device-width[^\"]*viewport-fit=cover[^\"]*"\s*\/>/i);
+  assert.match(html,/<meta\s+name="robots"\s+content="[^"]*noindex[^\"]*nofollow[^\"]*"\s*\/>/i);
+  assert.match(html,/<meta\s+name="referrer"\s+content="no-referrer"\s*\/>/i);
+  assert.doesNotMatch(html,/href="\/manifest\.webmanifest"/i);
+  assert.doesNotMatch(html,/src="\/pwa\.js/i);
+  assert.match(html,new RegExp(`src="/admin\\.js\\?v=${escapeRegExp(BUILD)}"`));
+  assert.match(html,new RegExp(`href="/admin\\.css\\?v=${escapeRegExp(BUILD)}"`));
+});
+
 test("service worker precaches only public assets and never handles account APIs",async()=>{
   const harness=serviceWorkerHarness();
   let installPromise;
@@ -210,14 +221,14 @@ test("service worker precaches only public assets and never handles account APIs
   assert.ok(harness.precache.some((url)=>url.includes("strata-512.png")));
 
   const paths=harness.precache.map((entry)=>new URL(entry,"https://strata.test").pathname);
-  const privateHtml=["/","/index.html","/account.html","/verify-email","/verify-email.html","/forgot-password","/forgot-password.html","/reset-password","/reset-password.html","/delete-account","/delete-account.html","/planner.html","/discover.html"];
+  const privateHtml=["/","/index.html","/account.html","/verify-email","/verify-email.html","/forgot-password","/forgot-password.html","/reset-password","/reset-password.html","/delete-account","/delete-account.html","/admin","/admin.html","/planner.html","/discover.html"];
   for(const forbidden of privateHtml)assert.ok(!paths.includes(forbidden),`${forbidden} must not be precached`);
   assert.ok(!paths.some((entry)=>entry.startsWith("/api/")||entry.startsWith("/auth/")||entry==="/healthz"),"account and health routes must not be precached");
 
-  for(const endpoint of ["/api/status","/api/me","/api/verification-status","/api/verify-email","/api/resend-verification","/api/password-reset/request","/api/password-reset/status","/api/password-reset/complete","/api/account/password-reset/request","/api/account/delete/request","/api/account/delete/cancel","/api/account/delete/status","/api/account/delete/complete","/api/billing/config","/api/billing/checkout","/api/paddle/webhook","/auth/login","/auth/signup","/auth/verify-email","/auth/resend-verification","/auth/password-reset/request","/auth/password-reset/complete","/auth/account-delete/complete","/healthz"]) {
+  for(const endpoint of ["/api/status","/api/me","/api/verification-status","/api/verify-email","/api/resend-verification","/api/password-reset/request","/api/password-reset/status","/api/password-reset/complete","/api/account/password-reset/request","/api/account/delete/request","/api/account/delete/cancel","/api/account/delete/status","/api/account/delete/complete","/api/admin/session","/api/admin/elevate","/api/admin/overview","/api/admin/users","/api/admin/users/example-user/actions","/api/admin/support","/api/admin/support/example-ticket","/api/admin/audit","/api/billing/config","/api/billing/checkout","/api/paddle/webhook","/auth/login","/auth/signup","/auth/verify-email","/auth/resend-verification","/auth/password-reset/request","/auth/password-reset/complete","/auth/account-delete/complete","/healthz"]) {
     assert.equal(dispatchServiceWorkerFetch(harness.listeners.fetch,endpoint),undefined,`${endpoint} must bypass the service worker`);
   }
-  for(const privatePage of ["/index.html","/account.html","/verify-email","/verify-email.html","/forgot-password","/forgot-password.html","/reset-password","/reset-password.html","/delete-account","/delete-account.html","/planner.html","/discover.html"]) {
+  for(const privatePage of ["/index.html","/account.html","/verify-email","/verify-email.html","/forgot-password","/forgot-password.html","/reset-password","/reset-password.html","/delete-account","/delete-account.html","/admin","/admin.html","/planner.html","/discover.html"]) {
     assert.equal(dispatchServiceWorkerFetch(harness.listeners.fetch,privatePage),undefined,`${privatePage} must bypass runtime asset caching`);
   }
   assert.equal(dispatchServiceWorkerFetch(harness.listeners.fetch,"/styles.css",{method:"POST"}),undefined,"writes must never be intercepted");
@@ -231,7 +242,7 @@ test("private navigations are network-first and fall back to the non-sensitive o
   harness.setOffline(true);
   const offline=dispatchServiceWorkerFetch(harness.listeners.fetch,"/account.html",{mode:"navigate"});
   assert.equal(await offline,harness.offlineResponse);
-  for(const page of ["/forgot-password","/reset-password","/delete-account"]) {
+  for(const page of ["/forgot-password","/reset-password","/delete-account","/admin"]) {
     const actionPage=dispatchServiceWorkerFetch(harness.listeners.fetch,page,{mode:"navigate"});
     assert.equal(await actionPage,harness.offlineResponse,`${page} must use only the non-sensitive offline fallback`);
   }

@@ -21,6 +21,7 @@ function safeNext(raw,exerciseId){
   if(/^\/planner\.html\?add=[a-z0-9-]{2,80}$/.test(raw||""))return raw;
   if(raw==="pricing"||raw==="/pricing"||raw==="/pricing.html")return "/pricing";
   if(raw==="discover"||raw==="/discover.html")return "/discover.html";
+  if(raw==="admin"||raw==="/admin"||raw==="/admin.html")return "/admin";
   return "/planner.html";
 }
 
@@ -28,6 +29,7 @@ function verificationLocation(destination,{deliveryState="",purpose="signup"}={}
   const query=new URLSearchParams();
   if(destination==="/pricing")query.set("next","pricing");
   else if(destination==="/discover.html")query.set("next","discover");
+  else if(destination==="/admin")query.set("next","admin");
   else{
     query.set("next","planner");
     const add=new URL(destination,"https://strata.local").searchParams.get("add");
@@ -58,6 +60,8 @@ const knownErrors=new Set([
   "Cross-origin request rejected.","Too many attempts. Try again later.",
   "Use a valid name, email, and password of 10–128 characters.",
   "An account with that email already exists.","Email or password is incorrect.",
+  "This account is temporarily paused. Contact STRATA support for help.",
+  "Admin ownership is secured. Sign in again to continue.","Administrator access required.",
   "Unable to complete the account request.","Account storage is temporarily unavailable. Please try again.",
   "Email verification is temporarily unavailable. Please try again later."
 ]);
@@ -149,6 +153,7 @@ function showSignedIn(user,csrfToken=""){
   el("accountAccess").hidden=true;
   el("signedInCard").hidden=false;
   el("signedInIdentity").textContent=`${user.name} · ${user.email}`;
+  el("accountAdminAction").hidden=user?.isAdmin!==true;
   const discoveryActive=user?.discovery?.active===true;
   const discoveryPending=Number(user?.discovery?.pendingPurchaseCount||0)>0;
   const discoveryAction=el("accountDiscoveryAction");

@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#10110f" />
+    <meta name="description" content="Private STRATA account and support administration." />
+    <meta name="robots" content="noindex, nofollow, noarchive" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Admin — STRATA</title>
+    <link rel="icon" href="/icons/strata-icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/admin.css?v=6.8.0" />
+  </head>
+  <body>
+    <a class="skip-link" href="#adminMain">Skip to administration</a>
+
+    <header class="admin-header">
+      <a class="brand" href="/" aria-label="STRATA home">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>STRATA</span>
+      </a>
+      <div class="header-label" aria-hidden="true">Admin / Private</div>
+      <nav class="header-nav" aria-label="Administrator navigation">
+        <a href="/account.html">Account</a><a href="/">Rankings</a>
+      </nav>
+    </header>
+
+    <main class="admin-shell" id="adminMain" aria-busy="true">
+      <section class="admin-hero" aria-labelledby="adminTitle">
+        <div>
+          <p class="eyebrow"><span></span> STRATA operations</p>
+          <h1 id="adminTitle">CONTROL<br /><em>ROOM.</em></h1>
+        </div>
+        <div class="admin-identity">
+          <p>Signed in as</p>
+          <strong id="adminIdentity">Confirming administrator…</strong>
+          <span id="lastUpdated">Live data has not loaded yet.</span>
+        </div>
+      </section>
+
+      <div class="global-message" id="globalMessage" role="status" aria-live="polite" aria-atomic="true" tabindex="-1" hidden></div>
+
+      <section class="access-panel" id="accessPanel" aria-labelledby="accessTitle">
+        <p class="panel-index">Security check</p>
+        <h2 id="accessTitle">VERIFYING ADMIN ACCESS…</h2>
+        <p id="accessMessage" role="status" aria-live="polite">Checking your signed-in account before loading private data.</p>
+        <div class="access-actions" id="accessActions" hidden>
+          <a class="button button-dark" href="/account.html?mode=login&amp;next=admin">Sign in <span aria-hidden="true">→</span></a>
+          <a class="button button-light" href="/account.html">Open account</a>
+        </div>
+      </section>
+
+      <section class="elevation-panel" id="elevationPanel" aria-labelledby="elevationTitle" hidden>
+        <div>
+          <p class="panel-index">Administrator step-up</p>
+          <h2 id="elevationTitle" tabindex="-1">CONFIRM IT’S YOU.</h2>
+          <p>Enter the current STRATA password for <strong id="elevationIdentity">your administrator account</strong>. This extra check protects account and support controls if an unlocked device is left unattended.</p>
+        </div>
+        <form id="elevationForm" aria-describedby="elevationMessage">
+          <div class="field elevated-field">
+            <label for="elevationPassword">Current STRATA password</label>
+            <input id="elevationPassword" name="password" type="password" autocomplete="current-password" minlength="10" maxlength="128" required />
+          </div>
+          <div class="dialog-message" id="elevationMessage" role="alert" tabindex="-1" hidden></div>
+          <button class="button button-accent" id="elevationSubmit" type="submit">Unlock admin controls <span aria-hidden="true">→</span></button>
+        </form>
+      </section>
+
+      <div class="dashboard" id="dashboard" hidden>
+        <nav class="section-nav" aria-label="Admin sections" role="tablist">
+          <button id="overviewTab" type="button" role="tab" data-section="overview" aria-controls="overviewSection" aria-selected="true">Overview</button>
+          <button id="peopleTab" type="button" role="tab" data-section="people" aria-controls="peopleSection" aria-selected="false">People</button>
+          <button id="supportTab" type="button" role="tab" data-section="support" aria-controls="supportSection" aria-selected="false">Help desk</button>
+          <button id="activityTab" type="button" role="tab" data-section="activity" aria-controls="activitySection" aria-selected="false">Activity</button>
+        </nav>
+
+        <section class="admin-section" id="overviewSection" data-panel="overview" role="tabpanel" aria-labelledby="overviewTab">
+          <div class="section-heading">
+            <div><p class="panel-index">01 / Overview</p><h2 id="overviewTitle">THE CURRENT PICTURE.</h2></div>
+            <button class="button button-light compact-button" id="refreshOverview" type="button">Refresh <span aria-hidden="true">↻</span></button>
+          </div>
+
+          <div class="stat-grid" aria-label="Account totals">
+            <article class="stat-card"><span>Total accounts</span><strong id="totalUsersStat">—</strong><small>All registered profiles</small></article>
+            <article class="stat-card"><span>Email verified</span><strong id="verifiedUsersStat">—</strong><small id="verifiedUsersNote">Confirmed accounts</small></article>
+            <article class="stat-card"><span>Discovery access</span><strong id="discoveryUsersStat">—</strong><small>Active one-time access</small></article>
+            <article class="stat-card"><span>Open help</span><strong id="openSupportStat">—</strong><small>New or active requests</small></article>
+          </div>
+
+          <dl class="attention-grid" aria-label="Items requiring attention">
+            <div><dt>Suspended accounts</dt><dd id="suspendedUsersStat">—</dd></div>
+            <div><dt>Active sessions</dt><dd id="activeSessionsStat">—</dd></div>
+            <div><dt>Pending payments</dt><dd id="pendingPaymentsStat">—</dd></div>
+            <div><dt>Deletion requests</dt><dd id="pendingDeletionsStat">—</dd></div>
+          </dl>
+
+          <div class="panel system-panel">
+            <div class="panel-heading"><div><p class="panel-index">Live services</p><h3>SYSTEM READINESS</h3></div><p>Configuration status only. No credentials are shown here.</p></div>
+            <ul class="system-grid" id="systemGrid">
+              <li><span class="status-dot" aria-hidden="true"></span><div><strong>Account storage</strong><small id="storageStatus">Checking…</small></div></li>
+              <li><span class="status-dot" aria-hidden="true"></span><div><strong>Email delivery</strong><small id="emailStatus">Checking…</small></div></li>
+              <li><span class="status-dot" aria-hidden="true"></span><div><strong>Paddle checkout</strong><small id="paymentStatus">Checking…</small></div></li>
+              <li><span class="status-dot" aria-hidden="true"></span><div><strong>Webhook protection</strong><small id="webhookStatus">Checking…</small></div></li>
+            </ul>
+            <p class="section-status" id="overviewStatus" role="status" aria-live="polite"></p>
+          </div>
+        </section>
+
+        <section class="admin-section" id="peopleSection" data-panel="people" role="tabpanel" aria-labelledby="peopleTab" hidden>
+          <div class="section-heading">
+            <div><p class="panel-index">02 / People</p><h2 id="peopleTitle">FIND AN ACCOUNT.</h2></div>
+          </div>
+          <form class="panel filter-panel" id="userSearchForm" role="search">
+            <div class="field field-grow">
+              <label for="userQuery">Email, name, user ID, or Paddle transaction ID</label>
+              <input id="userQuery" name="q" type="search" maxlength="254" autocomplete="off" enterkeyhint="search" placeholder="Search accounts" />
+            </div>
+            <button class="button button-dark" id="userSearchButton" type="submit">Search <span aria-hidden="true">→</span></button>
+            <button class="button button-light" id="clearUserSearch" type="button">Clear</button>
+          </form>
+          <div class="result-toolbar">
+            <p id="userResultCount" role="status" aria-live="polite" aria-atomic="true">Open this section to load accounts.</p>
+            <div class="pagination"><button id="previousUsers" type="button" disabled>← Previous</button><button id="nextUsers" type="button" disabled>Next →</button></div>
+          </div>
+          <ul class="record-list" id="userResults" aria-label="Account search results" aria-busy="false"></ul>
+          <div class="empty-state" id="userEmpty" hidden><strong>NO ACCOUNTS FOUND.</strong><p>Try the full email address, part of the name, the user ID, or a Paddle transaction ID.</p></div>
+          <p class="section-status" id="usersStatus" role="status" aria-live="polite"></p>
+        </section>
+
+        <section class="admin-section" id="supportSection" data-panel="support" role="tabpanel" aria-labelledby="supportTab" hidden>
+          <div class="section-heading">
+            <div><p class="panel-index">03 / Help desk</p><h2 id="supportTitle">HELP, ORGANIZED.</h2></div>
+            <button class="button button-light compact-button" id="refreshSupport" type="button">Refresh <span aria-hidden="true">↻</span></button>
+          </div>
+          <form class="panel support-filter" id="supportFilterForm">
+            <div class="field">
+              <label for="supportStatusFilter">Request status</label>
+              <select id="supportStatusFilter" name="status">
+                <option value="">All requests</option>
+                <option value="new">New</option>
+                <option value="open">Open</option>
+                <option value="waiting">Waiting on user</option>
+                <option value="resolved">Resolved</option>
+              </select>
+            </div>
+            <button class="button button-dark" type="submit">Apply filter <span aria-hidden="true">→</span></button>
+          </form>
+          <div class="result-toolbar">
+            <p id="supportResultCount" role="status" aria-live="polite" aria-atomic="true">Open this section to load help requests.</p>
+            <div class="pagination"><button id="previousSupport" type="button" disabled>← Previous</button><button id="nextSupport" type="button" disabled>Next →</button></div>
+          </div>
+          <ul class="record-list" id="supportResults" aria-label="Support requests" aria-busy="false"></ul>
+          <div class="empty-state" id="supportEmpty" hidden><strong>THE QUEUE IS CLEAR.</strong><p>No help requests match this status.</p></div>
+          <p class="section-status" id="supportStatus" role="status" aria-live="polite"></p>
+        </section>
+
+        <section class="admin-section" id="activitySection" data-panel="activity" role="tabpanel" aria-labelledby="activityTab" hidden>
+          <div class="section-heading">
+            <div><p class="panel-index">04 / Activity</p><h2 id="activityTitle">ADMIN ACTIONS.</h2></div>
+            <button class="button button-light compact-button" id="refreshAudit" type="button">Refresh <span aria-hidden="true">↻</span></button>
+          </div>
+          <p class="section-lede">A read-only record of administrator activity. Secrets and private action links must never appear here.</p>
+          <ol class="audit-list panel" id="auditResults" aria-busy="false"></ol>
+          <div class="empty-state" id="auditEmpty" hidden><strong>NO ACTIVITY YET.</strong><p>Completed account and support actions will appear here.</p></div>
+          <p class="section-status" id="auditStatus" role="status" aria-live="polite"></p>
+        </section>
+      </div>
+    </main>
+
+    <dialog class="record-dialog" id="userDialog" aria-labelledby="userDialogTitle">
+      <div class="dialog-header">
+        <div><p class="panel-index">Account details</p><h2 id="userDialogTitle" tabindex="-1">USER</h2></div>
+        <button class="icon-button" id="closeUserDialog" type="button" aria-label="Close account details">×</button>
+      </div>
+      <div class="dialog-body">
+        <p class="dialog-lede" id="userDialogEmail"></p>
+        <p class="section-status" id="userDetailStatus" role="status" aria-live="polite"></p>
+        <dl class="fact-grid" id="userFacts"></dl>
+        <section class="action-zone" aria-labelledby="userActionsTitle">
+          <p class="panel-index">Audited controls</p><h3 id="userActionsTitle">ACCOUNT ACTIONS</h3>
+          <p>STRATA sends private links to the registered email. It never reveals a password, verification code, or reset token.</p>
+          <div class="action-grid">
+            <button type="button" data-user-action="send-password-reset">Send password reset <span aria-hidden="true">→</span></button>
+            <button type="button" data-user-action="send-delete-link">Send deletion link <span aria-hidden="true">→</span></button>
+            <button type="button" data-user-action="cancel-deletion">Cancel deletion request <span aria-hidden="true">×</span></button>
+            <button type="button" data-user-action="revoke-sessions">Revoke all sessions <span aria-hidden="true">×</span></button>
+            <button class="danger-button" type="button" data-user-action="suspend">Suspend account <span aria-hidden="true">!</span></button>
+            <button type="button" data-user-action="restore">Restore account <span aria-hidden="true">↻</span></button>
+          </div>
+        </section>
+      </div>
+    </dialog>
+
+    <dialog class="confirm-dialog" id="confirmDialog" aria-labelledby="confirmTitle" aria-describedby="confirmDescription">
+      <form id="confirmForm">
+        <div class="dialog-header">
+          <div><p class="panel-index">Confirm action</p><h2 id="confirmTitle">ARE YOU SURE?</h2></div>
+          <button class="icon-button" id="closeConfirmDialog" type="button" aria-label="Cancel action">×</button>
+        </div>
+        <div class="dialog-body">
+          <p class="dialog-lede" id="confirmDescription"></p>
+          <div class="field">
+            <label for="actionReason">Reason for the audit log</label>
+            <textarea id="actionReason" minlength="4" maxlength="200" required placeholder="Briefly explain why this action is needed."></textarea>
+          </div>
+          <div class="field">
+            <label for="actionConfirmation">Type <strong id="confirmationPhrase">CONFIRM</strong> to continue</label>
+            <input id="actionConfirmation" maxlength="254" autocomplete="off" autocapitalize="characters" spellcheck="false" required />
+          </div>
+          <div class="dialog-message" id="confirmMessage" role="alert" tabindex="-1" hidden></div>
+          <div class="dialog-actions"><button class="button button-light" id="cancelAction" type="button">Cancel</button><button class="button danger-submit" id="submitAction" type="submit">Confirm action <span aria-hidden="true">→</span></button></div>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="record-dialog support-dialog" id="supportDialog" aria-labelledby="supportDialogTitle">
+      <div class="dialog-header">
+        <div><p class="panel-index">Help request</p><h2 id="supportDialogTitle" tabindex="-1">REQUEST</h2></div>
+        <button class="icon-button" id="closeSupportDialog" type="button" aria-label="Close help request">×</button>
+      </div>
+      <div class="dialog-body">
+        <p class="dialog-lede" id="supportDialogIdentity"></p>
+        <dl class="fact-grid" id="supportFacts"></dl>
+        <section class="ticket-message" aria-labelledby="ticketMessageTitle"><h3 id="ticketMessageTitle">MESSAGE</h3><p id="ticketMessage"></p></section>
+        <form class="support-workflow" id="supportUpdateForm">
+          <div class="field">
+            <label for="ticketStatus">Status</label>
+            <select id="ticketStatus" required><option value="new">New</option><option value="open">Open</option><option value="waiting">Waiting on user</option><option value="resolved">Resolved</option></select>
+          </div>
+          <div class="field">
+            <label for="ticketNote">Private note <span>Optional · never emailed</span></label>
+            <textarea id="ticketNote" maxlength="1000" placeholder="Add internal context for the next review."></textarea>
+          </div>
+          <div class="field">
+            <label for="ticketResponse">Email response <span>Optional · sent through STRATA</span></label>
+            <textarea id="ticketResponse" maxlength="2000" placeholder="Write a reply without requesting passwords, codes, or secret links."></textarea>
+            <small class="field-hint">Responses are sent immediately when you submit. This field is not a draft box.</small>
+          </div>
+          <div class="dialog-message" id="supportUpdateMessage" role="alert" tabindex="-1" hidden></div>
+          <div class="dialog-actions"><button class="button button-light" id="cancelSupportUpdate" type="button">Close</button><button class="button button-dark" id="saveSupportUpdate" type="submit">Save update <span aria-hidden="true">→</span></button></div>
+        </form>
+      </div>
+    </dialog>
+
+    <footer class="admin-footer">STRATA · Build 6.8.0 · Private administration · <a href="/contact">Contact</a> · <a href="/privacy">Privacy</a></footer>
+    <noscript><p class="noscript-message">JavaScript is required for private administration. Your public STRATA pages still work normally.</p></noscript>
+    <script src="/admin.js?v=6.8.0"></script>
+  </body>
+</html>

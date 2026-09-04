@@ -26,6 +26,7 @@ test("keeps root, private server, and public browser files separated",()=>{
     "server.js","src/server.js","src/database.js","src/email.js","src/payments.js",
     "src/data/discovery-data.json","public/pages/index.html","public/pages/forgot-password.html",
     "public/pages/reset-password.html","public/pages/delete-account.html",
+    "public/pages/admin.html","public/scripts/admin.js","public/styles/admin.css",
     "public/scripts/app.js","public/scripts/account-recovery.js","public/styles/styles.css",
     "public/data/exercises.json","public/service-worker.js","public/manifest.webmanifest"
   ])assert.ok(existsSync(join(PROJECT_ROOT,required)),`${required} must exist`);
@@ -54,7 +55,7 @@ test("keeps credentials, databases, and private modules out of public",()=>{
     assert.doesNotMatch(name,/(?:^|\/)(?:\.env(?:\..*)?|data\/.*\.(?:sqlite(?:-(?:shm|wal))?|db)|.*\.(?:pem|key))$/i);
     if(textExtensions.has(extension)){
       const body=readFileSync(file,"utf8");
-      assert.doesNotMatch(body,/\b(?:PADDLE_API_KEY|PADDLE_WEBHOOK_SECRET|TURSO_AUTH_TOKEN|TURSO_DATABASE_URL|STRATA_DATA_DIR|RESEND_API_KEY|EMAIL_VERIFICATION_SECRET)\b/,`${name} references a server-only environment variable`);
+      assert.doesNotMatch(body,/\b(?:ADMIN_EMAIL|SUPPORT_EMAIL|PADDLE_API_KEY|PADDLE_WEBHOOK_SECRET|TURSO_AUTH_TOKEN|TURSO_DATABASE_URL|STRATA_DATA_DIR|RESEND_API_KEY|EMAIL_VERIFICATION_SECRET)\b/,`${name} references a server-only environment variable`);
       assert.doesNotMatch(body,/pdl_(?:live|sandbox|sdbx)_apikey_[A-Za-z0-9_-]{16,}|pdl_ntfset_[A-Za-z0-9_-]{16,}/i,`${name} contains a Paddle secret`);
       assert.doesNotMatch(body,/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,`${name} contains a private key`);
     }

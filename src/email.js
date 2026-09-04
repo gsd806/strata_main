@@ -55,11 +55,13 @@ function getEmailVerificationConfig(env=process.env) {
   const apiKey=clean(env.RESEND_API_KEY,1000);
   const from=clean(env.EMAIL_FROM,320);
   const replyTo=clean(env.EMAIL_REPLY_TO,320);
+  const supportEmail=clean(env.SUPPORT_EMAIL||env.EMAIL_REPLY_TO,320);
   const verificationSecret=clean(env.EMAIL_VERIFICATION_SECRET,4096);
   const appBaseUrl=validAppBaseUrl(env.APP_BASE_URL,clean(env.NODE_ENV,40));
   const validApiKey=apiKey.startsWith("re_")&&apiKey.length>=20&&!placeholderCredential(apiKey);
   const validFrom=Boolean(mailboxAddress(from));
   const validReplyTo=!replyTo||Boolean(mailboxAddress(replyTo));
+  const validSupportEmail=!supportEmail||Boolean(mailboxAddress(supportEmail));
   const validSecret=verificationSecret.length>=32&&!placeholderCredential(verificationSecret);
   const validBaseUrl=Boolean(appBaseUrl);
   const credentialsValid=validApiKey&&validFrom&&validReplyTo&&validSecret&&validBaseUrl;
@@ -84,6 +86,7 @@ function getEmailVerificationConfig(env=process.env) {
     enabled:requestedEnabled&&credentialsValid,
     from:validFrom?from:"",
     replyTo:validReplyTo?replyTo:"",
+    supportEmail:validSupportEmail?supportEmail:"",
     appBaseUrl:validBaseUrl?appBaseUrl:"",
     missing:Object.freeze(missing)
   });
@@ -276,6 +279,83 @@ async function sendAccountActionEmail(config,message,fetchImpl=globalThis.fetch)
   return {messageId:clean(payload?.id,200)};
 }
 
+async function sendSupportEmail(config,message,fetchImpl=globalThis.fetch) {
+  const secrets=secretsByConfig.get(config);
+  if (!config?.enabled||!config.configured||!secrets?.apiKey) {
+    throw Object.assign(new Error("Support email is not available yet."),{status:503,code:"SUPPORT_EMAIL_UNAVAILABLE"});
+  }
+  const to=normalizedEmail(message?.to);
+  const reference=clean(message?.reference,40);
+  const subject=clean(message?.subject,120);
+  const text=clean(message?.text,6000);
+  const html=String(message?.html||"").slice(0,20_000);
+  const purpose=clean(message?.purpose,40);
+  const replyTo=clean(message?.replyTo||config.replyTo,320);
+  if (!mailboxAddress(to)||!/^STR-[0-9]{4}-[A-Z0-9]{6}$/.test(reference)||!subject||!text||!html||!purpose||(replyTo&&!mailboxAddress(replyTo))) {
+    throw new TypeError("Invalid support email input.");
+  }
+  const idempotencyDigest=digestParts(requireVerificationSecret(config),"support-delivery-v1",[reference,purpose,to]);
+  const body={from:config.from,to:[to],subject,text,html};
+  if (replyTo) body.reply_to=replyTo;
+  let response;
+  try {
+    response=await fetchImpl(`${secrets.apiBase}/emails`,{
+      method:"POST",
+      headers:{
+        Authorization:`Bearer ${secrets.apiKey}`,
+        "Content-Type":"application/json",
+        "Idempotency-Key":`strata-support-${idempotencyDigest}`
+      },
+      signal:timeoutSignal(10_000),
+      body:JSON.stringify(body)
+    });
+  } catch {
+    throw Object.assign(new Error("The support email could not be sent."),{status:502,code:"SUPPORT_EMAIL_DELIVERY_UNAVAILABLE"});
+  }
+  if (!response?.ok) {
+    throw Object.assign(new Error("The support email could not be sent."),{status:502,code:"SUPPORT_EMAIL_DELIVERY_FAILED"});
+  }
+  let payload;
+  try { payload=await response.json(); } catch { payload=null; }
+  return {messageId:clean(payload?.id,200)};
+}
+
+function supportEmailContent(kind,ticket,responseText="",appBaseUrl="") {
+  const name=clean(ticket?.name,80)||"there";
+  const reference=clean(ticket?.reference,40);
+  const subject=clean(ticket?.subject,100);
+  const category=clean(ticket?.category,40);
+  if (kind==="notification") {
+    const adminUrl=`${clean(appBaseUrl,2048)}/admin#support`;
+    const text=[`New STRATA support request ${reference}`,`From: ${name} <${normalizedEmail(ticket?.email)}>`,`Category: ${category}`,`Subject: ${subject}`,ticket?.referenceId?`Customer reference: ${clean(ticket.referenceId,80)}`:"","","Open the private STRATA Admin help desk to read and manage the message.",adminUrl].filter(Boolean).join("\n");
+    const html=`<!doctype html><html><body style="margin:0;padding:24px;background:#f4f2ec;color:#10110f;font-family:Arial,sans-serif"><main style="max-width:620px;margin:auto;background:#fff;padding:32px;border:1px solid #bbb"><p>New STRATA support request</p><h1 style="font-size:24px">${escapeHtml(reference)}</h1><p><strong>From:</strong> ${escapeHtml(name)} &lt;${escapeHtml(normalizedEmail(ticket?.email))}&gt;<br><strong>Category:</strong> ${escapeHtml(category)}<br><strong>Subject:</strong> ${escapeHtml(subject)}</p><p><a href="${escapeHtml(adminUrl)}">Open the private STRATA Admin help desk</a> to read and manage the message.</p></main></body></html>`;
+    return {subject:`[${reference}] ${subject}`,text,html};
+  }
+  if (kind==="response") {
+    const response=clean(responseText,2000);
+    const text=[`Hi ${name},`,"",response,"",`Support reference: ${reference}`,"Reply to this email if you still need help."].join("\n");
+    const html=`<!doctype html><html><body style="margin:0;padding:24px;background:#f4f2ec;color:#10110f;font-family:Arial,sans-serif"><main style="max-width:560px;margin:auto;background:#fff;padding:32px;border:1px solid #bbb"><p>Hi ${escapeHtml(name)},</p><p style="white-space:pre-wrap">${escapeHtml(response)}</p><p><strong>Support reference:</strong> ${escapeHtml(reference)}</p><p>Reply to this email if you still need help.</p></main></body></html>`;
+    return {subject:`Re: [${reference}] ${subject}`,text,html};
+  }
+  const text=[`Hi ${name},`,"",`We received your STRATA support request about “${subject}”.`,`Your reference is ${reference}.`,"",`Reply to this email if you need to add information. Never send passwords, verification codes, recovery links, or payment-card details.`].join("\n");
+  const html=`<!doctype html><html><body style="margin:0;padding:24px;background:#f4f2ec;color:#10110f;font-family:Arial,sans-serif"><main style="max-width:560px;margin:auto;background:#fff;padding:32px;border:1px solid #bbb"><p>Hi ${escapeHtml(name)},</p><h1 style="font-size:24px">We received your request</h1><p>Your STRATA support reference is <strong>${escapeHtml(reference)}</strong>.</p><p>Reply to this email if you need to add information. Never send passwords, verification codes, recovery links, or payment-card details.</p></main></body></html>`;
+  return {subject:`STRATA support received — ${reference}`,text,html};
+}
+
+async function sendSupportAcknowledgment(config,ticket,fetchImpl=globalThis.fetch) {
+  return sendSupportEmail(config,{to:ticket.email,reference:ticket.reference,purpose:"acknowledgment",...supportEmailContent("acknowledgment",ticket)},fetchImpl);
+}
+
+async function sendSupportNotification(config,ticket,fetchImpl=globalThis.fetch) {
+  if (!config?.supportEmail) return {messageId:""};
+  return sendSupportEmail(config,{to:config.supportEmail,replyTo:ticket.email,reference:ticket.reference,purpose:"notification",...supportEmailContent("notification",ticket,"",config.appBaseUrl)},fetchImpl);
+}
+
+async function sendSupportResponse(config,ticket,response,fetchImpl=globalThis.fetch) {
+  const responseDigest=digestParts(requireVerificationSecret(config),"support-response-v1",[ticket.reference,response]).slice(0,12);
+  return sendSupportEmail(config,{to:ticket.email,reference:ticket.reference,purpose:`response-${Number(ticket.updated_at)||0}-${responseDigest}`,...supportEmailContent("response",ticket,response)},fetchImpl);
+}
+
 module.exports = {
   directSignupAllowed,
   escapeHtml,
@@ -284,6 +364,9 @@ module.exports = {
   maskEmail,
   safeDigestEqual,
   sendAccountActionEmail,
+  sendSupportAcknowledgment,
+  sendSupportNotification,
+  sendSupportResponse,
   sendVerificationEmail,
   verificationCodeDigest,
   verificationEmailHash

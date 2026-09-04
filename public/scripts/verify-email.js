@@ -9,6 +9,7 @@ function safeNext(raw,exerciseId){
   if(/^\/planner\.html\?add=[a-z0-9-]{2,80}$/.test(raw||""))return raw;
   if(raw==="pricing"||raw==="/pricing"||raw==="/pricing.html")return "/pricing";
   if(raw==="discover"||raw==="/discover.html")return "/discover.html";
+  if(raw==="admin"||raw==="/admin"||raw==="/admin.html")return "/admin";
   return "/planner.html";
 }
 
@@ -16,6 +17,7 @@ function accountLocation(destination,mode="signup"){
   const query=new URLSearchParams({mode:mode==="login"?"login":"signup"});
   if(destination==="/pricing")query.set("next","pricing");
   else if(destination==="/discover.html")query.set("next","discover");
+  else if(destination==="/admin")query.set("next","admin");
   else{
     query.set("next","planner");
     const add=new URL(destination,"https://strata.local").searchParams.get("add");

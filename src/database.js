@@ -12,7 +12,8 @@ const SCHEMA = [
     password_salt TEXT NOT NULL,
     created_at INTEGER NOT NULL,
     email_verified_at INTEGER,
-    auth_version INTEGER NOT NULL DEFAULT 1
+    auth_version INTEGER NOT NULL DEFAULT 1,
+    suspended_at INTEGER
   )`,
   `CREATE TABLE IF NOT EXISTS sessions (
     token_hash TEXT PRIMARY KEY,
@@ -145,16 +146,77 @@ const SCHEMA = [
     event_type TEXT NOT NULL,
     occurred_at INTEGER NOT NULL,
     processed_at INTEGER NOT NULL
-  )`
+  )`,
+  `CREATE TABLE IF NOT EXISTS support_tickets (
+    id TEXT PRIMARY KEY,
+    reference TEXT NOT NULL UNIQUE,
+    user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL COLLATE NOCASE,
+    category TEXT NOT NULL CHECK(category IN ('account','password','payment','privacy','exercise','other')),
+    subject TEXT NOT NULL,
+    reference_id TEXT,
+    message TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'new' CHECK(status IN ('new','open','waiting','resolved')),
+    admin_note TEXT,
+    last_response_at INTEGER,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`,
+  "CREATE INDEX IF NOT EXISTS support_tickets_status_updated ON support_tickets(status,updated_at DESC)",
+  "CREATE INDEX IF NOT EXISTS support_tickets_email ON support_tickets(email,created_at DESC)",
+  `CREATE TABLE IF NOT EXISTS support_request_events (
+    id TEXT PRIMARY KEY,
+    ip_hash TEXT NOT NULL,
+    email_hash TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  )`,
+  "CREATE INDEX IF NOT EXISTS support_request_events_ip_time ON support_request_events(ip_hash,created_at)",
+  "CREATE INDEX IF NOT EXISTS support_request_events_email_time ON support_request_events(email_hash,created_at)",
+  "CREATE INDEX IF NOT EXISTS support_request_events_time ON support_request_events(created_at)",
+  `CREATE TABLE IF NOT EXISTS admin_principal (
+    slot TEXT PRIMARY KEY CHECK(slot='primary'),
+    user_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE RESTRICT,
+    configured_email TEXT NOT NULL COLLATE NOCASE,
+    bound_at INTEGER NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS admin_elevations (
+    session_token_hash TEXT PRIMARY KEY REFERENCES sessions(token_hash) ON DELETE CASCADE,
+    expires_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL
+  )`,
+  "CREATE INDEX IF NOT EXISTS admin_elevations_expiry ON admin_elevations(expires_at)",
+  `CREATE TABLE IF NOT EXISTS admin_audit_events (
+    id TEXT PRIMARY KEY,
+    actor_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    target_user_id TEXT,
+    action TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    result TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  )`,
+  "CREATE INDEX IF NOT EXISTS admin_audit_created ON admin_audit_events(created_at DESC)",
+  "CREATE INDEX IF NOT EXISTS admin_audit_actor ON admin_audit_events(actor_user_id,created_at DESC)",
+  `CREATE TRIGGER IF NOT EXISTS admin_principal_secure_claim
+    AFTER INSERT ON admin_principal
+    BEGIN
+      UPDATE users SET auth_version=auth_version+1 WHERE id=NEW.user_id;
+      DELETE FROM sessions WHERE user_id=NEW.user_id;
+      DELETE FROM account_action_requests WHERE user_id=NEW.user_id;
+      DELETE FROM account_action_deliveries WHERE user_id=NEW.user_id;
+      INSERT INTO admin_audit_events(id,actor_user_id,target_user_id,action,reason,result,created_at)
+      VALUES(lower(hex(randomblob(16))),NEW.user_id,NEW.user_id,'admin-bound','Primary administrator activated','success',NEW.bound_at);
+    END`
 ];
 
 const SQL = {
   ping:"SELECT 1 AS ok",
   userByEmail:"SELECT * FROM users WHERE email = ?",
-  userById:"SELECT id,name,email,created_at,email_verified_at,auth_version FROM users WHERE id = ?",
+  userById:"SELECT id,name,email,created_at,email_verified_at,auth_version,suspended_at FROM users WHERE id = ?",
+  accountCredentialsById:"SELECT id,email,password_hash,password_salt,auth_version,suspended_at FROM users WHERE id = ?",
   insertUser:"INSERT INTO users(id,name,email,password_hash,password_salt,created_at,email_verified_at) VALUES(?,?,?,?,?,?,?)",
-  insertSession:"INSERT INTO sessions(token_hash,user_id,csrf_token,expires_at,created_at,auth_version) SELECT ?,id,?,?,?,auth_version FROM users WHERE id=? AND auth_version=? RETURNING token_hash",
-  session:"SELECT s.token_hash,s.csrf_token,s.expires_at,u.id,u.name,u.email,u.created_at,u.email_verified_at,u.auth_version FROM sessions s JOIN users u ON u.id=s.user_id AND u.auth_version=s.auth_version WHERE s.token_hash=? AND s.expires_at>?",
+  insertSession:"INSERT INTO sessions(token_hash,user_id,csrf_token,expires_at,created_at,auth_version) SELECT ?,id,?,?,?,auth_version FROM users WHERE id=? AND auth_version=? AND suspended_at IS NULL RETURNING token_hash",
+  session:"SELECT s.token_hash,s.csrf_token,s.expires_at,u.id,u.name,u.email,u.created_at,u.email_verified_at,u.auth_version,u.suspended_at FROM sessions s JOIN users u ON u.id=s.user_id AND u.auth_version=s.auth_version AND u.suspended_at IS NULL WHERE s.token_hash=? AND s.expires_at>?",
   deleteSession:"DELETE FROM sessions WHERE token_hash=?",
   deleteExpired:"DELETE FROM sessions WHERE expires_at<=?",
   verificationByTokenHash:"SELECT challenge_id,browser_token_hash,user_id,purpose,email,name,password_hash,password_salt,code_digest,generation,attempts_used,send_count,last_sent_at,expires_at,hard_expires_at,delivery_state,consumed_at,created_at,updated_at FROM signup_verifications WHERE browser_token_hash=?",
@@ -164,12 +226,12 @@ const SQL = {
   markVerificationDelivery:"UPDATE signup_verifications SET delivery_state=?,updated_at=? WHERE challenge_id=? AND generation=? AND consumed_at IS NULL RETURNING challenge_id",
   claimVerificationAttempt:"UPDATE signup_verifications SET attempts_used=attempts_used+1,updated_at=? WHERE challenge_id=? AND generation=? AND consumed_at IS NULL AND expires_at>? AND hard_expires_at>? AND attempts_used<? RETURNING challenge_id,browser_token_hash,user_id,purpose,email,name,password_hash,password_salt,code_digest,generation,attempts_used,send_count,last_sent_at,expires_at,hard_expires_at,delivery_state,consumed_at,created_at,updated_at",
   consumeVerification:"UPDATE signup_verifications SET code_digest='',password_hash='',password_salt='',delivery_state='consumed',consumed_at=?,updated_at=? WHERE challenge_id=? AND generation=? AND consumed_at IS NULL RETURNING challenge_id,browser_token_hash,user_id,purpose,email,name,password_hash,password_salt,code_digest,generation,attempts_used,send_count,last_sent_at,expires_at,hard_expires_at,delivery_state,consumed_at,created_at,updated_at",
-  completeSignupInsert:"INSERT INTO users(id,name,email,password_hash,password_salt,created_at,email_verified_at) SELECT user_id,name,email,password_hash,password_salt,?,? FROM signup_verifications WHERE challenge_id=? AND generation=? AND purpose='signup' AND consumed_at IS NULL AND expires_at>? AND hard_expires_at>? RETURNING id,name,email,created_at,email_verified_at,auth_version",
+  completeSignupInsert:"INSERT INTO users(id,name,email,password_hash,password_salt,created_at,email_verified_at) SELECT user_id,name,email,password_hash,password_salt,?,? FROM signup_verifications WHERE challenge_id=? AND generation=? AND purpose='signup' AND consumed_at IS NULL AND expires_at>? AND hard_expires_at>? RETURNING id,name,email,created_at,email_verified_at,auth_version,suspended_at",
   completeSignupConsume:"UPDATE signup_verifications SET code_digest='',password_hash='',password_salt='',delivery_state='consumed',consumed_at=?,updated_at=? WHERE changes()=1 AND challenge_id=? AND generation=? AND purpose='signup' AND consumed_at IS NULL AND expires_at>? AND hard_expires_at>? RETURNING challenge_id",
   completeSignupSession:"INSERT INTO sessions(token_hash,user_id,csrf_token,expires_at,created_at,auth_version) SELECT ?,v.user_id,?,?,?,u.auth_version FROM signup_verifications v JOIN users u ON u.id=v.user_id WHERE changes()=1 AND v.challenge_id=? AND v.generation=? AND v.purpose='signup' AND v.consumed_at=? RETURNING token_hash",
-  completeLoginVerifyUser:"UPDATE users SET email_verified_at=? WHERE email_verified_at IS NULL AND id=(SELECT user_id FROM signup_verifications WHERE challenge_id=? AND generation=? AND purpose='login' AND consumed_at IS NULL AND expires_at>? AND hard_expires_at>?) RETURNING id,name,email,created_at,email_verified_at,auth_version",
+  completeLoginVerifyUser:"UPDATE users SET email_verified_at=? WHERE email_verified_at IS NULL AND suspended_at IS NULL AND id=(SELECT user_id FROM signup_verifications WHERE challenge_id=? AND generation=? AND purpose='login' AND consumed_at IS NULL AND expires_at>? AND hard_expires_at>?) RETURNING id,name,email,created_at,email_verified_at,auth_version,suspended_at",
   completeLoginConsume:"UPDATE signup_verifications SET code_digest='',password_hash='',password_salt='',delivery_state='consumed',consumed_at=?,updated_at=? WHERE changes()=1 AND challenge_id=? AND generation=? AND purpose='login' AND consumed_at IS NULL AND expires_at>? AND hard_expires_at>? RETURNING challenge_id",
-  completeLoginSession:"INSERT INTO sessions(token_hash,user_id,csrf_token,expires_at,created_at,auth_version) SELECT ?,v.user_id,?,?,?,u.auth_version FROM signup_verifications v JOIN users u ON u.id=v.user_id WHERE changes()=1 AND v.challenge_id=? AND v.generation=? AND v.purpose='login' AND v.consumed_at=? RETURNING token_hash",
+  completeLoginSession:"INSERT INTO sessions(token_hash,user_id,csrf_token,expires_at,created_at,auth_version) SELECT ?,v.user_id,?,?,?,u.auth_version FROM signup_verifications v JOIN users u ON u.id=v.user_id AND u.suspended_at IS NULL WHERE changes()=1 AND v.challenge_id=? AND v.generation=? AND v.purpose='login' AND v.consumed_at=? RETURNING token_hash",
   completeLoginDeleteOldSessions:"DELETE FROM sessions WHERE changes()=1 AND user_id=(SELECT user_id FROM signup_verifications WHERE challenge_id=? AND generation=? AND purpose='login' AND consumed_at=?) AND token_hash<>? RETURNING token_hash",
   countVerificationSends:"SELECT COUNT(*) AS send_count FROM email_verification_sends WHERE email_hash=? AND sent_at>=?",
   recordVerificationSend:"INSERT INTO email_verification_sends(send_id,email_hash,challenge_id,generation,sent_at) VALUES(?,?,?,?,?)",
@@ -192,14 +254,15 @@ const SQL = {
   activeAccountDeletion:"SELECT request_id,expires_at FROM account_action_requests WHERE user_id=? AND purpose='account_delete' AND delivery_state='sent' AND consumed_at IS NULL AND expires_at>?",
   cancelAccountDeletion:"DELETE FROM account_action_requests WHERE user_id=? AND purpose='account_delete' AND delivery_state='sent' AND consumed_at IS NULL RETURNING request_id",
   cancelStagedAccountDeletions:"DELETE FROM account_action_deliveries WHERE user_id=? AND purpose='account_delete' RETURNING request_id",
-  completePasswordResetUser:"UPDATE users SET password_hash=?,password_salt=?,email_verified_at=COALESCE(email_verified_at,?),auth_version=auth_version+1 WHERE id=(SELECT user_id FROM account_action_requests WHERE token_hash=? AND purpose='password_reset' AND delivery_state='sent' AND consumed_at IS NULL AND expires_at>?) RETURNING id,name,email,created_at,email_verified_at,auth_version",
+  cancelStagedAccountDeletionsIfAudit:"DELETE FROM account_action_deliveries WHERE user_id=? AND purpose='account_delete' AND EXISTS(SELECT 1 FROM admin_audit_events WHERE id=?) RETURNING request_id",
+  completePasswordResetUser:"UPDATE users SET password_hash=?,password_salt=?,email_verified_at=COALESCE(email_verified_at,?),auth_version=auth_version+1 WHERE id=(SELECT user_id FROM account_action_requests WHERE token_hash=? AND purpose='password_reset' AND delivery_state='sent' AND consumed_at IS NULL AND expires_at>?) RETURNING id,name,email,created_at,email_verified_at,auth_version,suspended_at",
   completePasswordResetConsume:"UPDATE account_action_requests SET consumed_at=?,delivery_state='consumed',updated_at=? WHERE changes()=1 AND token_hash=? AND purpose='password_reset' AND delivery_state='sent' AND consumed_at IS NULL AND expires_at>? RETURNING user_id",
   completePasswordResetDeleteSessions:"DELETE FROM sessions WHERE user_id=(SELECT user_id FROM account_action_requests WHERE token_hash=? AND purpose='password_reset' AND consumed_at=?) RETURNING token_hash",
   completePasswordResetDeleteStagedActions:"DELETE FROM account_action_deliveries WHERE user_id=(SELECT user_id FROM account_action_requests WHERE token_hash=? AND purpose='password_reset' AND consumed_at=?) RETURNING request_id",
   completePasswordResetDeleteActions:"DELETE FROM account_action_requests WHERE user_id=(SELECT user_id FROM account_action_requests WHERE token_hash=? AND purpose='password_reset' AND consumed_at=?) RETURNING request_id",
   pendingPurchasesForUser:"SELECT COUNT(*) AS pending_count FROM paddle_purchases WHERE user_id=? AND paddle_status<>'canceled' AND completed_at IS NULL AND access_revoked_at IS NULL",
   unsettledPurchasesForUser:"SELECT transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at FROM paddle_purchases WHERE user_id=? AND paddle_status<>'canceled' AND completed_at IS NULL AND access_revoked_at IS NULL ORDER BY created_at",
-  deleteUserWithAction:"DELETE FROM users WHERE id=(SELECT user_id FROM account_action_requests WHERE token_hash=? AND purpose='account_delete' AND delivery_state='sent' AND consumed_at IS NULL AND expires_at>?) AND NOT EXISTS (SELECT 1 FROM paddle_purchases p WHERE p.user_id=users.id AND p.paddle_status<>'canceled' AND p.completed_at IS NULL AND p.access_revoked_at IS NULL) RETURNING id,email",
+  deleteUserWithAction:"DELETE FROM users WHERE id=(SELECT user_id FROM account_action_requests WHERE token_hash=? AND purpose='account_delete' AND delivery_state='sent' AND consumed_at IS NULL AND expires_at>?) AND NOT EXISTS (SELECT 1 FROM admin_principal ap WHERE ap.user_id=users.id) AND NOT EXISTS (SELECT 1 FROM paddle_purchases p WHERE p.user_id=users.id AND p.paddle_status<>'canceled' AND p.completed_at IS NULL AND p.access_revoked_at IS NULL) RETURNING id,email",
   deleteVerificationSendsForDeletedUser:"DELETE FROM email_verification_sends WHERE challenge_id IN (SELECT challenge_id FROM signup_verifications WHERE user_id=? OR email=?) AND NOT EXISTS (SELECT 1 FROM users WHERE id=?)",
   deleteVerificationsForDeletedUser:"DELETE FROM signup_verifications WHERE (user_id=? OR email=?) AND NOT EXISTS (SELECT 1 FROM users WHERE id=?)",
   deleteActionSendsForDeletedUser:"DELETE FROM account_action_sends WHERE email_hash=? AND NOT EXISTS (SELECT 1 FROM users WHERE id=?)",
@@ -211,7 +274,7 @@ const SQL = {
   ratingAggregates:"SELECT exercise_id,COUNT(*) AS rating_count,AVG(comfort) AS comfort,AVG(pump) AS pump,AVG(enjoyment) AS enjoyment,AVG(stability) AS stability,AVG(setup) AS setup,AVG(overall) AS overall FROM ratings GROUP BY exercise_id",
   ratingAggregate:"SELECT exercise_id,COUNT(*) AS rating_count,AVG(comfort) AS comfort,AVG(pump) AS pump,AVG(enjoyment) AS enjoyment,AVG(stability) AS stability,AVG(setup) AS setup,AVG(overall) AS overall FROM ratings WHERE exercise_id=? GROUP BY exercise_id",
   upsertRating:"INSERT INTO ratings(user_id,exercise_id,comfort,pump,enjoyment,stability,setup,overall,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,exercise_id) DO UPDATE SET comfort=excluded.comfort,pump=excluded.pump,enjoyment=excluded.enjoyment,stability=excluded.stability,setup=excluded.setup,overall=excluded.overall,updated_at=excluded.updated_at",
-  insertPendingPurchase:"INSERT INTO paddle_purchases(transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at) SELECT ?,u.id,?,?,NULL,?,NULL,NULL,NULL,?,? FROM users u WHERE u.id=? AND NOT EXISTS (SELECT 1 FROM account_action_requests a WHERE a.user_id=u.id AND a.purpose='account_delete' AND a.delivery_state='sent' AND a.consumed_at IS NULL AND a.expires_at>?) RETURNING transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at",
+  insertPendingPurchase:"INSERT INTO paddle_purchases(transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at) SELECT ?,u.id,?,?,NULL,?,NULL,NULL,NULL,?,? FROM users u WHERE u.id=? AND u.suspended_at IS NULL AND NOT EXISTS (SELECT 1 FROM account_action_requests a WHERE a.user_id=u.id AND a.purpose='account_delete' AND a.delivery_state='sent' AND a.consumed_at IS NULL AND a.expires_at>?) RETURNING transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at",
   purchaseByTransaction:"SELECT transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at FROM paddle_purchases WHERE transaction_id=?",
   pendingPurchaseForUser:"SELECT transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at FROM paddle_purchases WHERE user_id=? AND price_id=? AND paddle_status IN ('draft','ready') AND completed_at IS NULL AND access_revoked_at IS NULL ORDER BY created_at DESC LIMIT 1",
   completePurchase:"UPDATE paddle_purchases SET customer_id=COALESCE(?,customer_id),paddle_status='completed',completed_at=COALESCE(completed_at,?),updated_at=MAX(updated_at,?) WHERE transaction_id=?",
@@ -222,7 +285,34 @@ const SQL = {
   discoveryAccessSummary:"SELECT COUNT(*) AS purchase_count,COALESCE(SUM(CASE WHEN paddle_status='completed' AND completed_at IS NOT NULL AND access_revoked_at IS NULL THEN 1 ELSE 0 END),0) AS active_purchase_count,COALESCE(SUM(CASE WHEN paddle_status<>'canceled' AND completed_at IS NULL AND access_revoked_at IS NULL THEN 1 ELSE 0 END),0) AS pending_purchase_count,MAX(CASE WHEN paddle_status='completed' AND access_revoked_at IS NULL THEN completed_at ELSE NULL END) AS latest_active_purchase_at,MAX(completed_at) AS latest_completed_at,MAX(access_revoked_at) AS latest_revoked_at FROM paddle_purchases WHERE user_id=? AND (? IS NULL OR price_id=?)",
   adjustmentById:"SELECT adjustment_id,transaction_id,action,type,status,occurred_at,updated_at FROM paddle_adjustments WHERE adjustment_id=?",
   webhookEvent:"SELECT event_id,notification_id,event_type,occurred_at,processed_at FROM paddle_webhook_events WHERE event_id=?",
-  recordWebhookEvent:"INSERT INTO paddle_webhook_events(event_id,notification_id,event_type,occurred_at,processed_at) VALUES(?,?,?,?,?) ON CONFLICT(event_id) DO NOTHING RETURNING event_id"
+  recordWebhookEvent:"INSERT INTO paddle_webhook_events(event_id,notification_id,event_type,occurred_at,processed_at) VALUES(?,?,?,?,?) ON CONFLICT(event_id) DO NOTHING RETURNING event_id",
+  adminOverview:"SELECT (SELECT COUNT(*) FROM users) AS total_users,(SELECT COUNT(*) FROM users WHERE email_verified_at IS NOT NULL) AS verified_users,(SELECT COUNT(*) FROM users WHERE suspended_at IS NOT NULL) AS suspended_users,(SELECT COUNT(*) FROM sessions s JOIN users u ON u.id=s.user_id AND u.auth_version=s.auth_version WHERE s.expires_at>? AND u.suspended_at IS NULL) AS active_sessions,(SELECT COUNT(DISTINCT user_id) FROM paddle_purchases WHERE paddle_status='completed' AND completed_at IS NOT NULL AND access_revoked_at IS NULL) AS discovery_users,(SELECT COUNT(*) FROM paddle_purchases WHERE paddle_status<>'canceled' AND completed_at IS NULL AND access_revoked_at IS NULL) AS pending_payments,(SELECT COUNT(*) FROM account_action_requests WHERE purpose='account_delete' AND delivery_state='sent' AND consumed_at IS NULL AND expires_at>?) AS pending_deletions,(SELECT COUNT(*) FROM support_tickets WHERE status<>'resolved') AS open_support",
+  adminUserById:"SELECT u.id,u.name,u.email,u.created_at,u.email_verified_at,u.auth_version,u.suspended_at,p.plan_json,(SELECT COUNT(*) FROM sessions s WHERE s.user_id=u.id AND s.auth_version=u.auth_version AND s.expires_at>?) AS active_session_count,(SELECT COUNT(*) FROM ratings r WHERE r.user_id=u.id) AS rating_count,(SELECT COUNT(*) FROM paddle_purchases pp WHERE pp.user_id=u.id) AS purchase_count,(SELECT COUNT(*) FROM paddle_purchases pp WHERE pp.user_id=u.id AND pp.paddle_status='completed' AND pp.completed_at IS NOT NULL AND pp.access_revoked_at IS NULL) AS active_purchase_count,(SELECT COUNT(*) FROM paddle_purchases pp WHERE pp.user_id=u.id AND pp.paddle_status<>'canceled' AND pp.completed_at IS NULL AND pp.access_revoked_at IS NULL) AS pending_purchase_count,(SELECT MAX(pp.updated_at) FROM paddle_purchases pp WHERE pp.user_id=u.id) AS latest_purchase_at,(SELECT pp.transaction_id FROM paddle_purchases pp WHERE pp.user_id=u.id ORDER BY pp.updated_at DESC,pp.transaction_id DESC LIMIT 1) AS transaction_id,(SELECT pp.paddle_status FROM paddle_purchases pp WHERE pp.user_id=u.id ORDER BY pp.updated_at DESC,pp.transaction_id DESC LIMIT 1) AS transaction_status,(SELECT request_id FROM account_action_requests a WHERE a.user_id=u.id AND a.purpose='account_delete' AND a.delivery_state='sent' AND a.consumed_at IS NULL AND a.expires_at>? LIMIT 1) AS deletion_request_id,(SELECT expires_at FROM account_action_requests a WHERE a.user_id=u.id AND a.purpose='account_delete' AND a.delivery_state='sent' AND a.consumed_at IS NULL AND a.expires_at>? LIMIT 1) AS deletion_expires_at FROM users u LEFT JOIN plans p ON p.user_id=u.id WHERE u.id=?",
+  adminUsers:"SELECT u.id,u.name,u.email,u.created_at,u.email_verified_at,u.suspended_at,(SELECT COUNT(*) FROM sessions s WHERE s.user_id=u.id AND s.auth_version=u.auth_version AND s.expires_at>?) AS active_session_count,(SELECT COUNT(*) FROM paddle_purchases pp WHERE pp.user_id=u.id) AS purchase_count,(SELECT COUNT(*) FROM paddle_purchases pp WHERE pp.user_id=u.id AND pp.paddle_status='completed' AND pp.completed_at IS NOT NULL AND pp.access_revoked_at IS NULL) AS active_purchase_count,(SELECT COUNT(*) FROM paddle_purchases pp WHERE pp.user_id=u.id AND pp.paddle_status<>'canceled' AND pp.completed_at IS NULL AND pp.access_revoked_at IS NULL) AS pending_purchase_count,(SELECT MAX(pp.updated_at) FROM paddle_purchases pp WHERE pp.user_id=u.id) AS latest_purchase_at,(SELECT pp.transaction_id FROM paddle_purchases pp WHERE pp.user_id=u.id ORDER BY pp.updated_at DESC,pp.transaction_id DESC LIMIT 1) AS transaction_id,(SELECT pp.paddle_status FROM paddle_purchases pp WHERE pp.user_id=u.id ORDER BY pp.updated_at DESC,pp.transaction_id DESC LIMIT 1) AS transaction_status,(SELECT expires_at FROM account_action_requests a WHERE a.user_id=u.id AND a.purpose='account_delete' AND a.delivery_state='sent' AND a.consumed_at IS NULL AND a.expires_at>? LIMIT 1) AS deletion_expires_at FROM users u WHERE (?='' OR lower(u.name) LIKE ? ESCAPE '\\' OR lower(u.email) LIKE ? ESCAPE '\\' OR lower(u.id) LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM paddle_purchases pp WHERE pp.user_id=u.id AND lower(pp.transaction_id) LIKE ? ESCAPE '\\')) ORDER BY u.created_at DESC,u.id DESC LIMIT ? OFFSET ?",
+  adminUserCount:"SELECT COUNT(*) AS total FROM users u WHERE (?='' OR lower(u.name) LIKE ? ESCAPE '\\' OR lower(u.email) LIKE ? ESCAPE '\\' OR lower(u.id) LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM paddle_purchases pp WHERE pp.user_id=u.id AND lower(pp.transaction_id) LIKE ? ESCAPE '\\'))",
+  adminPrincipal:"SELECT ap.slot,ap.user_id,ap.configured_email,ap.bound_at,u.name,u.email,u.email_verified_at,u.suspended_at,u.auth_version FROM admin_principal ap JOIN users u ON u.id=ap.user_id WHERE ap.slot='primary'",
+  insertAdminPrincipal:"INSERT INTO admin_principal(slot,user_id,configured_email,bound_at) SELECT 'primary',id,?,? FROM users WHERE id=? AND email=? COLLATE NOCASE AND email_verified_at IS NOT NULL AND suspended_at IS NULL ON CONFLICT(slot) DO NOTHING RETURNING slot,user_id,configured_email,bound_at",
+  upsertAdminElevation:"INSERT INTO admin_elevations(session_token_hash,expires_at,created_at) SELECT s.token_hash,?,? FROM sessions s JOIN admin_principal ap ON ap.user_id=s.user_id WHERE s.token_hash=? AND s.expires_at>? ON CONFLICT(session_token_hash) DO UPDATE SET expires_at=excluded.expires_at,created_at=excluded.created_at RETURNING session_token_hash,expires_at,created_at",
+  insertRotatedAdminSession:"INSERT INTO sessions(token_hash,user_id,csrf_token,expires_at,created_at,auth_version) SELECT ?,u.id,?,?,?,u.auth_version FROM sessions current JOIN users u ON u.id=current.user_id AND u.auth_version=current.auth_version AND u.suspended_at IS NULL JOIN admin_principal ap ON ap.user_id=u.id AND ap.slot='primary' WHERE current.token_hash=? AND current.expires_at>? AND u.id=? RETURNING token_hash,user_id,csrf_token,expires_at,created_at,auth_version",
+  insertAdminAuditIfSession:"INSERT INTO admin_audit_events(id,actor_user_id,target_user_id,action,reason,result,created_at) SELECT ?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM sessions WHERE token_hash=?) RETURNING id",
+  deleteRotatedAdminSession:"DELETE FROM sessions WHERE token_hash=? AND EXISTS(SELECT 1 FROM sessions WHERE token_hash=?) RETURNING token_hash",
+  adminElevation:"SELECT session_token_hash,expires_at,created_at FROM admin_elevations WHERE session_token_hash=? AND expires_at>?",
+  deleteExpiredAdminElevations:"DELETE FROM admin_elevations WHERE expires_at<=?",
+  revokeUserSessionsUser:"UPDATE users SET auth_version=auth_version+1 WHERE id=? RETURNING id,name,email,created_at,email_verified_at,auth_version,suspended_at",
+  revokeUserSessionsDelete:"DELETE FROM sessions WHERE user_id=? RETURNING token_hash",
+  suspendUser:"UPDATE users SET suspended_at=?,auth_version=auth_version+1 WHERE id=? AND suspended_at IS NULL AND NOT EXISTS(SELECT 1 FROM admin_principal ap WHERE ap.user_id=users.id) RETURNING id,name,email,created_at,email_verified_at,auth_version,suspended_at",
+  restoreUser:"UPDATE users SET suspended_at=NULL WHERE id=? AND suspended_at IS NOT NULL RETURNING id,name,email,created_at,email_verified_at,auth_version,suspended_at",
+  insertAdminAudit:"INSERT INTO admin_audit_events(id,actor_user_id,target_user_id,action,reason,result,created_at) VALUES(?,?,?,?,?,?,?) RETURNING id",
+  insertAdminAuditIfChanged:"INSERT INTO admin_audit_events(id,actor_user_id,target_user_id,action,reason,result,created_at) SELECT ?,?,?,?,?,?,? WHERE changes()>0 RETURNING id",
+  adminAudit:"SELECT a.id,a.target_user_id,a.action,a.reason,a.result,a.created_at,actor.id AS actor_id,actor.name AS actor_name,actor.email AS actor_email,target.id AS target_id,target.name AS target_name,target.email AS target_email FROM admin_audit_events a JOIN users actor ON actor.id=a.actor_user_id LEFT JOIN users target ON target.id=a.target_user_id ORDER BY a.created_at DESC,a.id DESC LIMIT ?",
+  insertSupportTicket:"INSERT INTO support_tickets(id,reference,user_id,name,email,category,subject,reference_id,message,status,admin_note,last_response_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,'new',NULL,NULL,?,?) RETURNING id,reference,user_id,name,email,category,subject,reference_id,message,status,admin_note,last_response_at,created_at,updated_at",
+  supportTicketById:"SELECT id,reference,user_id,name,email,category,subject,reference_id,message,status,admin_note,last_response_at,created_at,updated_at FROM support_tickets WHERE id=?",
+  adminSupportTickets:"SELECT id,reference,user_id,name,email,category,subject,reference_id,message,status,admin_note,last_response_at,created_at,updated_at FROM support_tickets WHERE (?='' OR status=?) ORDER BY CASE status WHEN 'new' THEN 0 WHEN 'open' THEN 1 WHEN 'waiting' THEN 2 ELSE 3 END,updated_at DESC,id DESC LIMIT ? OFFSET ?",
+  adminSupportCount:"SELECT COUNT(*) AS total FROM support_tickets WHERE (?='' OR status=?)",
+  updateSupportTicket:"UPDATE support_tickets SET status=?,admin_note=?,last_response_at=CASE WHEN ?=1 THEN ? ELSE last_response_at END,updated_at=? WHERE id=? AND updated_at=? RETURNING id,reference,user_id,name,email,category,subject,reference_id,message,status,admin_note,last_response_at,created_at,updated_at",
+  markSupportResponseSent:"UPDATE support_tickets SET last_response_at=?,updated_at=MAX(updated_at,?) WHERE id=? RETURNING id,reference,user_id,name,email,category,subject,reference_id,message,status,admin_note,last_response_at,created_at,updated_at",
+  claimSupportRequestEvent:"INSERT INTO support_request_events(id,ip_hash,email_hash,created_at) SELECT ?,?,?,? WHERE (SELECT COUNT(*) FROM support_request_events WHERE ip_hash=? AND created_at>=?)<? AND (SELECT COUNT(*) FROM support_request_events WHERE email_hash=? AND created_at>=?)<? AND (SELECT COUNT(*) FROM support_request_events WHERE created_at>=?)<? RETURNING id",
+  deleteOldSupportRequestEvents:"DELETE FROM support_request_events WHERE created_at<?"
 };
 
 function plainValue(value) {
@@ -267,6 +357,7 @@ function addLocalColumn(db,table,column,declaration) {
 function migrateLocalSchema(db) {
   addLocalColumn(db,"users","email_verified_at","INTEGER");
   addLocalColumn(db,"users","auth_version","INTEGER NOT NULL DEFAULT 1");
+  addLocalColumn(db,"users","suspended_at","INTEGER");
   addLocalColumn(db,"sessions","auth_version","INTEGER NOT NULL DEFAULT 1");
   // Turso/SQLite require a table rebuild to add a CHECK-constrained column to
   // a populated table. Runtime validation below preserves the invariant while
@@ -293,6 +384,7 @@ async function addTursoColumn(client,table,column,declaration) {
 async function migrateTursoSchema(client) {
   await addTursoColumn(client,"users","email_verified_at","INTEGER");
   await addTursoColumn(client,"users","auth_version","INTEGER NOT NULL DEFAULT 1");
+  await addTursoColumn(client,"users","suspended_at","INTEGER");
   await addTursoColumn(client,"sessions","auth_version","INTEGER NOT NULL DEFAULT 1");
   await addTursoColumn(client,"signup_verifications","purpose","TEXT NOT NULL DEFAULT 'signup'");
   await client.execute("DROP INDEX IF EXISTS signup_verifications_user_id");
@@ -412,6 +504,20 @@ function accessSummary(row) {
   };
 }
 
+function likePattern(value) {
+  return `%${String(value||"").toLowerCase().replace(/[\\%_]/g,(character)=>`\\${character}`)}%`;
+}
+
+function adminSearchArgs(query) {
+  const clean=String(query||"").trim().toLowerCase();
+  const pattern=likePattern(clean);
+  return [clean,pattern,pattern,pattern,pattern];
+}
+
+function adminAuditArgs(event) {
+  return [event.id,event.actorUserId,event.targetUserId||null,event.action,event.reason,event.result||"success",Number(event.createdAt)];
+}
+
 async function probeConnection(query) {
   await query();
   return true;
@@ -432,6 +538,7 @@ function localStore(root) {
     async ping() { return probeConnection(() => statements.ping.get()); },
     async userByEmail(email) { return plainRow(statements.userByEmail.get(email)); },
     async userById(id) { return plainRow(statements.userById.get(id)); },
+    async accountCredentialsById(id) { return plainRow(statements.accountCredentialsById.get(id)); },
     async insertUser(user) { statements.insertUser.run(user.id,user.name,user.email,user.passwordHash,user.passwordSalt,user.createdAt,user.emailVerifiedAt??user.email_verified_at??null); },
     async insertSession(session) {
       return Boolean(plainRow(statements.insertSession.get(session.tokenHash,session.csrfToken,session.expiresAt,session.createdAt,session.userId,Number(session.authVersion??1))));
@@ -590,6 +697,29 @@ function localStore(root) {
         throw error;
       }
     },
+    async cancelAccountDeletionWithAudit(userId,audit) {
+      let transactionOpen=false;
+      try {
+        db.exec("BEGIN IMMEDIATE");
+        transactionOpen=true;
+        const active=plainRow(statements.cancelAccountDeletion.get(userId));
+        if (!active) {
+          db.exec("ROLLBACK");
+          transactionOpen=false;
+          return false;
+        }
+        if (!plainRow(statements.insertAdminAuditIfChanged.get(...adminAuditArgs(audit)))) throw new Error("Deletion-cancellation audit could not be recorded atomically.");
+        statements.cancelStagedAccountDeletionsIfAudit.all(userId,audit.id);
+        db.exec("COMMIT");
+        transactionOpen=false;
+        return true;
+      } catch(error) {
+        if (transactionOpen) {
+          try { db.exec("ROLLBACK"); } catch { /* Preserve the original transaction error. */ }
+        }
+        throw error;
+      }
+    },
     async completePasswordReset(tokenHash,passwordHash,passwordSalt,completedAt) {
       let transactionOpen=false;
       try {
@@ -699,6 +829,186 @@ function localStore(root) {
     async recordWebhookEvent(event) {
       return Boolean(plainRow(statements.recordWebhookEvent.get(event.eventId,event.notificationId||null,event.eventType,event.occurredAt,event.processedAt)));
     },
+    async adminPrincipal() { return plainRow(statements.adminPrincipal.get()); },
+    async claimAdminPrincipal(userId,configuredEmail,boundAt) {
+      let transactionOpen=false;
+      try {
+        db.exec("BEGIN IMMEDIATE");
+        transactionOpen=true;
+        const existing=plainRow(statements.adminPrincipal.get());
+        if (existing) {
+          db.exec("COMMIT");
+          transactionOpen=false;
+          return {principal:existing,boundNow:false};
+        }
+        const inserted=plainRow(statements.insertAdminPrincipal.get(configuredEmail,boundAt,userId,configuredEmail));
+        db.exec("COMMIT");
+        transactionOpen=false;
+        return {principal:inserted||plainRow(statements.adminPrincipal.get()),boundNow:Boolean(inserted)};
+      } catch(error) {
+        if (transactionOpen) {
+          try { db.exec("ROLLBACK"); } catch { /* Preserve the original transaction error. */ }
+        }
+        throw error;
+      }
+    },
+    async createAdminElevation(sessionTokenHash,expiresAt,createdAt) {
+      return plainRow(statements.upsertAdminElevation.get(expiresAt,createdAt,sessionTokenHash,createdAt));
+    },
+    async rotateAdminSessionForElevation(oldSessionTokenHash,newSession,expiresAt,audit,now) {
+      let transactionOpen=false;
+      try {
+        db.exec("BEGIN IMMEDIATE");
+        transactionOpen=true;
+        const inserted=plainRow(statements.insertRotatedAdminSession.get(
+          newSession.tokenHash,newSession.csrfToken,newSession.expiresAt,newSession.createdAt,
+          oldSessionTokenHash,now,newSession.userId
+        ));
+        if (!inserted) {
+          db.exec("ROLLBACK");
+          transactionOpen=false;
+          return null;
+        }
+        const elevation=plainRow(statements.upsertAdminElevation.get(expiresAt,now,newSession.tokenHash,now));
+        if (!elevation) throw new Error("Admin elevation could not be attached to the rotated session.");
+        if (!plainRow(statements.insertAdminAuditIfSession.get(...adminAuditArgs(audit),newSession.tokenHash))) {
+          throw new Error("Admin elevation audit could not be recorded atomically.");
+        }
+        if (!plainRow(statements.deleteRotatedAdminSession.get(oldSessionTokenHash,newSession.tokenHash))) {
+          throw new Error("The previous admin session could not be invalidated atomically.");
+        }
+        db.exec("COMMIT");
+        transactionOpen=false;
+        return inserted;
+      } catch(error) {
+        if (transactionOpen) {
+          try { db.exec("ROLLBACK"); } catch { /* Preserve the original transaction error. */ }
+        }
+        throw error;
+      }
+    },
+    async adminElevation(sessionTokenHash,now) { return plainRow(statements.adminElevation.get(sessionTokenHash,now)); },
+    async deleteExpiredAdminElevations(now) { return affectedRows(statements.deleteExpiredAdminElevations.run(now)); },
+    async adminOverview(now) { return plainRow(statements.adminOverview.get(now,now)); },
+    async adminUserById(userId,now) { return plainRow(statements.adminUserById.get(now,now,now,userId)); },
+    async adminUsers(query,limit,offset,now) {
+      const search=adminSearchArgs(query);
+      const users=plainRows(statements.adminUsers.all(now,now,...search,limit,offset));
+      const total=Number(plainRow(statements.adminUserCount.get(...search))?.total||0);
+      return {users,total};
+    },
+    async revokeUserSessions(userId,audit=null) {
+      let transactionOpen=false;
+      try {
+        db.exec("BEGIN IMMEDIATE");
+        transactionOpen=true;
+        const user=plainRow(statements.revokeUserSessionsUser.get(userId));
+        if (!user) {
+          db.exec("ROLLBACK");
+          transactionOpen=false;
+          return null;
+        }
+        if (audit&&!plainRow(statements.insertAdminAuditIfChanged.get(...adminAuditArgs(audit)))) throw new Error("Admin audit could not be recorded atomically.");
+        const revoked=plainRows(statements.revokeUserSessionsDelete.all(userId)).length;
+        db.exec("COMMIT");
+        transactionOpen=false;
+        return {user,revoked};
+      } catch(error) {
+        if (transactionOpen) {
+          try { db.exec("ROLLBACK"); } catch { /* Preserve the original transaction error. */ }
+        }
+        throw error;
+      }
+    },
+    async suspendUser(userId,suspendedAt,audit=null) {
+      let transactionOpen=false;
+      try {
+        db.exec("BEGIN IMMEDIATE");
+        transactionOpen=true;
+        const user=plainRow(statements.suspendUser.get(suspendedAt,userId));
+        if (!user) {
+          db.exec("ROLLBACK");
+          transactionOpen=false;
+          return null;
+        }
+        if (audit&&!plainRow(statements.insertAdminAuditIfChanged.get(...adminAuditArgs(audit)))) throw new Error("Admin audit could not be recorded atomically.");
+        statements.revokeUserSessionsDelete.all(userId);
+        db.exec("COMMIT");
+        transactionOpen=false;
+        return user;
+      } catch(error) {
+        if (transactionOpen) {
+          try { db.exec("ROLLBACK"); } catch { /* Preserve the original transaction error. */ }
+        }
+        throw error;
+      }
+    },
+    async restoreUser(userId,audit=null) {
+      if (!audit) return plainRow(statements.restoreUser.get(userId));
+      let transactionOpen=false;
+      try {
+        db.exec("BEGIN IMMEDIATE");
+        transactionOpen=true;
+        const user=plainRow(statements.restoreUser.get(userId));
+        if (!user) {
+          db.exec("ROLLBACK");
+          transactionOpen=false;
+          return null;
+        }
+        if (!plainRow(statements.insertAdminAuditIfChanged.get(...adminAuditArgs(audit)))) throw new Error("Admin audit could not be recorded atomically.");
+        db.exec("COMMIT");
+        transactionOpen=false;
+        return user;
+      } catch(error) {
+        if (transactionOpen) {
+          try { db.exec("ROLLBACK"); } catch { /* Preserve the original transaction error. */ }
+        }
+        throw error;
+      }
+    },
+    async recordAdminAudit(event) {
+      return Boolean(plainRow(statements.insertAdminAudit.get(...adminAuditArgs(event))));
+    },
+    async adminAudit(limit) { return plainRows(statements.adminAudit.all(limit)); },
+    async insertSupportTicket(ticket) {
+      return plainRow(statements.insertSupportTicket.get(ticket.id,ticket.reference,ticket.userId||null,ticket.name,ticket.email,ticket.category,ticket.subject,ticket.referenceId||null,ticket.message,ticket.createdAt,ticket.updatedAt));
+    },
+    async supportTicketById(ticketId) { return plainRow(statements.supportTicketById.get(ticketId)); },
+    async adminSupportTickets(status,limit,offset) {
+      const tickets=plainRows(statements.adminSupportTickets.all(status,status,limit,offset));
+      const total=Number(plainRow(statements.adminSupportCount.get(status,status))?.total||0);
+      return {tickets,total};
+    },
+    async updateSupportTicket(ticketId,update,audit=null) {
+      let transactionOpen=false;
+      try {
+        db.exec("BEGIN IMMEDIATE");
+        transactionOpen=true;
+        const ticket=plainRow(statements.updateSupportTicket.get(update.status,update.note||null,update.responseSent?1:0,update.updatedAt,update.updatedAt,ticketId,update.expectedUpdatedAt));
+        if (!ticket) {
+          db.exec("ROLLBACK");
+          transactionOpen=false;
+          return null;
+        }
+        if (audit&&!plainRow(statements.insertAdminAuditIfChanged.get(...adminAuditArgs(audit)))) throw new Error("Support audit could not be recorded atomically.");
+        db.exec("COMMIT");
+        transactionOpen=false;
+        return ticket;
+      } catch(error) {
+        if (transactionOpen) {
+          try { db.exec("ROLLBACK"); } catch { /* Preserve the original transaction error. */ }
+        }
+        throw error;
+      }
+    },
+    async markSupportResponseSent(ticketId,sentAt) { return plainRow(statements.markSupportResponseSent.get(sentAt,sentAt,ticketId)); },
+    async claimSupportRequestEvent(event,{since,ipLimit,emailLimit,globalLimit}) {
+      return Boolean(plainRow(statements.claimSupportRequestEvent.get(
+        event.id,event.ipHash,event.emailHash,event.createdAt,
+        event.ipHash,since,ipLimit,event.emailHash,since,emailLimit,since,globalLimit
+      )));
+    },
+    async deleteOldSupportRequestEvents(before) { return affectedRows(statements.deleteOldSupportRequestEvents.run(before)); },
     async close() { db.close(); }
   };
 }
@@ -744,6 +1054,7 @@ async function tursoStore(url,authToken) {
     ping:() => probeConnection(() => client.execute(SQL.ping)),
     userByEmail:(email) => first(SQL.userByEmail,[email]),
     userById:(id) => first(SQL.userById,[id]),
+    accountCredentialsById:(id) => first(SQL.accountCredentialsById,[id]),
     insertUser:(user) => run(SQL.insertUser,[user.id,user.name,user.email,user.passwordHash,user.passwordSalt,user.createdAt,user.emailVerifiedAt??user.email_verified_at??null]),
     async insertSession(session) {
       const result=await run(SQL.insertSession,[session.tokenHash,session.csrfToken,session.expiresAt,session.createdAt,session.userId,Number(session.authVersion??1)]);
@@ -868,6 +1179,17 @@ async function tursoStore(url,authToken) {
       const staged=plainRows(results[1]?.rows,results[1]?.columns);
       return Boolean(active||staged.length);
     },
+    async cancelAccountDeletionWithAudit(userId,audit) {
+      const results=await client.batch([
+        {sql:SQL.cancelAccountDeletion,args:[userId]},
+        {sql:SQL.insertAdminAuditIfChanged,args:adminAuditArgs(audit)},
+        {sql:SQL.cancelStagedAccountDeletionsIfAudit,args:[userId,audit.id]}
+      ],"write");
+      const active=plainRow(results[0]?.rows?.[0],results[0]?.columns);
+      if (!active) return false;
+      if (!plainRow(results[1]?.rows?.[0],results[1]?.columns)) throw new Error("Deletion-cancellation audit could not be recorded atomically.");
+      return true;
+    },
     async completePasswordReset(tokenHash,passwordHash,passwordSalt,completedAt) {
       const action=await first(SQL.accountActionByTokenHash,[tokenHash]);
       if (!action||action.purpose!=="password_reset"||action.delivery_state!=="sent"||action.consumed_at!=null||Number(action.expires_at)<=completedAt) return null;
@@ -950,6 +1272,120 @@ async function tursoStore(url,authToken) {
       const result=await run(SQL.recordWebhookEvent,[event.eventId,event.notificationId||null,event.eventType,event.occurredAt,event.processedAt]);
       return Boolean(plainRow(result.rows?.[0],result.columns));
     },
+    adminPrincipal:() => first(SQL.adminPrincipal),
+    async claimAdminPrincipal(userId,configuredEmail,boundAt) {
+      const existing=await first(SQL.adminPrincipal);
+      if (existing) return {principal:existing,boundNow:false};
+      const results=await client.batch([
+        {sql:SQL.insertAdminPrincipal,args:[configuredEmail,boundAt,userId,configuredEmail]}
+      ],"write");
+      const inserted=plainRow(results[0]?.rows?.[0],results[0]?.columns);
+      return {principal:inserted||await first(SQL.adminPrincipal),boundNow:Boolean(inserted)};
+    },
+    async createAdminElevation(sessionTokenHash,expiresAt,createdAt) {
+      const result=await run(SQL.upsertAdminElevation,[expiresAt,createdAt,sessionTokenHash,createdAt]);
+      return plainRow(result.rows?.[0],result.columns);
+    },
+    async rotateAdminSessionForElevation(oldSessionTokenHash,newSession,expiresAt,audit,now) {
+      const results=await client.batch([
+        {sql:SQL.insertRotatedAdminSession,args:[newSession.tokenHash,newSession.csrfToken,newSession.expiresAt,newSession.createdAt,oldSessionTokenHash,now,newSession.userId]},
+        {sql:SQL.upsertAdminElevation,args:[expiresAt,now,newSession.tokenHash,now]},
+        {sql:SQL.insertAdminAuditIfSession,args:[...adminAuditArgs(audit),newSession.tokenHash]},
+        {sql:SQL.deleteRotatedAdminSession,args:[oldSessionTokenHash,newSession.tokenHash]}
+      ],"write");
+      const inserted=plainRow(results[0]?.rows?.[0],results[0]?.columns);
+      if (!inserted) return null;
+      if (!plainRow(results[1]?.rows?.[0],results[1]?.columns)||!plainRow(results[2]?.rows?.[0],results[2]?.columns)||!plainRow(results[3]?.rows?.[0],results[3]?.columns)) {
+        throw new Error("Admin session rotation could not be completed atomically.");
+      }
+      return inserted;
+    },
+    adminElevation:(sessionTokenHash,now) => first(SQL.adminElevation,[sessionTokenHash,now]),
+    async deleteExpiredAdminElevations(now) { return affectedRows(await run(SQL.deleteExpiredAdminElevations,[now])); },
+    adminOverview:(now) => first(SQL.adminOverview,[now,now]),
+    adminUserById:(userId,now) => first(SQL.adminUserById,[now,now,now,userId]),
+    async adminUsers(query,limit,offset,now) {
+      const search=adminSearchArgs(query);
+      const [users,count]=await Promise.all([
+        all(SQL.adminUsers,[now,now,...search,limit,offset]),
+        first(SQL.adminUserCount,search)
+      ]);
+      return {users,total:Number(count?.total||0)};
+    },
+    async revokeUserSessions(userId,audit=null) {
+      const statements=[{sql:SQL.revokeUserSessionsUser,args:[userId]}];
+      if (audit) statements.push({sql:SQL.insertAdminAuditIfChanged,args:adminAuditArgs(audit)});
+      statements.push({sql:SQL.revokeUserSessionsDelete,args:[userId]});
+      const results=await client.batch(statements,"write");
+      const user=plainRow(results[0]?.rows?.[0],results[0]?.columns);
+      if (user&&audit&&!plainRow(results[1]?.rows?.[0],results[1]?.columns)) throw new Error("Admin audit could not be recorded atomically.");
+      const deleted=results[audit?2:1];
+      return user?{user,revoked:plainRows(deleted?.rows||[],deleted?.columns).length}:null;
+    },
+    async suspendUser(userId,suspendedAt,audit=null) {
+      const statements=[{sql:SQL.suspendUser,args:[suspendedAt,userId]}];
+      if (audit) statements.push({sql:SQL.insertAdminAuditIfChanged,args:adminAuditArgs(audit)});
+      statements.push({sql:SQL.revokeUserSessionsDelete,args:[userId]});
+      const results=await client.batch(statements,"write");
+      const user=plainRow(results[0]?.rows?.[0],results[0]?.columns);
+      if (user&&audit&&!plainRow(results[1]?.rows?.[0],results[1]?.columns)) throw new Error("Admin audit could not be recorded atomically.");
+      return user;
+    },
+    async restoreUser(userId,audit=null) {
+      if (!audit) {
+        const result=await run(SQL.restoreUser,[userId]);
+        return plainRow(result.rows?.[0],result.columns);
+      }
+      const results=await client.batch([
+        {sql:SQL.restoreUser,args:[userId]},
+        {sql:SQL.insertAdminAuditIfChanged,args:adminAuditArgs(audit)}
+      ],"write");
+      const user=plainRow(results[0]?.rows?.[0],results[0]?.columns);
+      if (user&&!plainRow(results[1]?.rows?.[0],results[1]?.columns)) throw new Error("Admin audit could not be recorded atomically.");
+      return user;
+    },
+    async recordAdminAudit(event) {
+      const result=await run(SQL.insertAdminAudit,adminAuditArgs(event));
+      return Boolean(plainRow(result.rows?.[0],result.columns));
+    },
+    adminAudit:(limit) => all(SQL.adminAudit,[limit]),
+    async insertSupportTicket(ticket) {
+      const result=await run(SQL.insertSupportTicket,[ticket.id,ticket.reference,ticket.userId||null,ticket.name,ticket.email,ticket.category,ticket.subject,ticket.referenceId||null,ticket.message,ticket.createdAt,ticket.updatedAt]);
+      return plainRow(result.rows?.[0],result.columns);
+    },
+    supportTicketById:(ticketId) => first(SQL.supportTicketById,[ticketId]),
+    async adminSupportTickets(status,limit,offset) {
+      const [tickets,count]=await Promise.all([
+        all(SQL.adminSupportTickets,[status,status,limit,offset]),
+        first(SQL.adminSupportCount,[status,status])
+      ]);
+      return {tickets,total:Number(count?.total||0)};
+    },
+    async updateSupportTicket(ticketId,update,audit=null) {
+      if (!audit) {
+        const result=await run(SQL.updateSupportTicket,[update.status,update.note||null,update.responseSent?1:0,update.updatedAt,update.updatedAt,ticketId,update.expectedUpdatedAt]);
+        return plainRow(result.rows?.[0],result.columns);
+      }
+      const results=await client.batch([
+        {sql:SQL.updateSupportTicket,args:[update.status,update.note||null,update.responseSent?1:0,update.updatedAt,update.updatedAt,ticketId,update.expectedUpdatedAt]},
+        {sql:SQL.insertAdminAuditIfChanged,args:adminAuditArgs(audit)}
+      ],"write");
+      const ticket=plainRow(results[0]?.rows?.[0],results[0]?.columns);
+      if (ticket&&!plainRow(results[1]?.rows?.[0],results[1]?.columns)) throw new Error("Support audit could not be recorded atomically.");
+      return ticket;
+    },
+    async markSupportResponseSent(ticketId,sentAt) {
+      const result=await run(SQL.markSupportResponseSent,[sentAt,sentAt,ticketId]);
+      return plainRow(result.rows?.[0],result.columns);
+    },
+    async claimSupportRequestEvent(event,{since,ipLimit,emailLimit,globalLimit}) {
+      const result=await run(SQL.claimSupportRequestEvent,[
+        event.id,event.ipHash,event.emailHash,event.createdAt,
+        event.ipHash,since,ipLimit,event.emailHash,since,emailLimit,since,globalLimit
+      ]);
+      return Boolean(plainRow(result.rows?.[0],result.columns));
+    },
+    async deleteOldSupportRequestEvents(before) { return affectedRows(await run(SQL.deleteOldSupportRequestEvents,[before])); },
     async close() { client.close(); }
   };
 }
