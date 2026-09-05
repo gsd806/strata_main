@@ -20,6 +20,7 @@ Local development uses SQLite. Production refuses to start without Turso, becaus
 
 ```bash
 npm install
+npx playwright install chromium
 npm run check
 npm start
 ```
@@ -104,12 +105,12 @@ Before deployment:
 
 ```bash
 npm ci
+npx playwright install --with-deps chromium
 npm run check
-npm run coverage
 npm audit --omit=dev
 ```
 
-`npm run check` verifies release metadata, runs the correctness-focused linter, executes the Node tests, and runs browser-free runtime QA. Coverage is reported separately as an informational baseline without a percentage gate. Use `npm run qa:ui` with the environment documented in `../qa/README.md` for the optional real-browser accessibility and responsive-layout pass.
+`npm run check` verifies release metadata and architecture policy, statically checks typed domain boundaries, runs the correctness-focused linter, enforces coverage floors over the Node suite, executes browser-free runtime QA, checks endpoint/storage performance budgets, and runs the isolated high-risk Chromium journeys. Use `npm run qa:ui` with the environment documented in `../qa/README.md` for the broader real-browser accessibility and responsive-layout pass.
 
 After deployment:
 

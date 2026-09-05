@@ -1,3 +1,4 @@
+// @ts-check
 "use strict";
 
 // Both database adapters must expose this complete application-facing API.
@@ -106,6 +107,14 @@ const STORE_METHODS = Object.freeze([
 ]);
 const STORE_METHOD_SET = new Set(STORE_METHODS);
 
+/**
+ * Preserve the concrete adapter signatures while checking the complete runtime
+ * method set shared by SQLite and Turso.
+ * @template {import("./domain-types").StoreMethods} T
+ * @param {string} kind
+ * @param {T} methods
+ * @returns {{kind:string}&T}
+ */
 function defineStore(kind,methods) {
   const missing=STORE_METHODS.filter((name) => typeof methods[name] !== "function");
   const unexpected=Object.keys(methods).filter((name) => !STORE_METHOD_SET.has(name));

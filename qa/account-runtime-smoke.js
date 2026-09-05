@@ -6,7 +6,8 @@ const vm=require("node:vm");
 const {join}=require("node:path");
 
 const PROJECT_ROOT=join(__dirname,"..");
-const BUILD=require(join(PROJECT_ROOT,"package.json")).version;
+const RELEASE=require(join(PROJECT_ROOT,"package.json"));
+const BUILD=RELEASE.strataBuild||RELEASE.version;
 const CATALOG_URL=`/exercises.json?v=${BUILD}`;
 const readPublic=(...parts)=>fs.readFileSync(join(PROJECT_ROOT,"public",...parts),"utf8");
 const html=readPublic("pages","index.html");

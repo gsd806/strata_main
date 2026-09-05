@@ -2,7 +2,13 @@
 
 ## Fast checks
 
-Run the release audit, correctness-focused linter, Node suite, and all four browser-free runtime smokes:
+Install Chromium once after `npm install`; both `npm run check` and `npm run test:e2e` require it:
+
+```bash
+npx playwright install chromium
+```
+
+Run the release audit, module-architecture and static-boundary checks, correctness-focused linter, coverage-gated Node suite, all four browser-free runtime smokes, performance regression check, and high-risk browser E2E suite:
 
 ```bash
 npm run check
@@ -10,21 +16,17 @@ npm run check
 
 `npm run qa` remains an alias for the same full check. The runtime smokes execute the homepage, discovery, and weekly-planner scripts against a small fake DOM, then start a real local server to verify the PWA routes, headers, icons, manifest, versioned-cache lifecycle, private-data exclusions, protected-page gating, and build status. The planner smoke also exercises desktop catalog pagination, unique-card expansion, and focus transfer after **Load more**. These checks catch initialization, rendering, and deployment regressions, but they do not replace the real-browser audit.
 
-For an informational application-code coverage baseline, run:
+To run the coverage-gated Node suite by itself:
 
 ```bash
 npm run coverage
 ```
 
-Coverage has no arbitrary percentage gate. Treat uncovered security and state-transition branches as test-review leads, not as a reason to add low-value tests for the number alone.
+Coverage fails below the calibrated 90% line, 78% branch, and 85% function floors. See [`docs/testing.md`](../docs/testing.md) for the unit, integration, contract, and E2E boundaries and the rationale for those floors.
+
+To collect the local endpoint/storage performance evidence separately, run `npm run performance`. Its method, budgets, and interpretation are documented in [`docs/performance.md`](../docs/performance.md).
 
 ## Browser audit
-
-Install Chromium once after `npm install`:
-
-```bash
-npx playwright install chromium
-```
 
 Start STRATA in a separate terminal. Use an isolated data directory so QA accounts do not enter the development database:
 

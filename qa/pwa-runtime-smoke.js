@@ -6,7 +6,8 @@ const {mkdirSync,mkdtempSync,rmSync}=require("node:fs");
 const {join}=require("node:path");
 
 const ROOT=join(__dirname,"..");
-const BUILD=require("../package.json").version;
+const RELEASE=require("../package.json");
+const BUILD=RELEASE.strataBuild||RELEASE.version;
 const runtimeRoot=join(ROOT,"test-runtime");
 mkdirSync(runtimeRoot,{recursive:true});
 const runtimeDir=mkdtempSync(join(runtimeRoot,"pwa-smoke-"));

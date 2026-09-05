@@ -7,7 +7,8 @@ const path=require("node:path");
 
 const PROJECT_ROOT=path.join(__dirname,"..");
 const PUBLIC_ROOT=path.join(PROJECT_ROOT,"public");
-const BUILD=require(path.join(PROJECT_ROOT,"package.json")).version;
+const RELEASE=require(path.join(PROJECT_ROOT,"package.json"));
+const BUILD=RELEASE.strataBuild||RELEASE.version;
 const read=(name)=>fs.readFileSync(path.join(PUBLIC_ROOT,"pages",name),"utf8");
 const text=(name)=>read(name).replace(/<script[\s\S]*?<\/script>/gi," ").replace(/<style[\s\S]*?<\/style>/gi," ").replace(/<[^>]+>/g," ").replace(/&nbsp;/g," ").replace(/\s+/g," ").trim();
 
@@ -34,7 +35,7 @@ test("homepage publishes the founder story without exposing a residential addres
 });
 
 test("published Strata+ price and refund promise are exact and consistent",()=>{
-  assert.equal(BUILD,"6.9.9");
+  assert.equal(BUILD,"6.9.9.007");
   const pricingHtml=read("pricing.html"),pricing=text("pricing.html"),refunds=text("refunds.html"),terms=text("terms.html");
   assert.match(pricing,/Strata\+/);
   assert.match(pricing,/\$5\.99 USD/i);

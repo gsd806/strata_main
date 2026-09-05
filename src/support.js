@@ -12,6 +12,11 @@ const SUPPORT_REQUESTS_GLOBAL=100;
 const SUPPORT_CATEGORIES=new Set(["account","password","payment","privacy","exercise","other"]);
 const SUPPORT_STATUSES=new Set(["new","open","waiting","resolved"]);
 
+/**
+ * Typed dependency-injection boundary for public and admin support requests.
+ * @param {import("./domain-types").SupportServiceDependencies} dependencies
+ * @returns {import("./domain-types").SupportService}
+ */
 function createSupportService({
   store,
   emailConfig,

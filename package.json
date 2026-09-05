@@ -1,14 +1,22 @@
 {
   "name": "strata-workout-index",
   "version": "6.9.9",
+  "strataBuild": "6.9.9.007",
   "private": true,
   "description": "Evidence-informed exercise rankings with Strata+ personalization, session building, community weekly plans, ratings, and 31-day planning.",
   "scripts": {
     "start": "node server.js",
     "test": "node --test",
+    "test:unit": "node scripts/run-test-layer.js unit",
+    "test:integration": "node scripts/run-test-layer.js integration",
+    "test:contract": "node scripts/run-test-layer.js contract",
+    "test:e2e": "node scripts/run-test-layer.js e2e",
     "lint": "eslint . --max-warnings=0",
-    "coverage": "node --test --experimental-test-coverage --test-coverage-include='server.js' --test-coverage-include='src/**/*.js' --test-coverage-include='public/scripts/**/*.js'",
-    "check": "npm run release:check && npm run lint && npm test && npm run qa:runtime",
+    "typecheck": "tsc -p tsconfig.boundaries.json",
+    "architecture:check": "node scripts/architecture-report.js",
+    "coverage": "node scripts/coverage-check.js",
+    "performance": "node scripts/performance-check.js",
+    "check": "npm run release:check && npm run architecture:check && npm run typecheck && npm run lint && npm run coverage && npm run qa:runtime && npm run performance && npm run test:e2e",
     "qa": "npm run check",
     "qa:runtime": "node qa/account-runtime-smoke.js && node qa/discover-runtime-smoke.js && node qa/planner-runtime-smoke.js && node qa/pwa-runtime-smoke.js",
     "qa:ui": "node qa/ui-audit.js",
@@ -20,9 +28,12 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@types/node": "24.13.3",
     "eslint": "10.10.0",
+    "espree": "11.2.0",
     "globals": "17.12.0",
-    "playwright": "1.62.1"
+    "playwright": "1.62.1",
+    "typescript": "7.0.2"
   },
   "engines": {
     "node": ">=24.0.0 <25.0.0"

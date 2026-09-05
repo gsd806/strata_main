@@ -12,26 +12,39 @@ test("one check command owns the complete pre-release verification sequence",()=
   const manifest=JSON.parse(read("package.json"));
   assert.deepEqual(manifest.scripts.check.split(" && "),[
     "npm run release:check",
+    "npm run architecture:check",
+    "npm run typecheck",
     "npm run lint",
-    "npm test",
-    "npm run qa:runtime"
+    "npm run coverage",
+    "npm run qa:runtime",
+    "npm run performance",
+    "npm run test:e2e"
   ]);
   assert.equal(manifest.scripts.qa,"npm run check");
   assert.equal(manifest.scripts.lint,"eslint . --max-warnings=0");
   assert.match(manifest.devDependencies.eslint,/^10\./);
+  for (const layer of ["unit","integration","contract","e2e"]) {
+    assert.equal(manifest.scripts[`test:${layer}`],`node scripts/run-test-layer.js ${layer}`);
+  }
 
   const workflow=read(".github/workflows/ci.yml");
+  assert.match(workflow,/npx playwright install --with-deps chromium/);
   assert.match(workflow,/run: npm run check/);
-  assert.match(workflow,/run: npm run coverage/);
+  assert.doesNotMatch(workflow,/run: npm run coverage/,"the release gate already owns coverage");
 });
 
-test("coverage reports application code without an arbitrary percentage gate",()=>{
+test("coverage reports application code and enforces calibrated regression floors",()=>{
   const command=JSON.parse(read("package.json")).scripts.coverage;
-  assert.match(command,/--experimental-test-coverage/);
-  assert.match(command,/--test-coverage-include='server\.js'/);
-  assert.match(command,/--test-coverage-include='src\/\*\*\/\*\.js'/);
-  assert.match(command,/--test-coverage-include='public\/scripts\/\*\*\/\*\.js'/);
-  assert.doesNotMatch(command,/--test-coverage-(?:branches|functions|lines)=/);
+  assert.equal(command,"node scripts/coverage-check.js");
+  const coverageRunner=read("scripts/coverage-check.js");
+  assert.match(coverageRunner,/lines:90/);
+  assert.match(coverageRunner,/branches:78/);
+  assert.match(coverageRunner,/functions:85/);
+  assert.match(coverageRunner,/--test-coverage-include=server\.js/);
+  assert.match(coverageRunner,/--test-coverage-include=src\/\*\*\/\*\.js/);
+  assert.match(coverageRunner,/--test-coverage-include=public\/scripts\/discovery-core\.js/);
+  assert.match(coverageRunner,/--test-coverage-include=public\/scripts\/monthly-plan-core\.js/);
+  assert.doesNotMatch(coverageRunner,/public\/scripts\/\*\*\/\*\.js/);
 });
 
 test("security and architecture guidance cover the maintained trust boundaries",()=>{

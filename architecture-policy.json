@@ -1,0 +1,79 @@
+{
+  "modules": {
+    "server.js": {
+      "role": "Process bootstrap",
+      "maxLines": 20,
+      "allowedDependencies": ["src/server.js"]
+    },
+    "src/server.js": {
+      "role": "HTTP composition root",
+      "maxLines": 1200,
+      "allowedDependencies": [
+        "src/admin.js",
+        "src/auth.js",
+        "src/database.js",
+        "src/email.js",
+        "src/http.js",
+        "src/payments.js",
+        "src/plans.js",
+        "src/service-composition.js",
+        "src/support.js"
+      ]
+    },
+    "src/service-composition.js": {
+      "role": "Typed auth/admin/support composition",
+      "maxLines": 80,
+      "allowedDependencies": []
+    },
+    "src/auth.js": {
+      "role": "Authentication and account lifecycle",
+      "maxLines": 850,
+      "allowedDependencies": ["src/email.js", "src/plans.js"]
+    },
+    "src/admin.js": {
+      "role": "Administrative authorization and actions",
+      "maxLines": 300,
+      "allowedDependencies": ["src/plans.js"]
+    },
+    "src/support.js": {
+      "role": "Public and administrative support workflow",
+      "maxLines": 180,
+      "allowedDependencies": ["src/email.js", "src/plans.js"]
+    },
+    "src/database.js": {
+      "role": "SQLite and Turso store adapters",
+      "maxLines": 1300,
+      "allowedDependencies": ["src/schema.js", "src/store-contract.js"]
+    },
+    "src/store-contract.js": {
+      "role": "Storage boundary contract",
+      "maxLines": 180,
+      "allowedDependencies": []
+    },
+    "src/schema.js": {
+      "role": "Shared storage schema and statements",
+      "maxLines": 420,
+      "allowedDependencies": []
+    },
+    "src/email.js": {
+      "role": "Resend integration and email security",
+      "maxLines": 420,
+      "allowedDependencies": []
+    },
+    "src/payments.js": {
+      "role": "Paddle integration boundary",
+      "maxLines": 480,
+      "allowedDependencies": []
+    },
+    "src/plans.js": {
+      "role": "Plan domain validation",
+      "maxLines": 400,
+      "allowedDependencies": []
+    },
+    "src/http.js": {
+      "role": "HTTP transport helpers",
+      "maxLines": 180,
+      "allowedDependencies": []
+    }
+  }
+}

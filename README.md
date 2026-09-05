@@ -1,8 +1,8 @@
 # STRATA — Exercise Rankings and Workout Planning
 
-STRATA is an evidence-informed workout index with server-backed, email-verified accounts, a private Strata+ studio, and weekly, community, and monthly workout planning. It includes 200 resistance-training exercises—25 per muscle group, including 50 bodyweight options—across 8 muscle groups and 26 sub-muscle targets. Build 6.9.9 is an installable Progressive Web App (PWA) with Resend-powered account email, Paddle-powered one-time Strata+ access, and a private owner dashboard.
+STRATA is an evidence-informed workout index with server-backed, email-verified accounts, a private Strata+ studio, and weekly, community, and monthly workout planning. It includes 200 resistance-training exercises—25 per muscle group, including 50 bodyweight options—across 8 muscle groups and 26 sub-muscle targets. Build 6.9.9.007 is an installable Progressive Web App (PWA) with Resend-powered account email, Paddle-powered one-time Strata+ access, and a private owner dashboard.
 
-**Build 6.9.9 is a focused hardening and maintainability release.** Authentication, administration, auditing, and support now live in injected modules instead of the HTTP composition root. The release also adds one-command quality checks, informational coverage, stronger storage/payment/security boundaries, safer PWA caching, clearer save errors, and verified keyboard-dialog behavior without introducing a major new feature.
+**Build 6.9.9.007 is the release that makes quality boundaries enforceable.** CI now rejects architectural dependency or module-budget regressions, static errors in the checked domain-boundary slice, coverage below calibrated floors, performance budget regressions, and failures in real Chromium journeys for account recovery, plan conflicts, payment entitlement, and account deletion.
 
 STRATA also includes a login-free local weekly planner, account-synced plans, structured community-plan sharing, a deterministic 31-day workspace, community ratings, printable exports, and a private administrator help desk. Strata+ is **$5.99 USD as a one-time purchase with no subscription**. Paddle is the merchant of record, and the server grants access only after verifying a signed matching webhook.
 
@@ -26,7 +26,7 @@ Copy `.env.example` into your preferred local environment loader when testing em
 
 ## Project structure
 
-Build 6.9.9 separates browser files from private server code while preserving every public URL used by visitors, Paddle, Render, and installed PWAs:
+Build 6.9.9.007 separates browser files from private server code while preserving every public URL used by visitors, Paddle, Render, and installed PWAs:
 
 ```text
 server.js          Stable npm/Render bootstrap
@@ -38,27 +38,35 @@ public/styles/     Browser stylesheets
 public/data/       Intentionally public exercise catalog
 public/icons/      PWA and site icons
 data/              Generated local SQLite data; ignored by Git
-test/              Automated Node test suite
-qa/                Runtime and optional browser checks
+test/              Unit, integration, and contract Node tests
+qa/e2e/            Isolated browser-level security journeys
+qa/                Runtime and optional broader browser checks
 docs/              Architecture and deployment guidance
 ```
 
-See [docs/architecture.md](docs/architecture.md) for module responsibilities, request and database flow, trust boundaries, Paddle, Resend, and PWA caching.
+See [docs/architecture.md](docs/architecture.md) for request and data flow, [docs/module-architecture.md](docs/module-architecture.md) for the enforced dependency graph and module sizes, and [docs/testing.md](docs/testing.md) for test-layer boundaries.
 
 ## Quality commands
 
 ```bash
-npm run check       # release consistency, lint, tests, and runtime QA
+npm run check       # complete release gate, including Chromium E2E
+npm run architecture:check # module budgets, dependencies, and cycles
+npm run typecheck   # strict checkJs at domain boundaries
 npm run lint        # correctness-focused ESLint checks; no formatting policy
 npm test            # Node test suite
-npm run coverage    # informational application-code coverage report
+npm run test:unit   # focused tests with mocked/injected collaborators
+npm run test:integration # HTTP/application composition tests
+npm run test:contract    # storage and architecture contracts
+npm run test:e2e    # isolated high-risk Chromium journeys
+npm run coverage    # Node suite with enforced coverage floors
+npm run performance # reproducible endpoint/storage regression evidence
 npm run qa:runtime  # browser-free runtime smoke checks
 npm run qa:ui       # optional Playwright accessibility/layout audit
 ```
 
-Coverage is a measurement, not a 100% target or a release gate. Use the uncovered branches to find meaningful boundary tests rather than writing tests solely to improve the percentage. The optional browser audit and its environment variables are documented in [qa/README.md](qa/README.md).
+Coverage is enforced at calibrated application-code floors, not chased to 100%. Performance budgets are conservative regression tripwires, not production capacity claims. See [docs/testing.md](docs/testing.md), [docs/performance.md](docs/performance.md), and [qa/README.md](qa/README.md) for exact scope and prerequisites.
 
-Before a release, audit managed version references with `npm run release:check`. Preview a bump with `npm run release:version -- --dry-run x.y.z`, then apply it with `npm run release:version -- x.y.z`. The tool changes only its explicit release manifest.
+Before a release, audit managed version references with `npm run release:check`. Preview a bump with `npm run release:version -- --dry-run x.y.z` or `x.y.z.NNN`, then apply it without `--dry-run`. Four-part public builds retain an npm-compatible three-part package version and store the exact public build in `strataBuild`. The tool changes only its explicit release manifest.
 
 ## Accounts, plans, and administrator access
 
@@ -80,7 +88,7 @@ Account APIs, authentication routes, health checks, personalized pages, the admi
 
 ## Public pricing, support, and policies
 
-Build 6.9.9 has public, mobile-friendly pages at `/pricing`, `/contact`, `/terms`, `/privacy`, and `/refunds`. The published refund window is 14 calendar days after purchase. Support is available through the Contact form and at `stratafitness.official@gmail.com`.
+Build 6.9.9.007 has public, mobile-friendly pages at `/pricing`, `/contact`, `/terms`, `/privacy`, and `/refunds`. The published refund window is 14 calendar days after purchase. Support is available through the Contact form and at `stratafitness.official@gmail.com`.
 
 Paddle receives payment information; STRATA does not receive or store full payment-card or bank-account details. Do not change the displayed price independently of the live Paddle catalog. Before accepting payments, make sure the public operator details match the identity required by Paddle and applicable law rather than inventing missing legal information.
 
