@@ -161,6 +161,7 @@ a { color:inherit; }
   .info-header { position:relative; }
   .info-nav { display:grid; grid-template-columns:repeat(2,1fr); overflow:visible; }
   .info-nav a { border-top:1px solid rgba(255,255,255,.12); }
+  .info-nav a:last-child:nth-child(odd) { grid-column:1 / -1; }
   .info-hero h1 { font-size:clamp(46px,16vw,72px); }
   .info-main { padding:52px 0 72px; }
   .price-card,.free-card,.contact-card { padding:26px 22px; }

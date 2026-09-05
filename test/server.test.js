@@ -65,7 +65,7 @@ test.before(startServer);
 test.after(stopServer);
 
 test("serves rankings and gates private account pages",async()=>{
-  assert.equal(BUILD,"6.9.5");
+  assert.equal(BUILD,"6.9.6");
   const home=await request("/");
   assert.equal(home.response.status,200);
   assert.equal(home.response.headers.get("cache-control"),"private, no-store");
@@ -102,12 +102,12 @@ test("serves rankings and gates private account pages",async()=>{
   assert.equal(malformedCookie.response.status,401);
   const planner=await request("/planner.html",{redirect:"manual"});
   assert.equal(planner.response.status,200);
-  assert.match(planner.data,/No login needed/);
+  assert.match(planner.data,/Guest plan[\s\S]*separate synced account plan/);
   const pendingPlanner=await request("/planner.html?add=flat-dumbbell-press",{redirect:"manual"});
   assert.equal(pendingPlanner.response.status,200);
   const discover=await request("/discover.html",{redirect:"manual"});
   assert.equal(discover.response.status,302);
-  assert.equal(discover.response.headers.get("location"),"/account.html?mode=login&next=pricing");
+  assert.equal(discover.response.headers.get("location"),"/account.html?mode=login&next=discover");
   const discoveryApi=await request("/api/discovery");
   assert.equal(discoveryApi.response.status,401);
 });

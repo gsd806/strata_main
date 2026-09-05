@@ -38,6 +38,8 @@ let exercises = [];
 const metricWeights = {
   stimulus:.3, stability:.2, progression:.2, range:.2, fatigue:.1
 };
+const PLAN_DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+const GUEST_PLAN_KEY = "strata_guest_plan_v1";
 
 function normalizeExercise(exercise) {
   if (!exercise || typeof exercise !== "object" || !groups[exercise.group]) {
@@ -85,7 +87,7 @@ function normalizeCatalog(catalog) {
 const groupOrder = Object.keys(groups);
 const state = {
   group:"chest", sub:"all", query:"", equipment:"all", level:"all", sort:"score",
-  compare:[], user:null, catalogStatus:"loading"
+  compare:[], user:null, accountStatus:"loading", catalogStatus:"loading"
 };
 
 const el = (id) => document.getElementById(id);
@@ -102,9 +104,14 @@ function escapeHtml(value) {
 
 async function api(path, options = {}) {
   const headers = { Accept:"application/json", ...(options.body ? {"Content-Type":"application/json"} : {}), ...(options.headers || {}) };
-  const response = await fetch(path, {...options, headers, credentials:"same-origin"});
+  let response;
+  try {
+    response = await fetch(path, {...options, headers, credentials:"same-origin"});
+  } catch (cause) {
+    throw Object.assign(new Error("Could not reach STRATA. Check your connection and try again."),{code:"NETWORK_ERROR",cause});
+  }
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || "Request failed.");
+  if (!response.ok) throw Object.assign(new Error(data.error || "Request failed."),{status:response.status,code:data.code || "REQUEST_FAILED",data});
   return data;
 }
 
@@ -208,7 +215,24 @@ function renderExercises() {
   }).join("");
 }
 
+function guestPlanCount() {
+  try {
+    const plan = JSON.parse(localStorage.getItem(GUEST_PLAN_KEY) || "null");
+    const knownIds = state.catalogStatus === "ready" ? new Set(exercises.map((exercise) => exercise.id)) : null;
+    return PLAN_DAYS.reduce((total,day) => {
+      const items = Array.isArray(plan?.days?.[day]) ? plan.days[day].slice(0,40) : [];
+      return total + items.filter((item) => {
+        const exerciseId = item && typeof item === "object" ? String(item.exerciseId || "") : "";
+        return Boolean(exerciseId) && (!knownIds || knownIds.has(exerciseId));
+      }).length;
+    },0);
+  } catch {
+    return 0;
+  }
+}
+
 function updateAccountUI() {
+  if (state.accountStatus === "loading" || state.accountStatus === "unavailable") return;
   const button = el("accountButton");
   const signup = el("signupButton");
   const discoveryButton = el("discoverButton");
@@ -220,7 +244,7 @@ function updateAccountUI() {
   discoveryButton.hidden = !state.user;
   discoveryButton.href = discoveryActive ? "/discover.html" : "/pricing";
   discoveryButton.textContent = discoveryActive ? "Strata+" : "Unlock Strata+";
-  const planCount = state.user ? (Number(state.user.planCount) || 0) : 0;
+  const planCount = state.user ? (Number(state.user.planCount) || 0) : guestPlanCount();
   el("planCount").textContent = planCount;
   el("planButton").href = "/planner.html";
   el("planButton").setAttribute("aria-label", `Open weekly planner, ${planCount} ${planCount === 1 ? "exercise" : "exercises"}`);
@@ -298,12 +322,26 @@ function addToPlanner(id) {
 }
 
 async function initializeAccount() {
-  try { const result = await api("/api/me"); state.user = result.user; } catch { state.user = null; }
-  updateAccountUI(); renderExercises();
-  if (new URLSearchParams(location.search).get("signin") === "1") {
+  try {
+    const result = await api("/api/me");
+    state.user = result.user || null;
+    state.accountStatus = state.user ? "authenticated" : "anonymous";
+  } catch (error) {
+    if (error.status === 401) {
+      state.user = null;
+      state.accountStatus = "anonymous";
+    } else {
+      state.accountStatus = "unavailable";
+    }
+  }
+  updateAccountUI();
+  const requestedSignin = new URLSearchParams(location.search).get("signin") === "1";
+  if (requestedSignin && state.accountStatus !== "unavailable") {
     history.replaceState({},"","/");
     if (state.user) window.location.assign("/planner.html");
     else window.location.assign("/account.html?mode=login");
+  } else if (requestedSignin) {
+    showToast("Could not confirm your account. Check your connection and try again.");
   }
 }
 
@@ -311,7 +349,7 @@ async function initializeCatalog() {
   state.catalogStatus = "loading";
   renderAll();
   try {
-    exercises = normalizeCatalog(await api("/exercises.json?v=6.9.5"));
+    exercises = normalizeCatalog(await api("/exercises.json?v=6.9.6"));
     state.catalogStatus = "ready";
     el("catalogTotal").textContent = exercises.length;
   } catch {
@@ -352,7 +390,7 @@ function openComparison() {
   const [a,b] = state.compare.map((id) => exercises.find((exercise) => exercise.id === id));
   if (!a || !b) return;
   const row = (label,left,right,className="") => `<tr><th scope="row">${label}</th><td class="${className}">${left}</td><td class="${className}">${right}</td></tr>`;
-  el("compareContent").innerHTML = `<div class="compare-table-wrap"><table class="compare-table">
+  el("compareContent").innerHTML = `<div class="compare-table-wrap" role="region" aria-label="${escapeHtml(a.name)} and ${escapeHtml(b.name)} comparison table" tabindex="0"><table class="compare-table">
     <caption class="sr-only">Comparison of ${escapeHtml(a.name)} and ${escapeHtml(b.name)}</caption>
     <thead><tr><th scope="col">Measure</th><th scope="col" class="compare-name">${escapeHtml(a.name)}</th><th scope="col" class="compare-name">${escapeHtml(b.name)}</th></tr></thead>
     <tbody>

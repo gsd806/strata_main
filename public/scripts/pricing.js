@@ -98,18 +98,22 @@
     const active=discoveryIsActive(state.user);
     const trial=state.user?.discovery?.trial;
     const paid=state.user?.discovery?.accessType==="paid";
+    const trialEligible=signedIn&&!active&&trial?.eligible===true;
     const online=navigator.onLine!==false;
     const checkoutReady=Boolean(state.config&&!state.configError&&state.paddleReady&&online);
 
     signupLink.hidden=signedIn;
     loginLink.hidden=signedIn;
     buyButton.hidden=!signedIn||active;
-    trialButton.hidden=!signedIn||active||trial?.eligible!==true;
+    trialButton.hidden=!trialEligible;
     openLink.hidden=!signedIn||!active;
     checkButton.hidden=!signedIn||active||!state.awaitingAccess;
     buyButton.disabled=state.busy||state.awaitingAccess||state.checkoutOpen||!checkoutReady;
     trialButton.disabled=state.busy||navigator.onLine===false;
     checkButton.disabled=state.busy;
+    buyButton.classList.toggle("button-dark",!trialEligible);
+    buyButton.classList.toggle("button-light",trialEligible);
+    buyButton.innerHTML=trialEligible?'Skip trial — buy now · $5.99 USD <span aria-hidden="true">→</span>':'Buy Strata+ · $5.99 USD <span aria-hidden="true">→</span>';
     panel.setAttribute("aria-busy",String(state.busy||state.awaitingAccess));
 
     if(state.busy&&state.awaitingAccess){setStatus("Your checkout completed. STRATA is securely confirming access…","warn");return;}

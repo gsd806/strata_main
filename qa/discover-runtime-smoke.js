@@ -21,8 +21,9 @@ class ClassList{
   contains(name){return this.values.has(name);}
 }
 class Element{
-  constructor(id){this.id=id;this.value="";this.innerHTML="";this.textContent="";this.hidden=false;this.open=false;this.disabled=false;this.dataset={};this.attributes={};this.classList=new ClassList();this.parentElement={classList:new ClassList()};this.listeners={};}
+  constructor(id){this.id=id;this.value="";this.innerHTML="";this.textContent="";this.hidden=false;this.open=false;this.disabled=false;this.dataset={};this.attributes={};this.classList=new ClassList();this.parentElement={classList:new ClassList()};this.listeners={};this.queryResults=new Map();}
   addEventListener(type,handler){(this.listeners[type]||=[]).push(handler);}
+  async emit(type,event={}){for(const handler of this.listeners[type]||[])await handler(event);}
   setAttribute(name,value){this.attributes[name]=String(value);}
   removeAttribute(name){delete this.attributes[name];}
   showModal(){this.open=true;}
@@ -30,7 +31,7 @@ class Element{
   focus(){}
   scrollIntoView(){}
   append(){}
-  querySelector(){return new Element("child");}
+  querySelector(selector){return this.queryResults.get(selector)||new Element("child");}
   querySelectorAll(){return [];}
   closest(){return null;}
   get selectedOptions(){const labels={hypertrophy:"Hypertrophy selection",strength:"Strength skill",balanced:"Balanced","time-efficient":"Time-efficient setup"};return [{textContent:labels[this.value]||this.value}];}
@@ -47,9 +48,10 @@ const document={
 const weeklyPlan={version:1,restDay:"Sunday",days:Object.fromEntries(["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].map((day)=>[day,day==="Monday"?[{instanceId:"runtime-plan-item",exerciseId:"flat-dumbbell-press",sets:3,reps:"8–12"}]:[]]))};
 const response={user:{id:"u1",name:"Runtime Audit",email:"audit@example.test"},csrfToken:"csrf",exercises,methodology:discovery.methodology,sources:discovery.sources,limitedConfidenceExercises:discovery.limitedConfidenceExercises,preferences:{version:1,goal:"hypertrophy",level:"Intermediate",days:4,equipment:[...new Set(exercises.map((exercise)=>exercise.equipment))],preferences:["stable","long-range"],limitations:[]},ratings:{aggregates:[],user:[]},weeklyPlan,weeklyPlanUpdatedAt:1_700_000_000_100};
 const communityPlan={id:"11111111-1111-4111-8111-111111111111",title:"Runtime <Week>",description:"A shared smoke-test plan.",authorName:"Other Member",plan:weeklyPlan,createdAt:1_700_000_000_000,updatedAt:1_700_000_000_000};
-const fetches=[],requests=[];
+const fetches=[],requests=[];let discoveryAttempts=0;
 const context={console,document,window:{location:{replace(){}}},location:{},navigator:{},requests,fetch:async(path,options={})=>{
   fetches.push(path);requests.push({path,options});
+  if(path==="/api/discovery"&&++discoveryAttempts===1)throw new TypeError("Failed to fetch");
   if(String(path).startsWith("/api/community-plans?"))return {ok:true,json:async()=>({plans:[communityPlan],pagination:{limit:12,offset:0,nextOffset:null}})};
   if(String(path).endsWith("/apply"))return {ok:true,json:async()=>({ok:true,plan:weeklyPlan,planUpdatedAt:1_700_000_000_200})};
   return {ok:true,json:async()=>response};
@@ -64,6 +66,12 @@ assert.equal(vm.runInContext('Object.keys(FEATURE_CONFIG).filter((name)=>feature
 
 (async()=>{
   await new Promise(setImmediate);
+  assert.equal(elements.get("discoveryLoadError").hidden,false,"a failed initial request must expose recovery UI");
+  assert.match(elements.get("discoveryLoadErrorMessage").textContent,/Could not reach STRATA[\s\S]*try again/i,"browser-native network errors must be normalized");
+  assert.equal(elements.get("discoveryRetry").disabled,false,"retry must remain available after failure");
+  await elements.get("discoveryRetry").emit("click");
+  await new Promise(setImmediate);
+  assert.equal(elements.get("discoveryLoadError").hidden,true,"a successful retry must clear the error UI");
   vm.runInContext(`
     globalThis.featureAudit={defaultFeature:state.activeFeature,defaultVisible:!el("recommendations").hidden,defaultHidden:Object.keys(FEATURE_CONFIG).filter((name)=>featurePanel(name).hidden).length};
     activateFeature("explorer");
@@ -82,6 +90,13 @@ assert.equal(vm.runInContext('Object.keys(FEATURE_CONFIG).filter((name)=>feature
     openDetail("flat-dumbbell-press");
     globalThis.audit={recommendations:state.recommendations.length,results:discoveryResults().length,renderedResults:(el("exerciseGrid").innerHTML.match(/class="exercise-card"/g)||[]).length,hasLoadMore:/data-load-more-exercises/.test(el("exerciseGrid").innerHTML),compareCount:state.compare.length,detailOpen:el("detailDialog").open,bodyLocked:document.body.classList.contains("dialog-open")};
   `,context);
+  const draftValues={comfort:1,pump:2,enjoyment:4,stability:5,setup:2,overall:4},draftForm=new Element("ratingDraft");
+  draftForm.dataset.ratingForm="flat-dumbbell-press";
+  draftForm.elements={namedItem:(name)=>({value:draftValues[name]})};
+  elements.get("detailContent").queryResults.set("[data-rating-form]",draftForm);
+  vm.runInContext("globalThis.ratingRefreshPromise=refreshCommunityRatings({force:true});",context);
+  await context.ratingRefreshPromise;
+  context.audit.ratingDraftPreserved=Object.entries(draftValues).every(([name,value])=>new RegExp(`name="${name}">[\\s\\S]*?<option value="${value}" selected`).test(elements.get("detailContent").innerHTML));
   vm.runInContext('closeDialog("detailDialog"); activateFeature("community");',context);
   await new Promise(setImmediate);
   vm.runInContext(`
@@ -95,7 +110,7 @@ assert.equal(vm.runInContext('Object.keys(FEATURE_CONFIG).filter((name)=>feature
   const result={
     ...context.audit,
     ...context.featureAudit,
-    discoveryFetch:fetches.filter((path)=>path==="/api/discovery").length===1,
+    discoveryFetch:fetches.filter((path)=>path==="/api/discovery").length===2,
     battleBuilder:/Flat Dumbbell Press/.test(elements.get("battleSelects").innerHTML),
     battleSlots:(elements.get("battleSelects").innerHTML.match(/data-battle-slot=/g)||[]).length,
     battleTable:/Official FitScore/.test(elements.get("battleResults").innerHTML),
@@ -127,6 +142,6 @@ assert.equal(vm.runInContext('Object.keys(FEATURE_CONFIG).filter((name)=>feature
   assert.equal(result.unknownHashFeature,"explorer");
   assert.equal(result.battleSlots,4);
   assert.ok(result.battleRows>=10);
-  for(const key of ["discoveryFetch","battleBuilder","battleTable","battleVisible","battleStatus","detailOpen","bodyLocked","scoreAudit","evidence","alternatives","ratings","communityFetch","communityRendered","communitySevenDayPreview","communityConfirmation","communityApplied","communityPlanLink"])assert.equal(result[key],true,key);
+  for(const key of ["discoveryFetch","battleBuilder","battleTable","battleVisible","battleStatus","detailOpen","bodyLocked","scoreAudit","evidence","alternatives","ratings","ratingDraftPreserved","communityFetch","communityRendered","communitySevenDayPreview","communityConfirmation","communityApplied","communityPlanLink"])assert.equal(result[key],true,key);
   console.log(JSON.stringify(result,null,2));
 })().catch(error=>{console.error(error);process.exitCode=1;});

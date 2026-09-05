@@ -10,6 +10,7 @@ const read=(...parts)=>readFileSync(join(PROJECT_ROOT,"public",...parts),"utf8")
 
 test("Strata+ feature blocks progressively enhance six visible workspaces",()=>{
   const html=read("pages","discover.html");
+  const script=read("scripts","discover.js");
   const panels=[...html.matchAll(/<section\b([^>]*\bdata-feature-panel="([^"]+)"[^>]*)>/g)];
   const blocks=[...html.matchAll(/<a\b[^>]*\bclass="[^"]*feature-block[^"]*"[^>]*\bdata-feature-target="([^"]+)"[^>]*>/g)];
 
@@ -20,6 +21,8 @@ test("Strata+ feature blocks progressively enhance six visible workspaces",()=>{
     assert.match(tag,/\baria-controls="[^"]+"/);
     assert.match(tag,/\baria-expanded="false"/);
   }
+  assert.match(html,/class="studio-account" href="\/account\.html">Account<\/a>/);
+  assert.match(script,/account\.html\?mode=login&next=discover/);
 });
 
 test("community plans preview a full week and require confirmation before replacing My Plan",()=>{
@@ -73,6 +76,24 @@ test("Strata+ feature navigation owns visibility, URL state, focus, and reduced 
   assert.match(css,/\.feature-panel\[hidden\]\s*\{\s*display:\s*none\s*!important/);
   assert.match(css,/@media \(prefers-reduced-motion: reduce\)/);
   assert.match(css,/\.toast, \.feature-block \{ transition: none; \}/);
+});
+
+test("Strata+ initial loading offers a normalized, retryable error without replacing auth redirects",()=>{
+  const html=read("pages","discover.html"),script=read("scripts","discover.js"),css=read("styles","discover.css");
+  for(const id of ["discoveryLoadError","discoveryLoadErrorTitle","discoveryLoadErrorMessage","discoveryRetry"])assert.match(html,new RegExp(`\\bid="${id}"`));
+  assert.match(html,/id="discoveryRetry"[^>]*>Try again/);
+  assert.match(script,/code:"NETWORK_ERROR"/);
+  assert.match(script,/error\.redirecting=true;window\.location\.replace\("\/account\.html\?mode=login&next=discover"\)/);
+  assert.match(script,/if\(!error\?\.redirecting\)showInitialLoadError\(error\)/);
+  assert.match(script,/"discoveryRetry"\)\.addEventListener\("click",\(\)=>\{void init\(\);\}\)/);
+  assert.match(css,/\.discovery-load-error\[hidden\]\s*\{\s*display:none/);
+});
+
+test("open rating drafts survive aggregate-driven detail re-renders",()=>{
+  const script=read("scripts","discover.js");
+  assert.match(script,/function openRatingDraft\(id\)/);
+  assert.match(script,/const ratingDraft=openRatingDraft\(id\);state\.activeExercise=id/);
+  assert.match(script,/ratingFormMarkup\(exercise,ratingDraft\)/);
 });
 
 test("Strata+ polish keeps filters legible and comparison details accessible",()=>{
