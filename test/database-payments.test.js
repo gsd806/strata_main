@@ -56,6 +56,21 @@ function pending(transactionId,createdAt,status="ready") {
   };
 }
 
+test("one-time Strata+ trials grant temporary access without becoming purchases",async()=>{
+  const {store,close}=await fixture();
+  try{
+    assert.equal(await store.discoveryTrial("user-1"),null);
+    assert.equal(await store.hasDiscoveryAccess("user-1",null,999),false);
+    const trial=await store.startDiscoveryTrial("user-1",1_000,11_000);
+    assert.deepEqual(trial,{user_id:"user-1",started_at:1_000,expires_at:11_000});
+    assert.equal(await store.hasPaidDiscoveryAccess("user-1"),false);
+    assert.equal(await store.hasDiscoveryAccess("user-1",null,10_999),true);
+    assert.equal(await store.hasDiscoveryAccess("user-1",null,11_000),false);
+    assert.equal(await store.startDiscoveryTrial("user-1",20_000,30_000),null,"a used trial cannot restart");
+    assert.deepEqual(await store.discoveryTrial("user-1"),trial);
+  }finally{await close();}
+});
+
 test("purchase ledger grants access from any completed, unrevoked purchase",async() => {
   const {store,close}=await fixture();
   try {

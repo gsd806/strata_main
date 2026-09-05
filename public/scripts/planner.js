@@ -6,9 +6,10 @@ const REST_PREFERENCE=["Sunday","Thursday","Wednesday","Saturday","Friday","Tues
 const LIBRARY_DESKTOP_PAGE_SIZE=32;
 const LIBRARY_MOBILE_PAGE_SIZE=16;
 const SEARCH_DEBOUNCE_MS=180;
+const GUEST_PLAN_KEY="strata_guest_plan_v1";
 const state={
   exercises:[],plan:null,user:null,query:"",group:"all",drag:null,selectedDay:"Monday",
-  ready:false,saveTimer:null,savePromise:null,revision:0,savedRevision:0,navigating:false,libraryLimit:LIBRARY_DESKTOP_PAGE_SIZE
+  ready:false,guest:false,saveTimer:null,savePromise:null,revision:0,savedRevision:0,navigating:false,libraryLimit:LIBRARY_DESKTOP_PAGE_SIZE
 };
 const el=(id)=>document.getElementById(id);
 
@@ -26,7 +27,6 @@ async function api(path,options={}) {
   const data=await response.json().catch(()=>({}));
   if(!response.ok) {
     const error=Object.assign(new Error(data.error||"Request failed."),{status:response.status});
-    if(response.status===401&&path!=="/api/logout")window.location.replace("/");
     throw error;
   }
   return data;
@@ -36,6 +36,30 @@ function escapeHtml(value){return String(value??"").replace(/[&<>'"]/g,(char)=>(
 function exerciseById(id){return state.exercises.find((exercise)=>exercise.id===id);}
 function itemByInstance(day,instanceId){return state.plan?.days?.[day]?.find((item)=>item.instanceId===instanceId);}
 function makeId(){return globalThis.crypto?.randomUUID?.()||`item-${Date.now()}-${Math.random().toString(16).slice(2)}`;}
+function emptyPlan(){return{version:1,restDay:"Sunday",days:Object.fromEntries(DAYS.map((day)=>[day,[]]))};}
+function guestPlan(){
+  let input=null;
+  try{input=JSON.parse(localStorage.getItem(GUEST_PLAN_KEY)||"null");}catch{/* Use a clean local plan if storage is malformed or unavailable. */}
+  const plan=emptyPlan(),known=new Set(state.exercises.map((exercise)=>exercise.id)),seen=new Set();
+  plan.restDay=DAYS.includes(input?.restDay)?input.restDay:"Sunday";
+  for(const day of DAYS){
+    const items=Array.isArray(input?.days?.[day])?input.days[day]:[];
+    plan.days[day]=items.slice(0,40).flatMap((item)=>{
+      if(!item||!known.has(String(item.exerciseId||"")))return[];
+      let instanceId=String(item.instanceId||makeId()).replace(/[^a-zA-Z0-9_-]/g,"").slice(0,100)||makeId();
+      if(seen.has(instanceId))instanceId=makeId();
+      seen.add(instanceId);
+      const sets=Math.max(1,Math.min(10,Math.round(Number(item.sets)||3)));
+      const reps=String(item.reps||"8–12").trim().slice(0,20)||"8–12";
+      return[{instanceId,exerciseId:String(item.exerciseId),sets,reps}];
+    });
+  }
+  return plan;
+}
+function saveGuestPlan(){
+  try{localStorage.setItem(GUEST_PLAN_KEY,JSON.stringify(state.plan));return true;}
+  catch{return false;}
+}
 function focusSoon(selector){if(!selector)return;requestAnimationFrame(()=>document.querySelector(selector)?.focus());}
 function instanceSelector(attribute,instanceId){return `[${attribute}="${String(instanceId).replace(/[^a-zA-Z0-9_-]/g,"")}"]`;}
 
@@ -198,10 +222,14 @@ async function performSave({keepalive=false,silent=false}={}){
   setSaveStatus("Saving…");
   const operation=(async()=>{
     try{
-      const result=await api("/api/plan",{method:"PUT",body:payload,keepalive});
+      let result;
+      if(state.guest){
+        if(!saveGuestPlan())throw new Error("This browser blocked local storage, so the plan could not be saved.");
+        result={plan:state.plan};
+      }else result=await api("/api/plan",{method:"PUT",body:payload,keepalive});
       state.savedRevision=Math.max(state.savedRevision,revision);
       if(state.revision===revision)state.plan=result.plan;
-      setSaveStatus(state.savedRevision===state.revision?"Saved to account":"Unsaved changes");
+      setSaveStatus(state.savedRevision===state.revision?(state.guest?"Saved on this device":"Saved to account"):"Unsaved changes");
       return true;
     }catch(error){
       setSaveStatus("Save failed · retry needed",true);
@@ -232,6 +260,7 @@ async function flushSave(options={}){
 function sendKeepaliveSave(){
   if(!state.ready||state.savedRevision>=state.revision||hasRestConflict())return;
   clearTimeout(state.saveTimer);
+  if(state.guest){if(saveGuestPlan())state.savedRevision=state.revision;return;}
   const body=JSON.stringify({plan:state.plan});
   void fetch("/api/plan",{method:"PUT",body,keepalive:true,credentials:"same-origin",headers:{Accept:"application/json","Content-Type":"application/json"}}).catch(()=>{});
 }
@@ -373,15 +402,26 @@ async function init(){
   el("weekSummary").innerHTML="";
   el("weekBoard").innerHTML='<div class="planner-load-state">Loading your weekly plan…</div>';
   try{
-    const [exercises,result]=await Promise.all([api("/exercises.json?v=6.9.0"),api("/api/plan")]);
-    if(!Array.isArray(exercises)||!result.plan?.days)throw new Error("STRATA returned an incomplete plan.");
-    state.exercises=exercises;state.plan=result.plan;state.user=result.user;
+    const exercises=await api("/exercises.json?v=6.9.1");
+    if(!Array.isArray(exercises))throw new Error("STRATA returned an incomplete exercise library.");
+    state.exercises=exercises;
+    let result;
+    try{result=await api("/api/plan");}
+    catch(error){if(error.status!==401)throw error;result={plan:guestPlan(),user:null};}
+    if(!result.plan?.days)throw new Error("STRATA returned an incomplete plan.");
+    state.plan=result.plan;state.user=result.user;state.guest=!result.user?.id;
     state.revision=0;state.savedRevision=0;state.savePromise=null;
     const repairedRest=repairLegacyRestDay();
     state.selectedDay=DAYS.find((day)=>day!==state.plan.restDay)||"Monday";
-    el("userName").textContent=result.user.name;
+    el("userName").textContent=state.guest?"Guest plan":result.user.name;
+    el("logoutButton").hidden=state.guest;
+    el("plannerSignIn").hidden=!state.guest;
+    el("plannerModeNotice").hidden=false;
+    el("plannerModeNotice").innerHTML=state.guest
+      ? '<strong>No login needed.</strong> Your plan is saved only on this device. <a href="/account.html?mode=login&amp;next=planner">Sign in for cross-device sync</a>.'
+      : '<strong>Account plan.</strong> Changes sync securely across your signed-in devices.';
     setReady(true);
-    resetLibraryWindow();renderFilters();renderLibrary();renderWeek();setSaveStatus("Saved to account");
+    resetLibraryWindow();renderFilters();renderLibrary();renderWeek();setSaveStatus(state.guest?"Saved on this device":"Saved to account");
     if(repairedRest){queueSave();showToast(`Recovery moved to empty ${repairedRest} to keep it clear.`);}
     handlePendingAdd();
   }catch(error){

@@ -100,9 +100,11 @@ async function main() {
   assert.match(homeText,/href="\/manifest\.webmanifest"/);
   assert.match(homeText,/href="\/install\.html"/);
 
-  const protectedPage=await get("/planner.html");
-  assert.equal(protectedPage.response.status,302);
-  assert.match(protectedPage.response.headers.get("location"),/^\/account\.html\?/);
+  const guestPlanner=await get("/planner.html");
+  const guestPlannerText=Buffer.from(guestPlanner.body).toString("utf8");
+  assert.equal(guestPlanner.response.status,200);
+  assert.equal(guestPlanner.response.headers.get("cache-control"),"no-cache");
+  assert.match(guestPlannerText,/No login needed/);
 
   for(const route of ["/forgot-password","/reset-password","/delete-account"]) {
     const page=await get(route);

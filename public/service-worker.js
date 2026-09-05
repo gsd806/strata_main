@@ -1,6 +1,6 @@
 "use strict";
 
-const BUILD="6.9.0";
+const BUILD="6.9.1";
 const CACHE_PREFIX="strata-static-";
 const STATIC_CACHE=`${CACHE_PREFIX}${BUILD}`;
 const PRECACHE_URLS=[
@@ -11,23 +11,24 @@ const PRECACHE_URLS=[
   "/terms.html",
   "/privacy.html",
   "/refunds.html",
-  "/install.css?v=6.9.0",
-  "/install.js?v=6.9.0",
-  "/site-info.css?v=6.9.0",
-  "/pricing.js?v=6.9.0",
-  "/contact.js?v=6.9.0",
-  "/pwa.js?v=6.9.0",
-  "/styles.css?v=6.9.0",
-  "/app.js?v=6.9.0",
-  "/account.css?v=6.9.0",
-  "/account.js?v=6.9.0",
-  "/account-recovery.js?v=6.9.0",
-  "/planner.css?v=6.9.0",
-  "/planner.js?v=6.9.0",
-  "/discover.css?v=6.9.0",
-  "/discovery-core.js?v=6.9.0",
-  "/discover.js?v=6.9.0",
-  "/exercises.json?v=6.9.0",
+  "/planner.html",
+  "/install.css?v=6.9.1",
+  "/install.js?v=6.9.1",
+  "/site-info.css?v=6.9.1",
+  "/pricing.js?v=6.9.1",
+  "/contact.js?v=6.9.1",
+  "/pwa.js?v=6.9.1",
+  "/styles.css?v=6.9.1",
+  "/app.js?v=6.9.1",
+  "/account.css?v=6.9.1",
+  "/account.js?v=6.9.1",
+  "/account-recovery.js?v=6.9.1",
+  "/planner.css?v=6.9.1",
+  "/planner.js?v=6.9.1",
+  "/discover.css?v=6.9.1",
+  "/discovery-core.js?v=6.9.1",
+  "/discover.js?v=6.9.1",
+  "/exercises.json?v=6.9.1",
   "/manifest.webmanifest",
   "/icons/strata-icon.svg",
   "/icons/strata-192.png",
@@ -36,14 +37,15 @@ const PRECACHE_URLS=[
   "/icons/apple-touch-icon.png"
 ];
 const PUBLIC_ASSET_PATHS=new Set(PRECACHE_URLS.map((entry) => new URL(entry,self.location.origin).pathname));
-const PRIVATE_HTML_PATHS=new Set(["/","/index.html","/account.html","/verify-email","/verify-email.html","/forgot-password","/forgot-password.html","/reset-password","/reset-password.html","/delete-account","/delete-account.html","/planner.html","/discover.html","/admin","/admin.html"]);
+const PRIVATE_HTML_PATHS=new Set(["/","/index.html","/account.html","/verify-email","/verify-email.html","/forgot-password","/forgot-password.html","/reset-password","/reset-password.html","/delete-account","/delete-account.html","/discover.html","/admin","/admin.html"]);
 const PUBLIC_HTML_FALLBACKS=new Map([
   ["/install","/install.html"],
   ["/pricing","/pricing.html"],
   ["/contact","/contact.html"],
   ["/terms","/terms.html"],
   ["/privacy","/privacy.html"],
-  ["/refunds","/refunds.html"]
+  ["/refunds","/refunds.html"],
+  ["/planner","/planner.html"]
 ]);
 
 function bypassNetwork(pathname) {

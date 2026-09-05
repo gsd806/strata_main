@@ -67,6 +67,7 @@ const MAX_DELETION_RECONCILIATIONS = 8;
 const MAX_BODY_BYTES = 64 * 1024;
 const MAX_WEBHOOK_BYTES = 256 * 1024;
 const ADMIN_ELEVATION_MS = 30 * 60 * 1000;
+const DISCOVERY_TRIAL_MS = 10 * 24 * 60 * 60 * 1000;
 const MIN_GZIP_BYTES = 1024;
 const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 const EXERCISES = JSON.parse(readFileSync(join(PUBLIC_ROOT,"data","exercises.json"),"utf8"));
@@ -139,7 +140,7 @@ const PAGE_ALIASES = new Map([
   ["/delete-account","delete-account.html"],
   ["/admin","admin.html"]
 ]);
-const PROTECTED_HTML = new Set(["planner.html","discover.html"]);
+const PROTECTED_HTML = new Set(["discover.html"]);
 const PRIVATE_HTML = new Set(["index.html","account.html","verify-email.html","forgot-password.html","reset-password.html","delete-account.html","admin.html",...PROTECTED_HTML]);
 const MIME = {
   ".html":"text/html; charset=utf-8",
@@ -269,12 +270,21 @@ function planStats(plan) {
 }
 
 async function userPayload(session) {
-  const [plan,discovery,deletion,admin]=await Promise.all([
+  const now=Date.now();
+  const [plan,paidDiscovery,trial,deletion,admin]=await Promise.all([
     planFor(session.id),
     store.discoveryAccessSummary(session.id),
-    store.activeAccountDeletion(session.id,Date.now()),
+    store.discoveryTrial(session.id),
+    store.activeAccountDeletion(session.id,now),
     adminIdentity(session)
   ]);
+  const trialActive=Boolean(trial&&Number(trial.expires_at)>now);
+  const discovery={
+    ...paidDiscovery,
+    active:paidDiscovery.active||trialActive,
+    accessType:paidDiscovery.active?"paid":trialActive?"trial":null,
+    trial:{eligible:!trial,active:trialActive,startedAt:trial?Number(trial.started_at):null,expiresAt:trial?Number(trial.expires_at):null}
+  };
   return {
     id:session.id,
     name:session.name,
@@ -2004,6 +2014,26 @@ async function handleApi(req,res,url) {
     if (!session) { json(res,401,{error:"Not signed in."}); return; }
     json(res,200,{user:await userPayload(session),csrfToken:session.csrf_token}); return;
   }
+  if (url.pathname === "/api/discovery/trial" && req.method === "POST") {
+    const session=await requireSession(req,res); if (!session) return;
+    if (!validCsrf(req,session)) { json(res,403,{error:"Security check failed. Refresh and try again.",code:"INVALID_CSRF"}); return; }
+    await bodyJson(req);
+    if (await store.hasPaidDiscoveryAccess(session.id)) {
+      json(res,409,{error:"Strata+ is already permanently unlocked for this account.",code:"DISCOVERY_ALREADY_ACTIVE"}); return;
+    }
+    const now=Date.now();
+    if (await store.activeAccountDeletion(session.id,now)) {
+      json(res,409,{error:"Cancel the pending account-deletion request before starting a trial.",code:"ACCOUNT_DELETION_PENDING"}); return;
+    }
+    if (!rateAllowed(req,`discovery-trial:${session.id}`,5)) { json(res,429,{error:"Too many trial attempts. Try again later."}); return; }
+    const created=await store.startDiscoveryTrial(session.id,now,now+DISCOVERY_TRIAL_MS);
+    const trial=created||await store.discoveryTrial(session.id);
+    if (!trial) { json(res,409,{error:"The trial could not be started for this account.",code:"TRIAL_UNAVAILABLE"}); return; }
+    if (!created&&Number(trial.expires_at)<=now) {
+      json(res,409,{error:"This account has already used its one-time Strata+ trial.",code:"TRIAL_ALREADY_USED"}); return;
+    }
+    json(res,created?201:200,{ok:true,user:await userPayload(session)}); return;
+  }
   if (url.pathname === "/api/billing/checkout" && req.method === "POST") {
     const session=await requireSession(req,res); if (!session) return;
     if (!validCsrf(req,session)) { json(res,403,{error:"Security check failed. Refresh and try again.",code:"INVALID_CSRF"}); return; }
@@ -2011,7 +2041,7 @@ async function handleApi(req,res,url) {
     if (!PAYMENT_CONFIG.enabled) { json(res,503,{error:"Checkout is not available yet.",code:"CHECKOUT_UNAVAILABLE"}); return; }
     if (await store.activeAccountDeletion(session.id,Date.now())) { json(res,409,{error:"Cancel the pending account-deletion request before starting checkout.",code:"ACCOUNT_DELETION_PENDING"}); return; }
     if (!rateAllowed(req,`checkout:${session.id}`,8)) { json(res,429,{error:"Too many checkout attempts. Try again later."}); return; }
-    if (await store.hasDiscoveryAccess(session.id)) {
+    if (await store.hasPaidDiscoveryAccess(session.id)) {
       json(res,409,{error:"Strata+ is already unlocked for this account.",code:"ALREADY_ENTITLED"}); return;
     }
     const pending=await store.pendingPurchaseForUser(session.id,PAYMENT_CONFIG.priceId);
@@ -2149,7 +2179,7 @@ async function serveStatic(req,res,url) {
     const user=activeSession?await userPayload(activeSession):null;
     const actions=user
       ? `<a class="account-button discover-button" id="discoverButton" href="${user.discovery.active?"/discover.html":"/pricing"}">${user.discovery.active?"Strata+":"Unlock Strata+"}</a>\n        <a class="account-button account-create" id="signupButton" href="/account.html?mode=signup" hidden>Sign up</a>\n        <a class="account-button account-link signed-in" id="accountButton" href="/account.html">${escapeHtml(user.name.split(/\s+/)[0])} profile</a>\n        <a class="session-button" id="planButton" href="/planner.html">Plan <span id="planCount">${user.planCount}</span></a>`
-      : `<a class="account-button discover-button" id="discoverButton" href="/discover.html" hidden>Discover</a>\n        <a class="account-button account-create" id="signupButton" href="/account.html?mode=signup">Sign up</a>\n        <a class="account-button account-link" id="accountButton" href="/account.html?mode=login">Log in</a>\n        <a class="session-button" id="planButton" href="/account.html?mode=login&amp;next=planner">Plan <span id="planCount">0</span></a>`;
+      : `<a class="account-button discover-button" id="discoverButton" href="/discover.html" hidden>Strata+</a>\n        <a class="account-button account-create" id="signupButton" href="/account.html?mode=signup">Sign up</a>\n        <a class="account-button account-link" id="accountButton" href="/account.html?mode=login">Log in</a>\n        <a class="session-button" id="planButton" href="/planner.html">Plan <span id="planCount">0</span></a>`;
     body=Buffer.from(body.toString("utf8").replace(/<!-- ACCOUNT_ACTIONS_START -->[\s\S]*?<!-- ACCOUNT_ACTIONS_END -->/,`<!-- ACCOUNT_ACTIONS_START -->\n        ${actions}\n        <!-- ACCOUNT_ACTIONS_END -->`));
   }
   const privateHtml=PRIVATE_HTML.has(requested);

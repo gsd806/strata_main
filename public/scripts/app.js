@@ -194,7 +194,7 @@ function renderExercises() {
     <div class="row-actions">
       <a class="action-icon youtube-action" href="${exercise.youtube}" target="_blank" rel="noreferrer" aria-label="Find ${exercise.name} tutorials on YouTube">▶</a>
       <button class="action-icon ${compared ? "active" : ""}" data-compare="${exercise.id}" type="button" aria-pressed="${compared}" aria-label="${compared ? "Remove" : "Add"} ${exercise.name} ${compared ? "from" : "to"} comparison">⇄</button>
-      <button class="action-icon" data-add-planner="${exercise.id}" type="button" aria-label="${state.user ? "Add to weekly planner" : "Sign in to add to weekly planner"}">+</button>
+      <button class="action-icon" data-add-planner="${exercise.id}" type="button" aria-label="Add to weekly planner">+</button>
     </div>
   </article>`;
   }).join("");
@@ -213,7 +213,7 @@ function updateAccountUI() {
   discoveryButton.href = discoveryActive ? "/discover.html" : "/pricing";
   discoveryButton.textContent = discoveryActive ? "Strata+" : "Unlock Strata+";
   el("planCount").textContent = state.user ? (state.user.planCount || 0) : "0";
-  el("planButton").href = state.user ? "/planner.html" : "/account.html?mode=login&next=planner";
+  el("planButton").href = "/planner.html";
 }
 
 function renderAll() {
@@ -277,7 +277,7 @@ function openDetail(id) {
     <div class="metric-grid">${metricMarkup(exercise)}</div>
     <p class="detail-score-build"><strong>Score build</strong><span>Weighted baseline ${exercise.weightedBaseline}</span><span>Editorial adjustment ${adjustmentLabel(exercise.editorialAdjustment)}</span></p>
     <div class="detail-columns"><div><h3>Execution notes</h3><ul>${exercise.cues.map((cue) => `<li>${cue}</li>`).join("")}</ul></div><div><h3>Why it ranks here</h3><p class="detail-rationale">${exercise.why}</p><p class="detail-note"><strong>Watch for:</strong> ${exercise.caution}</p></div></div>
-    <div class="detail-footer"><button class="button button-dark" data-add-planner="${exercise.id}" type="button">${state.user ? "Add to weekly planner" : "Sign in to plan"}<span>+</span></button><a class="button detail-youtube" href="${exercise.youtube}" target="_blank" rel="noreferrer">YouTube tutorials <span>▶</span></a><button class="button" style="border-color:var(--ink)" data-compare="${exercise.id}" type="button" aria-pressed="${compared}">${compared ? "Remove comparison" : "Compare exercise"}<span>⇄</span></button></div>
+    <div class="detail-footer"><button class="button button-dark" data-add-planner="${exercise.id}" type="button">Add to weekly planner<span>+</span></button><a class="button detail-youtube" href="${exercise.youtube}" target="_blank" rel="noreferrer">YouTube tutorials <span>▶</span></a><button class="button" style="border-color:var(--ink)" data-compare="${exercise.id}" type="button" aria-pressed="${compared}">${compared ? "Remove comparison" : "Compare exercise"}<span>⇄</span></button></div>
   </div>`;
   openModal(detailDialog);
 }
@@ -287,8 +287,7 @@ function plannerUrl(exerciseId = null) {
 }
 
 function addToPlanner(id) {
-  if (state.user) { window.location.assign(plannerUrl(id)); return; }
-  window.location.assign(`/account.html?mode=login&next=planner&add=${encodeURIComponent(id)}`);
+  window.location.assign(plannerUrl(id));
 }
 
 async function initializeAccount() {
@@ -305,7 +304,7 @@ async function initializeCatalog() {
   state.catalogStatus = "loading";
   renderAll();
   try {
-    exercises = normalizeCatalog(await api("/exercises.json?v=6.9.0"));
+    exercises = normalizeCatalog(await api("/exercises.json?v=6.9.1"));
     state.catalogStatus = "ready";
     el("catalogTotal").textContent = exercises.length;
   } catch {

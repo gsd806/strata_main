@@ -16,7 +16,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/site-info.css?v=6.9.0" />
+    <link rel="stylesheet" href="/site-info.css?v=6.9.1" />
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to pricing</a>
@@ -29,7 +29,7 @@
       <section class="info-hero" aria-labelledby="pageTitle">
         <div class="info-container info-hero-grid">
           <div><p class="eyebrow">Strata+ access</p><h1 id="pageTitle">ONE PRICE.<br /><em>NO SUBSCRIPTION.</em></h1></div>
-          <p class="info-lede">One secure purchase unlocks the personalized Strata+ studio on your account. The exercise index, account, synced weekly planner, and installable app remain free.</p>
+          <p class="info-lede">Start with a one-time 10-day trial, then keep Strata+ with one secure purchase if you want. The exercise index, login-free weekly planner, account sync, and installable app remain free.</p>
         </div>
       </section>
 
@@ -50,12 +50,13 @@
               <div class="button-row purchase-actions">
                 <a class="button button-dark" id="purchaseSignup" href="/account.html?mode=signup&amp;next=pricing">Create account to purchase <span aria-hidden="true">→</span></a>
                 <a class="button button-light" id="purchaseLogin" href="/account.html?mode=login&amp;next=pricing">Already have an account? Sign in</a>
+                <button class="button button-dark" id="trialDiscovery" type="button" aria-describedby="purchaseStatus" hidden disabled>Try Strata+ free for 10 days <span aria-hidden="true">→</span></button>
                 <button class="button button-dark" id="buyDiscovery" type="button" aria-describedby="purchaseStatus" hidden disabled>Buy Strata+ · $5.99 USD <span aria-hidden="true">→</span></button>
                 <a class="button button-dark" id="openDiscovery" href="/discover.html" hidden>Open Strata+ <span aria-hidden="true">→</span></a>
                 <button class="button button-light" id="checkAccess" type="button" aria-describedby="purchaseStatus" hidden>Check access <span aria-hidden="true">↻</span></button>
                 <a class="button button-light" href="/refunds">14-day refunds <span aria-hidden="true">↗</span></a>
               </div>
-              <p class="purchase-status" id="purchaseStatus" role="status" aria-live="polite" aria-atomic="true" tabindex="-1">Create an account or sign in before purchasing so access can follow you across devices.</p>
+              <p class="purchase-status" id="purchaseStatus" role="status" aria-live="polite" aria-atomic="true" tabindex="-1">Sign in to start a one-time 10-day trial, or make the one-time Strata+ purchase.</p>
             </div>
             <noscript><p class="purchase-status purchase-status-warn">JavaScript is required to open secure Paddle checkout. You can still create an account, then return to this page.</p></noscript>
             <p class="checkout-note"><strong>Secure checkout:</strong> Paddle is the merchant of record and handles payment details, applicable tax, receipts, and refunds. STRATA does not receive or store your full card number. Strata+ unlocks after STRATA securely confirms the completed transaction.</p>
@@ -64,10 +65,10 @@
           <article class="free-card" aria-labelledby="freeTitle">
             <p class="card-kicker">STRATA core · Free</p>
             <h2 id="freeTitle">KEEP THE BASICS.</h2>
-            <p>Create an account without purchasing Strata+. The public rankings, full exercise index, synced weekly planner, and PWA installation guide remain available at no charge.</p>
+            <p>Build a weekly plan without creating an account. Guest plans stay on that device; signing in adds secure cross-device plan sync. Public rankings and the PWA installation guide also remain free.</p>
             <ul class="feature-list">
               <li>200 ranked exercises across 8 muscle groups</li>
-              <li>Private account and cross-device weekly plan</li>
+              <li>Login-free weekly planner with optional account sync</li>
               <li>Install STRATA on supported phones and computers</li>
             </ul>
             <p class="plain-note">Questions before buying? <a class="contact-email" href="/contact">Contact STRATA</a> or review the <a class="contact-email" href="/terms">Terms of Service</a>.</p>
@@ -80,11 +81,11 @@
       <div class="info-container info-footer-grid">
         <div><a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>STRATA</span></a><p class="footer-tagline">Move selection, made legible.</p></div>
         <nav class="footer-nav" aria-label="Footer navigation"><a href="/pricing">Pricing</a><a href="/contact">Contact</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/refunds">Refunds</a><a href="/install">Install</a></nav>
-        <p class="footer-meta">© 2026 Strata Index<br />Build 6.9.0</p>
+        <p class="footer-meta">© 2026 Strata Index<br />Build 6.9.1</p>
       </div>
     </footer>
     <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
-    <script src="/pwa.js?v=6.9.0"></script>
-    <script src="/pricing.js?v=6.9.0"></script>
+    <script src="/pwa.js?v=6.9.1"></script>
+    <script src="/pricing.js?v=6.9.1"></script>
   </body>
 </html>

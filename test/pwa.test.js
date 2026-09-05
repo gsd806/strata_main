@@ -22,7 +22,7 @@ function pngDimensions(file) {
 
 function serviceWorkerHarness() {
   const listeners={},precache=[],offlineResponse={kind:"offline"},networkResponse={kind:"network"};
-  const pageResponses=new Map(["install","pricing","contact","terms","privacy","refunds"].map((name)=>[`/${name}.html`,{kind:name}]));
+  const pageResponses=new Map(["install","pricing","contact","terms","privacy","refunds","planner"].map((name)=>[`/${name}.html`,{kind:name}]));
   let networkFails=false;
   const cache={
     async addAll(urls){precache.push(...urls);},
@@ -93,7 +93,7 @@ test("release version, cache keys, asset URLs, and catalog claims stay aligned",
   const serviceWorker=read("service-worker.js");
   const pages=["index.html","account.html","verify-email.html","forgot-password.html","reset-password.html","delete-account.html","admin.html","planner.html","discover.html","install.html","offline.html","pricing.html","contact.html","terms.html","privacy.html","refunds.html"];
 
-  assert.equal(version,"6.9.0");
+  assert.equal(version,"6.9.1");
   assert.match(serviceWorker,new RegExp(`const BUILD="${versionPattern}";`));
   assert.match(serviceWorker,/const CACHE_PREFIX="strata-static-";/);
   assert.match(serviceWorker,/const STATIC_CACHE=`\$\{CACHE_PREFIX\}\$\{BUILD\}`;/);
@@ -215,20 +215,20 @@ test("service worker precaches only public assets and never handles account APIs
   assert.ok(harness.precache.includes("/install.html"));
   assert.ok(harness.precache.includes("/manifest.webmanifest"));
   assert.ok(harness.precache.includes(`/exercises.json?v=${BUILD}`));
-  for(const page of ["pricing","contact","terms","privacy","refunds"])assert.ok(harness.precache.includes(`/${page}.html`),`${page} must be precached`);
+  for(const page of ["pricing","contact","terms","privacy","refunds","planner"])assert.ok(harness.precache.includes(`/${page}.html`),`${page} must be precached`);
   assert.ok(harness.precache.includes(`/site-info.css?v=${BUILD}`));
   assert.ok(harness.precache.includes(`/pricing.js?v=${BUILD}`));
   assert.ok(harness.precache.some((url)=>url.includes("strata-512.png")));
 
   const paths=harness.precache.map((entry)=>new URL(entry,"https://strata.test").pathname);
-  const privateHtml=["/","/index.html","/account.html","/verify-email","/verify-email.html","/forgot-password","/forgot-password.html","/reset-password","/reset-password.html","/delete-account","/delete-account.html","/admin","/admin.html","/planner.html","/discover.html"];
+  const privateHtml=["/","/index.html","/account.html","/verify-email","/verify-email.html","/forgot-password","/forgot-password.html","/reset-password","/reset-password.html","/delete-account","/delete-account.html","/admin","/admin.html","/discover.html"];
   for(const forbidden of privateHtml)assert.ok(!paths.includes(forbidden),`${forbidden} must not be precached`);
   assert.ok(!paths.some((entry)=>entry.startsWith("/api/")||entry.startsWith("/auth/")||entry==="/healthz"),"account and health routes must not be precached");
 
   for(const endpoint of ["/api/status","/api/me","/api/verification-status","/api/verify-email","/api/resend-verification","/api/password-reset/request","/api/password-reset/status","/api/password-reset/complete","/api/account/password-reset/request","/api/account/delete/request","/api/account/delete/cancel","/api/account/delete/status","/api/account/delete/complete","/api/admin/session","/api/admin/elevate","/api/admin/overview","/api/admin/users","/api/admin/users/example-user/actions","/api/admin/support","/api/admin/support/example-ticket","/api/admin/audit","/api/billing/config","/api/billing/checkout","/api/paddle/webhook","/auth/login","/auth/signup","/auth/verify-email","/auth/resend-verification","/auth/password-reset/request","/auth/password-reset/complete","/auth/account-delete/complete","/healthz"]) {
     assert.equal(dispatchServiceWorkerFetch(harness.listeners.fetch,endpoint),undefined,`${endpoint} must bypass the service worker`);
   }
-  for(const privatePage of ["/index.html","/account.html","/verify-email","/verify-email.html","/forgot-password","/forgot-password.html","/reset-password","/reset-password.html","/delete-account","/delete-account.html","/admin","/admin.html","/planner.html","/discover.html"]) {
+  for(const privatePage of ["/index.html","/account.html","/verify-email","/verify-email.html","/forgot-password","/forgot-password.html","/reset-password","/reset-password.html","/delete-account","/delete-account.html","/admin","/admin.html","/discover.html"]) {
     assert.equal(dispatchServiceWorkerFetch(harness.listeners.fetch,privatePage),undefined,`${privatePage} must bypass runtime asset caching`);
   }
   assert.equal(dispatchServiceWorkerFetch(harness.listeners.fetch,"/styles.css",{method:"POST"}),undefined,"writes must never be intercepted");
@@ -251,7 +251,7 @@ test("private navigations are network-first and fall back to the non-sensitive o
 test("public information pages use their cached page when offline",async()=>{
   const harness=serviceWorkerHarness();
   harness.setOffline(true);
-  for(const page of ["pricing","contact","terms","privacy","refunds"]) {
+  for(const page of ["pricing","contact","terms","privacy","refunds","planner"]) {
     for(const pathName of [`/${page}`,`/${page}/`,`/${page}.html`]) {
       const response=dispatchServiceWorkerFetch(harness.listeners.fetch,pathName,{mode:"navigate"});
       assert.equal(await response,harness.pageResponses.get(`/${page}.html`),`${pathName} offline fallback`);

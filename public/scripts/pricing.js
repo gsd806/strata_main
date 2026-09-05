@@ -8,10 +8,12 @@
   const statusNode=el("purchaseStatus");
   const signupLink=el("purchaseSignup");
   const loginLink=el("purchaseLogin");
+  const trialButton=el("trialDiscovery");
   const buyButton=el("buyDiscovery");
   const openLink=el("openDiscovery");
   const checkButton=el("checkAccess");
   const pageReason=new URLSearchParams(location.search).get("reason");
+  const trialRequested=new URLSearchParams(location.search).get("trial")==="1";
 
   const state={
     user:null,
@@ -94,29 +96,42 @@
   function renderPurchaseState(){
     const signedIn=Boolean(state.user?.id);
     const active=discoveryIsActive(state.user);
+    const trial=state.user?.discovery?.trial;
+    const paid=state.user?.discovery?.accessType==="paid";
     const online=navigator.onLine!==false;
     const checkoutReady=Boolean(state.config&&!state.configError&&state.paddleReady&&online);
 
     signupLink.hidden=signedIn;
     loginLink.hidden=signedIn;
     buyButton.hidden=!signedIn||active;
+    trialButton.hidden=!signedIn||active||trial?.eligible!==true;
     openLink.hidden=!signedIn||!active;
     checkButton.hidden=!signedIn||active||!state.awaitingAccess;
     buyButton.disabled=state.busy||state.awaitingAccess||state.checkoutOpen||!checkoutReady;
+    trialButton.disabled=state.busy||navigator.onLine===false;
     checkButton.disabled=state.busy;
     panel.setAttribute("aria-busy",String(state.busy||state.awaitingAccess));
 
     if(state.busy&&state.awaitingAccess){setStatus("Your checkout completed. STRATA is securely confirming access…","warn");return;}
     if(state.busy){setStatus("Checking your account and secure checkout…");return;}
-    if(active){setStatus("Strata+ is unlocked on this account.","good");return;}
+    if(active){
+      if(trial?.active&&!paid){
+        const expiry=new Date(trial.expiresAt).toLocaleString([], {dateStyle:"medium",timeStyle:"short"});
+        setStatus(`Your Strata+ trial is active until ${expiry}. No card was charged and it will not renew automatically.`,"good");
+      }else setStatus("Strata+ is permanently unlocked on this account.","good");
+      return;
+    }
     if(!signedIn){
-      const message=pageReason==="access"||pageReason==="discovery-required"
-        ? "Sign in or create an account, then purchase Strata+ to continue."
-        : "Create an account or sign in before purchasing so access can follow you across devices.";
+      const message=trialRequested
+        ? "Sign in or create an account to start your one-time 10-day Strata+ trial. No card is required."
+        : pageReason==="access"||pageReason==="discovery-required"
+          ? "Sign in or create an account, then start a trial or purchase Strata+ to continue."
+          : "Create an account or sign in before starting a trial or purchasing, so access follows you across devices.";
       setStatus(message);
       return;
     }
-    if(!online){setStatus("You are offline. Reconnect before opening secure checkout.","warn");return;}
+    if(!online){setStatus("You are offline. Reconnect before starting a trial or opening secure checkout.","warn");return;}
+    if(trial?.eligible){setStatus("Your account is eligible for one free 10-day Strata+ trial. No card required and no automatic charge.");return;}
     if(state.configError){setStatus(state.configError,"error");return;}
     if(state.actionError){setStatus(state.actionError,"error");return;}
     if(state.awaitingAccess){setStatus("Your checkout completed. STRATA is securely confirming access…","warn");return;}
@@ -129,7 +144,24 @@
       setStatus("Strata+ requires a $5.99 USD one-time purchase on this account.");
       return;
     }
-    setStatus("Signed in and ready for secure Paddle checkout.");
+    if(trial&&trial.eligible===false) setStatus("This account has already used its free trial. One-time Strata+ access is available for $5.99 USD.");
+    else setStatus("Signed in and ready for secure Paddle checkout.");
+  }
+
+  async function startTrial(){
+    if(state.busy)return;
+    if(!state.user?.id){location.assign("/account.html?mode=login&next=pricing");return;}
+    if(!state.csrfToken){setStatus("Your session needs refreshing before the trial can start.","error",{focus:true});return;}
+    state.busy=true;state.actionError="";renderPurchaseState();
+    try{
+      const result=await requestJson("/api/discovery/trial",{method:"POST",headers:{"X-CSRF-Token":state.csrfToken},body:"{}"});
+      state.user=result.user||await readAccount();
+      renderPurchaseState();
+      setStatus("Your 10-day Strata+ trial has started. No card was charged and it will end automatically.","good",{focus:true});
+    }catch(error){
+      if(error.status===401){location.assign("/account.html?mode=login&next=pricing");return;}
+      state.actionError=error.message||"The trial could not be started.";
+    }finally{state.busy=false;renderPurchaseState();if(state.actionError)setStatus(state.actionError,"error",{focus:true});}
   }
 
   async function readAccount(){
@@ -293,6 +325,7 @@
   }
 
   buyButton.addEventListener("click",()=>{void openCheckout();});
+  trialButton.addEventListener("click",()=>{void startTrial();});
   checkButton.addEventListener("click",()=>{void refreshAccess({focus:true});});
   window.addEventListener("online",()=>{renderPurchaseState();});
   window.addEventListener("offline",()=>{renderPurchaseState();});

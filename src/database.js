@@ -130,6 +130,13 @@ const SCHEMA = [
   )`,
   "CREATE INDEX IF NOT EXISTS paddle_purchases_user_id ON paddle_purchases(user_id)",
   "CREATE INDEX IF NOT EXISTS paddle_purchases_customer_id ON paddle_purchases(customer_id)",
+  `CREATE TABLE IF NOT EXISTS discovery_trials (
+    user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    started_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    CHECK(expires_at > started_at)
+  )`,
+  "CREATE INDEX IF NOT EXISTS discovery_trials_expires_at ON discovery_trials(expires_at)",
   `CREATE TABLE IF NOT EXISTS paddle_adjustments (
     adjustment_id TEXT PRIMARY KEY,
     transaction_id TEXT NOT NULL REFERENCES paddle_purchases(transaction_id) ON DELETE CASCADE,
@@ -282,6 +289,9 @@ const SQL = {
   upsertAdjustment:"INSERT INTO paddle_adjustments(adjustment_id,transaction_id,action,type,status,occurred_at,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(adjustment_id) DO UPDATE SET action=excluded.action,type=excluded.type,status=excluded.status,occurred_at=excluded.occurred_at,updated_at=excluded.updated_at WHERE excluded.occurred_at>=paddle_adjustments.occurred_at RETURNING adjustment_id",
   revokePurchase:"UPDATE paddle_purchases SET access_revoked_at=?,revocation_reason=?,updated_at=MAX(updated_at,?) WHERE transaction_id=? AND access_revoked_at IS NULL",
   hasDiscoveryAccess:"SELECT 1 AS active FROM paddle_purchases WHERE user_id=? AND (? IS NULL OR price_id=?) AND paddle_status='completed' AND completed_at IS NOT NULL AND access_revoked_at IS NULL LIMIT 1",
+  discoveryTrial:"SELECT user_id,started_at,expires_at FROM discovery_trials WHERE user_id=?",
+  activeDiscoveryTrial:"SELECT user_id,started_at,expires_at FROM discovery_trials WHERE user_id=? AND expires_at>?",
+  startDiscoveryTrial:"INSERT OR IGNORE INTO discovery_trials(user_id,started_at,expires_at) SELECT id,?,? FROM users WHERE id=? AND suspended_at IS NULL RETURNING user_id,started_at,expires_at",
   discoveryAccessSummary:"SELECT COUNT(*) AS purchase_count,COALESCE(SUM(CASE WHEN paddle_status='completed' AND completed_at IS NOT NULL AND access_revoked_at IS NULL THEN 1 ELSE 0 END),0) AS active_purchase_count,COALESCE(SUM(CASE WHEN paddle_status<>'canceled' AND completed_at IS NULL AND access_revoked_at IS NULL THEN 1 ELSE 0 END),0) AS pending_purchase_count,MAX(CASE WHEN paddle_status='completed' AND access_revoked_at IS NULL THEN completed_at ELSE NULL END) AS latest_active_purchase_at,MAX(completed_at) AS latest_completed_at,MAX(access_revoked_at) AS latest_revoked_at FROM paddle_purchases WHERE user_id=? AND (? IS NULL OR price_id=?)",
   adjustmentById:"SELECT adjustment_id,transaction_id,action,type,status,occurred_at,updated_at FROM paddle_adjustments WHERE adjustment_id=?",
   webhookEvent:"SELECT event_id,notification_id,event_type,occurred_at,processed_at FROM paddle_webhook_events WHERE event_id=?",
@@ -823,7 +833,12 @@ function localStore(root) {
       statements.revokePurchase.run(revokedAt,reason,updatedAt,transactionId);
       return plainRow(statements.purchaseByTransaction.get(transactionId));
     },
-    async hasDiscoveryAccess(userId,priceId=null) { return Boolean(statements.hasDiscoveryAccess.get(userId,priceId,priceId)); },
+    async hasPaidDiscoveryAccess(userId,priceId=null) { return Boolean(statements.hasDiscoveryAccess.get(userId,priceId,priceId)); },
+    async hasDiscoveryAccess(userId,priceId=null,now=Date.now()) {
+      return Boolean(statements.hasDiscoveryAccess.get(userId,priceId,priceId)||statements.activeDiscoveryTrial.get(userId,now));
+    },
+    async discoveryTrial(userId) { return plainRow(statements.discoveryTrial.get(userId)); },
+    async startDiscoveryTrial(userId,startedAt,expiresAt) { return plainRow(statements.startDiscoveryTrial.get(startedAt,expiresAt,userId)); },
     async discoveryAccessSummary(userId,priceId=null) { return accessSummary(plainRow(statements.discoveryAccessSummary.get(userId,priceId,priceId))); },
     async webhookEvent(eventId) { return plainRow(statements.webhookEvent.get(eventId)); },
     async recordWebhookEvent(event) {
@@ -1265,7 +1280,19 @@ async function tursoStore(url,authToken) {
       await run(SQL.revokePurchase,[revokedAt,reason,updatedAt,transactionId]);
       return first(SQL.purchaseByTransaction,[transactionId]);
     },
-    async hasDiscoveryAccess(userId,priceId=null) { return Boolean(await first(SQL.hasDiscoveryAccess,[userId,priceId,priceId])); },
+    async hasPaidDiscoveryAccess(userId,priceId=null) { return Boolean(await first(SQL.hasDiscoveryAccess,[userId,priceId,priceId])); },
+    async hasDiscoveryAccess(userId,priceId=null,now=Date.now()) {
+      const [paid,trial]=await Promise.all([
+        first(SQL.hasDiscoveryAccess,[userId,priceId,priceId]),
+        first(SQL.activeDiscoveryTrial,[userId,now])
+      ]);
+      return Boolean(paid||trial);
+    },
+    discoveryTrial:(userId) => first(SQL.discoveryTrial,[userId]),
+    async startDiscoveryTrial(userId,startedAt,expiresAt) {
+      const result=await run(SQL.startDiscoveryTrial,[startedAt,expiresAt,userId]);
+      return plainRow(result.rows?.[0],result.columns);
+    },
     async discoveryAccessSummary(userId,priceId=null) { return accessSummary(await first(SQL.discoveryAccessSummary,[userId,priceId,priceId])); },
     webhookEvent:(eventId) => first(SQL.webhookEvent,[eventId]),
     async recordWebhookEvent(event) {

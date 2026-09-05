@@ -16,15 +16,17 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="planner.css?v=6.9.0" />
+    <link rel="stylesheet" href="planner.css?v=6.9.1" />
   </head>
   <body>
     <a class="skip-link" href="#weekTitle">Skip to weekly plan</a>
     <header class="planner-header">
       <a class="brand" href="/" aria-label="Back to Strata rankings"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>STRATA</span></a>
       <div class="header-center" role="status" aria-live="polite" aria-atomic="true"><span class="live-dot" aria-hidden="true"></span><span id="saveStatus">Loading plan…</span></div>
-      <div class="user-menu"><span id="userName">Account</span><a href="/discover.html">Strata+</a><a href="/install.html">Install</a><button id="logoutButton" type="button">Sign out</button></div>
+      <div class="user-menu"><span id="userName">Plan</span><a id="plannerSignIn" href="/account.html?mode=login&amp;next=planner" hidden>Sign in</a><a href="/pricing?trial=1">Strata+</a><a href="/install.html">Install</a><button id="logoutButton" type="button" hidden>Sign out</button></div>
     </header>
+
+    <div class="planner-mode-notice" id="plannerModeNotice" role="status"><strong>No login needed.</strong> Your guest plan is saved only on this device.</div>
 
     <main class="planner-shell" id="plannerShell" aria-busy="true">
       <aside class="library-panel" id="libraryPanel" aria-label="Exercise library" aria-busy="true">
@@ -39,16 +41,16 @@
       <section class="week-section" aria-labelledby="weekTitle">
         <div class="week-toolbar">
           <div><p class="eyebrow">Weekly training architecture</p><h1 id="weekTitle" tabindex="-1">BUILD YOUR <em>WEEK.</em></h1></div>
-          <div class="toolbar-actions"><button class="outline-button" id="recommendRest" type="button" disabled>Recommend rest day <span aria-hidden="true">↻</span></button><a class="dark-button" href="/discover.html">Strata+ studio <span aria-hidden="true">↗</span></a></div>
+          <div class="toolbar-actions"><button class="outline-button" id="recommendRest" type="button" disabled>Recommend rest day <span aria-hidden="true">↻</span></button><a class="dark-button" href="/pricing?trial=1">Try Strata+ free for 10 days <span aria-hidden="true">↗</span></a></div>
         </div>
         <div class="week-summary" id="weekSummary" aria-label="Plan summary"></div>
         <div class="week-board" id="weekBoard" role="region" aria-label="Weekly workout schedule" aria-busy="true" tabindex="0"><div class="planner-load-state">Loading your weekly plan…</div></div>
       </section>
     </main>
 
-    <footer class="build-footer">STRATA · Build 6.9.0 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
+    <footer class="build-footer">STRATA · Build 6.9.1 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
     <div class="planner-toast" id="plannerToast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=6.9.0"></script>
-    <script src="planner.js?v=6.9.0"></script>
+    <script src="/pwa.js?v=6.9.1"></script>
+    <script src="planner.js?v=6.9.1"></script>
   </body>
 </html>

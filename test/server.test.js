@@ -65,7 +65,7 @@ test.before(startServer);
 test.after(stopServer);
 
 test("serves rankings and gates private account pages",async()=>{
-  assert.equal(BUILD,"6.9.0");
+  assert.equal(BUILD,"6.9.1");
   const home=await request("/");
   assert.equal(home.response.status,200);
   assert.equal(home.response.headers.get("cache-control"),"private, no-store");
@@ -101,10 +101,10 @@ test("serves rankings and gates private account pages",async()=>{
   const malformedCookie=await request("/api/me",{headers:{Cookie:"broken=%E0%A4%A"}});
   assert.equal(malformedCookie.response.status,401);
   const planner=await request("/planner.html",{redirect:"manual"});
-  assert.equal(planner.response.status,302);
-  assert.equal(planner.response.headers.get("location"),"/account.html?mode=login&next=planner");
+  assert.equal(planner.response.status,200);
+  assert.match(planner.data,/No login needed/);
   const pendingPlanner=await request("/planner.html?add=flat-dumbbell-press",{redirect:"manual"});
-  assert.equal(pendingPlanner.response.headers.get("location"),"/account.html?mode=login&next=planner&add=flat-dumbbell-press");
+  assert.equal(pendingPlanner.response.status,200);
   const discover=await request("/discover.html",{redirect:"manual"});
   assert.equal(discover.response.status,302);
   assert.equal(discover.response.headers.get("location"),"/account.html?mode=login&next=pricing");
@@ -168,7 +168,7 @@ test("creates an account with a private default plan",async()=>{
 
   const plannerPage=await request("/planner.html",{headers:{Cookie:signup.cookie}});
   assert.equal(plannerPage.response.status,200);
-  assert.equal(plannerPage.response.headers.get("cache-control"),"private, no-store");
+  assert.equal(plannerPage.response.headers.get("cache-control"),"no-cache");
   assert.match(plannerPage.data,/BUILD YOUR/);
   assert.match(plannerPage.data,BUILD_LABEL);
 
@@ -181,6 +181,21 @@ test("creates an account with a private default plan",async()=>{
   assert.equal(plan.response.status,200);
   assert.equal(plan.data.plan.restDay,"Sunday");
   assert.deepEqual(plan.data.plan.days.Monday,[]);
+
+  const me=await request("/api/me",{headers:{Cookie:signup.cookie}});
+  assert.equal(me.data.user.discovery.trial.eligible,true);
+  const missingCsrf=await request("/api/discovery/trial",{method:"POST",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:"{}"});
+  assert.equal(missingCsrf.response.status,403);
+  const trial=await request("/api/discovery/trial",{method:"POST",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":me.data.csrfToken},body:"{}"});
+  assert.equal(trial.response.status,201);
+  assert.equal(trial.data.user.discovery.active,true);
+  assert.equal(trial.data.user.discovery.accessType,"trial");
+  assert.equal(trial.data.user.discovery.trial.active,true);
+  assert.equal(trial.data.user.discovery.trial.expiresAt-trial.data.user.discovery.trial.startedAt,10*24*60*60*1000);
+  const repeatedTrial=await request("/api/discovery/trial",{method:"POST",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":me.data.csrfToken},body:"{}"});
+  assert.equal(repeatedTrial.response.status,200,"repeating an active trial request is idempotent");
+  const trialDiscovery=await request("/api/discovery",{headers:{Cookie:signup.cookie}});
+  assert.equal(trialDiscovery.response.status,200);
 
   const unauthenticatedSave=await request("/api/plan",{method:"PUT",headers:{Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:plan.data.plan})});
   assert.equal(unauthenticatedSave.response.status,401);

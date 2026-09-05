@@ -22,10 +22,12 @@
       href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=6.9.0" />
+    <link rel="stylesheet" href="styles.css?v=6.9.1" />
   </head>
   <body>
     <a class="skip-link" href="#rankings">Skip to rankings</a>
+
+    <aside class="free-access-bar" aria-label="Free access shortcuts"><a href="/planner.html">Try STRATA planner free — no login</a><a href="/pricing?trial=1">Try Strata+ free for 10 days — account required</a></aside>
 
     <header class="site-header" id="top">
       <a class="brand" href="#top" aria-label="Strata home">
@@ -44,7 +46,7 @@
         <a class="account-button discover-button" id="discoverButton" href="/discover.html" hidden>Strata+</a>
         <a class="account-button account-create" id="signupButton" href="/account.html?mode=signup">Sign up</a>
         <a class="account-button account-link" id="accountButton" href="/account.html?mode=login">Log in</a>
-        <a class="session-button" id="planButton" href="/account.html?mode=login&amp;next=planner">
+        <a class="session-button" id="planButton" href="/planner.html">
           Plan <span id="planCount">0</span>
         </a>
         <!-- ACCOUNT_ACTIONS_END -->
@@ -281,7 +283,7 @@
         <div class="footer-meta">
           <p>© 2026 Strata Index</p>
           <p>Built for education, not diagnosis.</p>
-          <p class="build-number">Build 6.9.0</p>
+          <p class="build-number">Build 6.9.1</p>
         </div>
       </div>
     </footer>
@@ -310,7 +312,7 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=6.9.0"></script>
-    <script src="app.js?v=6.9.0"></script>
+    <script src="/pwa.js?v=6.9.1"></script>
+    <script src="app.js?v=6.9.1"></script>
   </body>
 </html>

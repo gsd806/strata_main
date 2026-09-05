@@ -221,9 +221,8 @@ test("new accounts require one delivered code while existing accounts remain saf
   db.prepare("UPDATE users SET email_verified_at=NULL WHERE email=?").run("verified@example.test");
   const blockedExistingSession=await request("/api/me",{headers:{Cookie:sessionCookie}});
   assert.equal(blockedExistingSession.response.status,401,"an existing session must stop working when its account is unverified");
-  const blockedProtectedPage=await request("/planner.html",{redirect:"manual",headers:{Cookie:sessionCookie}});
-  assert.equal(blockedProtectedPage.response.status,302);
-  assert.equal(blockedProtectedPage.response.headers.get("location"),"/account.html?mode=login&next=planner");
+  const guestPlannerPage=await request("/planner.html",{redirect:"manual",headers:{Cookie:sessionCookie}});
+  assert.equal(guestPlannerPage.response.status,200,"the login-free planner remains available when an account session is invalid");
   const beforeBadLogin=deliveries.length;
   const badUnverifiedLogin=await postJson("/api/login",{email:"verified@example.test",password:"incorrect-password-123"});
   assert.equal(badUnverifiedLogin.response.status,401);
