@@ -110,6 +110,17 @@ function statusText(text){
   statusNode.textContent=text;
 }
 
+function setButtonBusy(button,busy,label=""){
+  if(!button)return;
+  if(busy){
+    button.dataset.busy="true";
+    if(label)button.setAttribute("aria-label",label);
+  }else{
+    delete button.dataset.busy;
+    button.removeAttribute("aria-label");
+  }
+}
+
 function errorCode(error){
   return String(error?.code||"").trim().toUpperCase();
 }
@@ -337,6 +348,7 @@ function enhanceVerification(){
     form.dataset.submitting="true";
     form.setAttribute("aria-busy","true");
     setVerificationBusy(true);
+    setButtonBusy(verifyButton,true,"Verifying code, please wait");
     try{
       const result=await readJson("/api/verify-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code})});
       if(!result.user?.id)throw Object.assign(new Error("Unexpected response."),{code:"invalid-response",status:502});
@@ -377,6 +389,7 @@ function enhanceVerification(){
     }finally{
       if(!verificationNavigating){
         setVerificationBusy(false);
+        setButtonBusy(verifyButton,false);
         delete form.dataset.submitting;
         form.removeAttribute("aria-busy");
       }
@@ -389,6 +402,7 @@ function enhanceVerification(){
     resendForm.dataset.submitting="true";
     resendForm.setAttribute("aria-busy","true");
     setVerificationBusy(true);
+    setButtonBusy(resendButton,true,"Sending another code, please wait");
     clearError();
     try{
       const result=await readJson("/api/resend-verification",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});
@@ -411,6 +425,7 @@ function enhanceVerification(){
       showError(friendlyError(error,"resend"),{markCode:false});
     }finally{
       setVerificationBusy(false);
+      setButtonBusy(resendButton,false);
       delete resendForm.dataset.submitting;
       resendForm.removeAttribute("aria-busy");
     }

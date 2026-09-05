@@ -65,7 +65,7 @@ test.before(startServer);
 test.after(stopServer);
 
 test("serves rankings and gates private account pages",async()=>{
-  assert.equal(BUILD,"6.9.3");
+  assert.equal(BUILD,"6.9.4");
   const home=await request("/");
   assert.equal(home.response.status,200);
   assert.equal(home.response.headers.get("cache-control"),"private, no-store");
@@ -128,7 +128,7 @@ test("serves public pricing, contact, and policy pages at friendly routes",async
 });
 
 test("serves recovery pages at friendly private routes",async()=>{
-  const pages={"forgot-password":/CHECK YOUR EMAIL/,"reset-password":/NEW PASSWORD/,"delete-account":/THIS CANNOT BE UNDONE/};
+  const pages={"forgot-password":/SEND RESET LINK/,"reset-password":/NEW PASSWORD/,"delete-account":/THIS CANNOT BE UNDONE/};
   for(const [slug,marker] of Object.entries(pages)) {
     for(const path of [`/${slug}`,`/${slug}/`,`/${slug}.html`]) {
       const page=await request(path);

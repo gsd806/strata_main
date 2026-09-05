@@ -71,9 +71,31 @@ function setReady(ready){
   el("recommendRest").disabled=!ready;
   el("exportWeeklyPlan").disabled=!ready;
   el("shareWeeklyPlan").disabled=!ready;
+  el("retryPlanSave").disabled=!ready;
+  if(!ready)el("retryPlanSave").hidden=true;
   el("plannerShell").setAttribute("aria-busy",String(!ready));
   el("libraryPanel").setAttribute("aria-busy",String(!ready));
   el("weekBoard").setAttribute("aria-busy",String(!ready));
+}
+
+function renderPlusCta(){
+  const cta=el("plannerPlusCta"),discovery=state.user?.discovery;
+  let label="Explore Strata+",href="/pricing?trial=1";
+  if(discovery?.active){label="Open Strata+";href="/discover.html";}
+  else if(!state.guest&&discovery?.trial?.eligible){label="Start 10-day free trial";}
+  cta.href=href;
+  cta.innerHTML=`${label} <span aria-hidden="true">↗</span>`;
+}
+
+function renderDayNav(){
+  const nav=el("plannerDayNav");
+  if(!state.plan){nav.innerHTML="";return;}
+  el("quickAddDayValue").textContent=state.selectedDay;
+  nav.innerHTML=DAYS.map((day)=>{
+    const selected=state.selectedDay===day,rest=state.plan.restDay===day;
+    const label=rest?`${day}, recovery day`:selected?`${day}, selected for new exercises`:`Add new exercises to ${day}`;
+    return `<button class="planner-day-chip ${selected?"active":""} ${rest?"recovery":""}" data-select-day="${day}" data-day-chip="${day}" type="button" aria-label="${label}" aria-pressed="${selected}" ${rest?"disabled":""}>${day.slice(0,3)}</button>`;
+  }).join("");
 }
 
 function downloadWeeklyPlan(){
@@ -268,7 +290,7 @@ function renderLibrary(){
   el("libraryResultStatus").textContent=items.length?`Showing ${visibleItems.length} of ${items.length} matching movement${items.length===1?"":"s"}.`:`No matching movements.`;
   el("libraryList").innerHTML=items.length?visibleItems.map((exercise,index)=>{
     const id=escapeHtml(exercise.id),name=escapeHtml(exercise.name),sub=escapeHtml(exercise.sub),equipment=escapeHtml(exercise.equipment),youtube=escapeHtml(exercise.youtube);
-    return `<article class="library-card" draggable="true" data-library-id="${id}" data-library-index="${index}"><div class="library-score">${escapeHtml(exercise.score)}</div><div><h3>${name}</h3><p>${sub} · ${equipment}</p></div><div class="library-actions"><button data-quick-add="${id}" type="button" aria-label="Add ${name} to ${escapeHtml(state.selectedDay)}">+</button><a class="yt-link" href="${youtube}" target="_blank" rel="noreferrer" aria-label="Find ${name} tutorials on YouTube">▶</a></div></article>`;
+    return `<article class="library-card" draggable="true" data-library-id="${id}" data-library-index="${index}"><div class="library-score"><span aria-hidden="true">${escapeHtml(exercise.score)}</span><span class="sr-only">STRATA score ${escapeHtml(exercise.score)}</span></div><div><h3>${name}</h3><p>${sub} · ${equipment}</p></div><div class="library-actions"><button data-quick-add="${id}" type="button" aria-label="Add ${name} to ${escapeHtml(state.selectedDay)}">+</button><a class="yt-link" href="${youtube}" target="_blank" rel="noreferrer" aria-label="Find ${name} tutorials on YouTube">▶</a></div></article>`;
   }).join("")+(!remaining?"":`<div class="library-load-more"><span>${visibleItems.length} of ${items.length}</span><button data-load-more-library type="button" aria-controls="libraryList">Load ${nextCount} more <span aria-hidden="true">↓</span></button></div>`):`<div class="loading">No matching movements.</div>`;
 }
 
@@ -283,10 +305,11 @@ function scheduledMarkup(item,day,index,count){
 function renderWeek(focusSelector=null){
   el("weekBoard").innerHTML=DAYS.map((day,index)=>{
     const items=state.plan.days[day],rest=state.plan.restDay===day,selected=state.selectedDay===day,conflict=rest&&items.length>0;
-    const targetText=rest?"Recovery day":selected?"Tap-add target":"Use for tap-add";
+    const targetText=rest?"Recovery day":selected?"Adding here":"Add here";
     const restText=rest?"Current recovery day":items.length?"Clear day to make rest":"Make rest day";
     return `<section class="day-column ${rest?"rest-day":""} ${selected?"selected-day":""} ${conflict?"rest-conflict":""}" data-day="${day}" aria-labelledby="day-title-${index}"><header class="day-head"><div class="day-index"><span>Day ${String(index+1).padStart(2,"0")}</span><span>${items.length} movement${items.length===1?"":"s"}</span></div><div class="day-title-row"><h2 id="day-title-${index}" tabindex="-1">${day}</h2><button class="day-target ${selected?"active":""}" data-select-day="${day}" type="button" aria-pressed="${selected}" ${rest?"disabled":""}>${targetText}</button></div>${rest?`<span class="rest-badge">${conflict?"Recovery day needs clearing":"Recommended rest"}</span>`:""}</header><button class="rest-toggle" data-set-rest="${day}" type="button" aria-pressed="${rest}" ${rest||items.length?"disabled":""}>${restText}</button>${rest?`<div class="rest-callout"><strong>${conflict?"Clear this day":"Recover"}</strong><p>${conflict?"Move every scheduled exercise to another day before saving further recovery changes.":"Keep this day free or use gentle mobility and walking."}</p></div>`:""}<div class="day-dropzone" data-drop-day="${day}" aria-label="${day} exercises">${items.length?items.map((item,itemIndex)=>scheduledMarkup(item,day,itemIndex,items.length)).join(""):`<div class="day-empty">${rest?"Recovery day · keep clear":"Drop exercises here"}</div>`}</div></section>`;
   }).join("");
+  renderDayNav();
   renderSummary();
   focusSoon(focusSelector);
 }
@@ -385,8 +408,10 @@ function queueSave(){
 }
 
 function setSaveStatus(message,error=false){
-  el("saveStatus").textContent=message;
-  el("saveStatus").parentElement.classList.toggle("error",error);
+  const status=el("saveStatus"),retry=el("retryPlanSave");
+  status.textContent=message;
+  status.parentElement.classList.toggle("error",error);
+  retry.hidden=!(error&&state.ready&&state.savedRevision<state.revision&&!hasRestConflict());
 }
 
 async function performSave({keepalive=false,silent=false}={}){
@@ -465,6 +490,8 @@ function renderLoadError(error){
   el("plannerFilters").innerHTML="";
   el("libraryList").innerHTML=`<div class="loading">${message}</div>`;
   el("libraryResultStatus").textContent="Exercise library could not be loaded.";
+  el("plannerDayNav").innerHTML="";
+  el("quickAddDayValue").textContent="Unavailable";
   el("weekSummary").innerHTML="";
   el("weekBoard").innerHTML=`<div class="planner-load-state planner-error" role="alert"><strong>Plan unavailable</strong><p>${message}</p><button type="button" data-retry-init>Try again</button></div>`;
   el("weekBoard").setAttribute("aria-busy","false");
@@ -498,7 +525,11 @@ document.addEventListener("click",(event)=>{
   const filter=event.target.closest("[data-library-group]"),quick=event.target.closest("[data-quick-add]"),select=event.target.closest("[data-select-day]"),remove=event.target.closest("[data-remove-item]"),rest=event.target.closest("[data-set-rest]"),move=event.target.closest("[data-move-item]"),loadMore=event.target.closest("[data-load-more-library]"),retry=event.target.closest("[data-retry-init]"),unpublish=event.target.closest("[data-unpublish-plan]");
   if(filter){state.group=filter.dataset.libraryGroup;resetLibraryWindow();renderFilters(state.group);renderLibrary();}
   else if(quick){addExercise(quick.dataset.quickAdd,state.selectedDay);}
-  else if(select){state.selectedDay=select.dataset.selectDay;renderWeek(instanceSelector("data-select-day",state.selectedDay));renderLibrary();showToast(`${state.selectedDay} selected for tap-add.`);}
+  else if(select){
+    state.selectedDay=select.dataset.selectDay;
+    const focusSelector=select.dataset.dayChip!==undefined?instanceSelector("data-day-chip",state.selectedDay):`#weekBoard ${instanceSelector("data-select-day",state.selectedDay)}`;
+    renderWeek(focusSelector);renderLibrary();showToast(`New exercises will be added to ${state.selectedDay}.`);
+  }
   else if(remove){
     const column=remove.closest("[data-day]"),day=column.dataset.day,items=state.plan.days[day],index=items.findIndex((item)=>item.instanceId===remove.dataset.removeItem),next=items[index+1]||items[index-1];
     if(index<0)return;
@@ -541,11 +572,18 @@ let librarySearchTimer=null;
 el("plannerSearch").addEventListener("input",(event)=>{const query=event.target.value;clearTimeout(librarySearchTimer);librarySearchTimer=setTimeout(()=>{state.query=query;resetLibraryWindow();renderLibrary();},SEARCH_DEBOUNCE_MS);});
 el("recommendRest").addEventListener("click",()=>{
   if(!state.ready)return;
-  const day=chooseRestDay();
+  const day=chooseRestDay(state.plan.restDay);
   if(!day){showToast("Clear a day before requesting a recovery-day recommendation.");return;}
   setRestDay(day,{recommended:true});
 });
 el("exportWeeklyPlan").addEventListener("click",downloadWeeklyPlan);
+el("retryPlanSave").addEventListener("click",async(event)=>{
+  const button=event.currentTarget;
+  button.disabled=true;
+  setSaveStatus("Retrying save…");
+  try{await flushSave();}
+  finally{button.disabled=false;}
+});
 el("shareWeeklyPlan").addEventListener("click",()=>{
   if(el("shareWeeklyPanel").hidden)openSharePanel();else closeSharePanel();
 });
@@ -589,7 +627,7 @@ async function init(){
   el("weekSummary").innerHTML="";
   el("weekBoard").innerHTML='<div class="planner-load-state">Loading your weekly plan…</div>';
   try{
-    const exercises=await api("/exercises.json?v=6.9.3");
+    const exercises=await api("/exercises.json?v=6.9.4");
     if(!Array.isArray(exercises))throw new Error("STRATA returned an incomplete exercise library.");
     state.exercises=exercises;
     let result;
@@ -605,8 +643,9 @@ async function init(){
     el("plannerSignIn").hidden=!state.guest;
     el("plannerModeNotice").hidden=false;
     el("plannerModeNotice").innerHTML=state.guest
-      ? '<strong>No login needed.</strong> Your plan is saved only on this device. <a href="/account.html?mode=login&amp;next=planner">Sign in for cross-device sync</a>.'
+      ? '<strong>No login needed.</strong> Guest plan saved only on this device and not automatically transferred when you sign in. <a href="/account.html?mode=login&amp;next=planner">Use a separate account plan across devices</a>.'
       : '<strong>Account plan.</strong> Changes sync securely across your signed-in devices.';
+    renderPlusCta();
     setReady(true);
     resetLibraryWindow();renderFilters();renderLibrary();renderWeek();renderShareAccess();setSaveStatus(state.guest?"Saved on this device":"Saved to account");
     if(!state.guest)void loadSharedPlans();

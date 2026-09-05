@@ -230,10 +230,14 @@ test("verification and resend requests cannot overlap",async()=>{
   await page.elements.get("resendForm").emit("submit",{preventDefault(){}});
   assert.equal(page.requests.filter(({path})=>path==="/api/resend-verification").length,0);
   assert.equal(page.elements.get("verificationSubmit").disabled,true);
+  assert.equal(page.elements.get("verificationSubmit").dataset.busy,"true");
+  assert.match(page.elements.get("verificationSubmit").getAttribute("aria-label"),/verifying code/i);
   assert.equal(page.elements.get("resendSubmit").disabled,true);
   finishVerification(response(400,{error:"Invalid code.",code:"INVALID_VERIFICATION_CODE",attemptsRemaining:4}));
   await pending;
   assert.equal(page.elements.get("verificationSubmit").disabled,false);
+  assert.equal(page.elements.get("verificationSubmit").dataset.busy,undefined);
+  assert.equal(page.elements.get("verificationSubmit").getAttribute("aria-label"),null);
   assert.equal(page.elements.get("resendSubmit").disabled,false);
 });
 

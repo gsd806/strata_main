@@ -107,6 +107,29 @@ function clearAllFormErrors(){
   clearFormError("login");
 }
 
+function setButtonBusy(button,busy,label=""){
+  if(!button)return;
+  if(busy){
+    button.dataset.busy="true";
+    if(label)button.setAttribute("aria-label",label);
+  }else{
+    delete button.dataset.busy;
+    button.removeAttribute("aria-label");
+  }
+}
+
+function setupPasswordToggle(inputId,buttonId,description){
+  const input=el(inputId),button=el(buttonId);
+  if(!input||!button)return;
+  button.addEventListener("click",()=>{
+    const show=button.getAttribute("aria-pressed")!=="true";
+    input.type=show?"text":"password";
+    button.setAttribute("aria-pressed",show?"true":"false");
+    button.setAttribute("aria-label",`${show?"Hide":"Show"} ${description}`);
+    button.textContent=show?"Hide":"Show";
+  });
+}
+
 function showFormError(authMode,message,{status,focus=false}={}){
   const node=authMessages[authMode];
   node.textContent=message;
@@ -229,6 +252,7 @@ function enhanceForm(authMode){
     form.dataset.submitting="true";
     form.setAttribute("aria-busy","true");
     button.disabled=true;
+    setButtonBusy(button,true,authMode==="signup"?"Creating account, please wait":"Signing in, please wait");
     try{
       const result=await readJson(`/api/${authMode}`,{
         method:"POST",
@@ -260,6 +284,7 @@ function enhanceForm(authMode){
         delete form.dataset.submitting;
         form.removeAttribute("aria-busy");
         button.disabled=false;
+        setButtonBusy(button,false);
       }
     }
   });
@@ -287,6 +312,7 @@ async function requestSecurityEmail(kind,event){
   const button=event.currentTarget;
   if(button.disabled)return;
   button.disabled=true;
+  setButtonBusy(button,true,kind==="delete"?"Sending deletion link, please wait":"Sending password reset link, please wait");
   showSecurityStatus(kind==="delete"?"Preparing the deletion confirmation email…":"Preparing your password-reset email…");
   try{
     const path=kind==="delete"?"/api/account/delete/request":"/api/account/password-reset/request";
@@ -297,7 +323,7 @@ async function requestSecurityEmail(kind,event){
     if(kind==="delete")el("accountDeleteCancel").hidden=false;
   }catch(error){
     showSecurityStatus(securityError(error),{error:true});
-  }finally{button.disabled=false;}
+  }finally{button.disabled=false;setButtonBusy(button,false);}
 }
 
 el("accountPasswordReset").addEventListener("click",(event)=>{void requestSecurityEmail("password",event);});
@@ -305,22 +331,25 @@ el("accountDeleteRequest").addEventListener("click",(event)=>{void requestSecuri
 el("accountDeleteCancel").addEventListener("click",async(event)=>{
   const button=event.currentTarget;
   button.disabled=true;
+  setButtonBusy(button,true,"Canceling deletion request, please wait");
   try{
     await readJson("/api/account/delete/cancel",{method:"POST",headers:{"Content-Type":"application/json","X-CSRF-Token":currentCsrfToken},body:"{}"});
     button.hidden=true;
     showSecurityStatus("The pending deletion request was canceled. Any link from that email can no longer be used.");
   }catch(error){showSecurityStatus(securityError(error),{error:true});}
-  finally{button.disabled=false;}
+  finally{button.disabled=false;setButtonBusy(button,false);}
 });
 
 el("accountLogout").addEventListener("click",async(event)=>{
   const button=event.currentTarget;
   button.disabled=true;
+  setButtonBusy(button,true,"Signing out, please wait");
   el("signedInMessage").hidden=true;
   try{await readJson("/api/logout",{method:"POST"});location.replace("/");}
   catch(error){
     if(error.status===401){location.replace("/");return;}
     button.disabled=false;
+    setButtonBusy(button,false);
     el("signedInMessage").textContent="Could not sign out. Check your connection and try again.";
     el("signedInMessage").hidden=false;
   }
@@ -330,5 +359,8 @@ if(typeof globalThis.fetch==="function"&&typeof globalThis.FormData==="function"
   enhanceForm("signup");
   enhanceForm("login");
 }
+
+setupPasswordToggle("signupPassword","signupPasswordToggle","signup password");
+setupPasswordToggle("loginPassword","loginPasswordToggle","sign-in password");
 
 initialize();

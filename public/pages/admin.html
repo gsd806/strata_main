@@ -13,7 +13,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/admin.css?v=6.9.3" />
+    <link rel="stylesheet" href="/admin.css?v=6.9.4" />
   </head>
   <body>
     <a class="skip-link" href="#adminMain">Skip to administration</a>
@@ -45,7 +45,7 @@
 
       <section class="access-panel" id="accessPanel" aria-labelledby="accessTitle">
         <p class="panel-index">Security check</p>
-        <h2 id="accessTitle">VERIFYING ADMIN ACCESS…</h2>
+        <h2 id="accessTitle" tabindex="-1">VERIFYING ADMIN ACCESS…</h2>
         <p id="accessMessage" role="status" aria-live="polite">Checking your signed-in account before loading private data.</p>
         <div class="access-actions" id="accessActions" hidden>
           <a class="button button-dark" href="/account.html?mode=login&amp;next=admin">Sign in <span aria-hidden="true">→</span></a>
@@ -179,7 +179,7 @@
         <p class="dialog-lede" id="userDialogEmail"></p>
         <p class="section-status" id="userDetailStatus" role="status" aria-live="polite"></p>
         <dl class="fact-grid" id="userFacts"></dl>
-        <section class="action-zone" aria-labelledby="userActionsTitle">
+        <section class="action-zone" aria-labelledby="userActionsTitle" aria-describedby="userDetailStatus">
           <p class="panel-index">Audited controls</p><h3 id="userActionsTitle">ACCOUNT ACTIONS</h3>
           <p>STRATA sends private links to the registered email. It never reveals a password, verification code, or reset token.</p>
           <div class="action-grid">
@@ -245,8 +245,8 @@
       </div>
     </dialog>
 
-    <footer class="admin-footer">STRATA · Build 6.9.3 · Private administration · <a href="/contact">Contact</a> · <a href="/privacy">Privacy</a></footer>
+    <footer class="admin-footer">STRATA · Build 6.9.4 · Private administration · <a href="/contact">Contact</a> · <a href="/privacy">Privacy</a></footer>
     <noscript><p class="noscript-message">JavaScript is required for private administration. Your public STRATA pages still work normally.</p></noscript>
-    <script src="/admin.js?v=6.9.3"></script>
+    <script src="/admin.js?v=6.9.4"></script>
   </body>
 </html>

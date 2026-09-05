@@ -76,6 +76,59 @@ test("native forms remain available without the JavaScript enhancement",()=>{
   assert.doesNotMatch(html,/<section class="account-access" id="accountAccess"[^>]*hidden/);
 });
 
+test("login accepts existing password lengths while new passwords keep the stronger minimum",()=>{
+  const signupPassword=html.match(/<input\b[^>]*id="signupPassword"[^>]*>/)?.[0]||"";
+  const loginPassword=html.match(/<input\b[^>]*id="loginPassword"[^>]*>/)?.[0]||"";
+  assert.match(signupPassword,/minlength="10"/);
+  assert.doesNotMatch(loginPassword,/minlength=/,"login must not reject a valid legacy password in browser validation");
+  assert.match(loginPassword,/maxlength="128"/);
+});
+
+test("password visibility controls expose state without changing form behavior",async()=>{
+  assert.match(html,/id="signupPasswordToggle"[^>]*type="button"[^>]*aria-controls="signupPassword"[^>]*aria-pressed="false"/);
+  assert.match(html,/id="loginPasswordToggle"[^>]*type="button"[^>]*aria-controls="loginPassword"[^>]*aria-pressed="false"/);
+  const page=createPage({route:async(path)=>{
+    if(path==="/api/status")return jsonResponse(200,{persistent:true});
+    if(path==="/healthz")return jsonResponse(200,{ok:true});
+    if(path==="/api/me")return jsonResponse(401,{error:"Not signed in."});
+    throw new Error(`Unexpected route ${path}`);
+  }});
+  await settle();
+  const input=page.elements.get("signupPassword"),button=page.elements.get("signupPasswordToggle");
+  await button.emit("click");
+  assert.equal(input.type,"text");
+  assert.equal(button.getAttribute("aria-pressed"),"true");
+  assert.equal(button.textContent,"Hide");
+  await button.emit("click");
+  assert.equal(input.type,"password");
+  assert.equal(button.getAttribute("aria-pressed"),"false");
+  assert.equal(button.textContent,"Show");
+});
+
+test("auth submit buttons communicate progress and restore after failure",async()=>{
+  let finishLogin;
+  const pendingLogin=new Promise((resolve)=>{finishLogin=resolve;});
+  const page=createPage({route:async(path)=>{
+    if(path==="/api/status")return jsonResponse(200,{persistent:true});
+    if(path==="/healthz")return jsonResponse(200,{ok:true});
+    if(path==="/api/me")return jsonResponse(401,{error:"Not signed in."});
+    if(path==="/api/login")return pendingLogin;
+    throw new Error(`Unexpected route ${path}`);
+  }});
+  await settle();
+  const form=page.elements.get("loginForm"),button=page.elements.get("loginSubmit");
+  form.values={email:"returning@example.test",password:"existing-password"};
+  const pending=form.emit("submit",{preventDefault(){}});
+  await new Promise(setImmediate);
+  assert.equal(button.dataset.busy,"true");
+  assert.match(button.getAttribute("aria-label"),/signing in/i);
+  finishLogin(jsonResponse(401,{error:"Email or password is incorrect."}));
+  await pending;
+  assert.equal(button.dataset.busy,undefined);
+  assert.equal(button.getAttribute("aria-label"),null);
+  assert.equal(button.disabled,false);
+});
+
 test("failed storage probes are advisory and a login error stays scoped",async()=>{
   const page=createPage({
     search:"?mode=login&error=Email%20or%20password%20is%20incorrect.",

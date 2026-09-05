@@ -10,6 +10,7 @@ const BUILD=require(join(PROJECT_ROOT,"package.json")).version;
 const CATALOG_URL=`/exercises.json?v=${BUILD}`;
 const readPublic=(...parts)=>fs.readFileSync(join(PROJECT_ROOT,"public",...parts),"utf8");
 const html=readPublic("pages","planner.html");
+const plannerCss=readPublic("styles","planner.css");
 const exercises=JSON.parse(readPublic("data","exercises.json"));
 const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map((match)=>match[1]);
 const DAYS=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
@@ -61,7 +62,7 @@ const context={
     fetches.push(path);
     requests.push({path,options});
     if(path===CATALOG_URL)return {ok:true,json:async()=>exercises};
-    if(path==="/api/plan")return {ok:true,json:async()=>({plan,user:{id:"u1",name:"Planner Audit",email:"audit@example.test"},csrfToken:"planner-csrf",planUpdatedAt:1_700_000_000_100})};
+    if(path==="/api/plan")return {ok:true,json:async()=>({plan,user:{id:"u1",name:"Planner Audit",email:"audit@example.test",discovery:{active:true,accessType:"paid",trial:{eligible:false,active:false}}},csrfToken:"planner-csrf",planUpdatedAt:1_700_000_000_100})};
     if(path==="/api/community-plans/mine")return {ok:true,json:async()=>({plans:[],csrfToken:"planner-csrf"})};
     if(path==="/api/community-plans"&&options.method==="POST")return {ok:true,json:async()=>({ok:true,plan:{id:"shared-runtime",title:"Runtime strength week",description:"A runtime-tested week.",authorName:"Planner Audit",plan,published:true,createdAt:Date.now(),updatedAt:Date.now()}})};
     if(path==="/api/community-plans/shared-runtime"&&options.method==="DELETE")return {ok:true,json:async()=>({ok:true})};
@@ -93,15 +94,46 @@ function clickUnpublish(){
   for(const handler of documentListeners.click||[])handler(event);
 }
 
+function clickSelectDay(day){
+  const select={dataset:{selectDay:day,dayChip:day}};
+  const target={
+    closest(selector){return selector==="[data-select-day]"?select:null;}
+  };
+  const event={target,defaultPrevented:false,button:0,metaKey:false,ctrlKey:false,shiftKey:false,altKey:false};
+  for(const handler of documentListeners.click||[])handler(event);
+}
+
 (async()=>{
   await new Promise(setImmediate);
 
   const initialIds=renderedIds();
   const initialMarkup=elements.get("libraryList").innerHTML;
+  const dayNavMarkup=elements.get("plannerDayNav").innerHTML;
   assert.equal(initialIds.length,32,"Desktop planner should initially render 32 library cards");
   assert.equal(new Set(initialIds).size,32,"Initial planner page must not contain duplicate cards");
   assert.match(initialMarkup,/data-load-more-library/,"Expanded catalog should expose Load more");
   assert.match(initialMarkup,/Load 32 more/,"Desktop Load more should reveal the next 32 cards");
+  for(const day of DAYS){
+    const chip=dayNavMarkup.match(new RegExp(`<button\\b(?=[^>]*data-day-chip="${day}")[^>]*>`))?.[0];
+    assert.ok(chip,`${day} must have a quick-add day chip`);
+    assert.match(chip,/\baria-pressed="(?:true|false)"/,`${day} day chip must expose its selected state`);
+  }
+  assert.equal((dayNavMarkup.match(/\baria-pressed="true"/g)||[]).length,1,"Exactly one quick-add day must be selected");
+  assert.equal(elements.get("plannerPlusCta").href,"/discover.html","Active Strata+ members should open their workspace directly");
+  assert.match(elements.get("plannerPlusCta").innerHTML,/Open Strata\+/);
+  assert.doesNotMatch(elements.get("plannerPlusCta").innerHTML,/free|trial/i);
+  assert.match(html,/id="weekBoard"[^>]*aria-describedby="weekScrollHint"/,"The horizontal week must expose its scroll instructions");
+  const finalMobileRule=plannerCss.slice(plannerCss.lastIndexOf("@media(max-width:760px)"),plannerCss.lastIndexOf("@media(max-width:480px)"));
+  assert.match(finalMobileRule,/\.library-panel\{[^}]*\btop:auto\b/,"The final mobile cascade must cancel the desktop sticky offset");
+
+  clickSelectDay("Tuesday");
+  assert.equal(vm.runInContext("state.selectedDay",context),"Tuesday","Day chips must update the quick-add target");
+  assert.match(elements.get("libraryList").innerHTML,/aria-label="Add [^"]+ to Tuesday"/,"Library add controls must announce the selected day");
+  const originalRest=vm.runInContext("state.plan.restDay",context);
+  for(const handler of elements.get("recommendRest").listeners.click||[])handler({currentTarget:elements.get("recommendRest")});
+  const recommendedRest=vm.runInContext("state.plan.restDay",context);
+  assert.notEqual(recommendedRest,originalRest,"Recommend rest day must exclude the current recovery day");
+  assert.equal(vm.runInContext("state.plan.days[state.plan.restDay].length",context),0,"A recommendation must choose an empty day");
 
   clickLoadMore();
 
@@ -137,6 +169,23 @@ function clickUnpublish(){
   assert.match(elements.get("ownSharedPlans").innerHTML,/not shared a week/i);
   const expandedResultStatus=elements.get("libraryResultStatus").textContent;
 
+  let retrySaveAttempts=0;
+  context.fetch=async(path,options={})=>{
+    if(path==="/api/plan"&&options.method==="PUT"){
+      retrySaveAttempts+=1;
+      if(retrySaveAttempts===1)return {ok:false,status:503,json:async()=>({error:"Temporary save failure"})};
+      return {ok:true,json:async()=>({ok:true,plan,planUpdatedAt:1_700_000_000_200})};
+    }
+    return {ok:false,status:404,json:async()=>({error:"Not found"})};
+  };
+  vm.runInContext("state.plan.days.Wednesday.push({instanceId:'retry-save-item',exerciseId:state.exercises[2].id,sets:3,reps:'8–12'});state.revision+=1;",context);
+  assert.equal(await vm.runInContext("flushSave()",context),false,"A failed save must remain unsaved");
+  assert.equal(elements.get("retryPlanSave").hidden,false,"A failed save must expose Retry");
+  await Promise.all((elements.get("retryPlanSave").listeners.click||[]).map((handler)=>handler({currentTarget:elements.get("retryPlanSave")})));
+  assert.equal(retrySaveAttempts,2,"Retry must make one fresh save request");
+  assert.equal(elements.get("retryPlanSave").hidden,true,"Retry should hide after the plan saves");
+  assert.match(elements.get("saveStatus").textContent,/Saved to account/);
+
   let guestCommunityFetches=0;
   context.fetch=async(path)=>{
     if(path===CATALOG_URL)return {ok:true,json:async()=>exercises};
@@ -148,6 +197,9 @@ function clickUnpublish(){
   assert.equal(elements.get("sharePlanGuest").hidden,false,"Guest planners should see the sign-in publishing prompt");
   assert.equal(elements.get("sharePlanAccount").hidden,true,"Guest planners must not see account publishing controls");
   assert.equal(guestCommunityFetches,0,"Guest planners must not request private community management data");
+  assert.match(elements.get("plannerModeNotice").innerHTML,/Guest plan[\s\S]*not automatically transferred/i,"Guest copy must explain that signing in does not migrate the local plan");
+  assert.doesNotMatch(elements.get("plannerModeNotice").innerHTML,/Sign in for cross-device sync/i);
+  assert.match(elements.get("plannerPlusCta").innerHTML,/Explore Strata\+/,"Unknown guest entitlement must not promise a new trial");
   const result={
     catalogFetch:fetches.filter((path)=>path===CATALOG_URL).length===1,
     planFetch:requests.filter((request)=>request.path==="/api/plan"&&!request.options.method).length===1,

@@ -6,8 +6,37 @@ if(supportForm){
   const supportStatus=document.getElementById("supportStatus");
   const supportSubmit=document.getElementById("supportSubmit");
   const supportSubmitLabel=document.getElementById("supportSubmitLabel");
+  const supportName=document.getElementById("supportName");
+  const supportEmail=document.getElementById("supportEmail");
+  const supportEmailHelp=document.getElementById("supportEmailHelp");
   const supportFields=[...supportForm.querySelectorAll("input:not([name='website']), select, textarea")];
   let submitting=false;
+  let accountIdentity=null;
+
+  function applyAccountIdentity(){
+    if(!accountIdentity)return;
+    supportName.value=accountIdentity.name;
+    supportEmail.value=accountIdentity.email;
+    supportName.readOnly=true;
+    supportEmail.readOnly=true;
+    supportName.dataset.accountIdentity="true";
+    supportEmail.dataset.accountIdentity="true";
+    if(supportEmailHelp)supportEmailHelp.textContent=`Signed in as ${accountIdentity.email}. Replies will go to this registered address.`;
+  }
+
+  async function bindSignedInIdentity(){
+    try{
+      const response=await globalThis.fetch("/api/me",{credentials:"same-origin",headers:{Accept:"application/json"}});
+      if(!response.ok)return;
+      const data=await response.json();
+      const user=data?.user;
+      if(!user?.id||!user.name||!user.email)return;
+      accountIdentity={name:String(user.name),email:String(user.email)};
+      applyAccountIdentity();
+    }catch{
+      // The form remains available to signed-out users and during transient account checks.
+    }
+  }
 
   function clearFieldState(field){
     field.removeAttribute("aria-invalid");
@@ -105,6 +134,7 @@ if(supportForm){
       const result=await responseJson(response);
       const reference=result.reference.trim().slice(0,40);
       supportForm.reset();
+      applyAccountIdentity();
       supportFields.forEach(clearFieldState);
       const deliveryNote=result.emailSent===false?" It was saved, but the email confirmation may be delayed.":" Keep this number for follow-up.";
       setStatus(`Your support request was sent. Reference: ${reference}.${deliveryNote}`,"success",{focus:true});
@@ -114,4 +144,6 @@ if(supportForm){
       setSubmitting(false);
     }
   });
+
+  void bindSignedInIdentity();
 }

@@ -22,6 +22,14 @@ function setBusy(form,button,busy){
   form.dataset.submitting=busy?"true":"";
   if(busy)form.setAttribute("aria-busy","true");else form.removeAttribute("aria-busy");
   button.disabled=busy;
+  if(busy){
+    const labels={recoverySubmit:"Sending reset link, please wait",resetSubmit:"Resetting password, please wait",deleteSubmit:"Deleting account, please wait"};
+    button.dataset.busy="true";
+    button.setAttribute("aria-label",labels[button.id]||"Working, please wait");
+  }else{
+    delete button.dataset.busy;
+    button.removeAttribute("aria-label");
+  }
 }
 
 function clearMessage(node){
@@ -30,10 +38,28 @@ function clearMessage(node){
   node.textContent="";
 }
 
-function showMessage(node,message){
+function showMessage(node,message,{focus=true}={}){
   node.textContent=message;
   node.hidden=false;
-  requestAnimationFrame(()=>node.focus({preventScroll:false}));
+  if(focus)requestAnimationFrame(()=>node.focus({preventScroll:false}));
+}
+
+function showFieldMessage(node,field,message){
+  showMessage(node,message,{focus:false});
+  field.setAttribute("aria-invalid","true");
+  requestAnimationFrame(()=>field.focus({preventScroll:false}));
+}
+
+function setupPasswordToggle(inputId,buttonId,description){
+  const input=el(inputId),button=el(buttonId);
+  if(!input||!button)return;
+  button.addEventListener("click",()=>{
+    const show=button.getAttribute("aria-pressed")!=="true";
+    input.type=show?"text":"password";
+    button.setAttribute("aria-pressed",show?"true":"false");
+    button.setAttribute("aria-label",`${show?"Hide":"Show"} ${description}`);
+    button.textContent=show?"Hide":"Show";
+  });
 }
 
 function bearerToken(){
@@ -78,6 +104,8 @@ async function setupResetPassword(){
   const token=bearerToken();
   const form=el("resetPasswordForm"),button=el("resetSubmit"),message=el("resetMessage"),unavailable=el("resetUnavailable"),success=el("resetSuccess"),state=el("resetState"),intro=el("resetIntro");
   const password=el("newPassword"),confirmation=el("confirmPassword");
+  setupPasswordToggle("newPassword","newPasswordToggle","new password");
+  setupPasswordToggle("confirmPassword","confirmPasswordToggle","password confirmation");
   function unavailableState(){
     form.hidden=true;
     unavailable.hidden=false;
@@ -101,13 +129,13 @@ async function setupResetPassword(){
     state.querySelector("span").textContent="The link could not be checked yet. You can still try it below.";
     form.hidden=false;
   }
-  form.addEventListener("input",()=>clearMessage(message));
+  form.addEventListener("input",()=>{clearMessage(message);password.removeAttribute("aria-invalid");confirmation.removeAttribute("aria-invalid");});
   form.addEventListener("submit",async(event)=>{
     event.preventDefault();
     if(form.dataset.submitting==="true")return;
     clearMessage(message);
-    if(password.value.length<10||password.value.length>128){showMessage(message,"Use a password of 10–128 characters.");password.focus();return;}
-    if(password.value!==confirmation.value){showMessage(message,"The two password entries do not match.");confirmation.focus();return;}
+    if(password.value.length<10||password.value.length>128){showFieldMessage(message,password,"Use a password of 10–128 characters.");return;}
+    if(password.value!==confirmation.value){showFieldMessage(message,confirmation,"The two password entries do not match.");return;}
     setBusy(form,button,true);
     try{
       await readJson("/api/password-reset/complete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token,password:password.value,confirmation:confirmation.value})});

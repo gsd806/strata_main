@@ -29,25 +29,25 @@ button { font:inherit; cursor:pointer; touch-action:manipulation; }
 .brand-mark i:nth-child(2) { height:18px; }
 .brand-mark i:nth-child(3) { height:24px; }
 .install-header nav { display:flex; align-items:center; gap:6px; }
-.install-header nav a { min-height:44px; display:inline-grid; place-items:center; padding:0 10px; color:rgba(255,255,255,.72); text-decoration:none; text-transform:uppercase; font:500 10px var(--mono); }
+.install-header nav a { min-height:44px; display:inline-grid; place-items:center; padding:0 10px; color:rgba(255,255,255,.72); text-decoration:none; text-transform:uppercase; font:500 11px var(--mono); }
 .install-header nav a:hover { color:var(--accent); }
 
 .install-hero { overflow:hidden; color:var(--white); background:var(--ink); }
 .hero-grid { min-height:660px; display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:80px; align-items:center; padding-top:80px; padding-bottom:90px; }
-.kicker { display:flex; align-items:center; gap:10px; margin:0 0 18px; color:var(--muted); text-transform:uppercase; font:500 10px/1.4 var(--mono); letter-spacing:.08em; }
+.kicker { display:flex; align-items:center; gap:10px; margin:0 0 18px; color:var(--muted); text-transform:uppercase; font:500 11px/1.4 var(--mono); letter-spacing:.08em; }
 .kicker span { width:28px; height:2px; background:var(--accent); }
 .install-hero .kicker { color:rgba(255,255,255,.58); }
 .install-hero h1,.section-heading h2,.help-grid h2,.offline-shell h1 { margin:0; text-transform:uppercase; font:600 clamp(60px,8vw,112px)/.88 var(--display); letter-spacing:-.045em; overflow-wrap:anywhere; }
 .install-hero h1 em,.help-grid h2 em,.offline-shell h1 em { color:var(--accent); font-style:normal; }
 .hero-copy { max-width:680px; margin:28px 0 0; color:rgba(255,255,255,.7); font-size:16px; line-height:1.7; }
 .install-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:30px; }
-.button { min-height:50px; display:inline-flex; align-items:center; justify-content:space-between; gap:24px; padding:0 17px; border:1px solid transparent; text-decoration:none; text-transform:uppercase; font:600 10px var(--mono); letter-spacing:.06em; }
+.button { min-height:50px; display:inline-flex; align-items:center; justify-content:space-between; gap:24px; padding:0 17px; border:1px solid transparent; text-decoration:none; text-transform:uppercase; font:600 11px/1.35 var(--mono); letter-spacing:.06em; }
 .button-accent { color:var(--ink); background:var(--accent); }
 .button-accent:hover { background:#e7ff86; }
 .button-outline { color:var(--white); border-color:rgba(255,255,255,.4); background:transparent; }
 .button-outline:hover { color:var(--accent); border-color:var(--accent); }
 .button:disabled { cursor:default; opacity:.8; }
-.install-status { min-height:24px; margin:18px 0 0; color:rgba(255,255,255,.58); font:400 11px/1.55 var(--mono); }
+.install-status { min-height:24px; margin:18px 0 0; color:rgba(255,255,255,.68); font:400 13px/1.6 var(--mono); }
 
 .phone-preview { width:280px; height:500px; padding:12px; border:1px solid rgba(255,255,255,.32); border-radius:38px; background:#080908; transform:rotate(3deg); box-shadow:28px 28px 0 rgba(217,255,67,.12); }
 .phone-screen { height:100%; display:grid; place-items:center; align-content:center; gap:18px; padding:28px; border-radius:27px; background:linear-gradient(145deg,#1b1e19,#10110f); text-align:center; }
@@ -64,15 +64,15 @@ button { font:inherit; cursor:pointer; touch-action:manipulation; }
 .device-card { min-width:0; padding:34px; background:var(--white); }
 .device-card.recommended { box-shadow:inset 0 6px 0 var(--accent); }
 .card-head { min-height:24px; display:flex; align-items:flex-start; justify-content:space-between; gap:14px; }
-.card-head p { margin:0; color:var(--orange); text-transform:uppercase; font:500 9px var(--mono); }
-.device-match { padding:5px 7px; color:var(--ink); background:var(--accent); text-align:center; text-transform:uppercase; font:600 7px/1.35 var(--mono); }
+.card-head p { margin:0; color:var(--orange); text-transform:uppercase; font:500 11px var(--mono); }
+.device-match { padding:6px 8px; color:var(--ink); background:var(--accent); text-align:center; text-transform:uppercase; font:600 10px/1.35 var(--mono); }
 .device-match[hidden] { display:none; }
 .device-card h3 { margin:27px 0 9px; font:600 42px/1 var(--display); text-transform:uppercase; overflow-wrap:anywhere; }
-.browser-note { min-height:24px; margin:0 0 24px; color:var(--muted); font-size:12px; line-height:1.55; }
+.browser-note { min-height:24px; margin:0 0 24px; color:var(--muted); font-size:14px; line-height:1.55; }
 .device-card ol { margin:0; padding:0; list-style:none; counter-reset:steps; }
 .device-card li { position:relative; min-height:55px; padding:15px 8px 14px 48px; border-top:1px solid var(--line); font-size:14px; line-height:1.6; counter-increment:steps; }
 .device-card li::before { content:counter(steps,decimal-leading-zero); position:absolute; left:7px; top:17px; color:var(--orange); font:500 10px var(--mono); }
-.card-tip { margin:22px 0 0; padding:14px 16px; border-left:4px solid var(--accent); color:var(--muted); background:#ecebe4; font-size:11px; line-height:1.6; }
+.card-tip { margin:22px 0 0; padding:14px 16px; border-left:4px solid var(--accent); color:var(--muted); background:#ecebe4; font-size:13px; line-height:1.6; }
 
 .help-section { padding:100px 0; color:var(--white); background:var(--ink); }
 .help-grid { display:grid; grid-template-columns:1fr 1fr; gap:80px; }
@@ -82,7 +82,7 @@ button { font:inherit; cursor:pointer; touch-action:manipulation; }
 .help-grid li+li { margin-top:8px; }
 .privacy-note { margin:30px 0 0; padding:20px; border:1px solid rgba(217,255,67,.4); color:rgba(255,255,255,.68); font-size:13px; line-height:1.7; }
 .privacy-note strong { color:var(--accent); }
-.install-footer { min-height:68px; display:flex; align-items:center; justify-content:space-between; gap:20px; padding:10px max(34px,env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(34px,env(safe-area-inset-left)); color:var(--accent); background:var(--ink); border-top:1px solid rgba(255,255,255,.14); text-transform:uppercase; font:500 8px var(--mono); letter-spacing:.08em; }
+.install-footer { min-height:68px; display:flex; align-items:center; justify-content:space-between; gap:20px; padding:10px max(34px,env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(34px,env(safe-area-inset-left)); color:var(--accent); background:var(--ink); border-top:1px solid rgba(255,255,255,.14); text-transform:uppercase; font:500 11px/1.5 var(--mono); letter-spacing:.08em; }
 .install-footer a { min-height:44px; display:inline-flex; align-items:center; }
 
 .offline-page { color:var(--white); background:var(--ink); }
@@ -105,7 +105,7 @@ button { font:inherit; cursor:pointer; touch-action:manipulation; }
   .install-header { min-height:calc(64px + env(safe-area-inset-top)); padding-left:max(14px,env(safe-area-inset-left)); padding-right:max(14px,env(safe-area-inset-right)); }
   .brand { font-size:19px; }
   .install-header nav { gap:0; }
-  .install-header nav a { padding-inline:8px; font-size:9px; }
+  .install-header nav a { padding-inline:7px; font-size:10px; }
   .install-container { width:calc(100% - 28px); }
   .install-hero h1 { font-size:clamp(52px,16.5vw,76px); }
   .hero-copy { font-size:15px; }

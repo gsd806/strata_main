@@ -64,3 +64,32 @@ test("expired elevation purges rendered private data without waiting for another
   assert.match(source,/document\.addEventListener\("visibilitychange"/);
   assert.match(source,/function showElevation[\s\S]*?clearAdminData\(\)/);
 });
+
+test("account actions stay locked until authoritative detail loads",()=>{
+  const html=readPublic("pages/admin.html");
+  const source=readPublic("scripts/admin.js");
+  assert.match(html,/class="action-zone"[^>]*aria-describedby="userDetailStatus"/i);
+  assert.match(source,/renderUserDetails\(user,\{actionsReady:false\}\)/);
+  assert.match(source,/if\(!actionsReady\)\{disabled=true;title="Full account details are still loading\.";\}/);
+  assert.match(source,/renderUserDetails\(result\.user,\{actionsReady:true\}\)/);
+  assert.match(source,/Account actions remain locked\. \$\{friendlyError\(error\)\}/);
+});
+
+test("admin state changes move focus to stable visible targets",()=>{
+  const html=readPublic("pages/admin.html");
+  const source=readPublic("scripts/admin.js");
+  assert.match(html,/id="accessTitle" tabindex="-1"/i);
+  assert.match(source,/if\(focus\)requestAnimationFrame\(\(\)=>el\("accessTitle"\)\.focus/);
+  assert.match(source,/el\("supportDialog"\)\.showModal\(\);syncDialogLock\(\);\s*requestAnimationFrame\(\(\)=>el\("supportDialogTitle"\)\.focus/);
+  assert.match(source,/openDashboard\(result\.elevatedUntil,\{focus:true\}\)/);
+  assert.match(source,/if\(message&&!persist&&!error&&!focus\)globalMessageTimer=/,
+    "a success message that receives focus must not disappear underneath it");
+});
+
+test("authenticated admin layout keeps dense desktop rows and readable controls",()=>{
+  const css=readPublic("styles/admin.css");
+  assert.match(css,/body\.admin-ready \.record-card>button \{ min-height:72px;/);
+  assert.match(css,/body\.admin-ready \.record-primary \{ display:grid; grid-template-columns:/);
+  assert.match(css,/\.pagination button \{ min-height:44px;/);
+  assert.match(css,/\.field label \{[^}]*font:500 10px\/1\.5 var\(--mono\)/);
+});

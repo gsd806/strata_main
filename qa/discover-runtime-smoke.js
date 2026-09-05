@@ -59,6 +59,8 @@ vm.createContext(context);
 vm.runInContext(readPublic("scripts","discovery-core.js"),context,{filename:"discovery-core.js"});
 vm.runInContext(readPublic("scripts","monthly-plan-core.js"),context,{filename:"monthly-plan-core.js"});
 vm.runInContext(readPublic("scripts","discover.js"),context,{filename:"discover.js"});
+assert.equal(vm.runInContext("state.activeFeature",context),"recommendations","feature navigation must initialize before discovery data resolves");
+assert.equal(vm.runInContext('Object.keys(FEATURE_CONFIG).filter((name)=>featurePanel(name).hidden).length',context),5,"only the default workspace should remain visible during discovery loading");
 
 (async()=>{
   await new Promise(setImmediate);
@@ -66,6 +68,13 @@ vm.runInContext(readPublic("scripts","discover.js"),context,{filename:"discover.
     globalThis.featureAudit={defaultFeature:state.activeFeature,defaultVisible:!el("recommendations").hidden,defaultHidden:Object.keys(FEATURE_CONFIG).filter((name)=>featurePanel(name).hidden).length};
     activateFeature("explorer");
     featureAudit.explorerFeature=state.activeFeature;featureAudit.explorerVisible=!el("exerciseExplorer").hidden;featureAudit.explorerHidden=Object.keys(FEATURE_CONFIG).filter((name)=>featurePanel(name).hidden).length;
+    globalThis.location.hash="#alternativeSection";
+    restoreFeatureFromHistory();
+  `,context);
+  await new Promise(setImmediate);
+  vm.runInContext(`
+    featureAudit.unknownHashFeature=state.activeFeature;
+    globalThis.location.hash="";
     activateFeature("recommendations");
     state.compare=["flat-dumbbell-press","machine-chest-press","cable-fly"];
     renderCompareTray();
@@ -115,6 +124,7 @@ vm.runInContext(readPublic("scripts","discover.js"),context,{filename:"discover.
   assert.equal(result.explorerFeature,"explorer");
   assert.equal(result.explorerVisible,true);
   assert.equal(result.explorerHidden,5);
+  assert.equal(result.unknownHashFeature,"explorer");
   assert.equal(result.battleSlots,4);
   assert.ok(result.battleRows>=10);
   for(const key of ["discoveryFetch","battleBuilder","battleTable","battleVisible","battleStatus","detailOpen","bodyLocked","scoreAudit","evidence","alternatives","ratings","communityFetch","communityRendered","communitySevenDayPreview","communityConfirmation","communityApplied","communityPlanLink"])assert.equal(result[key],true,key);

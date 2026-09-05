@@ -16,7 +16,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="discover.css?v=6.9.3" />
+    <link rel="stylesheet" href="discover.css?v=6.9.4" />
   </head>
   <body>
     <a class="skip-link" href="#featureHub">Skip to Strata+ tools</a>
@@ -48,7 +48,7 @@
             <a class="feature-block" href="#exerciseExplorer" data-feature-target="explorer" aria-controls="exerciseExplorer" aria-expanded="false"><span>02 / Community</span><strong>Explore &amp; rate</strong><small>Search 200 exercises, inspect evidence, and add your rating.</small><b aria-hidden="true">↘</b></a>
             <a class="feature-block" href="#battle" data-feature-target="battle" aria-controls="battle" aria-expanded="false"><span>03 / Compare</span><strong>Exercise battle</strong><small>Compare two to four movements side by side.</small><b aria-hidden="true">↘</b></a>
             <a class="feature-block" href="#profile" data-feature-target="profile" aria-controls="profile" aria-expanded="false"><span>04 / Preferences</span><strong>Tune my ranking</strong><small>Set your goal, experience, equipment, and movement limits.</small><b aria-hidden="true">↘</b></a>
-            <a class="feature-block" href="#communityPlans" data-feature-target="community" aria-controls="communityPlans" aria-expanded="false"><span>05 / Community plans</span><strong>Find a week</strong><small>Preview plans shared by members and add one directly to your planner.</small><b aria-hidden="true">↘</b></a>
+            <a class="feature-block" href="#communityPlans" data-feature-target="community" aria-controls="communityPlans" aria-expanded="false"><span>05 / Community plans</span><strong>Find a week</strong><small>Preview a shared week, then choose whether to replace your current plan.</small><b aria-hidden="true">↘</b></a>
             <a class="feature-block" href="#monthlyPlan" data-feature-target="monthly" aria-controls="monthlyPlan" aria-expanded="false"><span>06 / Plan</span><strong>Pick my workouts</strong><small>Turn your weekly split into a complete, downloadable 31-day plan.</small><b aria-hidden="true">↘</b></a>
           </nav>
           <p class="sr-only" id="featureStatus" role="status" aria-live="polite"></p>
@@ -101,16 +101,16 @@
           <div class="section-heading"><div><p class="kicker">02 / Search, inspect, and rate</p><h2 id="explorerTitle" tabindex="-1">EXPLORE EVERY <em>TRADE-OFF.</em></h2></div><p>Search by exercise, muscle, equipment, pattern, or difficulty. Select up to four movements for a deeper comparison.</p></div>
           <div class="collection-row" role="group" aria-label="Quick exercise collections"><button data-collection="all" class="active" type="button" aria-pressed="true">All exercises</button><button data-collection="top-chest" type="button" aria-pressed="false">Highest-rated chest</button><button data-collection="dumbbells" type="button" aria-pressed="false">Best with dumbbells</button><button data-collection="bodyweight" type="button" aria-pressed="false">Bodyweight only</button><button data-collection="beginner" type="button" aria-pressed="false">Beginner-friendly</button><button data-collection="community" type="button" aria-pressed="false">Community rated</button></div>
           <div class="explorer-toolbar" role="search" aria-label="Filter exercises">
-            <label class="search-control"><span aria-hidden="true">⌕</span><span class="sr-only">Search exercises</span><input id="searchInput" type="search" placeholder="Exercise, muscle, equipment, pattern…" autocomplete="off" /></label>
-            <label><span class="sr-only">Muscle group</span><select id="groupFilter"><option value="all">All muscles</option></select></label>
-            <label><span class="sr-only">Equipment</span><select id="equipmentFilter"><option value="all">All equipment</option></select></label>
-            <label><span class="sr-only">Movement pattern</span><select id="patternFilter"><option value="all">All patterns</option></select></label>
-            <label><span class="sr-only">Difficulty</span><select id="levelFilter"><option value="all">All difficulty</option><option>Beginner</option><option>Intermediate</option><option>Advanced</option></select></label>
-            <label><span class="sr-only">Sort exercises</span><select id="sortSelect"><option value="personal">Personal match</option><option value="score">STRATA FitScore</option><option value="community">Community rating</option><option value="practicality">Practicality</option><option value="difficulty">Difficulty</option></select></label>
+            <label class="filter-control search-control"><span class="filter-label">Search exercises</span><span class="search-icon" aria-hidden="true">⌕</span><input id="searchInput" type="search" placeholder="Name, muscle, equipment, pattern…" autocomplete="off" /></label>
+            <label class="filter-control"><span class="filter-label">Muscle group</span><select id="groupFilter"><option value="all">All muscles</option></select></label>
+            <label class="filter-control"><span class="filter-label">Equipment</span><select id="equipmentFilter"><option value="all">All equipment</option></select></label>
+            <label class="filter-control"><span class="filter-label">Movement pattern</span><select id="patternFilter"><option value="all">All patterns</option></select></label>
+            <label class="filter-control"><span class="filter-label">Difficulty</span><select id="levelFilter"><option value="all">All difficulty</option><option>Beginner</option><option>Intermediate</option><option>Advanced</option></select></label>
+            <label class="filter-control"><span class="filter-label">Sort by</span><select id="sortSelect"><option value="personal">Personal match</option><option value="score">STRATA FitScore</option><option value="community">Community rating</option><option value="practicality">Practicality</option><option value="difficulty">Difficulty</option></select></label>
           </div>
-          <div class="results-line"><p id="resultStatus" role="status" aria-live="polite" aria-atomic="true"><strong id="resultCount">0</strong> matching <span id="resultNoun">exercises</span></p><button class="plain-button" id="clearFilters" type="button">Reset search</button></div>
+          <div class="results-line"><p id="resultStatus" role="status" aria-live="polite" aria-atomic="true"><strong id="resultCount">0</strong> matching <span id="resultNoun">exercises</span></p><button class="plain-button" id="clearFilters" type="button">Clear all</button></div>
           <div class="exercise-grid" id="exerciseGrid"><div class="loading-card">Loading exercise intelligence…</div></div>
-          <div class="empty-state" id="emptyState" hidden><strong>No exercise matches every filter.</strong><p>Try clearing the search or one of the exercise filters.</p><button class="button button-dark" data-reset-filters type="button">Reset filters</button></div>
+          <div class="empty-state" id="emptyState" hidden><strong>No exercise matches every filter.</strong><p>Try clearing the search or one of the exercise filters.</p><button class="button button-dark" data-reset-filters type="button">Clear all filters</button></div>
         </div>
       </section>
 
@@ -119,7 +119,7 @@
           <a class="tool-menu-link tool-menu-link-light" href="#featureHub">All Strata+ tools ↑</a>
           <div class="section-heading">
             <div><p class="kicker kicker-light">05 / Shared weekly plans</p><h2 id="communityPlansTitle" tabindex="-1">FIND YOUR NEXT <em>WEEK.</em></h2></div>
-            <p>Explore seven-day workout plans shared by other STRATA members. Preview every day first, then add a plan directly to your own planner.</p>
+            <p>Explore seven-day workout plans shared by other STRATA members. Preview every day first, then confirm before replacing your current weekly plan.</p>
           </div>
 
           <div class="community-browser">
@@ -201,7 +201,7 @@
 
     </main>
 
-    <footer class="build-footer">STRATA · Build 6.9.3 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
+    <footer class="build-footer">STRATA · Build 6.9.4 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
 
     <aside class="compare-tray" id="compareTray" hidden aria-label="Exercise comparison tray">
       <div><span>EXERCISE BATTLE</span><p id="compareNames">Choose 2–4 exercises</p></div>
@@ -213,8 +213,8 @@
       <div class="community-confirm-head"><p class="kicker">Replace weekly plan</p><button class="icon-button" data-close-dialog="communityApplyDialog" type="button" aria-label="Close without replacing your plan">×</button></div>
       <div class="community-confirm-body">
         <span class="community-confirm-mark" aria-hidden="true">!</span>
-        <h2 id="communityApplyTitle">ADD THIS TO MY PLAN?</h2>
-        <p id="communityApplyDescription">This will replace every day in your current weekly plan.</p>
+        <h2 id="communityApplyTitle">REPLACE MY WEEKLY PLAN?</h2>
+        <p id="communityApplyDescription">Review this shared week before replacing every day in your current plan.</p>
         <div class="community-confirm-summary" id="communityApplySummary"></div>
         <p class="community-confirm-warning" id="communityApplyWarning"><strong>Your current week will be replaced.</strong> This cannot be undone automatically. Nothing changes until you confirm.</p>
         <p class="community-confirm-error" id="communityApplyError" role="alert" hidden></p>
@@ -222,9 +222,9 @@
       </div>
     </dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=6.9.3"></script>
-    <script src="discovery-core.js?v=6.9.3"></script>
-    <script src="monthly-plan-core.js?v=6.9.3"></script>
-    <script src="discover.js?v=6.9.3"></script>
+    <script src="/pwa.js?v=6.9.4"></script>
+    <script src="discovery-core.js?v=6.9.4"></script>
+    <script src="monthly-plan-core.js?v=6.9.4"></script>
+    <script src="discover.js?v=6.9.4"></script>
   </body>
 </html>

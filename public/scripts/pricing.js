@@ -118,7 +118,7 @@
       if(trial?.active&&!paid){
         const expiry=new Date(trial.expiresAt).toLocaleString([], {dateStyle:"medium",timeStyle:"short"});
         setStatus(`Your Strata+ trial is active until ${expiry}. No card was charged and it will not renew automatically.`,"good");
-      }else setStatus("Strata+ is permanently unlocked on this account.","good");
+      }else setStatus("Strata+ is unlocked on this account with no recurring subscription.","good");
       return;
     }
     if(!signedIn){

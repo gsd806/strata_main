@@ -88,6 +88,16 @@ function createPage(page,route,{hash="",search="",sessionSeed={}}={}){
 
 async function settle(){for(let index=0;index<5;index+=1)await new Promise(setImmediate);}
 
+test("recovery pages keep guidance, fallback, and retention copy explicit",()=>{
+  assert.match(htmlByPage["forgot-password"],/id="recoveryTitle"[^>]*>SEND RESET LINK</);
+  assert.match(htmlByPage["reset-password"],/<noscript>[\s\S]*JAVASCRIPT REQUIRED[\s\S]*Request a new link/);
+  assert.match(htmlByPage["reset-password"],/id="newPasswordToggle"[^>]*type="button"[^>]*aria-controls="newPassword"/);
+  assert.match(htmlByPage["reset-password"],/id="confirmPasswordToggle"[^>]*type="button"[^>]*aria-controls="confirmPassword"/);
+  assert.match(htmlByPage["delete-account"],/copied by somebody else remain as independent copies/i);
+  assert.match(htmlByPage["delete-account"],/support records, administrator security logs, and provider records may be retained/i);
+  assert.match(htmlByPage["delete-account"],/Paddle’s merchant-of-record transaction record is not deleted/i);
+});
+
 test("forgot-password gives a generic success and blocks a double submission",async()=>{
   let finishRequest;
   const pendingResponse=new Promise((resolve)=>{finishRequest=resolve;});
@@ -106,6 +116,8 @@ test("forgot-password gives a generic success and blocks a double submission",as
   assert.equal(page.requests.length,1,"an in-flight recovery request cannot be submitted twice");
   assert.equal(page.elements.get("recoverySubmit").disabled,true);
   assert.equal(form.getAttribute("aria-busy"),"true");
+  assert.equal(page.elements.get("recoverySubmit").dataset.busy,"true");
+  assert.match(page.elements.get("recoverySubmit").getAttribute("aria-label"),/sending reset link/i);
   assert.deepEqual(JSON.parse(page.requests[0].options.body),{email:"person@example.test"});
   assert.equal(page.requests[0].options.method,"POST");
   assert.equal(page.requests[0].options.credentials,"same-origin");
@@ -119,6 +131,8 @@ test("forgot-password gives a generic success and blocks a double submission",as
   assert.equal(page.elements.get("recoverySuccess").focused,true);
   assert.match(page.elements.get("recoverySuccess").textContent||htmlByPage["forgot-password"],/if an account uses that email/i);
   assert.equal(page.elements.get("recoverySubmit").disabled,false);
+  assert.equal(page.elements.get("recoverySubmit").dataset.busy,undefined);
+  assert.equal(page.elements.get("recoverySubmit").getAttribute("aria-label"),null);
   assert.equal(form.getAttribute("aria-busy"),null);
 });
 
@@ -157,6 +171,27 @@ test("reset rejects mismatched passwords without consuming the link",async()=>{
   assert.equal(page.elements.get("resetMessage").hidden,false);
   assert.match(page.elements.get("resetMessage").textContent,/do not match/i);
   assert.equal(page.elements.get("confirmPassword").focused,true);
+  assert.equal(page.elements.get("confirmPassword").getAttribute("aria-invalid"),"true");
+  assert.equal(page.elements.get("resetMessage").focused,false,"focus should remain on the field that needs correction");
+  await page.elements.get("resetPasswordForm").emit("input");
+  assert.equal(page.elements.get("confirmPassword").getAttribute("aria-invalid"),null);
+});
+
+test("reset password visibility controls keep independent pressed states",async()=>{
+  const page=createPage("reset-password",async(path)=>{
+    if(path==="/api/password-reset/status")return jsonResponse(200,{active:true});
+    throw new Error(`Unexpected path ${path}`);
+  },{hash:`#token=${validToken}`});
+  await settle();
+  const newPassword=page.elements.get("newPassword"),newToggle=page.elements.get("newPasswordToggle");
+  const confirmation=page.elements.get("confirmPassword"),confirmToggle=page.elements.get("confirmPasswordToggle");
+  await newToggle.emit("click");
+  assert.equal(newPassword.type,"text");
+  assert.equal(newToggle.getAttribute("aria-pressed"),"true");
+  assert.notEqual(confirmToggle.getAttribute("aria-pressed"),"true");
+  await confirmToggle.emit("click");
+  assert.equal(confirmation.type,"text");
+  assert.equal(confirmToggle.getAttribute("aria-pressed"),"true");
 });
 
 test("reset submits once and shows success after the password changes",async()=>{

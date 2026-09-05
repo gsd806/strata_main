@@ -34,7 +34,7 @@ test("community plans preview a full week and require confirmation before replac
   assert.match(script,/\/api\/community-plans\?limit=/);
   assert.match(script,/\/api\/community-plans\/\$\{encodeURIComponent\(record\.id\)\}\/apply/);
   assert.match(script,/Monthly\.DAYS\.map\(\(day\)=>sharedPlanDayMarkup/);
-  assert.match(script,/Add to My Plan/);
+  assert.match(script,/Replace My Plan/);
   assert.match(script,/sourceUpdatedAt:Number\(record\.updatedAt\)/);
   assert.match(script,/targetUpdatedAt:state\.weeklyPlanUpdatedAt/);
   assert.match(script,/communityApplyCancel"\)\.focus/);
@@ -65,10 +65,29 @@ test("Strata+ feature navigation owns visibility, URL state, focus, and reduced 
   assert.match(script,/historyMode:"push"/);
   assert.match(script,/"popstate",restoreFeatureFromHistory/);
   assert.match(script,/"hashchange",restoreFeatureFromHistory/);
+  assert.match(script,/if\(rawHash&&!requested\)return/);
   assert.match(script,/focus:\s*true,scroll:\s*true,smooth:\s*true/);
   assert.match(script,/activateFeature\("battle"[^\n]+openComparison\(\)/);
-  assert.match(script,/finally\{initializeFeatureNavigation\(\);\}/);
+  assert.match(script,/initializeFeatureNavigation\(\);\s*init\(\);/);
+  assert.doesNotMatch(script,/finally\{initializeFeatureNavigation\(\);\}/);
   assert.match(css,/\.feature-panel\[hidden\]\s*\{\s*display:\s*none\s*!important/);
   assert.match(css,/@media \(prefers-reduced-motion: reduce\)/);
   assert.match(css,/\.toast, \.feature-block \{ transition: none; \}/);
+});
+
+test("Strata+ polish keeps filters legible and comparison details accessible",()=>{
+  const html=read("pages","discover.html"),script=read("scripts","discover.js"),css=read("styles","discover.css");
+
+  assert.equal((html.match(/class="filter-label"/g)||[]).length,6);
+  assert.match(html,/id="clearFilters"[^>]*>Clear all</);
+  assert.match(html,/id="communityApplyTitle">REPLACE MY WEEKLY PLAN\?</);
+  assert.match(script,/data-scroll-alternatives/);
+  assert.doesNotMatch(script,/href="#alternativeSection"/);
+  assert.match(script,/<thead><tr><th scope="col">Measure<\/th>/);
+  assert.match(script,/Best in this comparison/);
+  assert.match(script,/match-pill \$\{personal\.eligible\?"":"is-excluded"\}/);
+  assert.match(css,/\.match-pill\.is-excluded/);
+  assert.match(css,/\.small-button \{ min-height: 44px/);
+  assert.match(css,/body:has\(\.compare-tray:not\(\[hidden\]\)\) \{ padding-bottom: 112px/);
+  assert.match(css,/@media \(max-width: 520px\)\s*\{\s*\.feature-grid \{ grid-template-columns: 1fr/);
 });

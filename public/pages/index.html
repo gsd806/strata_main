@@ -22,12 +22,12 @@
       href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=6.9.3" />
+    <link rel="stylesheet" href="styles.css?v=6.9.4" />
   </head>
   <body>
     <a class="skip-link" href="#rankings">Skip to rankings</a>
 
-    <aside class="free-access-bar" aria-label="Free access shortcuts"><a href="/planner.html">Try STRATA planner free — no login</a><a href="/pricing?trial=1">Try Strata+ free for 10 days — account required</a></aside>
+    <aside class="free-access-bar" aria-label="Free access shortcuts"><a href="/planner.html"><span class="promo-long">Try STRATA planner free — no login</span><span class="promo-short">Free planner</span></a><a href="/pricing?trial=1"><span class="promo-long">Try Strata+ free for 10 days — account required</span><span class="promo-short">10-day Strata+ trial</span></a></aside>
 
     <header class="site-header" id="top">
       <a class="brand" href="#top" aria-label="Strata home">
@@ -46,7 +46,7 @@
         <a class="account-button discover-button" id="discoverButton" href="/discover.html" hidden>Strata+</a>
         <a class="account-button account-create" id="signupButton" href="/account.html?mode=signup">Sign up</a>
         <a class="account-button account-link" id="accountButton" href="/account.html?mode=login">Log in</a>
-        <a class="session-button" id="planButton" href="/planner.html">
+        <a class="session-button" id="planButton" href="/planner.html" aria-label="Open weekly planner, 0 exercises">
           Plan <span id="planCount">0</span>
         </a>
         <!-- ACCOUNT_ACTIONS_END -->
@@ -68,9 +68,9 @@
               Find the highest-value movements for the exact tissue you want to train—then see why they rank where they do.
             </p>
             <div class="hero-actions">
-              <a class="button button-accent" href="#rankings">Explore rankings <span>↘</span></a>
-              <a class="text-link" href="#method">How scoring works <span>→</span></a>
-              <a class="text-link" href="/install.html">Install STRATA <span>↗</span></a>
+              <a class="button button-accent" href="#rankings">Explore rankings <span aria-hidden="true">↘</span></a>
+              <a class="text-link" href="#method">How scoring works <span aria-hidden="true">→</span></a>
+              <a class="text-link" href="/install.html">Install STRATA <span aria-hidden="true">↗</span></a>
             </div>
           </div>
           <div class="hero-data" aria-label="Database statistics">
@@ -86,7 +86,7 @@
 
       <section class="ticker" aria-label="Ranking principles">
         <div class="ticker-track">
-          <span>STIMULUS</span><b>✳</b><span>STABILITY</span><b>✳</b><span>RANGE</span><b>✳</b><span>PROGRESSION</span><b>✳</b><span>FATIGUE COST</span><b>✳</b>
+          <span>STIMULUS</span><b aria-hidden="true">✳</b><span>STABILITY</span><b aria-hidden="true">✳</b><span>RANGE</span><b aria-hidden="true">✳</b><span>PROGRESSION</span><b aria-hidden="true">✳</b><span>FATIGUE COST</span><b aria-hidden="true">✳</b>
           <span aria-hidden="true">STIMULUS</span><b aria-hidden="true">✳</b><span aria-hidden="true">STABILITY</span><b aria-hidden="true">✳</b><span aria-hidden="true">RANGE</span><b aria-hidden="true">✳</b><span aria-hidden="true">PROGRESSION</span><b aria-hidden="true">✳</b><span aria-hidden="true">FATIGUE COST</span><b aria-hidden="true">✳</b>
         </div>
       </section>
@@ -103,24 +103,25 @@
 
           <div class="group-tabs" id="groupTabs" role="tablist" aria-label="Muscle groups"></div>
 
-          <div class="rankings-shell" id="rankingsPanel" role="tabpanel" aria-labelledby="group-tab-chest" tabindex="0">
-            <aside class="muscle-panel" id="musclePanel" aria-live="polite"></aside>
+          <div class="rankings-shell" id="rankingsPanel" role="tabpanel" aria-labelledby="group-tab-chest">
+            <aside class="muscle-panel" id="musclePanel"></aside>
 
             <div class="ranking-main">
               <div class="filter-bar">
                 <label class="search-field">
                   <span class="sr-only">Search exercises</span>
-                  <span aria-hidden="true">⌕</span>
-                  <input id="searchInput" type="search" placeholder="Search movement or target" autocomplete="off" />
+                  <span class="field-label" aria-hidden="true">Search</span>
+                  <span class="search-icon" aria-hidden="true">⌕</span>
+                  <input id="searchInput" type="search" placeholder="Search movement or target" autocomplete="off" maxlength="80" />
                 </label>
                 <label class="select-wrap">
-                  <span class="sr-only">Filter by equipment</span>
+                  <span class="field-label">Equipment</span>
                   <select id="equipmentFilter">
                     <option value="all">All equipment</option>
                   </select>
                 </label>
                 <label class="select-wrap">
-                  <span class="sr-only">Filter by experience</span>
+                  <span class="field-label">Experience</span>
                   <select id="levelFilter">
                     <option value="all">All levels</option>
                     <option value="Beginner">Beginner</option>
@@ -133,20 +134,24 @@
               <div class="submuscle-row" id="submuscleFilters" role="group" aria-label="Sub-muscle filters"></div>
 
               <div class="results-meta">
-                <p id="resultsStatus" role="status" aria-live="polite" aria-atomic="true"><span id="resultCount">0</span> <span id="resultNoun">exercises</span> · <span id="activeTarget">All targets</span></p>
-                <label class="sort-field">Sort
-                  <select id="sortSelect">
-                    <option value="score">FitScore</option>
-                    <option value="stimulus">Stimulus</option>
-                    <option value="stability">Stability</option>
-                    <option value="range">Useful range</option>
-                    <option value="progression">Progression</option>
-                    <option value="fatigue">Low fatigue</option>
-                  </select>
-                </label>
+                <p id="resultsStatus" role="status" aria-live="polite" aria-atomic="true"><span id="resultCount">0</span> <span id="resultNoun">exercises</span> · <span id="activeTarget">Chest · All targets</span></p>
+                <div class="results-controls">
+                  <button class="reset-filters" id="resetActiveFilters" type="button" hidden>Clear filters</button>
+                  <label class="sort-field">Sort by
+                    <select id="sortSelect">
+                      <option value="score">FitScore</option>
+                      <option value="stimulus">Stimulus</option>
+                      <option value="stability">Stability</option>
+                      <option value="range">Useful range</option>
+                      <option value="progression">Progression</option>
+                      <option value="fatigue">Low fatigue</option>
+                    </select>
+                  </label>
+                </div>
               </div>
 
-              <div class="exercise-list" id="exerciseList" role="list"></div>
+              <div class="exercise-list-head" aria-hidden="true"><span>Rank</span><span>Movement</span><span>Target</span><span>Equipment</span><span>FitScore</span><span>Actions</span></div>
+              <div class="exercise-list" id="exerciseList" role="list" aria-describedby="resultsStatus"></div>
               <div class="empty-state" id="emptyState" hidden>
                 <span>Ø</span>
                 <h3>No movement found.</h3>
@@ -167,11 +172,11 @@
               FitScore is an editorial tool for hypertrophy-oriented exercise selection—not a scientific measurement or a substitute for coaching. Each score starts with the rounded weighted baseline shown here, then may receive an exercise-specific editorial adjustment of up to four points when the five factors miss a meaningful trade-off.
             </p>
             <p class="method-adjustment"><strong>Score build:</strong> Rounded 30/20/20/20/10 weighted baseline + editorial adjustment (±4 maximum). Every exercise detail shows both numbers.</p>
-            <a class="button button-outline" href="#sources">Audit the sources <span>↘</span></a>
+            <a class="button button-outline" href="#sources">Audit the sources <span aria-hidden="true">↘</span></a>
           </div>
 
           <div class="score-model">
-            <div class="score-ring" aria-label="FitScore out of 100">
+            <div class="score-ring" role="img" aria-label="FitScore out of 100">
               <span>FIT<br />SCORE</span><strong>100</strong>
             </div>
             <ol class="weight-list">
@@ -193,7 +198,7 @@
               alt="Athlete setting up for a barbell deadlift in a gym"
               loading="lazy"
             />
-            <a href="https://unsplash.com/photos/a-woman-lifting-a-barbell-in-a-gym-t7SyUNppIeA" target="_blank" rel="noreferrer">HamZa NOUASRIA / Unsplash ↗</a>
+            <a href="https://unsplash.com/photos/a-woman-lifting-a-barbell-in-a-gym-t7SyUNppIeA" target="_blank" rel="noreferrer">HamZa NOUASRIA / Unsplash <span aria-hidden="true">↗</span></a>
           </div>
           <article>
             <p class="kicker">03 / Use the list well</p>
@@ -220,12 +225,12 @@
             <p>Primary research, professional exercise libraries, anatomy texts, and licensed imagery used to shape this guide.</p>
           </div>
           <div class="source-grid">
-            <a href="https://pubmed.ncbi.nlm.nih.gov/36662126/" target="_blank" rel="noreferrer"><span>01 · SYSTEMATIC REVIEW</span><strong>Range of motion and muscle hypertrophy</strong><small>Journal of Strength & Conditioning Research · PubMed</small><b>↗</b></a>
-            <a href="https://pubmed.ncbi.nlm.nih.gov/38970765/" target="_blank" rel="noreferrer"><span>02 · META-REGRESSION</span><strong>Proximity to failure, strength & hypertrophy</strong><small>Sports Medicine · PubMed</small><b>↗</b></a>
-            <a href="https://www.acsm.org/wp-content/uploads/2025/01/Progression-Models-in-Resistance-Training-for-Healthy-Adults-Simplified.pdf" target="_blank" rel="noreferrer"><span>03 · POSITION STAND</span><strong>Progression models in resistance training</strong><small>American College of Sports Medicine</small><b>↗</b></a>
-            <a href="https://www.acefitness.org/resources/everyone/exercise-library/" target="_blank" rel="noreferrer"><span>04 · EXERCISE LIBRARY</span><strong>Exercise setup, targets, and movement cues</strong><small>American Council on Exercise</small><b>↗</b></a>
-            <a href="https://openstax.org/books/anatomy-and-physiology-2e/pages/11-introduction" target="_blank" rel="noreferrer"><span>05 · ANATOMY TEXT</span><strong>Axial and appendicular muscle anatomy</strong><small>OpenStax Anatomy & Physiology 2e</small><b>↗</b></a>
-            <a href="https://www.nsca.com/contentassets/d27e2ba7e56949229d3eb1aaef7ddcfa/trainertips_hypertrophy_201601.pdf" target="_blank" rel="noreferrer"><span>06 · PRACTITIONER GUIDE</span><strong>Hypertrophy programming variables</strong><small>National Strength & Conditioning Association</small><b>↗</b></a>
+            <a href="https://pubmed.ncbi.nlm.nih.gov/36662126/" target="_blank" rel="noreferrer"><span>01 · SYSTEMATIC REVIEW</span><strong>Range of motion and muscle hypertrophy</strong><small>Journal of Strength & Conditioning Research · PubMed</small><b aria-hidden="true">↗</b></a>
+            <a href="https://pubmed.ncbi.nlm.nih.gov/38970765/" target="_blank" rel="noreferrer"><span>02 · META-REGRESSION</span><strong>Proximity to failure, strength & hypertrophy</strong><small>Sports Medicine · PubMed</small><b aria-hidden="true">↗</b></a>
+            <a href="https://www.acsm.org/wp-content/uploads/2025/01/Progression-Models-in-Resistance-Training-for-Healthy-Adults-Simplified.pdf" target="_blank" rel="noreferrer"><span>03 · POSITION STAND</span><strong>Progression models in resistance training</strong><small>American College of Sports Medicine</small><b aria-hidden="true">↗</b></a>
+            <a href="https://www.acefitness.org/resources/everyone/exercise-library/" target="_blank" rel="noreferrer"><span>04 · EXERCISE LIBRARY</span><strong>Exercise setup, targets, and movement cues</strong><small>American Council on Exercise</small><b aria-hidden="true">↗</b></a>
+            <a href="https://openstax.org/books/anatomy-and-physiology-2e/pages/11-introduction" target="_blank" rel="noreferrer"><span>05 · ANATOMY TEXT</span><strong>Axial and appendicular muscle anatomy</strong><small>OpenStax Anatomy & Physiology 2e</small><b aria-hidden="true">↗</b></a>
+            <a href="https://www.nsca.com/contentassets/d27e2ba7e56949229d3eb1aaef7ddcfa/trainertips_hypertrophy_201601.pdf" target="_blank" rel="noreferrer"><span>06 · PRACTITIONER GUIDE</span><strong>Hypertrophy programming variables</strong><small>National Strength & Conditioning Association</small><b aria-hidden="true">↗</b></a>
           </div>
           <div class="source-note">
             <p><strong>Method note.</strong> Sources establish anatomy, exercise execution, and broad programming principles. Each FitScore combines the published weighted baseline with an editorial adjustment of no more than ±4 points; no source claims the exact numerical ranking shown here.</p>
@@ -283,21 +288,21 @@
         <div class="footer-meta">
           <p>© 2026 Strata Index</p>
           <p>Built for education, not diagnosis.</p>
-          <p class="build-number">Build 6.9.3</p>
+          <p class="build-number">Build 6.9.4</p>
         </div>
       </div>
     </footer>
 
-    <div class="compare-dock" id="compareDock" hidden>
+    <aside class="compare-dock" id="compareDock" aria-label="Exercise comparison" hidden>
       <div>
         <span>COMPARE TRAY</span>
-        <p id="compareNames">Choose two exercises</p>
+        <p id="compareNames" aria-live="polite" aria-atomic="true">Choose two exercises</p>
       </div>
       <div class="compare-actions">
         <button type="button" class="plain-button" id="clearCompare">Clear</button>
         <button type="button" class="button button-accent" id="openCompare" disabled>Compare <span id="compareCount">0/2</span></button>
       </div>
-    </div>
+    </aside>
 
     <dialog class="detail-dialog" id="detailDialog" aria-labelledby="detailTitle">
       <div id="detailContent"></div>
@@ -312,7 +317,7 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=6.9.3"></script>
-    <script src="app.js?v=6.9.3"></script>
+    <script src="/pwa.js?v=6.9.4"></script>
+    <script src="app.js?v=6.9.4"></script>
   </body>
 </html>

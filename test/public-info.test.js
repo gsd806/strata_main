@@ -34,7 +34,7 @@ test("homepage publishes the founder story without exposing a residential addres
 });
 
 test("published Strata+ price and refund promise are exact and consistent",()=>{
-  assert.equal(BUILD,"6.9.3");
+  assert.equal(BUILD,"6.9.4");
   const pricingHtml=read("pricing.html"),pricing=text("pricing.html"),refunds=text("refunds.html"),terms=text("terms.html");
   assert.match(pricing,/Strata\+/);
   assert.match(pricing,/\$5\.99 USD/i);
@@ -77,6 +77,15 @@ test("contact and policy pages publish the official support address and cross-li
   assert.match(text("privacy.html"),/does not receive or store full payment-card or bank-account details/i);
 });
 
+test("support and deletion pages explain their important fallback and retention behavior",()=>{
+  const contact=read("contact.html"),deletion=text("delete-account.html");
+  assert.match(contact,/<noscript>[\s\S]*support form needs JavaScript[\s\S]*mailto:/i);
+  assert.match(text("contact.html"),/signed-in requests use the name and email registered to the account/i);
+  assert.match(deletion,/monthly plan/i);
+  assert.match(deletion,/published (?:community-)?plan listing/i);
+  assert.match(deletion,/support (?:requests|records)[\s\S]*administrator security logs[\s\S]*may be retained/i);
+});
+
 test("community-plan policies explain publication, privacy, replacement, and removal",()=>{
   const privacy=text("privacy.html"),terms=text("terms.html");
   assert.match(privacy,/validated structured weekly plan/i);
@@ -94,4 +103,7 @@ test("public copy describes active secure checkout without overpromising access"
   assert.doesNotMatch(publicCopy,/prelaunch|until checkout is activated|when paid checkout launches|when purchasing is available/i);
   assert.match(text("privacy.html"),/Paddle handles checkout and payment information/i);
   assert.match(text("refunds.html"),/Strata\+ access for the refunded account ends when the refund is processed/i);
+  const pricingClient=fs.readFileSync(path.join(PUBLIC_ROOT,"scripts","pricing.js"),"utf8");
+  assert.doesNotMatch(pricingClient,/permanently unlocked/i);
+  assert.match(pricingClient,/unlocked on this account with no recurring subscription/i);
 });

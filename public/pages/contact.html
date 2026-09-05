@@ -16,10 +16,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/site-info.css?v=6.9.3" />
+    <link rel="stylesheet" href="/site-info.css?v=6.9.4" />
   </head>
   <body>
-    <a class="skip-link" href="#main">Skip to support form</a>
+    <a class="skip-link" href="#supportFormTitle">Skip to support options</a>
     <header class="info-header">
       <a class="brand" href="/" aria-label="STRATA home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>STRATA</span></a>
       <nav class="info-nav" aria-label="Public navigation"><a href="/">Home</a><a href="/pricing">Pricing</a><a href="/contact" aria-current="page">Contact</a><a href="/install">Install</a></nav>
@@ -37,8 +37,13 @@
         <div class="info-container contact-grid">
           <article class="contact-card support-form-card" aria-labelledby="supportFormTitle">
             <p class="card-kicker">Support request</p>
-            <h2 id="supportFormTitle">HOW CAN WE HELP?</h2>
-            <p id="supportFormHelp">Share enough detail for STRATA to understand the issue. Required fields are marked with an asterisk. If you are signed in, the request stays attached to your registered account name and email.</p>
+            <h2 id="supportFormTitle" tabindex="-1">HOW CAN WE HELP?</h2>
+            <p id="supportFormHelp">Share enough detail for STRATA to understand the issue. Required fields are marked with an asterisk. Signed-in requests use the name and email registered to the account, even if different details are entered below.</p>
+
+            <noscript>
+              <style>#supportForm{display:none}</style>
+              <p class="support-status support-status-error no-script-support">The support form needs JavaScript. Please <a href="mailto:stratafitness.official@gmail.com?subject=STRATA%20support">email STRATA support</a> instead.</p>
+            </noscript>
 
             <form class="support-form" id="supportForm" action="/api/support" method="post" aria-describedby="supportFormHelp supportStatus">
               <div class="support-field">
@@ -48,7 +53,8 @@
 
               <div class="support-field">
                 <label for="supportEmail">Email <span aria-hidden="true">*</span></label>
-                <input id="supportEmail" name="email" type="email" autocomplete="email" inputmode="email" maxlength="254" required />
+                <input id="supportEmail" name="email" type="email" autocomplete="email" inputmode="email" autocapitalize="none" spellcheck="false" maxlength="254" aria-describedby="supportEmailHelp" required />
+                <p class="field-help" id="supportEmailHelp">If you are signed in, replies go to the registered account email.</p>
               </div>
 
               <div class="support-field">
@@ -115,10 +121,10 @@
       <div class="info-container info-footer-grid">
         <div><a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>STRATA</span></a><p class="footer-tagline">Move selection, made legible.</p></div>
         <nav class="footer-nav" aria-label="Footer navigation"><a href="/pricing">Pricing</a><a href="/contact">Contact</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/refunds">Refunds</a><a href="/install">Install</a></nav>
-        <p class="footer-meta">© 2026 Strata Index<br />Build 6.9.3</p>
+        <p class="footer-meta">© 2026 Strata Index<br />Build 6.9.4</p>
       </div>
     </footer>
-    <script src="/contact.js?v=6.9.3"></script>
-    <script src="/pwa.js?v=6.9.3"></script>
+    <script src="/contact.js?v=6.9.4"></script>
+    <script src="/pwa.js?v=6.9.4"></script>
   </body>
 </html>

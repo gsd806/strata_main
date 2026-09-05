@@ -13,7 +13,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Manrope:wght@400;500;600;700&amp;family=Oswald:wght@500;600;700&amp;display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/account.css?v=6.9.3" />
+    <link rel="stylesheet" href="/account.css?v=6.9.4" />
   </head>
   <body data-account-page="delete-account">
     <a class="skip-link" href="#deletePanel">Skip to account deletion</a>
@@ -33,16 +33,17 @@
           <p class="panel-index">Final confirmation</p>
           <h2 id="deleteTitle" tabindex="-1">THIS CANNOT BE UNDONE</h2>
           <div class="deletion-warning">
-            <p>Permanent deletion removes:</p>
-            <ul><li>Your account and every signed-in session</li><li>Your weekly plan and Strata+ preferences</li><li>Your ratings and their contribution to community scores</li><li>Your local Strata+ purchase record and access</li></ul>
-            <p><strong>Deletion is not a refund.</strong> A used Paddle purchase or discount is not restored if you create a new account. Request an eligible refund before deleting if needed.</p>
+            <p>Permanent deletion removes from STRATA’s account database:</p>
+            <ul><li>Your account and every signed-in session</li><li>Your private weekly and monthly plans, published plan listing, profile, and preferences</li><li>Your ratings and their contribution to community scores</li><li>Your STRATA entitlement and purchase mapping</li></ul>
+            <p>Plans already copied by somebody else remain as independent copies in that person’s private Plan. Separately submitted support records, administrator security logs, and provider records may be retained where reasonably needed for support, security, payments, tax, fraud prevention, or legal obligations. See the <a href="/privacy">Privacy Policy</a> for details.</p>
+            <p><strong>Deletion is not a refund.</strong> Paddle’s merchant-of-record transaction record is not deleted, and a used purchase or discount is not restored if you create a new account. Request an eligible refund before deleting if needed.</p>
           </div>
           <form id="deleteAccountForm" action="/auth/account-delete/complete" method="post" aria-describedby="deleteMessage" hidden>
             <div class="account-message panel-message" id="deleteMessage" role="alert" tabindex="-1" hidden></div>
             <input id="deleteToken" name="token" type="hidden" value="" />
             <label for="deleteConfirmation">Type DELETE to confirm</label>
             <input id="deleteConfirmation" name="confirmation" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" pattern="DELETE" maxlength="6" required />
-            <button class="danger-action" id="deleteSubmit" type="submit">Delete my account permanently <span aria-hidden="true">→</span></button>
+            <button class="danger-action" id="deleteSubmit" type="submit"><span class="button-idle">Delete my account permanently</span><span class="button-busy">Deleting account…</span><span aria-hidden="true">→</span></button>
           </form>
           <div class="verification-ended" id="deleteUnavailable" role="status" aria-live="assertive" tabindex="-1" hidden>
             <h3>LINK UNAVAILABLE</h3>
@@ -51,13 +52,13 @@
           </div>
           <div class="recovery-success" id="deleteSuccess" role="status" aria-live="assertive" tabindex="-1" hidden>
             <h3>ACCOUNT DELETED</h3>
-            <p>Your STRATA account and its local data were permanently removed. Paddle may retain transaction records required for payments, refunds, fraud prevention, tax, or legal obligations.</p>
+            <p>Your account and linked data were removed from STRATA’s account database. Independently copied plans remain with the people who copied them. Support or security records and service-provider records may be retained as described in the Privacy Policy. Paddle’s transaction record is not deleted, and account deletion does not create a refund.</p>
             <a href="/">Return to STRATA <span aria-hidden="true">→</span></a>
           </div>
         </article>
       </section>
     </main>
-    <footer class="build-footer">STRATA · Build 6.9.3 · <a href="/refunds">Refunds</a> · <a href="/contact">Contact</a> · <a href="/privacy">Privacy</a></footer>
-    <script src="/account-recovery.js?v=6.9.3"></script>
+    <footer class="build-footer">STRATA · Build 6.9.4 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
+    <script src="/account-recovery.js?v=6.9.4"></script>
   </body>
 </html>

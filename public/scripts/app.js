@@ -165,7 +165,8 @@ function renderExercises() {
     const failed = state.catalogStatus === "error";
     el("resultCount").textContent = "0";
     el("resultNoun").textContent = "exercises";
-    el("activeTarget").textContent = failed ? "Library unavailable" : "Loading library";
+    el("activeTarget").textContent = `${groups[state.group].name} · ${failed ? "Library unavailable" : "Loading library"}`;
+    el("resetActiveFilters").hidden = true;
     exerciseList.innerHTML = "";
     el("emptyState").hidden = false;
     setEmptyStateCopy(
@@ -179,22 +180,29 @@ function renderExercises() {
 
   setEmptyStateCopy("No movement found.","Clear a filter or search another exercise.","Reset filters",false);
   const rows = filteredExercises();
+  const activeFilters = [
+    state.sub !== "all" ? `Target: ${state.sub}` : "",
+    state.equipment !== "all" ? `Equipment: ${state.equipment}` : "",
+    state.level !== "all" ? `Experience: ${state.level}` : "",
+    state.query.trim() ? `Search: “${state.query.trim()}”` : ""
+  ].filter(Boolean);
   el("resultCount").textContent = rows.length;
   el("resultNoun").textContent = rows.length === 1 ? "exercise" : "exercises";
-  el("activeTarget").textContent = state.sub === "all" ? "All targets" : state.sub;
+  el("activeTarget").textContent = `${groups[state.group].name} · ${activeFilters.length ? activeFilters.join(" · ") : "All targets"}`;
+  el("resetActiveFilters").hidden = activeFilters.length === 0;
   el("emptyState").hidden = rows.length !== 0;
   exerciseList.innerHTML = rows.map((exercise,index) => {
     const compared = state.compare.includes(exercise.id);
     return `<article class="exercise-row" role="listitem">
-    <div class="rank-number">${String(index+1).padStart(2,"0")}</div>
-    <div class="exercise-title"><button type="button" data-detail="${exercise.id}"><h3>${exercise.name}</h3><p>${exercise.pattern} · ${exercise.level}</p><span class="details-cue">View details ↘</span></button></div>
+    <div class="rank-number"><span aria-hidden="true">${String(index+1).padStart(2,"0")}</span><span class="sr-only">Rank ${index+1}</span></div>
+    <div class="exercise-title"><button type="button" data-detail="${exercise.id}"><h3>${exercise.name}</h3><p>${exercise.pattern} · ${exercise.level}</p><p class="mobile-exercise-meta">${exercise.sub} · ${exercise.equipment}</p><span class="details-cue">View details <span aria-hidden="true">↘</span></span></button></div>
     <div><span class="target-pill">${exercise.sub}</span></div>
     <div class="exercise-cell"><small>Equipment</small><strong>${exercise.equipment}</strong></div>
-    <div class="score-badge ${exercise.score >= 94 ? "top" : ""}" aria-label="FitScore ${exercise.score} out of 100"><strong>${exercise.score}</strong><span aria-hidden="true">/100</span></div>
+    <div class="score-badge ${exercise.score >= 94 ? "top" : ""}" role="img" aria-label="FitScore ${exercise.score} out of 100"><strong>${exercise.score}</strong><span aria-hidden="true">/100</span></div>
     <div class="row-actions">
-      <a class="action-icon youtube-action" href="${exercise.youtube}" target="_blank" rel="noreferrer" aria-label="Find ${exercise.name} tutorials on YouTube">▶</a>
-      <button class="action-icon ${compared ? "active" : ""}" data-compare="${exercise.id}" type="button" aria-pressed="${compared}" aria-label="${compared ? "Remove" : "Add"} ${exercise.name} ${compared ? "from" : "to"} comparison">⇄</button>
-      <button class="action-icon" data-add-planner="${exercise.id}" type="button" aria-label="Add to weekly planner">+</button>
+      <a class="action-icon youtube-action" href="${exercise.youtube}" target="_blank" rel="noreferrer" title="Watch tutorials" aria-label="Find ${exercise.name} tutorials on YouTube"><span aria-hidden="true">▶</span></a>
+      <button class="action-icon ${compared ? "active" : ""}" data-compare="${exercise.id}" type="button" title="${compared ? "Remove from comparison" : "Add to comparison"}" aria-pressed="${compared}" aria-label="${compared ? "Remove" : "Add"} ${exercise.name} ${compared ? "from" : "to"} comparison"><span aria-hidden="true">⇄</span></button>
+      <button class="action-icon" data-add-planner="${exercise.id}" type="button" title="Add to planner" aria-label="Add ${exercise.name} to weekly planner"><span aria-hidden="true">+</span></button>
     </div>
   </article>`;
   }).join("");
@@ -212,8 +220,10 @@ function updateAccountUI() {
   discoveryButton.hidden = !state.user;
   discoveryButton.href = discoveryActive ? "/discover.html" : "/pricing";
   discoveryButton.textContent = discoveryActive ? "Strata+" : "Unlock Strata+";
-  el("planCount").textContent = state.user ? (state.user.planCount || 0) : "0";
+  const planCount = state.user ? (Number(state.user.planCount) || 0) : 0;
+  el("planCount").textContent = planCount;
   el("planButton").href = "/planner.html";
+  el("planButton").setAttribute("aria-label", `Open weekly planner, ${planCount} ${planCount === 1 ? "exercise" : "exercises"}`);
 }
 
 function renderAll() {
@@ -231,9 +241,6 @@ function selectGroup(group, restoreFocus = true) {
   if (!groups[group]) return;
   state.group = group;
   state.sub = "all";
-  state.equipment = "all";
-  state.query = "";
-  el("searchInput").value = "";
   renderAll();
   if (restoreFocus) focusRenderedControl(groupTabs, "data-group", group);
 }
@@ -247,7 +254,7 @@ function selectSubfilter(sub, restoreFocus = true) {
 
 function metricMarkup(exercise) {
   const labels = {stimulus:"Stimulus",stability:"Stability",progression:"Progression",range:"Useful range",fatigue:"Low fatigue"};
-  return Object.entries(exercise.metrics).map(([key,value]) => `<div class="metric"><div class="metric-head"><span>${labels[key]}</span><b>${value}</b></div><div class="metric-track"><i style="width:${value}%"></i></div></div>`).join("");
+  return Object.entries(exercise.metrics).map(([key,value]) => `<div class="metric"><div class="metric-head"><span>${labels[key]}</span><b>${value}</b></div><div class="metric-track" aria-hidden="true"><i style="width:${value}%"></i></div></div>`).join("");
 }
 
 function adjustmentLabel(value) {
@@ -271,13 +278,13 @@ function openDetail(id) {
   el("detailContent").innerHTML = `<div class="detail-hero">
     <button class="icon-button detail-close" data-close-dialog="detailDialog" type="button" aria-label="Close details">×</button>
     <div class="detail-hero-copy"><p class="kicker">${groups[exercise.group].name} / ${exercise.sub}</p><h2 id="detailTitle">${exercise.name}</h2><p>${exercise.why}</p></div>
-    <div class="detail-score" aria-label="FitScore ${exercise.score} out of 100"><span>FIT SCORE</span><strong>${exercise.score}</strong><span>OUT OF 100</span></div>
+    <div class="detail-score" role="img" aria-label="FitScore ${exercise.score} out of 100"><span>FIT SCORE</span><strong>${exercise.score}</strong><span>OUT OF 100</span></div>
   </div><div class="detail-body">
     <div class="detail-meta"><div><span>Sets</span><strong>${exercise.sets}</strong></div><div><span>Reps</span><strong>${exercise.reps}</strong></div><div><span>Rest</span><strong>${exercise.rest}</strong></div><div><span>Level</span><strong>${exercise.level}</strong></div></div>
     <div class="metric-grid">${metricMarkup(exercise)}</div>
     <p class="detail-score-build"><strong>Score build</strong><span>Weighted baseline ${exercise.weightedBaseline}</span><span>Editorial adjustment ${adjustmentLabel(exercise.editorialAdjustment)}</span></p>
     <div class="detail-columns"><div><h3>Execution notes</h3><ul>${exercise.cues.map((cue) => `<li>${cue}</li>`).join("")}</ul></div><div><h3>Why it ranks here</h3><p class="detail-rationale">${exercise.why}</p><p class="detail-note"><strong>Watch for:</strong> ${exercise.caution}</p></div></div>
-    <div class="detail-footer"><button class="button button-dark" data-add-planner="${exercise.id}" type="button">Add to weekly planner<span>+</span></button><a class="button detail-youtube" href="${exercise.youtube}" target="_blank" rel="noreferrer">YouTube tutorials <span>▶</span></a><button class="button" style="border-color:var(--ink)" data-compare="${exercise.id}" type="button" aria-pressed="${compared}">${compared ? "Remove comparison" : "Compare exercise"}<span>⇄</span></button></div>
+    <div class="detail-footer"><button class="button button-dark" data-add-planner="${exercise.id}" type="button">Add to weekly planner<span aria-hidden="true">+</span></button><a class="button detail-youtube" href="${exercise.youtube}" target="_blank" rel="noreferrer">YouTube tutorials <span aria-hidden="true">▶</span></a><button class="button" style="border-color:var(--ink)" data-compare="${exercise.id}" type="button" aria-pressed="${compared}">${compared ? "Remove comparison" : "Compare exercise"}<span aria-hidden="true">⇄</span></button></div>
   </div>`;
   openModal(detailDialog);
 }
@@ -304,7 +311,7 @@ async function initializeCatalog() {
   state.catalogStatus = "loading";
   renderAll();
   try {
-    exercises = normalizeCatalog(await api("/exercises.json?v=6.9.3"));
+    exercises = normalizeCatalog(await api("/exercises.json?v=6.9.4"));
     state.catalogStatus = "ready";
     el("catalogTotal").textContent = exercises.length;
   } catch {
@@ -335,6 +342,7 @@ function toggleCompare(id) {
 
 function updateCompareDock() {
   el("compareDock").hidden = state.compare.length === 0;
+  document.body?.classList.toggle("compare-open", state.compare.length > 0);
   el("compareCount").textContent = `${state.compare.length}/2`;
   el("openCompare").disabled = state.compare.length !== 2;
   el("compareNames").textContent = state.compare.length ? state.compare.map((id) => exercises.find((exercise) => exercise.id === id)?.name).join(" vs ") : "Choose two exercises";
@@ -367,7 +375,7 @@ function openComparison() {
 let toastTimer;
 function showToast(message) {
   const toast = el("toast"); toast.textContent = message; toast.classList.add("show");
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove("show"),1800);
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove("show"),3000);
 }
 
 document.addEventListener("click", (event) => {
@@ -398,10 +406,12 @@ el("searchInput").addEventListener("input", (event) => { state.query=event.targe
 el("equipmentFilter").addEventListener("change", (event) => { state.equipment=event.target.value; renderExercises(); });
 el("levelFilter").addEventListener("change", (event) => { state.level=event.target.value; renderExercises(); });
 el("sortSelect").addEventListener("change", (event) => { state.sort=event.target.value; renderExercises(); });
-el("clearFilters").addEventListener("click", () => {
+function resetFilters() {
   if (state.catalogStatus === "error") { initializeCatalog(); return; }
   state.sub="all";state.equipment="all";state.level="all";state.query="";el("searchInput").value="";el("levelFilter").value="all";renderAll();requestAnimationFrame(()=>el("searchInput").focus());
-});
+}
+el("clearFilters").addEventListener("click", resetFilters);
+el("resetActiveFilters").addEventListener("click", resetFilters);
 el("clearCompare").addEventListener("click", () => { state.compare=[];updateCompareDock();renderExercises();requestAnimationFrame(()=>el("searchInput").focus()); });
 el("openCompare").addEventListener("click", openComparison);
 [detailDialog,compareDialog].forEach((dialog) => {

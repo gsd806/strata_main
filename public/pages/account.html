@@ -16,7 +16,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="account.css?v=6.9.3" />
+    <link rel="stylesheet" href="account.css?v=6.9.4" />
   </head>
   <body>
     <a class="skip-link" href="#accountPage">Skip to account</a>
@@ -38,15 +38,15 @@
         <p id="signedInIdentity"></p>
         <p class="account-discovery-status" id="accountDiscoveryStatus" role="status" aria-live="polite"></p>
         <div class="account-message signed-in-message" id="signedInMessage" role="alert" hidden></div>
-        <div class="signed-actions"><a id="accountAdminAction" href="/admin" hidden>Open admin dashboard →</a><a id="accountDiscoveryAction" href="/pricing">Unlock Strata+ →</a><a href="/planner.html">Open weekly planner →</a><button id="accountLogout" type="button">Sign out</button></div>
+        <div class="signed-actions"><a id="accountAdminAction" href="/admin" hidden>Open admin dashboard →</a><a id="accountDiscoveryAction" href="/pricing">Unlock Strata+ →</a><a href="/planner.html">Open weekly planner →</a><button id="accountLogout" type="button"><span class="button-idle">Sign out</span><span class="button-busy">Signing out…</span></button></div>
         <section class="account-security" aria-labelledby="accountSecurityTitle">
           <p class="panel-index">Account controls</p>
           <h3 id="accountSecurityTitle">ACCOUNT SECURITY</h3>
           <p>Reset your password through a secure link sent to your registered email. Completing a reset signs out every device.</p>
           <div class="security-actions">
-            <button id="accountPasswordReset" type="button">Email password-reset link <span aria-hidden="true">→</span></button>
-            <button class="danger-action" id="accountDeleteRequest" type="button">Delete account <span aria-hidden="true">→</span></button>
-            <button class="verification-secondary" id="accountDeleteCancel" type="button" hidden>Cancel deletion request <span aria-hidden="true">×</span></button>
+            <button id="accountPasswordReset" type="button"><span class="button-idle">Email password-reset link</span><span class="button-busy">Sending reset link…</span><span aria-hidden="true">→</span></button>
+            <button class="danger-action" id="accountDeleteRequest" type="button"><span class="button-idle">Delete account</span><span class="button-busy">Sending deletion link…</span><span aria-hidden="true">→</span></button>
+            <button class="verification-secondary" id="accountDeleteCancel" type="button" hidden><span class="button-idle">Cancel deletion request</span><span class="button-busy">Canceling request…</span><span aria-hidden="true">×</span></button>
           </div>
           <p class="security-status" id="accountSecurityStatus" role="status" aria-live="polite"></p>
         </section>
@@ -69,10 +69,11 @@
               <div class="account-message panel-message" id="signupMessage" role="alert" tabindex="-1" hidden></div>
               <input id="signupNext" type="hidden" name="next" value="/planner.html" />
               <label for="signupName">Name</label><input id="signupName" name="name" autocomplete="name" required minlength="2" maxlength="40" />
-              <label for="signupEmail">Email</label><input id="signupEmail" name="email" type="email" autocomplete="email" required maxlength="254" />
-              <label for="signupPassword">Password</label><input id="signupPassword" name="password" type="password" autocomplete="new-password" required minlength="10" maxlength="128" aria-describedby="signupPasswordHint" />
-              <small id="signupPasswordHint">Use at least 10 characters. Passwords are salted and hashed before storage.</small>
-              <button id="signupSubmit" type="submit">Create account <span>→</span></button>
+              <label for="signupEmail">Email</label><input id="signupEmail" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" required maxlength="254" />
+              <label for="signupPassword">Password</label>
+              <div class="password-field"><input id="signupPassword" name="password" type="password" autocomplete="new-password" required minlength="10" maxlength="128" aria-describedby="signupPasswordHint" /><button class="password-toggle" id="signupPasswordToggle" type="button" aria-controls="signupPassword" aria-pressed="false" aria-label="Show signup password">Show</button></div>
+              <small id="signupPasswordHint">Use 10–128 characters. A unique password is safest.</small>
+              <button id="signupSubmit" type="submit"><span class="button-idle">Create account</span><span class="button-busy">Creating account…</span><span aria-hidden="true">→</span></button>
             </form>
           </article>
           <article class="auth-panel" id="loginPanel" aria-labelledby="loginTitle">
@@ -82,18 +83,19 @@
             <form id="loginForm" action="/auth/login" method="post" aria-labelledby="loginTitle" aria-describedby="loginMessage">
               <div class="account-message panel-message" id="loginMessage" role="alert" tabindex="-1" hidden></div>
               <input id="loginNext" type="hidden" name="next" value="/planner.html" />
-              <label for="loginEmail">Email</label><input id="loginEmail" name="email" type="email" autocomplete="email" required maxlength="254" />
-              <label for="loginPassword">Password</label><input id="loginPassword" name="password" type="password" autocomplete="current-password" required minlength="10" maxlength="128" aria-describedby="loginPasswordHint" />
-              <small id="loginPasswordHint">If account storage is temporarily unavailable, wait a moment and try again.</small>
+              <label for="loginEmail">Email</label><input id="loginEmail" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" required maxlength="254" />
+              <label for="loginPassword">Password</label>
+              <div class="password-field"><input id="loginPassword" name="password" type="password" autocomplete="current-password" required maxlength="128" aria-describedby="loginPasswordHint" /><button class="password-toggle" id="loginPasswordToggle" type="button" aria-controls="loginPassword" aria-pressed="false" aria-label="Show sign-in password">Show</button></div>
+              <small id="loginPasswordHint">Passwords are case-sensitive.</small>
               <a class="auth-help" id="forgotPasswordLink" href="/forgot-password">Forgot password?</a>
-              <button id="loginSubmit" type="submit">Sign in <span>→</span></button>
+              <button id="loginSubmit" type="submit"><span class="button-idle">Sign in</span><span class="button-busy">Signing in…</span><span aria-hidden="true">→</span></button>
             </form>
           </article>
         </div>
       </section>
     </main>
-    <footer class="build-footer">STRATA · Build 6.9.3 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
-    <script src="/pwa.js?v=6.9.3"></script>
-    <script src="account.js?v=6.9.3"></script>
+    <footer class="build-footer">STRATA · Build 6.9.4 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
+    <script src="/pwa.js?v=6.9.4"></script>
+    <script src="account.js?v=6.9.4"></script>
   </body>
 </html>

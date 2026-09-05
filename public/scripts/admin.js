@@ -112,7 +112,7 @@ function showGlobal(message,{error=false,warn=false,focus=false,persist=false}={
   node.classList.toggle("warn",warn&&!error);
   node.hidden=!message;
   if(message&&focus)requestAnimationFrame(()=>node.focus({preventScroll:false}));
-  if(message&&!persist&&!error)globalMessageTimer=setTimeout(()=>{node.hidden=true;},7000);
+  if(message&&!persist&&!error&&!focus)globalMessageTimer=setTimeout(()=>{node.hidden=true;},7000);
 }
 
 function setLastUpdated() {
@@ -136,11 +136,12 @@ function clearAdminData() {
   for(const id of ["totalUsersStat","verifiedUsersStat","discoveryUsersStat","openSupportStat","suspendedUsersStat","activeSessionsStat","pendingPaymentsStat","pendingDeletionsStat"])el(id).textContent="—";
 }
 
-function showAccess(message,{signedOut=false}={}) {
+function showAccess(message,{signedOut=false,focus=false}={}) {
   clearAdminData();
   state.admin=null;
   state.csrfToken="";
   state.elevated=false;
+  document.body.classList.remove("admin-ready");
   el("dashboard").hidden=true;
   el("elevationPanel").hidden=true;
   el("accessPanel").hidden=false;
@@ -150,11 +151,13 @@ function showAccess(message,{signedOut=false}={}) {
   el("accessMessage").textContent=message;
   el("accessActions").hidden=false;
   el("adminMain").setAttribute("aria-busy","false");
+  if(focus)requestAnimationFrame(()=>el("accessTitle").focus({preventScroll:false}));
 }
 
 function showElevation(message="Enter your current STRATA password to unlock private administration.") {
   clearAdminData();
   state.elevated=false;
+  document.body.classList.remove("admin-ready");
   el("dashboard").hidden=true;
   el("accessPanel").hidden=true;
   el("elevationPanel").hidden=false;
@@ -173,11 +176,11 @@ function handleAuthorizationFailure(error) {
     return true;
   }
   if(code==="ADMIN_RELOGIN_REQUIRED"||code==="ADMIN_SESSION_CHANGED"){
-    showAccess("Administrator ownership was secured or your session changed. Sign in again to continue.",{signedOut:true});
+    showAccess("Administrator ownership was secured or your session changed. Sign in again to continue.",{signedOut:true,focus:true});
     return true;
   }
-  if(error?.status===401){showAccess("Your private session ended. Sign in with the verified administrator account to continue.",{signedOut:true});return true;}
-  if(error?.status===403){showAccess("This account is signed in, but it is not an approved STRATA administrator.");return true;}
+  if(error?.status===401){showAccess("Your private session ended. Sign in with the verified administrator account to continue.",{signedOut:true,focus:true});return true;}
+  if(error?.status===403){showAccess("This account is signed in, but it is not an approved STRATA administrator.",{focus:true});return true;}
   return false;
 }
 
@@ -352,7 +355,7 @@ function planSummary(user) {
   return `${formatCount(exercises??0)} exercises · ${formatCount(days??0)} workout days`;
 }
 
-function setActionAvailability(user) {
+function setActionAvailability(user,{actionsReady=true}={}) {
   const suspended=userSuspended(user);
   const isSelf=userId(user)&&userId(user)===userId(state.admin||{});
   for(const button of document.querySelectorAll("[data-user-action]")){
@@ -363,12 +366,13 @@ function setActionAvailability(user) {
     if(action==="suspend"&&suspended){disabled=true;title="This account is already suspended.";}
     if(action==="restore"&&!suspended){disabled=true;title="This account is not suspended.";}
     if(isSelf){disabled=true;title="Use Account Security for the sole administrator account.";}
+    if(!actionsReady){disabled=true;title="Full account details are still loading.";}
     button.disabled=disabled;
     button.title=title;
   }
 }
 
-function renderUserDetails(user) {
+function renderUserDetails(user,{actionsReady=true}={}) {
   state.selectedUser=user;
   el("userDialogTitle").textContent=userName(user);
   el("userDialogEmail").textContent=userEmail(user);
@@ -384,23 +388,32 @@ function renderUserDetails(user) {
   addFact(facts,"Ratings",formatCount(firstValue(user,["ratingCount","rating_count","ratings"],0)));
   addFact(facts,"Active sessions",formatCount(firstValue(user,["activeSessions","activeSessionCount","active_session_count","sessions"],0)));
   addFact(facts,"Deletion request",deletionPending(user)?"Pending confirmation":"None");
-  setActionAvailability(user);
+  setActionAvailability(user,{actionsReady});
 }
 
 async function openUserDialog(user,trigger) {
   state.userDialogTrigger=trigger;
-  renderUserDetails(user);
+  renderUserDetails(user,{actionsReady:false});
   el("userDetailStatus").textContent="Loading full account details…";
-  const dialog=el("userDialog");dialog.showModal();syncDialogLock();
+  el("userDetailStatus").classList.remove("error");
+  const dialog=el("userDialog");setBusy(dialog,true);dialog.showModal();syncDialogLock();
   requestAnimationFrame(()=>el("userDialogTitle").focus?.({preventScroll:true}));
   const targetId=userId(user);
   try{
     const result=await api(`/api/admin/users/${encodeURIComponent(targetId)}`);
     if(!state.elevated||!dialog.open||userId(state.selectedUser)!==targetId)return;
-    if(result.user)renderUserDetails(result.user);
+    if(!result.user)throw new Error("Full account details were not returned.");
+    renderUserDetails(result.user,{actionsReady:true});
     el("userDetailStatus").textContent="Account details are current.";
+    el("userDetailStatus").classList.remove("error");
   }catch(error){
-    if(!handleAuthorizationFailure(error)&&dialog.open)el("userDetailStatus").textContent=friendlyError(error);
+    if(!handleAuthorizationFailure(error)&&dialog.open){
+      setActionAvailability(state.selectedUser||user,{actionsReady:false});
+      el("userDetailStatus").textContent=`Account actions remain locked. ${friendlyError(error)}`;
+      el("userDetailStatus").classList.add("error");
+    }
+  }finally{
+    setBusy(dialog,false);
   }
 }
 
@@ -549,6 +562,7 @@ function openSupportDialog(ticket,trigger) {
   updateSupportSubmitLabel();
   el("supportUpdateMessage").hidden=true;el("supportUpdateMessage").textContent="";
   el("supportDialog").showModal();syncDialogLock();
+  requestAnimationFrame(()=>el("supportDialogTitle").focus({preventScroll:true}));
 }
 
 async function submitSupportUpdate(event) {
@@ -672,9 +686,10 @@ function setupEvents() {
   el("elevationForm").addEventListener("submit",submitElevation);
 }
 
-function openDashboard(elevatedUntil=null) {
+function openDashboard(elevatedUntil=null,{focus=false}={}) {
   state.elevated=true;
   state.elevatedUntil=Number(elevatedUntil)||0;
+  document.body.classList.add("admin-ready");
   el("accessPanel").hidden=true;el("elevationPanel").hidden=true;el("dashboard").hidden=false;
   el("adminMain").setAttribute("aria-busy","false");
   if(elevatedUntil)el("lastUpdated").textContent=`Admin controls confirmed until ${formatDate(elevatedUntil)}.`;
@@ -685,7 +700,9 @@ function openDashboard(elevatedUntil=null) {
     },Math.min(2_147_000_000,Math.max(1,state.elevatedUntil-Date.now()+25)));
   }
   const requested=location.hash.slice(1);
-  activateSection(SECTION_NAMES.has(requested)?requested:"overview",{replaceHash:!SECTION_NAMES.has(requested)});
+  const section=SECTION_NAMES.has(requested)?requested:"overview";
+  activateSection(section,{replaceHash:!SECTION_NAMES.has(requested)});
+  if(focus)requestAnimationFrame(()=>el(`${section}Tab`).focus({preventScroll:false}));
 }
 
 async function submitElevation(event) {
@@ -702,12 +719,12 @@ async function submitElevation(event) {
     if(!state.csrfToken)throw Object.assign(new Error("The secure administrator session could not be refreshed."),{status:409,code:"ADMIN_SESSION_CHANGED"});
     state.loaded.clear();
     message.hidden=true;message.textContent="";
-    openDashboard(result.elevatedUntil);
+    openDashboard(result.elevatedUntil,{focus:true});
     showGlobal("Administrator controls are unlocked for this session.");
   }catch(error){
     const authCode=String(error?.code||"").toUpperCase();
-    if(error?.status===403){showAccess("This account is signed in, but it is not an approved STRATA administrator.");return;}
-    if(error?.status===401&&["AUTH_REQUIRED","SESSION_REQUIRED","INVALID_SESSION"].includes(authCode)){showAccess("Your private session ended. Sign in again to continue.",{signedOut:true});return;}
+    if(error?.status===403){showAccess("This account is signed in, but it is not an approved STRATA administrator.",{focus:true});return;}
+    if(error?.status===401&&["AUTH_REQUIRED","SESSION_REQUIRED","INVALID_SESSION"].includes(authCode)){showAccess("Your private session ended. Sign in again to continue.",{signedOut:true,focus:true});return;}
     message.textContent=error?.status===401?"That password is incorrect. Enter the current password for this STRATA account.":friendlyError(error);
     message.className="dialog-message error";message.hidden=false;message.focus();
   }finally{button.disabled=false;}

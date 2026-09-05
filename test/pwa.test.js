@@ -93,7 +93,7 @@ test("release version, cache keys, asset URLs, and catalog claims stay aligned",
   const serviceWorker=read("service-worker.js");
   const pages=["index.html","account.html","verify-email.html","forgot-password.html","reset-password.html","delete-account.html","admin.html","planner.html","discover.html","install.html","offline.html","pricing.html","contact.html","terms.html","privacy.html","refunds.html"];
 
-  assert.equal(version,"6.9.3");
+  assert.equal(version,"6.9.4");
   assert.match(serviceWorker,new RegExp(`const BUILD="${versionPattern}";`));
   assert.match(serviceWorker,/const CACHE_PREFIX="strata-static-";/);
   assert.match(serviceWorker,/const STATIC_CACHE=`\$\{CACHE_PREFIX\}\$\{BUILD\}`;/);
@@ -180,7 +180,9 @@ test("every ordinary app page exposes consistent PWA and mobile metadata",()=>{
   }
   const offline=read("pages/offline.html");
   assert.match(offline,/href="\/manifest\.webmanifest"/);
-  assert.match(offline,/Reconnect before signing in, syncing your plan, or saving changes\./);
+  assert.match(offline,/Reconnect to sign in or sync account changes\./);
+  assert.match(offline,/id="offlineRetry"[^>]*type="button"/);
+  assert.match(offline,new RegExp(`src="/offline\\.js\\?v=${escapeRegExp(BUILD)}"`));
 });
 
 test("bearer-link pages stay mobile friendly but do not initialize the PWA",()=>{
@@ -218,6 +220,7 @@ test("service worker precaches only public assets and never handles account APIs
   for(const page of ["pricing","contact","terms","privacy","refunds","planner"])assert.ok(harness.precache.includes(`/${page}.html`),`${page} must be precached`);
   assert.ok(harness.precache.includes(`/site-info.css?v=${BUILD}`));
   assert.ok(harness.precache.includes(`/pricing.js?v=${BUILD}`));
+  assert.ok(harness.precache.includes(`/offline.js?v=${BUILD}`));
   assert.ok(harness.precache.some((url)=>url.includes("strata-512.png")));
 
   const paths=harness.precache.map((entry)=>new URL(entry,"https://strata.test").pathname);
@@ -339,4 +342,22 @@ test("install guide is beginner-friendly, device-specific, and progressively enh
   assert.equal(button.disabled,true);
   assert.match(button.textContent,/installed/i);
   assert.match(status.textContent,/already running as an installed app/i);
+
+  const unknownButton=new FakeElement(),unknownStatus=new FakeElement();
+  const unknownCards=new Map(["ios","android","desktop-chrome","desktop-edge"].map((platform)=>{
+    const card=new FakeElement(),badge=new FakeElement();
+    card.querySelector=()=>badge;
+    return [platform,{card,badge}];
+  }));
+  const unknownHarness=browserHarness("install.js",{
+    userAgent:"Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:143.0) Gecko/20100101 Firefox/143.0",
+    pwa:{isInstalled:()=>false,canPrompt:()=>false,async promptInstall(){return {outcome:"unavailable"};}}
+  });
+  unknownHarness.context.document={
+    getElementById(id){return id==="installButton"?unknownButton:id==="installStatus"?unknownStatus:null;},
+    querySelector(selector){const match=selector.match(/^\[data-platform="([^"]+)"\]$/);return match?unknownCards.get(match[1])?.card:null;}
+  };
+  unknownHarness.run();
+  assert.equal([...unknownCards.values()].some(({card})=>card.classList.contains("recommended")),false);
+  assert.match(unknownStatus.textContent,/browser menu.*Install app|Add to Home Screen/i);
 });

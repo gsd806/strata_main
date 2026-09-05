@@ -1,8 +1,10 @@
 # STRATA — Exercise Rankings and Workout Planning
 
-STRATA is an evidence-informed workout index with server-backed, email-verified accounts, a private Strata+ studio, and weekly, community, and monthly workout planning. It includes 200 resistance-training exercises—25 per muscle group, including 50 bodyweight options—across 8 muscle groups and 26 sub-muscle targets. Build 6.9.3 is an installable Progressive Web App (PWA) with Resend-powered account email, Paddle-powered one-time Strata+ access, and a private owner dashboard.
+STRATA is an evidence-informed workout index with server-backed, email-verified accounts, a private Strata+ studio, and weekly, community, and monthly workout planning. It includes 200 resistance-training exercises—25 per muscle group, including 50 bodyweight options—across 8 muscle groups and 26 sub-muscle targets. Build 6.9.4 is an installable Progressive Web App (PWA) with Resend-powered account email, Paddle-powered one-time Strata+ access, and a private owner dashboard.
 
-**Build 6.9.3 adds community weekly plans.** Any signed-in member can publish a structured copy of their current saved week from the Plan page and later unpublish their own listing. Strata+ members can browse those plans and deliberately apply one to Plan; applying replaces the member's current saved week after an explicit confirmation. A shared listing shows the author's STRATA display name, never their email address. STRATA stores validated plan data rather than accepting binary file uploads.
+**Build 6.9.4 is a product-wide usability and accessibility release.** It improves information hierarchy, filter clarity, readable type, touch targets, keyboard focus, loading and error feedback, mobile safe-area behavior, and offline recovery across the public index, Strata+ Studio, weekly planner, accounts, support, installation, and administration. The planner now exposes an explicit quick-add day, a real failed-save retry, an entitlement-aware Strata+ action, and a useful recovery-day recommendation. Community-plan actions now state clearly when they replace the current week, and administrator account controls remain locked until authoritative detail has loaded.
+
+The community weekly plans introduced in Build 6.9.3 remain included. Any signed-in member can publish a structured copy of their current saved week from the Plan page and later unpublish their own listing. Strata+ members can browse those plans and deliberately apply one to Plan; applying replaces the member's current saved week after an explicit confirmation. A shared listing shows the author's STRATA display name, never their email address. STRATA stores validated plan data rather than accepting binary file uploads.
 
 The private Monthly Plan workspace introduced in Build 6.9.2 remains included. A member can copy their signed-in weekly plan or locally import a STRATA weekly-plan JSON file, assign up to several muscle targets to each training day, mark rest days, and generate an exactly 31-day dated plan. The same inputs produce the same exercise rotation, and the result is saved to the member's Turso-backed account for cross-device access. Members can open the browser's print dialog to save a clean PDF or deliberately send plan text through the device share sheet or clipboard.
 
@@ -23,7 +25,7 @@ This build retains the Build 6.7.5 account-security work: password reset and ema
 
 ## Project structure
 
-Build 6.9.3 separates browser files from private server code while preserving every public URL used by visitors, Paddle, Render, and installed PWAs:
+Build 6.9.4 separates browser files from private server code while preserving every public URL used by visitors, Paddle, Render, and installed PWAs:
 
 ```text
 server.js          Small root bootstrap used by `npm start`
@@ -59,7 +61,7 @@ The PWA caches only public interface assets and an offline explanation page. Acc
 
 ## Public pricing, support, and policies
 
-Build 6.9.3 has public, mobile-friendly pages at `/pricing`, `/contact`, `/terms`, `/privacy`, and `/refunds`. The homepage links to all five without requiring JavaScript or an account. `/contact` submits help requests into Turso and sends acknowledgments and reference-only owner notifications through Resend; the full message stays in the private Admin help desk. Durable one-way IP/email quotas, a honeypot, and secret/card detection protect the form across Render restarts. If the form is unavailable, the public mail link still works.
+Build 6.9.4 has public, mobile-friendly pages at `/pricing`, `/contact`, `/terms`, `/privacy`, and `/refunds`. The homepage links to all five without requiring JavaScript or an account. `/contact` submits help requests into Turso and sends acknowledgments and reference-only owner notifications through Resend; the full message stays in the private Admin help desk. Durable one-way IP/email quotas, a honeypot, and secret/card detection protect the form across Render restarts. If the form is unavailable, the public mail link still works.
 
 The homepage also includes an **About the Founder** section for Saeed Abdalla Alketbi, describing STRATA’s UAE roots and the engineering mindset behind the project. It intentionally publishes only the city-level location `Al Ain, UAE`; do not add a residential street address to the public site.
 
@@ -80,7 +82,7 @@ ADMIN_EMAIL=stratafitness.official@gmail.com
 SUPPORT_EMAIL=stratafitness.official@gmail.com
 ```
 
-To activate the owner account after deploying Build 6.9.3:
+To activate the owner account after deploying Build 6.9.4:
 
 1. If `stratafitness.official@gmail.com` already has a verified STRATA account, deploy and sign in again. Startup binds that immutable user ID as the primary administrator, revokes older sessions, and invalidates any recovery or deletion links issued before promotion.
 2. If it has no STRATA account, create one with that exact address, complete the six-digit email verification, then sign out and sign back in once. The first verified login securely claims the empty administrator slot.
@@ -148,7 +150,7 @@ PADDLE_ENFORCE_IP_ALLOWLIST=false
 
 The live checkout has already passed an end-to-end test, so the current production service may keep `PADDLE_CHECKOUT_ENABLED=true`. For a fresh or unverified Paddle setup, begin with `false`, finish the webhook test, and enable checkout only after the signed notification grants access correctly. An existing deployment whose signup email already works should keep `EMAIL_VERIFICATION_ENABLED=true`; the same verified Resend configuration powers verification, password reset, account deletion, support acknowledgments, support notifications, and administrator replies. Build 6.9.1 adds only the non-secret `ADMIN_EMAIL` and `SUPPORT_EMAIL` settings shown above.
 
-`EMAIL_VERIFICATION_ENABLED` must be spelled exactly and set explicitly to `true` or `false`; Build 6.9.3 refuses to start in production if the value is absent or invalid. Do not set `ALLOW_UNVERIFIED_SIGNUP_FOR_TESTS` in Render. That test-only escape hatch is accepted only when `NODE_ENV=test` and cannot enable production signup.
+`EMAIL_VERIFICATION_ENABLED` must be spelled exactly and set explicitly to `true` or `false`; Build 6.9.4 refuses to start in production if the value is absent or invalid. Do not set `ALLOW_UNVERIFIED_SIGNUP_FOR_TESTS` in Render. That test-only escape hatch is accepted only when `NODE_ENV=test` and cannot enable production signup.
 
 `TRUST_PROXY=true` tells the login limiter to use the client address supplied by Render's trusted reverse proxy instead of treating every proxied request as one visitor. Do not enable it when exposing the Node process directly to the public internet.
 
@@ -160,7 +162,7 @@ Do not add `STRATA_DATA_DIR` and do not add a Render disk. Save the variables an
 
 Open these URLs on the deployed site before testing signup:
 
-- `/api/status` should return JSON containing `"build":"6.9.3"`, `"storage":"turso"`, `"persistent":true`, `"emailVerificationEnabled":true`, `"emailVerificationConfigured":true`, `"passwordResetEnabled":true`, `"accountDeletionEnabled":true`, and `"adminConfigured":true`. The response exposes readiness booleans only, never the administrator address or any credential value.
+- `/api/status` should return JSON containing `"build":"6.9.4"`, `"storage":"turso"`, `"persistent":true`, `"emailVerificationEnabled":true`, `"emailVerificationConfigured":true`, `"passwordResetEnabled":true`, `"accountDeletionEnabled":true`, and `"adminConfigured":true`. The response exposes readiness booleans only, never the administrator address or any credential value.
 - `/healthz` should return HTTP `200` with `{"ok":true}`.
 - A `404` or an HTML page means the project is not running as the Node Web Service.
 - `/api/status` succeeding while `/healthz` returns `503` means Render cannot currently query Turso; recheck the database URL, token, and Turso database availability.
@@ -209,9 +211,9 @@ EMAIL_REPLY_TO=stratafitness.official@gmail.com
 EMAIL_VERIFICATION_SECRET=<the independent random value>
 ```
 
-If these exact settings are already working in Build 6.7.1, keep them unchanged while deploying 6.9.3. Startup creates the new tables and columns before the server begins accepting requests, so a separate database reset or email-off migration deploy is not required. After the deploy:
+If these exact settings are already working in Build 6.7.1, keep them unchanged while deploying 6.9.4. Startup creates the new tables and columns before the server begins accepting requests, so a separate database reset or email-off migration deploy is not required. After the deploy:
 
-1. Confirm `/healthz` still returns HTTP `200` and `/api/status` reports Build 6.9.3 with Turso persistent, every account-email flag `true`, and `adminConfigured:true`.
+1. Confirm `/healthz` still returns HTTP `200` and `/api/status` reports Build 6.9.4 with Turso persistent, every account-email flag `true`, and `adminConfigured:true`.
 2. Sign in to one existing account and confirm its planner and Strata+ entitlement are unchanged.
 3. Confirm the Resend domain is verified and the API key, From address, Reply-To address, and HMAC secret remain present in Render.
 

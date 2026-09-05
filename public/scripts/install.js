@@ -11,7 +11,8 @@
     if (ios) return "ios";
     if (/android/.test(agent)) return "android";
     if (/edg\//.test(agent)) return "desktop-edge";
-    return "desktop-chrome";
+    if (/(?:chrome|chromium)\//.test(agent) && !/(?:opr|opera)\//.test(agent)) return "desktop-chrome";
+    return "";
   }
 
   const platform=currentPlatform();
@@ -26,7 +27,8 @@
     if (platform==="ios") return "On iPhone or iPad, use Safari’s Share menu and choose Add to Home Screen.";
     if (platform==="android") return "If the install button is not available, use Chrome’s menu and choose Install app or Add to Home screen.";
     if (platform==="desktop-edge") return "In Edge, open the menu and choose Apps, then Install this site as an app.";
-    return "In Chrome, use the install icon in the address bar or the browser menu.";
+    if (platform==="desktop-chrome") return "In Chrome, use the install icon in the address bar or the browser menu.";
+    return "Look in your browser menu for Install app or Add to Home Screen. If neither appears, open STRATA in Chrome or Edge.";
   }
 
   function updateInstallState() {
