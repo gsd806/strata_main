@@ -39,6 +39,30 @@ async function horizontalOverflow(page){
   return page.evaluate(()=>Math.max(0,document.documentElement.scrollWidth-document.documentElement.clientWidth));
 }
 
+async function contrastRatio(locator){
+  return locator.evaluate((node)=>{
+    const rgba=(value)=>{
+      const parts=String(value).match(/[\d.]+/g)?.map(Number)||[];
+      return[parts[0]||0,parts[1]||0,parts[2]||0,parts.length>3?parts[3]:1];
+    };
+    const over=(top,bottom)=>{
+      const alpha=top[3]+bottom[3]*(1-top[3]);
+      return[0,1,2].map((index)=>(top[index]*top[3]+bottom[index]*bottom[3]*(1-top[3]))/alpha).concat(alpha);
+    };
+    const layers=[];
+    for(let current=node;current;current=current.parentElement)layers.push(rgba(getComputedStyle(current).backgroundColor));
+    let background=[255,255,255,1];
+    for(let index=layers.length-1;index>=0;index-=1)background=over(layers[index],background);
+    const foreground=over(rgba(getComputedStyle(node).color),background);
+    const luminance=(color)=>{
+      const channels=color.slice(0,3).map((part)=>{const value=part/255;return value<=.04045?value/12.92:((value+.055)/1.055)**2.4;});
+      return .2126*channels[0]+.7152*channels[1]+.0722*channels[2];
+    };
+    const values=[luminance(foreground),luminance(background)].sort((left,right)=>right-left);
+    return (values[0]+.05)/(values[1]+.05);
+  });
+}
+
 async function savedPlanCount(page){
   return page.evaluate(async()=>{
     const response=await fetch("/api/plan",{credentials:"same-origin",headers:{Accept:"application/json"}});
@@ -70,12 +94,21 @@ let browser;
     };
     assert.deepEqual(publicHeaderLinks,{pricing:true,contact:true},"Homepage must expose Pricing and Contact in the desktop header");
     assert.match((await page.locator(".discovery-offer").textContent())||"",/\$5\.99 USD[\s\S]*one-time purchase/i);
+    for(const [label,control] of [["homepage promotion",page.locator(".free-access-bar a").first()],["homepage primary action",page.locator(".hero .button-accent").first()]]){
+      const ratio=await contrastRatio(control);assert.ok(ratio>=4.5,`${label} text contrast is ${ratio.toFixed(2)}:1; expected at least 4.5:1`);
+    }
+    const publicDetailTrigger=page.locator("[data-detail]").first(),publicDetailDialog=page.locator("#detailDialog");
+    await publicDetailTrigger.waitFor({state:"visible"});await publicDetailTrigger.focus();await page.keyboard.press("Enter");await publicDetailDialog.waitFor({state:"visible"});
+    assert.equal(await publicDetailDialog.getAttribute("aria-labelledby"),"detailTitle","Homepage exercise details need an explicit dialog label");
+    assert.equal(await publicDetailDialog.evaluate((dialog)=>dialog.contains(document.activeElement)),true,"Opening homepage details must move keyboard focus into the dialog");
+    await page.keyboard.press("Escape");await publicDetailDialog.waitFor({state:"hidden"});
+    assert.equal(await publicDetailTrigger.evaluate((trigger)=>trigger===document.activeElement),true,"Closing homepage details must return focus to its trigger");
     await Promise.all([page.waitForURL(url=>url.pathname.endsWith("/account.html")),page.click("#signupButton")]);
     await page.fill('#signupPanel input[name="name"]',"UI Audit");
     await page.fill('#signupPanel input[name="email"]',`audit-${Date.now()}-${process.pid}@example.test`);
     await page.fill('#signupPanel input[name="password"]',"audit-password-123");
     await Promise.all([page.waitForURL(url=>url.pathname.endsWith("/planner.html")),page.click('#signupPanel button[type="submit"]')]);
-    const snapshot={signupDestination:page.url(),title:await page.title()};
+    const snapshot={signupDestination:page.url(),title:await page.title(),publicDialogKeyboard:true};
     assert.equal(new URL(snapshot.signupDestination).pathname,"/planner.html","A new unpaid account should land on the free planner");
     assert.match(snapshot.title,/STRATA/i);
 
@@ -164,6 +197,9 @@ let browser;
     assert.ok(builderLabel||builderLabelledBy,"Session Builder must expose an accessible section name");
     assert.ok(["status","alert"].includes((await sessionStatus.getAttribute("role"))||""),"Session Builder status must be announced");
     assert.ok(["polite","assertive"].includes((await sessionStatus.getAttribute("aria-live"))||""),"Session Builder status must use an aria-live region");
+    snapshot.contrast={sessionStatus:await contrastRatio(sessionStatus),sessionAction:await contrastRatio(sessionGenerate)};
+    assert.ok(snapshot.contrast.sessionStatus>=4.5,`Session status text contrast is ${snapshot.contrast.sessionStatus.toFixed(2)}:1; expected at least 4.5:1`);
+    assert.ok(snapshot.contrast.sessionAction>=4.5,`Session action text contrast is ${snapshot.contrast.sessionAction.toFixed(2)}:1; expected at least 4.5:1`);
 
     snapshot.sessionChoices={
       group:await chooseOption(sessionGroup,{values:["full"],labelPattern:/full body/i}),
@@ -183,6 +219,13 @@ let browser;
     snapshot.sessionGeneratedText=((await sessionResults.textContent())||"").replace(/\s+/g," ").trim();
     positive(snapshot.sessionGeneratedText.length,"Generated session content");
     assert.match(((await sessionStatus.textContent())||""),/ready|generated|exercise|session/i,"Session Builder must announce successful generation");
+    const sessionDetailTrigger=sessionResults.locator("[data-open-detail]").first(),sessionDetailDialog=page.locator("#detailDialog");
+    await sessionDetailTrigger.focus();await page.keyboard.press("Enter");await sessionDetailDialog.waitFor({state:"visible"});
+    assert.equal(await sessionDetailDialog.getAttribute("aria-labelledby"),"detailTitle","Strata+ exercise details need an explicit dialog label");
+    assert.equal(await sessionDetailDialog.evaluate((dialog)=>dialog.contains(document.activeElement)),true,"Opening Strata+ details must move keyboard focus into the dialog");
+    await page.keyboard.press("Escape");await sessionDetailDialog.waitFor({state:"hidden"});
+    assert.equal(await sessionDetailTrigger.evaluate((trigger)=>trigger===document.activeElement),true,"Closing Strata+ details must return focus to its trigger");
+    snapshot.sessionDialogKeyboard=true;
     snapshot.sessionDesktopOverflow=await horizontalOverflow(page);
     assert.ok(snapshot.sessionDesktopOverflow<=1,`Generated Session Builder overflows desktop by ${snapshot.sessionDesktopOverflow}px`);
     await sessionBuilder.scrollIntoViewIfNeeded();

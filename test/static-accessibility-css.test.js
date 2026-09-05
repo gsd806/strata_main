@@ -50,3 +50,23 @@ test("Discover defines the compact hero gap only once",()=>{
   const css=read("public/styles/discover.css");
   assert.equal(css.match(/\.hero-layout\s*\{\s*gap:\s*34px;\s*\}/g)?.length,1);
 });
+
+test("every native dialog has an accessible name and restores its trigger",()=>{
+  for(const page of ["public/pages/index.html","public/pages/admin.html","public/pages/discover.html"]){
+    const html=read(page),dialogs=[...html.matchAll(/<dialog\b([^>]*)>/g)];
+    assert.ok(dialogs.length,`${page} should contain a dialog`);
+    for(const [,attributes] of dialogs)assert.match(attributes,/\baria-(?:label|labelledby)="[^"]+"/,`${page} dialog needs an accessible name`);
+  }
+  assert.match(read("public/scripts/app.js"),/dialogReturnFocus/);
+  assert.match(read("public/scripts/discover.js"),/dialogReturnFocus/);
+});
+
+test("plan-saving surfaces use consistent announced states and actionable errors",()=>{
+  const plannerHtml=read("public/pages/planner.html"),planner=read("public/scripts/planner.js"),discover=read("public/scripts/discover.js");
+  assert.match(plannerHtml,/id="saveStatus"[^>]*role="status"[^>]*aria-live="polite"/);
+  for(const state of ["Saving…","Saved","Couldn't save — Retry"])assert.ok(planner.includes(state),`planner must expose ${state}`);
+  for(const state of ["Saving…","Saved","Couldn't save — Retry"])assert.ok(discover.includes(state),`Strata+ must expose ${state}`);
+  assert.match(discover,/data-rating-status role="status" aria-live="polite"/);
+  assert.match(planner,/PLAN_CHANGED/);
+  assert.match(discover,/latest plan is loaded; review the selected day/i);
+});

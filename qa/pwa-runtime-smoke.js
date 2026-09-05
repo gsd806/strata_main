@@ -71,8 +71,13 @@ async function main() {
   assert.equal(manifestResponse.response.status,200);
   assert.match(manifestResponse.response.headers.get("content-type"),/^application\/manifest\+json/);
   assert.match(manifestResponse.response.headers.get("cache-control"),/no-cache/);
+  assert.equal(manifest.id,"/");
   assert.equal(manifest.start_url,"/");
+  assert.equal(manifest.scope,"/");
   assert.equal(manifest.display,"standalone");
+  assert.equal(manifest.prefer_related_applications,false);
+  assert.ok(manifest.icons.some((icon)=>icon.sizes==="192x192"&&String(icon.purpose||"any").includes("any")));
+  assert.ok(manifest.icons.some((icon)=>icon.sizes==="512x512"&&String(icon.purpose||"").includes("maskable")));
 
   const worker=await get("/service-worker.js");
   const workerText=Buffer.from(worker.body).toString("utf8");
@@ -80,9 +85,17 @@ async function main() {
   assert.match(worker.response.headers.get("content-type"),/^text\/javascript/);
   assert.equal(worker.response.headers.get("service-worker-allowed"),"/");
   assert.match(worker.response.headers.get("cache-control"),/no-cache/);
+  assert.match(workerText,new RegExp(`const BUILD="${BUILD.replace(/\./g,"\\.")}"`));
+  assert.match(workerText,/const CACHE_PREFIX="strata-static-"/);
+  assert.match(workerText,/key\.startsWith\(CACHE_PREFIX\) && key!==STATIC_CACHE/);
+  assert.match(workerText,/const PUBLIC_ASSET_URLS=new Set/);
+  assert.match(workerText,/PUBLIC_ASSET_URLS\.has\(url\.href\)/);
   assert.match(workerText,/pathname\.startsWith\("\/api\/"\)/);
   assert.match(workerText,/pathname\.startsWith\("\/auth\/"\)/);
   assert.match(workerText,/pathname==="\/healthz"/);
+  const precacheBlock=workerText.match(/const PRECACHE_URLS=\[([\s\S]*?)\];/);
+  assert.ok(precacheBlock,"service worker must expose a literal maintenance-auditable precache list");
+  assert.doesNotMatch(precacheBlock[1],/account\.html|discover\.html|admin\.html|reset-password|delete-account|\/api\/|\/auth\//);
 
   for(const [url,size] of [["/icons/strata-192.png",192],["/icons/strata-512.png",512],["/icons/strata-maskable-512.png",512],["/icons/apple-touch-icon.png",180]]) {
     const icon=await get(url),body=Buffer.from(icon.body);
@@ -114,7 +127,18 @@ async function main() {
     assert.match(pageText,new RegExp(`Build ${BUILD.replace(/\./g,"\\.")}`),route);
   }
 
-  const status=await fetch(`${base}/api/status`).then((response)=>response.json());
+  for(const route of ["/account.html","/discover.html","/admin"]) {
+    const page=await get(route);
+    assert.match(page.response.headers.get("cache-control"),/no-store/,route);
+  }
+
+  const privateApi=await get("/api/me");
+  assert.equal(privateApi.response.status,401);
+  assert.equal(privateApi.response.headers.get("cache-control"),"no-store");
+
+  const statusResponse=await fetch(`${base}/api/status`);
+  assert.equal(statusResponse.headers.get("cache-control"),"no-store");
+  const status=await statusResponse.json();
   assert.equal(status.ok,true);
   assert.equal(status.build,BUILD);
   assert.equal(typeof status.passwordResetEnabled,"boolean");
@@ -124,6 +148,7 @@ async function main() {
     installGuide:true,
     manifest:true,
     serviceWorker:true,
+    cacheLifecycle:true,
     icons:true,
     privatePagesRemainNetworkOnly:true,
     accountRecoveryPages:true,

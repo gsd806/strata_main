@@ -1,6 +1,6 @@
 "use strict";
 
-const BUILD="6.9.8";
+const BUILD="6.9.9";
 const CACHE_PREFIX="strata-static-";
 // Every release refreshes this complete versioned set before the worker takes control.
 const STATIC_CACHE=`${CACHE_PREFIX}${BUILD}`;
@@ -13,25 +13,25 @@ const PRECACHE_URLS=[
   "/privacy.html",
   "/refunds.html",
   "/planner.html",
-  "/install.css?v=6.9.8",
-  "/install.js?v=6.9.8",
-  "/offline.js?v=6.9.8",
-  "/site-info.css?v=6.9.8",
-  "/pricing.js?v=6.9.8",
-  "/contact.js?v=6.9.8",
-  "/pwa.js?v=6.9.8",
-  "/styles.css?v=6.9.8",
-  "/app.js?v=6.9.8",
-  "/account.css?v=6.9.8",
-  "/account.js?v=6.9.8",
-  "/account-recovery.js?v=6.9.8",
-  "/planner.css?v=6.9.8",
-  "/planner.js?v=6.9.8",
-  "/discover.css?v=6.9.8",
-  "/discovery-core.js?v=6.9.8",
-  "/monthly-plan-core.js?v=6.9.8",
-  "/discover.js?v=6.9.8",
-  "/exercises.json?v=6.9.8",
+  "/install.css?v=6.9.9",
+  "/install.js?v=6.9.9",
+  "/offline.js?v=6.9.9",
+  "/site-info.css?v=6.9.9",
+  "/pricing.js?v=6.9.9",
+  "/contact.js?v=6.9.9",
+  "/pwa.js?v=6.9.9",
+  "/styles.css?v=6.9.9",
+  "/app.js?v=6.9.9",
+  "/account.css?v=6.9.9",
+  "/account.js?v=6.9.9",
+  "/account-recovery.js?v=6.9.9",
+  "/planner.css?v=6.9.9",
+  "/planner.js?v=6.9.9",
+  "/discover.css?v=6.9.9",
+  "/discovery-core.js?v=6.9.9",
+  "/monthly-plan-core.js?v=6.9.9",
+  "/discover.js?v=6.9.9",
+  "/exercises.json?v=6.9.9",
   "/manifest.webmanifest",
   "/icons/strata-icon.svg",
   "/icons/strata-192.png",
@@ -39,7 +39,7 @@ const PRECACHE_URLS=[
   "/icons/strata-maskable-512.png",
   "/icons/apple-touch-icon.png"
 ];
-const PUBLIC_ASSET_PATHS=new Set(PRECACHE_URLS.map((entry) => new URL(entry,self.location.origin).pathname));
+const PUBLIC_ASSET_URLS=new Set(PRECACHE_URLS.map((entry) => new URL(entry,self.location.origin).href));
 const PRIVATE_HTML_PATHS=new Set(["/","/index.html","/account.html","/verify-email","/verify-email.html","/forgot-password","/forgot-password.html","/reset-password","/reset-password.html","/delete-account","/delete-account.html","/discover.html","/admin","/admin.html"]);
 const PUBLIC_HTML_FALLBACKS=new Map([
   ["/install","/install.html"],
@@ -111,6 +111,6 @@ self.addEventListener("fetch",(event) => {
     event.respondWith(navigationResponse(request,url));
     return;
   }
-  if (PRIVATE_HTML_PATHS.has(url.pathname) || !PUBLIC_ASSET_PATHS.has(url.pathname)) return;
+  if (PRIVATE_HTML_PATHS.has(url.pathname) || !PUBLIC_ASSET_URLS.has(url.href)) return;
   event.respondWith(publicAssetResponse(request));
 });

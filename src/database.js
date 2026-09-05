@@ -55,6 +55,11 @@ function migrateLocalSchema(db) {
   addLocalColumn(db,"signup_verifications","purpose","TEXT NOT NULL DEFAULT 'signup'");
   db.exec("DROP INDEX IF EXISTS signup_verifications_user_id");
   db.exec("CREATE INDEX IF NOT EXISTS signup_verifications_user_id_idx ON signup_verifications(user_id)");
+  // These legacy indexes have no matching lookup, filter, ordering, cleanup,
+  // or foreign-key enforcement path. Keeping them only adds write overhead.
+  db.exec("DROP INDEX IF EXISTS paddle_purchases_customer_id");
+  db.exec("DROP INDEX IF EXISTS discovery_trials_expires_at");
+  db.exec("DROP INDEX IF EXISTS support_tickets_email");
 }
 
 async function tursoColumnNames(client,table) {
@@ -79,6 +84,9 @@ async function migrateTursoSchema(client) {
   await addTursoColumn(client,"signup_verifications","purpose","TEXT NOT NULL DEFAULT 'signup'");
   await client.execute("DROP INDEX IF EXISTS signup_verifications_user_id");
   await client.execute("CREATE INDEX IF NOT EXISTS signup_verifications_user_id_idx ON signup_verifications(user_id)");
+  await client.execute("DROP INDEX IF EXISTS paddle_purchases_customer_id");
+  await client.execute("DROP INDEX IF EXISTS discovery_trials_expires_at");
+  await client.execute("DROP INDEX IF EXISTS support_tickets_email");
 }
 
 function affectedRows(result) {
@@ -759,14 +767,16 @@ function localStore(root) {
   });
 }
 
-async function tursoStore(url,authToken) {
+async function tursoStore(url,authToken,tursoClientFactory) {
   if (!authToken) throw new Error("TURSO_AUTH_TOKEN is required when TURSO_DATABASE_URL is set.");
 
-  let createClient;
-  try {
-    ({ createClient } = await import("@tursodatabase/serverless/compat"));
-  } catch (error) {
-    throw new Error("Turso support is not installed. Run npm install before starting STRATA.",{cause:error});
+  let createClient=tursoClientFactory;
+  if (!createClient) {
+    try {
+      ({ createClient } = await import("@tursodatabase/serverless/compat"));
+    } catch (error) {
+      throw new Error("Turso support is not installed. Run npm install before starting STRATA.",{cause:error});
+    }
   }
 
   const client = createClient({url,authToken});
@@ -800,14 +810,16 @@ async function tursoStore(url,authToken) {
     userByEmail:(email) => first(SQL.userByEmail,[email]),
     userById:(id) => first(SQL.userById,[id]),
     accountCredentialsById:(id) => first(SQL.accountCredentialsById,[id]),
-    insertUser:(user) => run(SQL.insertUser,[user.id,user.name,user.email,user.passwordHash,user.passwordSalt,user.createdAt,user.emailVerifiedAt??user.email_verified_at??null]),
+    async insertUser(user) {
+      await run(SQL.insertUser,[user.id,user.name,user.email,user.passwordHash,user.passwordSalt,user.createdAt,user.emailVerifiedAt??user.email_verified_at??null]);
+    },
     async insertSession(session) {
       const result=await run(SQL.insertSession,[session.tokenHash,session.csrfToken,session.expiresAt,session.createdAt,session.userId,Number(session.authVersion??1)]);
       return Boolean(plainRow(result.rows?.[0],result.columns));
     },
     session:(tokenHash,now) => first(SQL.session,[tokenHash,now]),
-    deleteSession:(tokenHash) => run(SQL.deleteSession,[tokenHash]),
-    deleteExpired:(now) => run(SQL.deleteExpired,[now]),
+    async deleteSession(tokenHash) { await run(SQL.deleteSession,[tokenHash]); },
+    async deleteExpired(now) { await run(SQL.deleteExpired,[now]); },
     verificationByTokenHash:(tokenHash) => first(SQL.verificationByTokenHash,[tokenHash]),
     async insertVerification(verification) {
       await run(SQL.insertVerification,verificationInsertArgs(verification));
@@ -863,7 +875,7 @@ async function tursoStore(url,authToken) {
     async countVerificationSends(emailHash,since) {
       return Number((await first(SQL.countVerificationSends,[emailHash,since]))?.send_count||0);
     },
-    recordVerificationSend:(send) => run(SQL.recordVerificationSend,verificationSendArgs(send)),
+    async recordVerificationSend(send) { await run(SQL.recordVerificationSend,verificationSendArgs(send)); },
     async claimVerificationSend(send,since,maxSends) {
       const result=await run(SQL.claimVerificationSend,verificationSendClaimArgs(send,since,maxSends));
       return Boolean(plainRow(result.rows?.[0],result.columns));
@@ -1024,13 +1036,15 @@ async function tursoStore(url,authToken) {
       return plainRow(result.rows?.[0],result.columns);
     },
     monthlyPlan:(userId) => first(SQL.monthlyPlan,[userId]),
-    upsertMonthlyPlan:(userId,planJson,updatedAt) => run(SQL.upsertMonthlyPlan,[userId,planJson,updatedAt]),
+    async upsertMonthlyPlan(userId,planJson,updatedAt) { await run(SQL.upsertMonthlyPlan,[userId,planJson,updatedAt]); },
     preferences:(userId) => first(SQL.preferences,[userId]),
-    upsertPreferences:(userId,preferencesJson,updatedAt) => run(SQL.upsertPreferences,[userId,preferencesJson,updatedAt]),
+    async upsertPreferences(userId,preferencesJson,updatedAt) { await run(SQL.upsertPreferences,[userId,preferencesJson,updatedAt]); },
     ratingsForUser:(userId) => all(SQL.ratingsForUser,[userId]),
     ratingAggregates:() => all(SQL.ratingAggregates),
     ratingAggregate:(exerciseId) => first(SQL.ratingAggregate,[exerciseId]),
-    upsertRating:(userId,exerciseId,rating,createdAt,updatedAt) => run(SQL.upsertRating,[userId,exerciseId,rating.comfort,rating.pump,rating.enjoyment,rating.stability,rating.setup,rating.overall,createdAt,updatedAt]),
+    async upsertRating(userId,exerciseId,rating,createdAt,updatedAt) {
+      await run(SQL.upsertRating,[userId,exerciseId,rating.comfort,rating.pump,rating.enjoyment,rating.stability,rating.setup,rating.overall,createdAt,updatedAt]);
+    },
     async insertPendingPurchase(purchase) {
       const result=await run(SQL.insertPendingPurchase,[purchase.transactionId,purchase.priceId,purchase.productId,purchase.paddleStatus||"ready",purchase.createdAt,purchase.updatedAt,purchase.userId,purchase.updatedAt]);
       return plainRow(result.rows?.[0],result.columns);
@@ -1208,9 +1222,9 @@ async function tursoStore(url,authToken) {
   });
 }
 
-async function createStore(root) {
+async function createStore(root,{tursoClientFactory}={}) {
   const tursoUrl = String(process.env.TURSO_DATABASE_URL || "").trim();
-  if (tursoUrl) return tursoStore(tursoUrl,String(process.env.TURSO_AUTH_TOKEN || "").trim());
+  if (tursoUrl) return tursoStore(tursoUrl,String(process.env.TURSO_AUTH_TOKEN || "").trim(),tursoClientFactory);
   if (process.env.NODE_ENV === "production") {
     throw new Error("Production requires TURSO_DATABASE_URL and TURSO_AUTH_TOKEN so accounts are not lost.");
   }

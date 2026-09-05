@@ -308,8 +308,10 @@ function isPaddleWebhookAddress(address,cidrs) {
 function validateCompletedTransaction(data,config) {
   if (!data||data.status!=="completed") return {ok:false,reason:"status"};
   if (!validTransactionId(data.id)) return {ok:false,reason:"transaction"};
+  if (data.origin!=="api") return {ok:false,reason:"origin"};
   if (data.subscription_id!=null) return {ok:false,reason:"subscription"};
   if (data.collection_mode!=="automatic") return {ok:false,reason:"collection"};
+  if (data.custom_data?.strata_version!==1) return {ok:false,reason:"metadata"};
   if (!Array.isArray(data.items)||data.items.length!==1) return {ok:false,reason:"items"};
   const item=data.items[0]||{};
   const price=item.price||{};

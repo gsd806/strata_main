@@ -232,6 +232,7 @@ function completedEvent({id,transactionId,userId}) {
       customer_id:"ctm_000000000000000000000001",
       subscription_id:null,
       collection_mode:"automatic",
+      origin:"api",
       updated_at:occurredAt,
       custom_data:{strata_user_id:userId,strata_version:1},
       items:[{
@@ -482,6 +483,68 @@ test("live one-time checkout grants and revokes the Discovery entitlement secure
   const revokedSecondDevice=await request("/api/discovery",{headers:{Cookie:secondDevice.cookie}});
   assert.equal(revokedFirstDevice.response.status,402);
   assert.equal(revokedSecondDevice.response.status,402);
+});
+
+test("completed webhook trust boundaries reject mismatches and keep an existing purchase identity immutable",async() => {
+  const account=await signup({
+    name:"Webhook Boundary Tester",
+    email:"webhook-boundaries@example.test",
+    password:"webhook-boundary-password-123"
+  });
+  const prepared=await checkout(account);
+  assert.equal(prepared.response.status,201);
+
+  const cases=[
+    ["account",(event)=>{event.data.custom_data.strata_user_id="another-user";}],
+    ["price",(event)=>{event.data.items[0].price.id="pri_01wrong00000000000000000000";}],
+    ["product",(event)=>{event.data.items[0].price.product_id="pro_01wrong00000000000000000000";}],
+    ["origin",(event)=>{event.data.origin="web";}],
+    ["metadata",(event)=>{event.data.custom_data.strata_version=2;}]
+  ];
+  let sequence=20;
+  for (const [reason,mutate] of cases) {
+    const event=completedEvent({
+      id:eventId(`reject${reason}`,sequence++),
+      transactionId:prepared.data.transactionId,
+      userId:account.user.id
+    });
+    mutate(event);
+    const rejected=await signedWebhook(event);
+    assert.equal(rejected.response.status,200,reason);
+    assert.equal(rejected.data.outcome,`rejected:${reason}`,reason);
+  }
+  assert.equal((await request("/api/discovery",{headers:{Cookie:account.cookie}})).response.status,402);
+
+  const valid=completedEvent({
+    id:eventId("boundaryvalid",sequence++),
+    transactionId:prepared.data.transactionId,
+    userId:account.user.id
+  });
+  const granted=await signedWebhook(valid);
+  assert.equal(granted.response.status,200);
+  assert.equal(granted.data.outcome,"granted");
+  const replay=await signedWebhook(valid);
+  assert.equal(replay.data.outcome,"replayed","the exact event ID must be processed once");
+
+  const laterCompletion=completedEvent({
+    id:eventId("boundarylater",sequence++),
+    transactionId:prepared.data.transactionId,
+    userId:account.user.id
+  });
+  laterCompletion.data.customer_id="ctm_000000000000000000000099";
+  laterCompletion.data.updated_at=new Date(Date.now()+60_000).toISOString();
+  const alreadyProcessed=await signedWebhook(laterCompletion);
+  assert.equal(alreadyProcessed.response.status,200);
+  assert.equal(alreadyProcessed.data.outcome,"granted");
+
+  const db=database({readOnly:true});
+  const purchase=db.prepare("SELECT customer_id,completed_at FROM paddle_purchases WHERE transaction_id=?").get(prepared.data.transactionId);
+  const purchaseCount=db.prepare("SELECT COUNT(*) AS count FROM paddle_purchases WHERE transaction_id=?").get(prepared.data.transactionId).count;
+  const eventCount=db.prepare("SELECT COUNT(*) AS count FROM paddle_webhook_events WHERE event_id IN (?,?)").get(valid.event_id,laterCompletion.event_id).count;
+  db.close();
+  assert.equal(purchase.customer_id,valid.data.customer_id,"a later completion cannot replace the durable customer identity");
+  assert.equal(purchaseCount,1,"duplicate and later completion notifications cannot duplicate the purchase ledger");
+  assert.equal(eventCount,2,"distinct signed notifications remain auditable even when they describe one transaction");
 });
 
 test("concurrent checkout requests create only one Paddle transaction",async() => {

@@ -143,7 +143,6 @@ const SCHEMA = [
     updated_at INTEGER NOT NULL
   )`,
   "CREATE INDEX IF NOT EXISTS paddle_purchases_user_id ON paddle_purchases(user_id)",
-  "CREATE INDEX IF NOT EXISTS paddle_purchases_customer_id ON paddle_purchases(customer_id)",
   `CREATE TABLE IF NOT EXISTS paddle_checkout_claims (
     user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     price_id TEXT NOT NULL,
@@ -161,7 +160,6 @@ const SCHEMA = [
     expires_at INTEGER NOT NULL,
     CHECK(expires_at > started_at)
   )`,
-  "CREATE INDEX IF NOT EXISTS discovery_trials_expires_at ON discovery_trials(expires_at)",
   `CREATE TABLE IF NOT EXISTS paddle_adjustments (
     adjustment_id TEXT PRIMARY KEY,
     transaction_id TEXT NOT NULL REFERENCES paddle_purchases(transaction_id) ON DELETE CASCADE,
@@ -196,7 +194,6 @@ const SCHEMA = [
     updated_at INTEGER NOT NULL
   )`,
   "CREATE INDEX IF NOT EXISTS support_tickets_status_updated ON support_tickets(status,updated_at DESC)",
-  "CREATE INDEX IF NOT EXISTS support_tickets_email ON support_tickets(email,created_at DESC)",
   `CREATE TABLE IF NOT EXISTS support_request_events (
     id TEXT PRIMARY KEY,
     ip_hash TEXT NOT NULL,
@@ -328,7 +325,7 @@ const SQL = {
   releaseCheckoutCreation:"DELETE FROM paddle_checkout_claims WHERE user_id=? AND claim_id=? AND transaction_id IS ? RETURNING claim_id",
   purchaseByTransaction:"SELECT transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at FROM paddle_purchases WHERE transaction_id=?",
   pendingPurchaseForUser:"SELECT transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at FROM paddle_purchases WHERE user_id=? AND price_id=? AND paddle_status IN ('draft','ready') AND completed_at IS NULL AND access_revoked_at IS NULL ORDER BY created_at DESC LIMIT 1",
-  completePurchase:"UPDATE paddle_purchases SET customer_id=COALESCE(?,customer_id),paddle_status='completed',completed_at=COALESCE(completed_at,?),updated_at=MAX(updated_at,?) WHERE transaction_id=?",
+  completePurchase:"UPDATE paddle_purchases SET customer_id=COALESCE(customer_id,?),paddle_status='completed',completed_at=COALESCE(completed_at,?),updated_at=MAX(updated_at,?) WHERE transaction_id=?",
   updatePurchaseStatus:"UPDATE paddle_purchases SET paddle_status=?,updated_at=? WHERE transaction_id=? AND paddle_status<>'completed' AND updated_at<=?",
   upsertAdjustment:"INSERT INTO paddle_adjustments(adjustment_id,transaction_id,action,type,status,occurred_at,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(adjustment_id) DO UPDATE SET action=excluded.action,type=excluded.type,status=excluded.status,occurred_at=excluded.occurred_at,updated_at=excluded.updated_at WHERE excluded.occurred_at>=paddle_adjustments.occurred_at RETURNING adjustment_id",
   revokePurchase:"UPDATE paddle_purchases SET access_revoked_at=?,revocation_reason=?,updated_at=MAX(updated_at,?) WHERE transaction_id=? AND access_revoked_at IS NULL",
