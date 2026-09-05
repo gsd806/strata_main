@@ -260,10 +260,18 @@ async function createSession(userId,authVersion=1) {
   return {token:session.token,csrfToken:session.csrfToken};
 }
 
-async function planFor(userId) {
+async function planSnapshotFor(userId) {
   const row = await store.plan(userId);
-  if (!row) return defaultPlan();
-  try { return sanitizePlan(JSON.parse(row.plan_json),{repair:true}); } catch { return defaultPlan(); }
+  if (!row) return {plan:defaultPlan(),updatedAt:0,storedPlanJson:null};
+  const storedUpdatedAt=Number(row.updated_at);
+  const updatedAt=Number.isSafeInteger(storedUpdatedAt)&&storedUpdatedAt>0?storedUpdatedAt:0;
+  const storedPlanJson=String(row.plan_json);
+  try { return {plan:sanitizePlan(JSON.parse(storedPlanJson),{repair:true}),updatedAt,storedPlanJson}; }
+  catch { return {plan:defaultPlan(),updatedAt,storedPlanJson}; }
+}
+
+async function planFor(userId) {
+  return (await planSnapshotFor(userId)).plan;
 }
 
 async function monthlyPlanFor(userId) {
@@ -403,6 +411,87 @@ function sanitizePlan(input,{repair=false}={}) {
     output.restDay=emptyDay;
   }
   return output;
+}
+
+function communityPlanError(message,code="INVALID_COMMUNITY_PLAN") {
+  return Object.assign(new Error(message),{status:400,code});
+}
+
+function communityPlanText(value,{label,min=0,max}) {
+  if (typeof value!=="string") throw communityPlanError(`${label} is invalid.`);
+  const text=value.trim().replace(/[ \t]+/g," ");
+  if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/.test(text)) {
+    throw communityPlanError(`${label} contains unsupported characters.`);
+  }
+  if (text.length<min||text.length>max) {
+    const range=min>0?`between ${min} and ${max}`:`at most ${max}`;
+    throw communityPlanError(`${label} must be ${range} characters.`);
+  }
+  return text;
+}
+
+function sanitizeCommunityPlanInput(input,currentPlan) {
+  if (!input||typeof input!=="object"||Array.isArray(input)) throw communityPlanError("Invalid community plan.");
+  const title=communityPlanText(input.title,{label:"Plan title",min:3,max:80});
+  if (/[\r\n]/.test(input.title)) throw communityPlanError("Plan title must use one line.");
+  const hasDescription=Object.prototype.hasOwnProperty.call(input,"description");
+  const hasPublished=Object.prototype.hasOwnProperty.call(input,"published");
+  const hasPlan=Object.prototype.hasOwnProperty.call(input,"plan");
+  if (hasPlan) throw communityPlanError("Save your weekly plan before publishing it.","COMMUNITY_PLAN_BODY_NOT_ALLOWED");
+  const description=hasDescription?communityPlanText(input.description,{label:"Description",max:240}):"";
+  if (hasPublished&&typeof input.published!=="boolean") throw communityPlanError("Published setting is invalid.");
+  const plan=currentPlan;
+  if (!plan||planStats(plan).planCount<1) throw communityPlanError("Add at least one exercise before sharing your weekly plan.","EMPTY_COMMUNITY_PLAN");
+  return {title,description,plan,published:!hasPublished||input.published};
+}
+
+function communityPlanId(value) {
+  const id=String(value||"").toLowerCase();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id)?id:"";
+}
+
+function communityPlanPayload(row,{owner=false}={}) {
+  if (!row) return null;
+  let plan;
+  try { plan=sanitizePlan(JSON.parse(row.plan_json)); }
+  catch { return null; }
+  const output={
+    id:String(row.id),
+    title:String(row.title),
+    description:String(row.description||""),
+    authorName:communityAuthorName(row.author_name),
+    plan,
+    createdAt:Number(row.created_at),
+    updatedAt:Number(row.updated_at)
+  };
+  if (owner) output.published=Boolean(Number(row.is_published));
+  return output;
+}
+
+function communityAuthorName(value) {
+  const name=String(value||"")
+    .replace(/[\u0000-\u001F\u007F\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/g," ")
+    .replace(/\s+/gu," ")
+    .trim()
+    .slice(0,80);
+  return name||"STRATA member";
+}
+
+function communityRevision(value,label,{allowZero=false}={}) {
+  if (!Number.isSafeInteger(value)||(allowZero?value<0:value<=0)) {
+    throw communityPlanError(`${label} is invalid. Refresh and try again.`,"INVALID_COMMUNITY_REVISION");
+  }
+  return value;
+}
+
+function communityPagination(url) {
+  const rawLimit=url.searchParams.get("limit"),rawOffset=url.searchParams.get("offset");
+  if (rawLimit!=null&&!/^[0-9]+$/.test(rawLimit)) throw communityPlanError("Community plan limit is invalid.","INVALID_PAGINATION");
+  if (rawOffset!=null&&!/^[0-9]+$/.test(rawOffset)) throw communityPlanError("Community plan offset is invalid.","INVALID_PAGINATION");
+  const limit=rawLimit==null?12:Number(rawLimit),offset=rawOffset==null?0:Number(rawOffset);
+  if (!Number.isSafeInteger(limit)||limit<1||limit>24) throw communityPlanError("Community plan limit must be between 1 and 24.","INVALID_PAGINATION");
+  if (!Number.isSafeInteger(offset)||offset<0||offset>10000) throw communityPlanError("Community plan offset must be between 0 and 10000.","INVALID_PAGINATION");
+  return {limit,offset};
 }
 
 function monthlyPlanError(message) {
@@ -754,6 +843,22 @@ function safeTokenEqual(actual,expected) {
 
 function validCsrf(req,session) {
   return safeTokenEqual(req.headers["x-csrf-token"],session?.csrf_token);
+}
+
+function requireCommunityMutation(req,res,session,{jsonBody=false}={}) {
+  if (!trustedAuthOrigin(req)) {
+    json(res,403,{error:"Community-plan security check failed. Refresh and try again.",code:"COMMUNITY_ORIGIN_REQUIRED"});
+    return false;
+  }
+  if (!validCsrf(req,session)) {
+    json(res,403,{error:"Security check failed. Refresh and try again.",code:"INVALID_CSRF"});
+    return false;
+  }
+  if (jsonBody&&!String(req.headers["content-type"]||"").toLowerCase().startsWith("application/json")) {
+    json(res,415,{error:"Community-plan requests must use JSON.",code:"JSON_REQUIRED"});
+    return false;
+  }
+  return true;
 }
 
 async function requireDiscoveryAccess(req,res) {
@@ -2234,13 +2339,126 @@ async function handleApi(req,res,url) {
   }
   if (url.pathname === "/api/plan" && req.method === "GET") {
     const session=await requireSession(req,res); if (!session) return;
-    json(res,200,{plan:await planFor(session.id),user:await userPayload(session)}); return;
+    const [snapshot,user]=await Promise.all([planSnapshotFor(session.id),userPayload(session)]);
+    json(res,200,{plan:snapshot.plan,planUpdatedAt:snapshot.updatedAt,user,csrfToken:session.csrf_token}); return;
   }
   if (url.pathname === "/api/plan" && req.method === "PUT") {
     const session=await requireSession(req,res); if (!session) return;
     const input=await bodyJson(req), plan=sanitizePlan(input.plan);
-    await store.upsertPlan(session.id,JSON.stringify(plan),Date.now());
-    json(res,200,{ok:true,plan,stats:planStats(plan)}); return;
+    const saved=await store.upsertPlan(session.id,JSON.stringify(plan),Date.now());
+    json(res,200,{ok:true,plan,planUpdatedAt:Number(saved.updated_at),stats:planStats(plan)}); return;
+  }
+  if (url.pathname === "/api/community-plans/mine" && req.method === "GET") {
+    const session=await requireSession(req,res); if (!session) return;
+    const plans=(await store.communityWeeklyPlansForUser(session.id))
+      .map((row)=>communityPlanPayload(row,{owner:true}))
+      .filter(Boolean);
+    json(res,200,{plans,csrfToken:session.csrf_token}); return;
+  }
+  if (url.pathname === "/api/community-plans" && req.method === "POST") {
+    const session=await requireSession(req,res); if (!session) return;
+    if (!requireCommunityMutation(req,res,session,{jsonBody:true})) return;
+    if (!rateAllowed(req,`community-plan-publish:${session.id}`,15,15*60*1000)) {
+      json(res,429,{error:"Too many community-plan updates. Wait a moment and try again.",code:"COMMUNITY_RATE_LIMIT"}); return;
+    }
+    const input=await bodyJson(req);
+    const expectedPlanUpdatedAt=communityRevision(input.expectedPlanUpdatedAt,"Your plan version");
+    const currentPlan=await planSnapshotFor(session.id);
+    if (currentPlan.updatedAt!==expectedPlanUpdatedAt) {
+      json(res,409,{error:"Your weekly plan changed. Refresh it and publish again.",code:"PLAN_CHANGED"}); return;
+    }
+    const clean=sanitizeCommunityPlanInput(input,currentPlan.plan);
+    const now=Date.now();
+    const existing=(await store.communityWeeklyPlansForUser(session.id))[0]||null;
+    const saved=await store.upsertCommunityWeeklyPlanFromPlan({
+      id:existing?.id||randomUUID(),userId:session.id,title:clean.title,description:clean.description,
+      isPublished:clean.published,createdAt:existing?Number(existing.created_at):now,updatedAt:now,
+      expectedPlanUpdatedAt,storedPlanJson:currentPlan.storedPlanJson
+    });
+    if (!saved) { json(res,409,{error:"Your weekly plan changed. Refresh it and publish again.",code:"PLAN_CHANGED"}); return; }
+    const row=await store.communityWeeklyPlanForOwner(saved.id,session.id);
+    const plan=communityPlanPayload(row,{owner:true});
+    if (!plan) { json(res,500,{error:"Your plan was saved but could not be read safely.",code:"COMMUNITY_PLAN_INVALID"}); return; }
+    json(res,200,{ok:true,plan,planUpdatedAt:currentPlan.updatedAt}); return;
+  }
+  if (url.pathname === "/api/community-plans" && req.method === "GET") {
+    const session=await requireDiscoveryAccess(req,res); if (!session) return;
+    const {limit,offset}=communityPagination(url);
+    const rows=await store.communityWeeklyPlans(limit+1,offset);
+    const hasMore=rows.length>limit;
+    const plans=rows.slice(0,limit).map((row)=>communityPlanPayload(row)).filter(Boolean);
+    json(res,200,{plans,pagination:{limit,offset,nextOffset:hasMore?offset+limit:null}}); return;
+  }
+  const communityApplyMatch=url.pathname.match(/^\/api\/community-plans\/([0-9a-f-]{36})\/apply$/i);
+  if (communityApplyMatch && req.method === "POST") {
+    const session=await requireDiscoveryAccess(req,res); if (!session) return;
+    if (!requireCommunityMutation(req,res,session,{jsonBody:true})) return;
+    if (!rateAllowed(req,`community-plan-apply:${session.id}`,30,15*60*1000)) {
+      json(res,429,{error:"Too many plan changes. Wait a moment and try again.",code:"COMMUNITY_RATE_LIMIT"}); return;
+    }
+    const input=await bodyJson(req);
+    const sourceUpdatedAt=communityRevision(input.sourceUpdatedAt,"Community plan version");
+    const targetUpdatedAt=communityRevision(input.targetUpdatedAt,"Your plan version",{allowZero:true});
+    const id=communityPlanId(communityApplyMatch[1]);
+    const sourceRow=id?await store.communityWeeklyPlan(id):null;
+    const source=communityPlanPayload(sourceRow);
+    if (!source) { json(res,404,{error:"Community plan not found.",code:"COMMUNITY_PLAN_NOT_FOUND"}); return; }
+    if (source.updatedAt!==sourceUpdatedAt) {
+      json(res,409,{error:"That community plan changed. Refresh it and confirm again.",code:"COMMUNITY_PLAN_CHANGED"}); return;
+    }
+    const applied=await store.applyCommunityWeeklyPlan({
+      id,userId:session.id,sourceUpdatedAt,targetUpdatedAt,
+      planJson:JSON.stringify(source.plan),storedPlanJson:sourceRow.plan_json,updatedAt:Date.now()
+    });
+    if (!applied) { json(res,409,{error:"A plan changed before it could be applied. Refresh and confirm again.",code:"COMMUNITY_PLAN_CHANGED"}); return; }
+    let plan;
+    try { plan=sanitizePlan(JSON.parse(applied.plan_json)); }
+    catch { json(res,500,{error:"The applied plan could not be read safely.",code:"COMMUNITY_PLAN_INVALID"}); return; }
+    json(res,200,{ok:true,plan,planUpdatedAt:Number(applied.updated_at),stats:planStats(plan),source:{id:source.id,title:source.title,authorName:source.authorName}}); return;
+  }
+  const communityPlanMatch=url.pathname.match(/^\/api\/community-plans\/([0-9a-f-]{36})$/i);
+  if (communityPlanMatch && req.method === "GET") {
+    const session=await requireDiscoveryAccess(req,res); if (!session) return;
+    const id=communityPlanId(communityPlanMatch[1]);
+    const plan=communityPlanPayload(id?await store.communityWeeklyPlan(id):null);
+    if (!plan) { json(res,404,{error:"Community plan not found.",code:"COMMUNITY_PLAN_NOT_FOUND"}); return; }
+    json(res,200,{plan}); return;
+  }
+  if (communityPlanMatch && req.method === "PATCH") {
+    const session=await requireSession(req,res); if (!session) return;
+    if (!requireCommunityMutation(req,res,session,{jsonBody:true})) return;
+    if (!rateAllowed(req,`community-plan-manage:${session.id}`,30,15*60*1000)) {
+      json(res,429,{error:"Too many community-plan updates. Wait a moment and try again.",code:"COMMUNITY_RATE_LIMIT"}); return;
+    }
+    const id=communityPlanId(communityPlanMatch[1]);
+    let owned=id?await store.communityWeeklyPlanForOwner(id,session.id):null;
+    if (!owned) {
+      const visible=id?await store.communityWeeklyPlan(id):null;
+      json(res,visible?403:404,{error:visible?"Only the plan owner can change this upload.":"Community plan not found.",code:visible?"COMMUNITY_PLAN_FORBIDDEN":"COMMUNITY_PLAN_NOT_FOUND"}); return;
+    }
+    const input=await bodyJson(req);
+    if (typeof input.published!=="boolean") { json(res,400,{error:"Published setting is invalid.",code:"INVALID_COMMUNITY_PLAN"}); return; }
+    await store.setCommunityWeeklyPlanPublished(id,session.id,input.published,Date.now());
+    owned=await store.communityWeeklyPlanForOwner(id,session.id);
+    if (!owned) { json(res,409,{error:"The community plan changed. Refresh and try again.",code:"COMMUNITY_PLAN_CHANGED"}); return; }
+    json(res,200,{ok:true,plan:communityPlanPayload(owned,{owner:true})}); return;
+  }
+  if (communityPlanMatch && req.method === "DELETE") {
+    const session=await requireSession(req,res); if (!session) return;
+    if (!requireCommunityMutation(req,res,session)) return;
+    if (!rateAllowed(req,`community-plan-manage:${session.id}`,30,15*60*1000)) {
+      json(res,429,{error:"Too many community-plan updates. Wait a moment and try again.",code:"COMMUNITY_RATE_LIMIT"}); return;
+    }
+    const id=communityPlanId(communityPlanMatch[1]);
+    const owned=id?await store.communityWeeklyPlanForOwner(id,session.id):null;
+    if (!owned) {
+      const visible=id?await store.communityWeeklyPlan(id):null;
+      json(res,visible?403:404,{error:visible?"Only the plan owner can remove this upload.":"Community plan not found.",code:visible?"COMMUNITY_PLAN_FORBIDDEN":"COMMUNITY_PLAN_NOT_FOUND"}); return;
+    }
+    if (!await store.deleteCommunityWeeklyPlan(id,session.id)) {
+      json(res,409,{error:"The community plan changed. Refresh and try again.",code:"COMMUNITY_PLAN_CHANGED"}); return;
+    }
+    json(res,200,{ok:true}); return;
   }
   if (url.pathname === "/api/monthly-plan" && req.method === "GET") {
     const session=await requireDiscoveryAccess(req,res); if (!session) return;
@@ -2256,8 +2474,8 @@ async function handleApi(req,res,url) {
   }
   if (url.pathname === "/api/discovery" && req.method === "GET") {
     const session=await requireDiscoveryAccess(req,res); if (!session) return;
-    const [preferences,aggregates,userRatings,monthlyPlan,weeklyPlan,user]=await Promise.all([preferencesFor(session.id),store.ratingAggregates(),store.ratingsForUser(session.id),monthlyPlanFor(session.id),planFor(session.id),userPayload(session)]);
-    json(res,200,{user,csrfToken:session.csrf_token,exercises:EXERCISES,methodology:DISCOVERY_DATA.methodology,sources:DISCOVERY_DATA.sources,limitedConfidenceExercises:DISCOVERY_DATA.limitedConfidenceExercises,preferences,ratings:{aggregates,user:userRatings},monthlyPlan,weeklyPlan}); return;
+    const [preferences,aggregates,userRatings,monthlyPlan,weeklyPlan,user]=await Promise.all([preferencesFor(session.id),store.ratingAggregates(),store.ratingsForUser(session.id),monthlyPlanFor(session.id),planSnapshotFor(session.id),userPayload(session)]);
+    json(res,200,{user,csrfToken:session.csrf_token,exercises:EXERCISES,methodology:DISCOVERY_DATA.methodology,sources:DISCOVERY_DATA.sources,limitedConfidenceExercises:DISCOVERY_DATA.limitedConfidenceExercises,preferences,ratings:{aggregates,user:userRatings},monthlyPlan,weeklyPlan:weeklyPlan.plan,weeklyPlanUpdatedAt:weeklyPlan.updatedAt}); return;
   }
   if (url.pathname === "/api/ratings/aggregates" && req.method === "GET") {
     const session=await requireDiscoveryAccess(req,res); if (!session) return;
@@ -2374,7 +2592,11 @@ const server=http.createServer(async(req,res) => {
     else if (["GET","HEAD"].includes(req.method)) await serveStatic(req,res,url);
     else json(res,405,{error:"Method not allowed."},{Allow:"GET, HEAD"});
   } catch(error) {
-    if (!res.headersSent) json(res,error.status||500,{error:error.status?error.message:"Unexpected server error."});
+    if (!res.headersSent) {
+      const payload={error:error.status?error.message:"Unexpected server error."};
+      if (error.status&&/^[A-Z][A-Z0-9_]{2,63}$/.test(String(error.code||""))) payload.code=String(error.code);
+      json(res,error.status||500,payload);
+    }
     if (!error.status) console.error(error);
   }
 });

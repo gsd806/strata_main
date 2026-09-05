@@ -96,6 +96,17 @@ const SCHEMA = [
     plan_json TEXT NOT NULL,
     updated_at INTEGER NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS community_weekly_plans (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 80),
+    description TEXT NOT NULL DEFAULT '' CHECK(length(description) <= 240),
+    plan_json TEXT NOT NULL,
+    is_published INTEGER NOT NULL DEFAULT 1 CHECK(is_published IN (0,1)),
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`,
+  "CREATE INDEX IF NOT EXISTS community_weekly_plans_public_updated ON community_weekly_plans(is_published,updated_at DESC,id DESC)",
   `CREATE TABLE IF NOT EXISTS monthly_plans (
     user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     plan_json TEXT NOT NULL,
@@ -278,8 +289,18 @@ const SQL = {
   deleteVerificationSendsForDeletedUser:"DELETE FROM email_verification_sends WHERE challenge_id IN (SELECT challenge_id FROM signup_verifications WHERE user_id=? OR email=?) AND NOT EXISTS (SELECT 1 FROM users WHERE id=?)",
   deleteVerificationsForDeletedUser:"DELETE FROM signup_verifications WHERE (user_id=? OR email=?) AND NOT EXISTS (SELECT 1 FROM users WHERE id=?)",
   deleteActionSendsForDeletedUser:"DELETE FROM account_action_sends WHERE email_hash=? AND NOT EXISTS (SELECT 1 FROM users WHERE id=?)",
+  deleteCommunityPlanForDeletedUser:"DELETE FROM community_weekly_plans WHERE user_id=? AND NOT EXISTS (SELECT 1 FROM users WHERE id=?) RETURNING id",
   plan:"SELECT plan_json,updated_at FROM plans WHERE user_id=?",
-  upsertPlan:"INSERT INTO plans(user_id,plan_json,updated_at) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan_json=excluded.plan_json,updated_at=excluded.updated_at",
+  upsertPlan:"INSERT INTO plans(user_id,plan_json,updated_at) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan_json=excluded.plan_json,updated_at=MAX(plans.updated_at+1,excluded.updated_at) RETURNING plan_json,updated_at",
+  communityWeeklyPlans:"SELECT c.id,c.title,c.description,c.plan_json,c.created_at,c.updated_at,u.name AS author_name FROM community_weekly_plans c JOIN users u ON u.id=c.user_id AND u.suspended_at IS NULL WHERE c.is_published=1 ORDER BY c.updated_at DESC,c.id DESC LIMIT ? OFFSET ?",
+  communityWeeklyPlan:"SELECT c.id,c.title,c.description,c.plan_json,c.created_at,c.updated_at,u.name AS author_name FROM community_weekly_plans c JOIN users u ON u.id=c.user_id AND u.suspended_at IS NULL WHERE c.id=? AND c.is_published=1",
+  communityWeeklyPlansForUser:"SELECT c.id,c.title,c.description,c.plan_json,c.is_published,c.created_at,c.updated_at,u.name AS author_name FROM community_weekly_plans c JOIN users u ON u.id=c.user_id WHERE c.user_id=? ORDER BY c.updated_at DESC,c.id DESC",
+  communityWeeklyPlanForOwner:"SELECT c.id,c.title,c.description,c.plan_json,c.is_published,c.created_at,c.updated_at,u.name AS author_name FROM community_weekly_plans c JOIN users u ON u.id=c.user_id WHERE c.id=? AND c.user_id=?",
+  upsertCommunityWeeklyPlan:"INSERT INTO community_weekly_plans(id,user_id,title,description,plan_json,is_published,created_at,updated_at) SELECT ?,u.id,?,?,?,?,?,? FROM users u WHERE u.id=? AND u.suspended_at IS NULL ON CONFLICT(user_id) DO UPDATE SET title=excluded.title,description=excluded.description,plan_json=excluded.plan_json,is_published=excluded.is_published,updated_at=MAX(community_weekly_plans.updated_at+1,excluded.updated_at) RETURNING id,user_id,title,description,plan_json,is_published,created_at,updated_at",
+  upsertCommunityWeeklyPlanFromPlan:"INSERT INTO community_weekly_plans(id,user_id,title,description,plan_json,is_published,created_at,updated_at) SELECT ?,u.id,?,?,p.plan_json,?,?,? FROM users u JOIN plans p ON p.user_id=u.id WHERE u.id=? AND u.suspended_at IS NULL AND p.updated_at=? AND p.plan_json=? ON CONFLICT(user_id) DO UPDATE SET title=excluded.title,description=excluded.description,plan_json=excluded.plan_json,is_published=excluded.is_published,updated_at=MAX(community_weekly_plans.updated_at+1,excluded.updated_at) RETURNING id,user_id,title,description,plan_json,is_published,created_at,updated_at",
+  setCommunityWeeklyPlanPublished:"UPDATE community_weekly_plans SET is_published=?,updated_at=MAX(updated_at+1,?) WHERE id=? AND user_id=? RETURNING id,user_id,title,description,plan_json,is_published,created_at,updated_at",
+  deleteCommunityWeeklyPlan:"DELETE FROM community_weekly_plans WHERE id=? AND user_id=? RETURNING id",
+  applyCommunityWeeklyPlan:"INSERT INTO plans(user_id,plan_json,updated_at) SELECT target.id,?,MAX(?,COALESCE(current_plan.updated_at,0)+1) FROM community_weekly_plans c JOIN users author ON author.id=c.user_id AND author.suspended_at IS NULL JOIN users target ON target.id=? AND target.suspended_at IS NULL LEFT JOIN plans current_plan ON current_plan.user_id=target.id WHERE c.id=? AND c.is_published=1 AND c.updated_at=? AND c.plan_json=? AND COALESCE(current_plan.updated_at,0)=? ON CONFLICT(user_id) DO UPDATE SET plan_json=excluded.plan_json,updated_at=excluded.updated_at RETURNING plan_json,updated_at",
   monthlyPlan:"SELECT plan_json,updated_at FROM monthly_plans WHERE user_id=?",
   upsertMonthlyPlan:"INSERT INTO monthly_plans(user_id,plan_json,updated_at) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan_json=excluded.plan_json,updated_at=excluded.updated_at",
   preferences:"SELECT preferences_json,updated_at FROM preferences WHERE user_id=?",
@@ -791,6 +812,9 @@ function localStore(root) {
         }
         const user=plainRow(statements.deleteUserWithAction.get(tokenHash,deletedAt));
         if (!user) throw new Error("Account deletion did not remove the requested user.");
+        // Keep deletion complete even if a future database connection loses
+        // its per-session foreign-key PRAGMA state.
+        statements.deleteCommunityPlanForDeletedUser.get(user.id,user.id);
         statements.deleteVerificationSendsForDeletedUser.run(user.id,user.email,user.id);
         statements.deleteVerificationsForDeletedUser.run(user.id,user.email,user.id);
         statements.deleteActionSendsForDeletedUser.run(emailHash,user.id);
@@ -812,7 +836,32 @@ function localStore(root) {
       return {actions:actions+staged,sends};
     },
     async plan(userId) { return plainRow(statements.plan.get(userId)); },
-    async upsertPlan(userId,planJson,updatedAt) { statements.upsertPlan.run(userId,planJson,updatedAt); },
+    async upsertPlan(userId,planJson,updatedAt) { return plainRow(statements.upsertPlan.get(userId,planJson,updatedAt)); },
+    async communityWeeklyPlans(limit,offset) { return plainRows(statements.communityWeeklyPlans.all(limit,offset)); },
+    async communityWeeklyPlan(id) { return plainRow(statements.communityWeeklyPlan.get(id)); },
+    async communityWeeklyPlansForUser(userId) { return plainRows(statements.communityWeeklyPlansForUser.all(userId)); },
+    async communityWeeklyPlanForOwner(id,userId) { return plainRow(statements.communityWeeklyPlanForOwner.get(id,userId)); },
+    async upsertCommunityWeeklyPlan(plan) {
+      return plainRow(statements.upsertCommunityWeeklyPlan.get(
+        plan.id,plan.title,plan.description,plan.planJson,plan.isPublished?1:0,
+        plan.createdAt,plan.updatedAt,plan.userId
+      ));
+    },
+    async upsertCommunityWeeklyPlanFromPlan(plan) {
+      return plainRow(statements.upsertCommunityWeeklyPlanFromPlan.get(
+        plan.id,plan.title,plan.description,plan.isPublished?1:0,
+        plan.createdAt,plan.updatedAt,plan.userId,plan.expectedPlanUpdatedAt,plan.storedPlanJson
+      ));
+    },
+    async setCommunityWeeklyPlanPublished(id,userId,isPublished,updatedAt) {
+      return plainRow(statements.setCommunityWeeklyPlanPublished.get(isPublished?1:0,updatedAt,id,userId));
+    },
+    async deleteCommunityWeeklyPlan(id,userId) { return Boolean(plainRow(statements.deleteCommunityWeeklyPlan.get(id,userId))); },
+    async applyCommunityWeeklyPlan({id,userId,sourceUpdatedAt,targetUpdatedAt,planJson,storedPlanJson,updatedAt}) {
+      return plainRow(statements.applyCommunityWeeklyPlan.get(
+        planJson,updatedAt,userId,id,sourceUpdatedAt,storedPlanJson,targetUpdatedAt
+      ));
+    },
     async monthlyPlan(userId) { return plainRow(statements.monthlyPlan.get(userId)); },
     async upsertMonthlyPlan(userId,planJson,updatedAt) { statements.upsertMonthlyPlan.run(userId,planJson,updatedAt); },
     async preferences(userId) { return plainRow(statements.preferences.get(userId)); },
@@ -1239,6 +1288,10 @@ async function tursoStore(url,authToken) {
       if (Number((await first(SQL.pendingPurchasesForUser,[action.user_id]))?.pending_count||0)>0) return {status:"purchase_pending"};
       const results=await client.batch([
         {sql:SQL.deleteUserWithAction,args:[tokenHash,deletedAt]},
+        // This conditional cleanup is intentionally explicit. Turso PRAGMA
+        // state is connection-scoped, so account privacy must not depend only
+        // on ON DELETE CASCADE surviving a renewed serverless session.
+        {sql:SQL.deleteCommunityPlanForDeletedUser,args:[action.user_id,action.user_id]},
         {sql:SQL.deleteVerificationSendsForDeletedUser,args:[action.user_id,action.email,action.user_id]},
         {sql:SQL.deleteVerificationsForDeletedUser,args:[action.user_id,action.email,action.user_id]},
         {sql:SQL.deleteActionSendsForDeletedUser,args:[emailHash,action.user_id]}
@@ -1259,7 +1312,42 @@ async function tursoStore(url,authToken) {
       return {actions:affectedRows(results[0])+affectedRows(results[1]),sends:affectedRows(results[2])};
     },
     plan:(userId) => first(SQL.plan,[userId]),
-    upsertPlan:(userId,planJson,updatedAt) => run(SQL.upsertPlan,[userId,planJson,updatedAt]),
+    async upsertPlan(userId,planJson,updatedAt) {
+      const result=await run(SQL.upsertPlan,[userId,planJson,updatedAt]);
+      return plainRow(result.rows?.[0],result.columns);
+    },
+    communityWeeklyPlans:(limit,offset) => all(SQL.communityWeeklyPlans,[limit,offset]),
+    communityWeeklyPlan:(id) => first(SQL.communityWeeklyPlan,[id]),
+    communityWeeklyPlansForUser:(userId) => all(SQL.communityWeeklyPlansForUser,[userId]),
+    communityWeeklyPlanForOwner:(id,userId) => first(SQL.communityWeeklyPlanForOwner,[id,userId]),
+    async upsertCommunityWeeklyPlan(plan) {
+      const result=await run(SQL.upsertCommunityWeeklyPlan,[
+        plan.id,plan.title,plan.description,plan.planJson,plan.isPublished?1:0,
+        plan.createdAt,plan.updatedAt,plan.userId
+      ]);
+      return plainRow(result.rows?.[0],result.columns);
+    },
+    async upsertCommunityWeeklyPlanFromPlan(plan) {
+      const result=await run(SQL.upsertCommunityWeeklyPlanFromPlan,[
+        plan.id,plan.title,plan.description,plan.isPublished?1:0,
+        plan.createdAt,plan.updatedAt,plan.userId,plan.expectedPlanUpdatedAt,plan.storedPlanJson
+      ]);
+      return plainRow(result.rows?.[0],result.columns);
+    },
+    async setCommunityWeeklyPlanPublished(id,userId,isPublished,updatedAt) {
+      const result=await run(SQL.setCommunityWeeklyPlanPublished,[isPublished?1:0,updatedAt,id,userId]);
+      return plainRow(result.rows?.[0],result.columns);
+    },
+    async deleteCommunityWeeklyPlan(id,userId) {
+      const result=await run(SQL.deleteCommunityWeeklyPlan,[id,userId]);
+      return Boolean(plainRow(result.rows?.[0],result.columns));
+    },
+    async applyCommunityWeeklyPlan({id,userId,sourceUpdatedAt,targetUpdatedAt,planJson,storedPlanJson,updatedAt}) {
+      const result=await run(SQL.applyCommunityWeeklyPlan,[
+        planJson,updatedAt,userId,id,sourceUpdatedAt,storedPlanJson,targetUpdatedAt
+      ]);
+      return plainRow(result.rows?.[0],result.columns);
+    },
     monthlyPlan:(userId) => first(SQL.monthlyPlan,[userId]),
     upsertMonthlyPlan:(userId,planJson,updatedAt) => run(SQL.upsertMonthlyPlan,[userId,planJson,updatedAt]),
     preferences:(userId) => first(SQL.preferences,[userId]),

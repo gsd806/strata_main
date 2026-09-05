@@ -9,24 +9,26 @@ const SEARCH_DEBOUNCE_MS=180;
 const GUEST_PLAN_KEY="strata_guest_plan_v1";
 const state={
   exercises:[],plan:null,user:null,query:"",group:"all",drag:null,selectedDay:"Monday",
-  ready:false,guest:false,saveTimer:null,savePromise:null,revision:0,savedRevision:0,navigating:false,libraryLimit:LIBRARY_DESKTOP_PAGE_SIZE
+  ready:false,guest:false,saveTimer:null,savePromise:null,lastSaveError:null,planUpdatedAt:0,revision:0,savedRevision:0,navigating:false,libraryLimit:LIBRARY_DESKTOP_PAGE_SIZE,
+  csrfToken:"",sharedPlans:[],sharedPlansLoaded:false,sharedPlansRequest:0,shareBusy:false,pendingUnpublish:""
 };
 const el=(id)=>document.getElementById(id);
 
 async function api(path,options={}) {
+  const method=String(options.method||"GET").toUpperCase(),changesState=method!=="GET"&&method!=="HEAD";
   let response;
   try {
     response=await fetch(path,{
       ...options,
       credentials:"same-origin",
-      headers:{Accept:"application/json",...(options.body?{"Content-Type":"application/json"}:{}),...(options.headers||{})}
+      headers:{Accept:"application/json",...(options.body?{"Content-Type":"application/json"}:{}),...(changesState&&state.csrfToken?{"X-CSRF-Token":state.csrfToken}:{}),...(options.headers||{})}
     });
   } catch(cause) {
     throw Object.assign(new Error("Could not reach STRATA. Check your connection and try again."),{cause});
   }
   const data=await response.json().catch(()=>({}));
   if(!response.ok) {
-    const error=Object.assign(new Error(data.error||"Request failed."),{status:response.status});
+    const error=Object.assign(new Error(data.error||"Request failed."),{status:response.status,code:data.code||"REQUEST_FAILED"});
     throw error;
   }
   return data;
@@ -68,6 +70,7 @@ function setReady(ready){
   el("plannerSearch").disabled=!ready;
   el("recommendRest").disabled=!ready;
   el("exportWeeklyPlan").disabled=!ready;
+  el("shareWeeklyPlan").disabled=!ready;
   el("plannerShell").setAttribute("aria-busy",String(!ready));
   el("libraryPanel").setAttribute("aria-busy",String(!ready));
   el("weekBoard").setAttribute("aria-busy",String(!ready));
@@ -81,6 +84,166 @@ function downloadWeeklyPlan(){
   link.href=url;link.download=`strata-weekly-plan-${new Date().toISOString().slice(0,10)}.json`;link.hidden=true;
   document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
   showToast("Weekly plan file downloaded. You can import it in Strata+.");
+}
+
+function planMovementCount(plan=state.plan){
+  return DAYS.reduce((total,day)=>total+(Array.isArray(plan?.days?.[day])?plan.days[day].length:0),0);
+}
+
+function setShareStatus(message="",type=""){
+  const status=el("sharePlanStatus");
+  status.textContent=message;
+  status.classList.toggle("error",type==="error");
+  status.classList.toggle("success",type==="success");
+}
+
+function shareDate(value){
+  const date=new Date(value);
+  if(!Number.isFinite(date.getTime()))return "Recently updated";
+  try{return `Updated ${new Intl.DateTimeFormat(undefined,{dateStyle:"medium"}).format(date)}`;}
+  catch{return `Updated ${date.toISOString().slice(0,10)}`;}
+}
+
+function currentSharedPlan(){
+  return state.sharedPlans.find((plan)=>plan&&plan.published!==false)||null;
+}
+
+function syncShareForm(plan=currentSharedPlan()){
+  const publishButton=el("publishWeeklyPlan");
+  publishButton.innerHTML=plan?'Update Strata+ copy <span aria-hidden="true">↗</span>':'Publish to Strata+ <span aria-hidden="true">↗</span>';
+  if(!plan)return;
+  if(!el("sharePlanTitle").value.trim())el("sharePlanTitle").value=String(plan.title||"").slice(0,80);
+  if(!el("sharePlanDescription").value.trim())el("sharePlanDescription").value=String(plan.description||"").slice(0,240);
+  el("shareDescriptionCount").textContent=`${el("sharePlanDescription").value.length} / 240`;
+}
+
+function renderOwnSharedPlans({focusId=""}={}){
+  const container=el("ownSharedPlans"),plans=state.sharedPlans.filter((plan)=>plan&&plan.published!==false);
+  if(!plans.length){
+    state.pendingUnpublish="";
+    container.innerHTML='<p class="share-list-empty">You have not shared a week yet. Publish the plan on this page when it is ready.</p>';
+    syncShareForm(null);
+    return;
+  }
+  container.innerHTML=plans.map((plan)=>{
+    const id=escapeHtml(plan.id),title=escapeHtml(plan.title||"Shared week"),description=escapeHtml(plan.description||"No description added."),movementCount=planMovementCount(plan.plan),confirming=state.pendingUnpublish===String(plan.id);
+    return `<article class="own-share-card"><div><h4>${title}</h4><p>${description}</p></div><div class="own-share-meta"><span>${movementCount} movement${movementCount===1?"":"s"}</span><span>${escapeHtml(shareDate(plan.updatedAt||plan.createdAt))}</span><span>By ${escapeHtml(plan.authorName||state.user?.name||"You")}</span></div><button class="unpublish-plan" data-unpublish-plan="${id}" type="button" ${state.shareBusy?"disabled":""}>${confirming?"Confirm unpublish":"Unpublish"}</button></article>`;
+  }).join("");
+  syncShareForm(plans[0]);
+  if(focusId)focusSoon(`[data-unpublish-plan="${String(focusId).replace(/[^a-zA-Z0-9_-]/g,"")}"]`);
+}
+
+function renderShareAccess(){
+  el("sharePlanGuest").hidden=!state.guest;
+  el("sharePlanAccount").hidden=state.guest;
+  if(!state.guest){
+    if(state.sharedPlansLoaded)renderOwnSharedPlans();
+    else el("ownSharedPlans").innerHTML='<p class="share-list-empty">Loading your shared plan…</p>';
+  }
+}
+
+async function loadSharedPlans({announce=false}={}){
+  if(state.guest||state.shareBusy)return false;
+  const requestId=++state.sharedPlansRequest;
+  const container=el("ownSharedPlans");
+  container.setAttribute("aria-busy","true");
+  if(!state.sharedPlansLoaded)container.innerHTML='<p class="share-list-empty">Loading your shared plan…</p>';
+  try{
+    const result=await api("/api/community-plans/mine");
+    if(requestId!==state.sharedPlansRequest)return false;
+    state.csrfToken=String(result.csrfToken||state.csrfToken||"");
+    state.sharedPlans=Array.isArray(result.plans)?result.plans:result.plan?[result.plan]:[];
+    state.sharedPlansLoaded=true;state.pendingUnpublish="";
+    renderOwnSharedPlans();
+    if(announce)setShareStatus("Your shared plan is up to date.","success");
+    return true;
+  }catch(error){
+    if(requestId!==state.sharedPlansRequest)return false;
+    container.innerHTML=`<p class="share-list-empty">${escapeHtml(error.message||"Your shared plan could not be loaded.")}</p>`;
+    if(announce){setShareStatus(error.message||"Your shared plan could not be loaded.","error");showToast(error.message||"Could not refresh your shared plan.");}
+    return false;
+  }finally{if(requestId===state.sharedPlansRequest)container.setAttribute("aria-busy","false");}
+}
+
+function openSharePanel(){
+  const panel=el("shareWeeklyPanel");
+  panel.hidden=false;
+  el("shareWeeklyPlan").setAttribute("aria-expanded","true");
+  renderShareAccess();
+  focusSoon("#shareWeeklyTitle");
+  panel.scrollIntoView?.({behavior:window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches?"auto":"smooth",block:"start"});
+  if(!state.guest&&!state.sharedPlansLoaded)void loadSharedPlans();
+}
+
+function closeSharePanel(){
+  el("shareWeeklyPanel").hidden=true;
+  el("shareWeeklyPlan").setAttribute("aria-expanded","false");
+  el("shareWeeklyPlan").focus?.();
+}
+
+function shareValidation(){
+  const title=el("sharePlanTitle").value.trim(),description=el("sharePlanDescription").value.trim();
+  if(state.guest)return{error:"Sign in to publish your week."};
+  if(!state.csrfToken)return{error:"Your secure session is not ready. Refresh the page and try again."};
+  if(title.length<3)return{error:"Give your plan a title using at least 3 characters.",focus:"sharePlanTitle"};
+  if(title.length>80)return{error:"Keep the plan title to 80 characters or fewer.",focus:"sharePlanTitle"};
+  if(description.length>240)return{error:"Keep the description to 240 characters or fewer.",focus:"sharePlanDescription"};
+  if(planMovementCount()===0)return{error:"Add at least one workout to your week before publishing."};
+  if(hasRestConflict())return{error:`Move all exercises off ${state.plan.restDay} before publishing.`};
+  if(!el("sharePlanConfirm").checked)return{error:"Confirm the community privacy notice before publishing.",focus:"sharePlanConfirm"};
+  return{title,description};
+}
+
+function clearShareValidation(){
+  for(const control of [el("sharePlanTitle"),el("sharePlanDescription"),el("sharePlanConfirm")])control.removeAttribute?.("aria-invalid");
+}
+
+async function publishWeeklyPlan(){
+  if(state.shareBusy)return;
+  clearShareValidation();
+  const input=shareValidation();
+  if(input.error){setShareStatus(input.error,"error");if(input.focus){el(input.focus).setAttribute?.("aria-invalid","true");el(input.focus).focus?.();}return;}
+  state.shareBusy=true;el("publishWeeklyPlan").disabled=true;el("refreshSharedPlans").disabled=true;
+  state.sharedPlansRequest+=1;
+  setShareStatus("Saving your private plan before publishing…");
+  try{
+    if(!await flushSave({silent:true}))throw state.lastSaveError||new Error("Your private plan could not be saved. Fix that first, then publish again.");
+    setShareStatus("Publishing your week to Strata+…");
+    const result=await api("/api/community-plans",{method:"POST",body:JSON.stringify({title:input.title,description:input.description,expectedPlanUpdatedAt:state.planUpdatedAt})});
+    const shared=result.plan||result.communityPlan;
+    if(shared)state.sharedPlans=[shared];
+    else await loadSharedPlans();
+    state.sharedPlansLoaded=true;state.pendingUnpublish="";el("sharePlanConfirm").checked=false;clearShareValidation();
+    renderOwnSharedPlans();
+    setShareStatus("Your week is now available in the Strata+ community library.","success");
+    showToast("Your week was published to Strata+.");
+  }catch(error){
+    if(error.status===401)setShareStatus("Your session ended. Sign in again before publishing.","error");
+    else if(error.code==="COMMUNITY_PLAN_CHANGED"||error.code==="PLAN_CHANGED")setShareStatus("Your saved Plan changed on another device or tab. Refresh this page and review it before publishing.","error");
+    else setShareStatus(error.message||"Your week could not be published.","error");
+    showToast(error.message||"Your week could not be published.");
+  }finally{
+    state.shareBusy=false;el("publishWeeklyPlan").disabled=false;el("refreshSharedPlans").disabled=false;el("ownSharedPlans").setAttribute("aria-busy","false");renderOwnSharedPlans();
+  }
+}
+
+async function unpublishSharedPlan(id){
+  const plan=state.sharedPlans.find((item)=>String(item?.id)===String(id));
+  if(!plan||state.shareBusy)return;
+  if(state.pendingUnpublish!==String(id)){
+    state.pendingUnpublish=String(id);renderOwnSharedPlans({focusId:id});
+    setShareStatus("Press Confirm unpublish to remove this week from Strata+. Your private Plan will stay unchanged.");
+    return;
+  }
+  state.shareBusy=true;state.sharedPlansRequest+=1;el("publishWeeklyPlan").disabled=true;el("refreshSharedPlans").disabled=true;renderOwnSharedPlans();setShareStatus("Removing your week from Strata+…");
+  let removed=false;
+  try{
+    await api(`/api/community-plans/${encodeURIComponent(id)}`,{method:"DELETE"});
+    state.sharedPlans=state.sharedPlans.filter((item)=>String(item?.id)!==String(id));state.pendingUnpublish="";
+    renderOwnSharedPlans();setShareStatus("Your week was removed from Strata+. Your private Plan is unchanged.","success");showToast("Shared week unpublished.");removed=true;
+  }catch(error){
+    state.pendingUnpublish="";renderOwnSharedPlans();setShareStatus(error.message||"Your shared week could not be removed.","error");showToast(error.message||"Could not unpublish the week.");
+  }finally{state.shareBusy=false;el("publishWeeklyPlan").disabled=false;el("refreshSharedPlans").disabled=false;el("ownSharedPlans").setAttribute("aria-busy","false");renderOwnSharedPlans();if(removed)el("refreshSharedPlans").focus?.();}
 }
 
 function renderFilters(focusGroup=null){
@@ -236,13 +399,15 @@ async function performSave({keepalive=false,silent=false}={}){
       let result;
       if(state.guest){
         if(!saveGuestPlan())throw new Error("This browser blocked local storage, so the plan could not be saved.");
-        result={plan:state.plan};
+        result={plan:state.plan,planUpdatedAt:state.planUpdatedAt};
       }else result=await api("/api/plan",{method:"PUT",body:payload,keepalive});
       state.savedRevision=Math.max(state.savedRevision,revision);
       if(state.revision===revision)state.plan=result.plan;
+      state.planUpdatedAt=Number(result.planUpdatedAt)||state.planUpdatedAt;state.lastSaveError=null;
       setSaveStatus(state.savedRevision===state.revision?(state.guest?"Saved on this device":"Saved to account"):"Unsaved changes");
       return true;
     }catch(error){
+      state.lastSaveError=error;
       setSaveStatus("Save failed · retry needed",true);
       if(!silent)showToast(error.message);
       return false;
@@ -273,7 +438,7 @@ function sendKeepaliveSave(){
   clearTimeout(state.saveTimer);
   if(state.guest){if(saveGuestPlan())state.savedRevision=state.revision;return;}
   const body=JSON.stringify({plan:state.plan});
-  void fetch("/api/plan",{method:"PUT",body,keepalive:true,credentials:"same-origin",headers:{Accept:"application/json","Content-Type":"application/json"}}).catch(()=>{});
+  void fetch("/api/plan",{method:"PUT",body,keepalive:true,credentials:"same-origin",headers:{Accept:"application/json","Content-Type":"application/json",...(state.csrfToken?{"X-CSRF-Token":state.csrfToken}:{})}}).catch(()=>{});
 }
 
 let toastTimer;
@@ -330,7 +495,7 @@ document.addEventListener("drop",(event)=>{
 document.addEventListener("dragend",()=>{state.drag=null;document.querySelectorAll(".drag-over").forEach((node)=>node.classList.remove("drag-over"));});
 
 document.addEventListener("click",(event)=>{
-  const filter=event.target.closest("[data-library-group]"),quick=event.target.closest("[data-quick-add]"),select=event.target.closest("[data-select-day]"),remove=event.target.closest("[data-remove-item]"),rest=event.target.closest("[data-set-rest]"),move=event.target.closest("[data-move-item]"),loadMore=event.target.closest("[data-load-more-library]"),retry=event.target.closest("[data-retry-init]");
+  const filter=event.target.closest("[data-library-group]"),quick=event.target.closest("[data-quick-add]"),select=event.target.closest("[data-select-day]"),remove=event.target.closest("[data-remove-item]"),rest=event.target.closest("[data-set-rest]"),move=event.target.closest("[data-move-item]"),loadMore=event.target.closest("[data-load-more-library]"),retry=event.target.closest("[data-retry-init]"),unpublish=event.target.closest("[data-unpublish-plan]");
   if(filter){state.group=filter.dataset.libraryGroup;resetLibraryWindow();renderFilters(state.group);renderLibrary();}
   else if(quick){addExercise(quick.dataset.quickAdd,state.selectedDay);}
   else if(select){state.selectedDay=select.dataset.selectDay;renderWeek(instanceSelector("data-select-day",state.selectedDay));renderLibrary();showToast(`${state.selectedDay} selected for tap-add.`);}
@@ -347,6 +512,7 @@ document.addEventListener("click",(event)=>{
   else if(move){const day=move.closest("[data-day]").dataset.day;moveWithinDay(day,move.dataset.moveItem,Number(move.dataset.moveDirection));}
   else if(loadMore){const firstNewIndex=state.libraryLimit;state.libraryLimit+=libraryPageSize();renderLibrary();requestAnimationFrame(()=>el("libraryList").querySelector(`[data-library-index="${firstNewIndex}"] [data-quick-add]`)?.focus());}
   else if(retry){void init();}
+  else if(unpublish){void unpublishSharedPlan(unpublish.dataset.unpublishPlan);}
 });
 
 document.addEventListener("change",(event)=>{
@@ -380,6 +546,15 @@ el("recommendRest").addEventListener("click",()=>{
   setRestDay(day,{recommended:true});
 });
 el("exportWeeklyPlan").addEventListener("click",downloadWeeklyPlan);
+el("shareWeeklyPlan").addEventListener("click",()=>{
+  if(el("shareWeeklyPanel").hidden)openSharePanel();else closeSharePanel();
+});
+el("closeShareWeekly").addEventListener("click",closeSharePanel);
+el("sharePlanTitle").addEventListener("input",(event)=>event.target.removeAttribute?.("aria-invalid"));
+el("sharePlanDescription").addEventListener("input",(event)=>{event.target.removeAttribute?.("aria-invalid");el("shareDescriptionCount").textContent=`${event.target.value.length} / 240`;});
+el("sharePlanConfirm").addEventListener("change",(event)=>event.target.removeAttribute?.("aria-invalid"));
+el("sharePlanForm").addEventListener("submit",(event)=>{event.preventDefault();void publishWeeklyPlan();});
+el("refreshSharedPlans").addEventListener("click",()=>void loadSharedPlans({announce:true}));
 el("logoutButton").addEventListener("click",async(event)=>{
   const button=event.currentTarget;
   button.disabled=true;
@@ -414,15 +589,15 @@ async function init(){
   el("weekSummary").innerHTML="";
   el("weekBoard").innerHTML='<div class="planner-load-state">Loading your weekly plan…</div>';
   try{
-    const exercises=await api("/exercises.json?v=6.9.2");
+    const exercises=await api("/exercises.json?v=6.9.3");
     if(!Array.isArray(exercises))throw new Error("STRATA returned an incomplete exercise library.");
     state.exercises=exercises;
     let result;
     try{result=await api("/api/plan");}
     catch(error){if(error.status!==401)throw error;result={plan:guestPlan(),user:null};}
     if(!result.plan?.days)throw new Error("STRATA returned an incomplete plan.");
-    state.plan=result.plan;state.user=result.user;state.guest=!result.user?.id;
-    state.revision=0;state.savedRevision=0;state.savePromise=null;
+    state.plan=result.plan;state.user=result.user;state.guest=!result.user?.id;state.csrfToken=String(result.csrfToken||"");state.planUpdatedAt=Number(result.planUpdatedAt)||0;state.sharedPlans=[];state.sharedPlansLoaded=false;state.sharedPlansRequest=0;state.shareBusy=false;state.pendingUnpublish="";
+    state.revision=0;state.savedRevision=0;state.savePromise=null;state.lastSaveError=null;
     const repairedRest=repairLegacyRestDay();
     state.selectedDay=DAYS.find((day)=>day!==state.plan.restDay)||"Monday";
     el("userName").textContent=state.guest?"Guest plan":result.user.name;
@@ -433,12 +608,13 @@ async function init(){
       ? '<strong>No login needed.</strong> Your plan is saved only on this device. <a href="/account.html?mode=login&amp;next=planner">Sign in for cross-device sync</a>.'
       : '<strong>Account plan.</strong> Changes sync securely across your signed-in devices.';
     setReady(true);
-    resetLibraryWindow();renderFilters();renderLibrary();renderWeek();setSaveStatus(state.guest?"Saved on this device":"Saved to account");
+    resetLibraryWindow();renderFilters();renderLibrary();renderWeek();renderShareAccess();setSaveStatus(state.guest?"Saved on this device":"Saved to account");
+    if(!state.guest)void loadSharedPlans();
     if(repairedRest){queueSave();showToast(`Recovery moved to empty ${repairedRest} to keep it clear.`);}
     handlePendingAdd();
   }catch(error){
     state.ready=false;
-    el("plannerSearch").disabled=true;el("recommendRest").disabled=true;el("exportWeeklyPlan").disabled=true;
+    el("plannerSearch").disabled=true;el("recommendRest").disabled=true;el("exportWeeklyPlan").disabled=true;el("shareWeeklyPlan").disabled=true;
     el("plannerShell").setAttribute("aria-busy","false");el("libraryPanel").setAttribute("aria-busy","false");
     setSaveStatus("Unable to load",true);renderLoadError(error);
   }

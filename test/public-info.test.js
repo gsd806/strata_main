@@ -34,7 +34,7 @@ test("homepage publishes the founder story without exposing a residential addres
 });
 
 test("published Strata+ price and refund promise are exact and consistent",()=>{
-  assert.equal(BUILD,"6.9.2");
+  assert.equal(BUILD,"6.9.3");
   const pricingHtml=read("pricing.html"),pricing=text("pricing.html"),refunds=text("refunds.html"),terms=text("terms.html");
   assert.match(pricing,/Strata\+/);
   assert.match(pricing,/\$5\.99 USD/i);
@@ -75,6 +75,17 @@ test("contact and policy pages publish the official support address and cross-li
     for(const route of ["/terms","/privacy","/refunds"])assert.match(html,new RegExp(`href="${route}"`),`${page} ${route} link`);
   }
   assert.match(text("privacy.html"),/does not receive or store full payment-card or bank-account details/i);
+});
+
+test("community-plan policies explain publication, privacy, replacement, and removal",()=>{
+  const privacy=text("privacy.html"),terms=text("terms.html");
+  assert.match(privacy,/validated structured weekly plan/i);
+  assert.match(privacy,/display name/i);
+  assert.match(privacy,/email address and internal user identifier are not included in the listing/i);
+  assert.match(privacy,/rather than uploading a binary file or attachment/i);
+  assert.match(terms,/Only Strata\+ members can browse and apply community plans/i);
+  assert.match(terms,/replaces your current saved week/i);
+  assert.match(terms,/publisher can unpublish their listing/i);
 });
 
 test("public copy describes active secure checkout without overpromising access",()=>{

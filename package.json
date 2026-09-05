@@ -1,8 +1,8 @@
 {
   "name": "strata-workout-index",
-  "version": "6.9.2",
+  "version": "6.9.3",
   "private": true,
-  "description": "Evidence-informed exercise rankings with Strata+ personalization, community ratings, and weekly and 31-day planning.",
+  "description": "Evidence-informed exercise rankings with Strata+ personalization, community weekly plans, ratings, and 31-day planning.",
   "scripts": {
     "start": "node server.js",
     "test": "node --test",

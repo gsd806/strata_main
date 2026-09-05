@@ -11,16 +11,17 @@ const EXPLORER_DESKTOP_PAGE_SIZE=24;
 const EXPLORER_MOBILE_PAGE_SIZE=12;
 const SEARCH_DEBOUNCE_MS=180;
 const RATINGS_REFRESH_MIN_INTERVAL_MS=15_000;
+const COMMUNITY_PAGE_SIZE=12;
 const FEATURE_DEFAULT="recommendations";
 const FEATURE_CONFIG=Object.freeze({
   recommendations:{panelId:"recommendations",headingId:"recommendationTitle",label:"Best for you"},
   explorer:{panelId:"exerciseExplorer",headingId:"explorerTitle",label:"Explore and rate"},
   battle:{panelId:"battle",headingId:"battleTitle",label:"Exercise battle"},
   profile:{panelId:"profile",headingId:"profileTitle",label:"Tune my ranking"},
-  monthly:{panelId:"monthlyPlan",headingId:"monthlyPlanTitle",label:"31-day plan"},
-  methodology:{panelId:"methodology",headingId:"methodTitle",label:"FitScore method"}
+  community:{panelId:"communityPlans",headingId:"communityPlansTitle",label:"Community weekly plans"},
+  monthly:{panelId:"monthlyPlan",headingId:"monthlyPlanTitle",label:"31-day plan"}
 });
-const state={exercises:[],methodology:null,sources:[],limited:new Set(),preferences:null,user:null,csrfToken:"",aggregate:new Map(),userRatings:new Map(),ratingsRefreshedAt:0,ratingsRefreshPromise:null,compare:[],collection:"all",query:"",group:"all",equipment:"all",pattern:"all",level:"all",sort:"personal",recommendations:[],activeExercise:null,activeFeature:null,explorerLimit:EXPLORER_DESKTOP_PAGE_SIZE,weeklyPlan:null,monthlyPlan:null,monthlySchedule:null,monthlySource:"muscle-schedule"};
+const state={exercises:[],methodology:null,sources:[],limited:new Set(),preferences:null,user:null,csrfToken:"",aggregate:new Map(),userRatings:new Map(),ratingsRefreshedAt:0,ratingsRefreshPromise:null,compare:[],collection:"all",query:"",group:"all",equipment:"all",pattern:"all",level:"all",sort:"personal",recommendations:[],activeExercise:null,activeFeature:null,explorerLimit:EXPLORER_DESKTOP_PAGE_SIZE,weeklyPlan:null,weeklyPlanUpdatedAt:0,monthlyPlan:null,monthlySchedule:null,monthlySource:"muscle-schedule",communityPlans:[],communityLoaded:false,communityLoading:false,communityError:"",communityNextOffset:0,communityQuery:"",communityPendingId:null,communityAppliedId:null,communityAppliedUpdatedAt:0};
 const el=(id)=>document.getElementById(id);
 
 async function api(path,options={}) {
@@ -79,6 +80,7 @@ function activateFeature(value,{focus=false,scroll=false,smooth=false,announce=f
   updateFeatureHistory(name,historyMode);
   if(announce&&el("featureStatus"))el("featureStatus").textContent=`${config.label} workspace opened.`;
   if(state.user&&["recommendations","explorer","battle"].includes(name))void refreshCommunityRatings().catch(()=>{});
+  if(state.user&&name==="community"&&!state.communityLoaded&&!state.communityLoading)void loadCommunityPlans({reset:true});
   if(scroll||focus){
     const move=()=>{
       const reduceMotion=window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
@@ -192,11 +194,6 @@ async function refreshCommunityRatings({force=false}={}){
   });
   state.ratingsRefreshPromise=refresh;
   try{return await refresh;}finally{if(state.ratingsRefreshPromise===refresh)state.ratingsRefreshPromise=null;}
-}
-
-function renderMethodology(){
-  el("methodSummary").textContent=`${state.methodology.summary} ${state.methodology.formula}`;
-  el("methodFactors").innerHTML=state.methodology.factors.map((factor,index)=>`<div class="factor-row"><span>${String(index+1).padStart(2,"0")}</span><div><strong>${escapeHtml(factor.label)}</strong><small>${escapeHtml(factor.description)} ${escapeHtml(factor.boundary)}</small></div><b>${factor.weight}%</b></div>`).join("");
 }
 
 function renderCompareTray(){
@@ -316,6 +313,105 @@ function openComparison(){
 function syncDialogState(){document.body.classList.toggle("dialog-open",Boolean(document.querySelector("dialog[open]")));}
 function closeDialog(id){const dialog=el(id);if(dialog?.open)dialog.close();syncDialogState();}
 let toastTimer;function showToast(message){const toast=el("toast");toast.textContent=message;toast.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove("show"),2200);}
+
+function normalizeCommunityPlan(record){
+  if(!record||typeof record!=="object")return null;
+  const id=String(record.id||"").trim();if(!id)return null;
+  try{
+    return{id,title:String(record.title||"Community week").trim().slice(0,80)||"Community week",description:String(record.description||"").trim().slice(0,240),authorName:String(record.authorName||"STRATA member").trim().slice(0,80)||"STRATA member",createdAt:record.createdAt,updatedAt:record.updatedAt,plan:Monthly.normalizeWeeklyPlan(record.plan,state.exercises)};
+  }catch{return null;}
+}
+function communityPlanStats(record){
+  const days=Monthly.DAYS.map((day)=>record.plan.days[day]||[]),exercises=days.reduce((total,items)=>total+items.length,0),trainingDays=days.filter((items)=>items.length).length;
+  return{exercises,trainingDays};
+}
+function communityExerciseName(item){return exerciseById(item.exerciseId)?.name||titleCase(item.exerciseId);}
+function communityPlanSearchText(record){
+  const names=Monthly.DAYS.flatMap((day)=>record.plan.days[day]||[]).map(communityExerciseName);
+  return[record.title,record.description,record.authorName,...names].join(" ").toLocaleLowerCase();
+}
+function communityDateLabel(value){
+  if(value===null||value===undefined||value==="")return "Shared plan";
+  const numeric=Number(value),date=new Date(Number.isFinite(numeric)&&numeric>0?numeric:value);
+  return Number.isNaN(date.getTime())?"Shared plan":`Shared ${new Intl.DateTimeFormat(undefined,{month:"short",year:"numeric"}).format(date)}`;
+}
+function sharedPlanDayMarkup(day,plan){
+  const items=plan.days[day]||[],isRest=day===plan.restDay;
+  const list=items.map((item)=>`<li><strong>${escapeHtml(communityExerciseName(item))}</strong><small>${Number(item.sets)} sets × ${escapeHtml(item.reps)}</small></li>`).join("");
+  return `<section class="shared-plan-day ${isRest?"is-rest":""}" aria-label="${escapeHtml(day)}: ${isRest?"recovery day":`${items.length} exercise${items.length===1?"":"s"}`}"><h4>${escapeHtml(day.slice(0,3))}<span>${isRest?"Recovery":`${items.length} exercise${items.length===1?"":"s"}`}</span></h4>${isRest?"<p>REST / RECOVERY</p>":items.length?`<ul>${list}</ul>`:"<p>Open training day</p>"}</section>`;
+}
+function communityPlanCard(record,index){
+  const stats=communityPlanStats(record),applied=state.communityAppliedId===record.id&&state.communityAppliedUpdatedAt===Number(record.updatedAt);
+  return `<article class="community-plan-card" data-community-plan="${escapeHtml(record.id)}"><div class="community-plan-card-head"><span class="community-plan-index">${String(index+1).padStart(2,"0")}</span><span class="community-plan-author">By ${escapeHtml(record.authorName)}</span></div><h3>${escapeHtml(record.title)}</h3><p class="community-plan-description">${escapeHtml(record.description||"A complete seven-day workout plan shared with the STRATA community.")}</p><div class="community-plan-meta"><span>${stats.trainingDays} training day${stats.trainingDays===1?"":"s"}</span><span>${stats.exercises} exercise${stats.exercises===1?"":"s"}</span><span>${escapeHtml(communityDateLabel(record.updatedAt||record.createdAt))}</span></div><details class="shared-plan-preview"><summary aria-label="Preview all 7 days of ${escapeHtml(record.title)} by ${escapeHtml(record.authorName)}">Preview all 7 days</summary><div class="shared-plan-week">${Monthly.DAYS.map((day)=>sharedPlanDayMarkup(day,record.plan)).join("")}</div></details><div class="community-plan-card-actions"><button class="button button-dark" data-apply-community="${escapeHtml(record.id)}" data-applied="${applied}" type="button" aria-label="${applied?"This exact version is already in My Plan":`Add ${escapeHtml(record.title)} by ${escapeHtml(record.authorName)} to My Plan`}" ${applied?"disabled":""}>${applied?"Added to My Plan ✓":"Add to My Plan"} <span>${applied?"✓":"→"}</span></button><a class="small-button" href="/planner.html">View mine</a></div></article>`;
+}
+function renderCommunityPlans(){
+  const grid=el("communityPlanGrid"),status=el("communityPlanStatus"),query=state.communityQuery.trim().toLocaleLowerCase();
+  grid.setAttribute?.("aria-busy",String(state.communityLoading));
+  if(state.communityLoading&&!state.communityPlans.length){grid.innerHTML='<div class="community-plan-state"><span class="community-state-mark" aria-hidden="true">↻</span><strong>Loading shared plans</strong><p>Getting the latest plans from the community.</p></div>';status.textContent="Loading shared plans…";el("communityLoadMore").hidden=true;return;}
+  const plans=query?state.communityPlans.filter((record)=>communityPlanSearchText(record).includes(query)):state.communityPlans;
+  if(!plans.length){
+    const failed=Boolean(state.communityError),filtered=Boolean(query&&state.communityPlans.length);
+    grid.innerHTML=`<div class="community-plan-state"><span class="community-state-mark" aria-hidden="true">${failed?"!":filtered?"⌕":"+"}</span><strong>${failed?"Plans could not load":filtered?"No matching plans":"No plans shared yet"}</strong><p>${failed?escapeHtml(state.communityError):filtered?"Try another plan name, creator, or exercise.":"When a member shares a week from their planner, it will appear here."}</p>${failed?'<button class="small-button" data-community-retry type="button">Try again</button>':""}</div>`;
+    status.textContent=failed?"Shared plans are temporarily unavailable.":filtered?"No loaded plans match your search.":"No community plans have been published yet.";
+  }else{
+    grid.innerHTML=plans.map((record,index)=>communityPlanCard(record,index)).join("");
+    status.textContent=state.communityError?`${plans.length} loaded plan${plans.length===1?"":"s"} shown · more plans could not load.`:`${plans.length} plan${plans.length===1?"":"s"} shown${query?` from ${state.communityPlans.length} loaded`:""}.`;
+  }
+  el("communityLoadMore").hidden=state.communityLoading||state.communityNextOffset===null;
+}
+function communityViewState(){
+  const cards=[...el("communityPlanGrid").querySelectorAll("[data-community-plan]")];
+  return{openIds:new Set(cards.filter((card)=>card.querySelector("details")?.open).map((card)=>card.dataset.communityPlan)),focusLoadMore:document.activeElement===el("communityLoadMore")};
+}
+function restoreCommunityView(view){
+  for(const card of el("communityPlanGrid").querySelectorAll("[data-community-plan]"))if(view.openIds.has(card.dataset.communityPlan)){const details=card.querySelector("details");if(details)details.open=true;}
+  if(view.focusLoadMore&&!el("communityLoadMore").hidden)el("communityLoadMore").focus?.();
+}
+async function loadCommunityPlans({reset=false}={}){
+  if(state.communityLoading)return;
+  const view=communityViewState();
+  if(reset){state.communityPlans=[];state.communityNextOffset=0;state.communityError="";state.communityLoaded=false;}
+  if(state.communityNextOffset===null&&!reset)return;
+  const offset=reset?0:state.communityNextOffset;
+  state.communityLoading=true;
+  if(!state.communityPlans.length)renderCommunityPlans();
+  else{el("communityPlanGrid").setAttribute?.("aria-busy","true");el("communityLoadMore").disabled=true;el("communityPlanStatus").textContent="Loading more shared plans…";}
+  try{
+    const data=await api(`/api/community-plans?limit=${COMMUNITY_PAGE_SIZE}&offset=${offset}`),incoming=(Array.isArray(data.plans)?data.plans:[]).map(normalizeCommunityPlan).filter(Boolean),plansById=new Map(state.communityPlans.map((plan)=>[plan.id,plan]));
+    incoming.forEach((plan)=>plansById.set(plan.id,plan));state.communityPlans=[...plansById.values()];
+    const rawNext=Number(data.pagination?.nextOffset);state.communityNextOffset=Number.isSafeInteger(rawNext)&&rawNext>offset?rawNext:null;state.communityError="";
+  }catch(error){state.communityError=error.message||"Please check your connection and try again.";}
+  finally{state.communityLoading=false;state.communityLoaded=true;el("communityLoadMore").disabled=false;renderCommunityPlans();restoreCommunityView(view);}
+}
+function openCommunityApplyDialog(id){
+  const record=state.communityPlans.find((plan)=>plan.id===String(id));if(!record)return;
+  const dialog=el("communityApplyDialog"),incoming=communityPlanStats(record),currentCount=weeklyPlanCount(state.weeklyPlan);
+  state.communityPendingId=record.id;el("communityApplyError").hidden=true;el("communityApplyError").textContent="";
+  el("communityApplyDescription").textContent=`Add “${record.title}” by ${record.authorName} directly to your weekly planner?`;
+  el("communityApplySummary").innerHTML=`<div><span>New week</span><strong>${escapeHtml(record.title)}</strong></div><div><span>Creator</span><strong>${escapeHtml(record.authorName)}</strong></div><div><span>New exercises</span><strong>${incoming.exercises}</strong></div><div><span>Your current week</span><strong>${currentCount} exercise${currentCount===1?"":"s"}</strong></div>`;
+  dialog.showModal?.();document.body.classList.add("dialog-open");el("communityApplyCancel").focus?.();
+}
+async function applyCommunityPlan(){
+  const record=state.communityPlans.find((plan)=>plan.id===state.communityPendingId);if(!record)return;
+  const dialog=el("communityApplyDialog"),confirm=el("communityApplyConfirm"),controls=[...dialog.querySelectorAll("button")];
+  dialog.dataset.busy="true";dialog.setAttribute?.("aria-busy","true");controls.forEach((control)=>{control.disabled=true;});confirm.textContent="Replacing your plan…";el("communityApplyError").hidden=true;
+  const controller=typeof globalThis.AbortController==="function"?new AbortController():null;
+  const timeout=controller?setTimeout(()=>controller.abort(),15_000):null;
+  try{
+    const result=await api(`/api/community-plans/${encodeURIComponent(record.id)}/apply`,{method:"POST",body:JSON.stringify({sourceUpdatedAt:Number(record.updatedAt),targetUpdatedAt:state.weeklyPlanUpdatedAt}),...(controller?{signal:controller.signal}:{})});
+    state.weeklyPlan=Monthly.normalizeWeeklyPlan(result.plan,state.exercises);state.weeklyPlanUpdatedAt=Number(result.planUpdatedAt)||state.weeklyPlanUpdatedAt;state.communityAppliedId=record.id;state.communityAppliedUpdatedAt=Number(record.updatedAt);updateMonthlySourceButtons();closeDialog("communityApplyDialog");state.communityPendingId=null;renderCommunityPlans();
+    const planLink=el("communityOpenPlan");planLink.hidden=false;el("communityPlanStatus").textContent=`“${record.title}” is now your weekly plan.`;planLink.focus?.();showToast("Community week added to My Plan.");
+  }catch(error){
+    if(error.code==="COMMUNITY_PLAN_CHANGED"){
+      const refreshed=await Promise.allSettled([api("/api/plan"),loadCommunityPlans({reset:true})]);
+      if(refreshed[0].status==="fulfilled"){
+        state.weeklyPlan=Monthly.normalizeWeeklyPlan(refreshed[0].value.plan,state.exercises);state.weeklyPlanUpdatedAt=Number(refreshed[0].value.planUpdatedAt)||0;
+      }
+      closeDialog("communityApplyDialog");state.communityPendingId=null;el("communityPlanStatus").textContent="A shared plan or your current week changed. Review the latest versions before trying again.";showToast("Plans changed — review them before replacing yours.");
+    }else{const node=el("communityApplyError");node.textContent=error.name==="AbortError"?"The request took too long. Your plan was not confirmed as changed; close this window and check My Plan before trying again.":error.message;node.hidden=false;}
+  }
+  finally{if(timeout!==null)clearTimeout(timeout);dialog.dataset.busy="false";dialog.setAttribute?.("aria-busy","false");controls.forEach((control)=>{control.disabled=false;});confirm.innerHTML='Replace with this plan <span>→</span>';}
+}
 
 function blankMonthlySchedule(){
   const training={Monday:["chest","triceps"],Wednesday:["back","biceps"],Friday:["legs","glutes"],Saturday:["shoulders","core"]};
@@ -517,6 +613,15 @@ el("monthlyFileInput").addEventListener("change",async(event)=>{
 el("monthlyPdfButton").addEventListener("click",printMonthlyPlan);
 el("monthlyShareButton").addEventListener("click",()=>void shareMonthlyPlan());
 el("monthlyEditButton").addEventListener("click",()=>{monthlyPlanForm.scrollIntoView?.({behavior:window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches?"auto":"smooth",block:"start"});el("monthlyTitle").focus?.({preventScroll:true});});
+el("communityPlanSearch").addEventListener("input",(event)=>{state.communityQuery=event.target.value;renderCommunityPlans();});
+el("communityRefresh").addEventListener("click",()=>void loadCommunityPlans({reset:true}));
+el("communityLoadMore").addEventListener("click",()=>void loadCommunityPlans());
+el("communityPlanGrid").addEventListener("click",(event)=>{
+  const apply=event.target.closest("[data-apply-community]"),retry=event.target.closest("[data-community-retry]");
+  if(apply)openCommunityApplyDialog(apply.dataset.applyCommunity);else if(retry)void loadCommunityPlans({reset:true});
+});
+el("communityApplyConfirm").addEventListener("click",()=>void applyCommunityPlan());
+el("communityApplyDialog").addEventListener("close",()=>{if(el("communityApplyDialog").dataset.busy!=="true")state.communityPendingId=null;});
 
 document.addEventListener("submit",async(event)=>{
   const form=event.target.closest("[data-rating-form]");if(!form)return;event.preventDefault();const id=form.dataset.ratingForm,data=Object.fromEntries(new FormData(form));const rating=Object.fromEntries(Object.entries(data).map(([key,value])=>[key,Number(value)]));const button=form.querySelector("button"),originalHtml=button.innerHTML;button.disabled=true;button.textContent="Saving…";
@@ -538,8 +643,8 @@ document.addEventListener("click",(event)=>{
 });
 
 document.querySelectorAll("dialog").forEach((dialog)=>{
-  dialog.addEventListener("click",(event)=>{if(event.target===dialog)closeDialog(dialog.id);});
-  dialog.addEventListener("cancel",(event)=>{event.preventDefault();closeDialog(dialog.id);});
+  dialog.addEventListener("click",(event)=>{if(event.target===dialog&&dialog.dataset.busy!=="true")closeDialog(dialog.id);});
+  dialog.addEventListener("cancel",(event)=>{event.preventDefault();if(dialog.dataset.busy!=="true")closeDialog(dialog.id);});
   dialog.addEventListener("close",syncDialogState);
 });
 function refreshCommunityRatingsWhenVisible(){
@@ -565,11 +670,11 @@ el("logoutButton").addEventListener("click",async()=>{try{await api("/api/logout
 
 async function init(){
   try{
-    const data=await api("/api/discovery");state.exercises=data.exercises;state.methodology=data.methodology;state.sources=data.sources;state.limited=new Set(data.limitedConfidenceExercises);state.preferences=data.preferences;state.user=data.user;state.weeklyPlan=data.weeklyPlan||null;state.monthlyPlan=data.monthlyPlan||null;
+    const data=await api("/api/discovery");state.exercises=data.exercises;state.methodology=data.methodology;state.sources=data.sources;state.limited=new Set(data.limitedConfidenceExercises);state.preferences=data.preferences;state.user=data.user;state.weeklyPlan=data.weeklyPlan||null;state.weeklyPlanUpdatedAt=Number(data.weeklyPlanUpdatedAt)||0;state.monthlyPlan=data.monthlyPlan||null;
     state.csrfToken=String(data.csrfToken||"");state.aggregate=new Map((data.ratings.aggregates||[]).map((item)=>[item.exercise_id,item]));state.userRatings=new Map((data.ratings.user||[]).map((item)=>[item.exercise_id,item]));state.ratingsRefreshedAt=Date.now();
     el("userName").textContent=data.user.name;el("catalogTotal").textContent=state.exercises.length;el("recommendationTitle").innerHTML=`BEST EXERCISES <em>FOR ${escapeHtml(data.user.name.split(/\s+/)[0].toUpperCase())}.</em>`;
-    renderProfile();populateFilters();renderMethodology();renderRecommendations();resetExplorerWindow();renderExplorer();renderCompareTray();populateMonthlyBuilder(state.monthlyPlan);
-  }catch(error){el("profileStatus").textContent="Unable to load";el("battleStatus").textContent=error.message;el("monthlyPlanStatus").textContent=error.message;el("recommendationGrid").innerHTML=`<div class="loading-card">${escapeHtml(error.message)}</div>`;el("exerciseGrid").innerHTML=`<div class="loading-card">${escapeHtml(error.message)}</div>`;showToast(error.message);}
+    renderProfile();populateFilters();renderRecommendations();resetExplorerWindow();renderExplorer();renderCompareTray();populateMonthlyBuilder(state.monthlyPlan);
+  }catch(error){el("profileStatus").textContent="Unable to load";el("battleStatus").textContent=error.message;el("monthlyPlanStatus").textContent=error.message;el("communityPlanStatus").textContent=error.message;el("recommendationGrid").innerHTML=`<div class="loading-card">${escapeHtml(error.message)}</div>`;el("exerciseGrid").innerHTML=`<div class="loading-card">${escapeHtml(error.message)}</div>`;showToast(error.message);}
   finally{initializeFeatureNavigation();}
 }
 

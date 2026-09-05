@@ -13,13 +13,34 @@ test("Strata+ feature blocks progressively enhance six visible workspaces",()=>{
   const panels=[...html.matchAll(/<section\b([^>]*\bdata-feature-panel="([^"]+)"[^>]*)>/g)];
   const blocks=[...html.matchAll(/<a\b[^>]*\bclass="[^"]*feature-block[^"]*"[^>]*\bdata-feature-target="([^"]+)"[^>]*>/g)];
 
-  assert.deepEqual(panels.map((match)=>match[2]).sort(),["battle","explorer","methodology","monthly","profile","recommendations"]);
+  assert.deepEqual(panels.map((match)=>match[2]).sort(),["battle","community","explorer","monthly","profile","recommendations"]);
   assert.equal(blocks.length,6);
   for(const [tag] of panels)assert.doesNotMatch(tag,/\bhidden\b/,"feature panels must remain visible when JavaScript is unavailable");
   for(const [tag] of blocks){
     assert.match(tag,/\baria-controls="[^"]+"/);
     assert.match(tag,/\baria-expanded="false"/);
   }
+});
+
+test("community plans preview a full week and require confirmation before replacing My Plan",()=>{
+  const html=read("pages","discover.html"),script=read("scripts","discover.js");
+  for(const id of ["communityPlans","communityPlanSearch","communityPlanGrid","communityPlanStatus","communityLoadMore","communityApplyDialog","communityApplyCancel","communityApplyConfirm","communityApplyWarning","communityOpenPlan"]){
+    assert.match(html,new RegExp(`\\bid="${id}"`),id);
+  }
+  assert.doesNotMatch(html,/data-feature-target="methodology"/);
+  assert.doesNotMatch(html,/>FitScore method</i);
+  assert.match(html,/Your current week will be replaced/i);
+  assert.match(html,/aria-describedby="communityApplyDescription communityApplyWarning"/);
+  assert.match(script,/\/api\/community-plans\?limit=/);
+  assert.match(script,/\/api\/community-plans\/\$\{encodeURIComponent\(record\.id\)\}\/apply/);
+  assert.match(script,/Monthly\.DAYS\.map\(\(day\)=>sharedPlanDayMarkup/);
+  assert.match(script,/Add to My Plan/);
+  assert.match(script,/sourceUpdatedAt:Number\(record\.updatedAt\)/);
+  assert.match(script,/targetUpdatedAt:state\.weeklyPlanUpdatedAt/);
+  assert.match(script,/communityApplyCancel"\)\.focus/);
+  assert.doesNotMatch(script,/items\.slice\(0,8\)/,"the preview must show every exercise that can be applied");
+  assert.match(script,/state\.weeklyPlan=Monthly\.normalizeWeeklyPlan\(result\.plan/);
+  assert.match(script,/communityApplyDialog/);
 });
 
 test("monthly workspace exposes private import, multi-muscle schedule, PDF, and sharing controls",()=>{
