@@ -117,18 +117,22 @@ function clickSelectDay(day){
   assert.equal(new Set(initialIds).size,32,"Initial planner page must not contain duplicate cards");
   assert.match(initialMarkup,/data-load-more-library/,"Expanded catalog should expose Load more");
   assert.match(initialMarkup,/Load 32 more/,"Desktop Load more should reveal the next 32 cards");
+  assert.match(initialMarkup,/>Add<\/button>/,"Library actions should use a clear text label instead of an unexplained symbol");
+  assert.match(initialMarkup,/>Video<\/a>/,"Tutorial actions should use a clear text label instead of an unexplained symbol");
   for(const day of DAYS){
     const chip=dayNavMarkup.match(new RegExp(`<button\\b(?=[^>]*data-day-chip="${day}")[^>]*>`))?.[0];
     assert.ok(chip,`${day} must have a quick-add day chip`);
     assert.match(chip,/\baria-pressed="(?:true|false)"/,`${day} day chip must expose its selected state`);
   }
   assert.equal((dayNavMarkup.match(/\baria-pressed="true"/g)||[]).length,1,"Exactly one quick-add day must be selected");
-  assert.equal(elements.get("plannerPlusCta").href,"/discover.html","Active Strata+ members should open their workspace directly");
-  assert.match(elements.get("plannerPlusCta").innerHTML,/Open Strata\+/);
-  assert.doesNotMatch(elements.get("plannerPlusCta").innerHTML,/free|trial/i);
   assert.match(html,/id="weekBoard"[^>]*aria-describedby="weekScrollHint"/,"The horizontal week must expose its scroll instructions");
   const finalMobileRule=plannerCss.slice(plannerCss.lastIndexOf("@media(max-width:760px)"),plannerCss.lastIndexOf("@media(max-width:480px)"));
   assert.match(finalMobileRule,/\.library-panel\{[^}]*\btop:auto\b/,"The final mobile cascade must cancel the desktop sticky offset");
+  assert.doesNotMatch(finalMobileRule,/\.planner-day-chip\{[^}]*min-width:0/,"The final mobile cascade must preserve accessible day-chip targets");
+  assert.match(plannerCss,/@media\(max-width:480px\)\{[^}]*\.library-panel\{[^}]*54svh[^}]*\}\.planner-day-chips\{grid-template-columns:repeat\(4,minmax\(44px,1fr\)\)/,"Small screens should expose four full-size day targets per row and leave the week within reach");
+  assert.match(html,/id="exportWeeklyPlan"[^>]*>Export week/,"Export should use a short, familiar label");
+  assert.match(html,/id="shareWeeklyPlan"[^>]*>Share week/,"Community publishing should not be described as a file upload");
+  assert.match(html,/id="userName" href="\/account\.html"/,"Signed-in planners should have a direct account link");
 
   clickSelectDay("Tuesday");
   assert.equal(vm.runInContext("state.selectedDay",context),"Tuesday","Day chips must update the quick-add target");
@@ -274,10 +278,10 @@ function clickSelectDay(day){
   await vm.runInContext("init()",context);
   assert.equal(elements.get("sharePlanGuest").hidden,false,"Guest planners should see the sign-in publishing prompt");
   assert.equal(elements.get("sharePlanAccount").hidden,true,"Guest planners must not see account publishing controls");
+  assert.equal(elements.get("userName").hidden,true,"Guest planners should not see a misleading account-name link");
   assert.equal(guestCommunityFetches,0,"Guest planners must not request private community management data");
-  assert.match(elements.get("plannerModeNotice").innerHTML,/Guest plan[\s\S]*not automatically transferred/i,"Guest copy must explain that signing in does not migrate the local plan");
+  assert.match(elements.get("plannerModeNotice").innerHTML,/Guest plan[\s\S]*separate synced account plan/i,"Guest copy must explain that signing in opens a separate plan");
   assert.doesNotMatch(elements.get("plannerModeNotice").innerHTML,/Sign in for cross-device sync/i);
-  assert.match(elements.get("plannerPlusCta").innerHTML,/Explore Strata\+/,"Unknown guest entitlement must not promise a new trial");
   guestStorageWrites.length=0;
   vm.runInContext("state.plan.days.Monday.push({instanceId:'guest-save-one',exerciseId:state.exercises[0].id,sets:3,reps:'8–12'});state.revision+=1;",context);
   assert.equal(await vm.runInContext("flushSave()",context),true,"A guest edit must save locally");

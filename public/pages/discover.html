@@ -16,15 +16,22 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="discover.css?v=6.9.5" />
+    <link rel="stylesheet" href="discover.css?v=6.9.6" />
   </head>
   <body>
     <a class="skip-link" href="#featureHub">Skip to Strata+ tools</a>
     <header class="studio-header">
       <a class="brand" href="/" aria-label="STRATA home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>STRATA</span></a>
       <nav class="studio-nav" aria-label="Primary navigation"><a class="active" href="/discover.html" aria-current="page">Strata+</a><a href="/planner.html">Plan week</a><a href="/">Index</a><a href="/install.html">Install</a></nav>
-      <div class="studio-user"><span id="userName">Account</span><button id="logoutButton" type="button">Sign out</button></div>
+      <div class="studio-user"><span id="userName">Member</span><a class="studio-account" href="/account.html">Account</a><button id="logoutButton" type="button">Sign out</button></div>
     </header>
+
+    <section class="discovery-load-error" id="discoveryLoadError" role="alert" aria-labelledby="discoveryLoadErrorTitle" aria-describedby="discoveryLoadErrorMessage" hidden>
+      <div class="studio-container discovery-load-error-inner">
+        <div><strong id="discoveryLoadErrorTitle">STRATA+ COULDN’T LOAD.</strong><p id="discoveryLoadErrorMessage">Check your connection, then try again.</p></div>
+        <button class="small-button" id="discoveryRetry" type="button">Try again <span aria-hidden="true">↻</span></button>
+      </div>
+    </section>
 
     <main>
       <section class="studio-hero">
@@ -201,7 +208,7 @@
 
     </main>
 
-    <footer class="build-footer">STRATA · Build 6.9.5 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
+    <footer class="build-footer">STRATA · Build 6.9.6 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
 
     <aside class="compare-tray" id="compareTray" hidden aria-label="Exercise comparison tray">
       <div><span>EXERCISE BATTLE</span><p id="compareNames">Choose 2–4 exercises</p></div>
@@ -222,9 +229,9 @@
       </div>
     </dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=6.9.5"></script>
-    <script src="discovery-core.js?v=6.9.5"></script>
-    <script src="monthly-plan-core.js?v=6.9.5"></script>
-    <script src="discover.js?v=6.9.5"></script>
+    <script src="/pwa.js?v=6.9.6"></script>
+    <script src="discovery-core.js?v=6.9.6"></script>
+    <script src="monthly-plan-core.js?v=6.9.6"></script>
+    <script src="discover.js?v=6.9.6"></script>
   </body>
 </html>

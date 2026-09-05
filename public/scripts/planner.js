@@ -79,15 +79,6 @@ function setReady(ready){
   el("weekBoard").setAttribute("aria-busy",String(!ready));
 }
 
-function renderPlusCta(){
-  const cta=el("plannerPlusCta"),discovery=state.user?.discovery;
-  let label="Explore Strata+",href="/pricing?trial=1";
-  if(discovery?.active){label="Open Strata+";href="/discover.html";}
-  else if(!state.guest&&discovery?.trial?.eligible){label="Start 10-day free trial";}
-  cta.href=href;
-  cta.innerHTML=`${label} <span aria-hidden="true">↗</span>`;
-}
-
 function renderDayNav(){
   const nav=el("plannerDayNav");
   if(!state.plan){nav.innerHTML="";return;}
@@ -237,7 +228,6 @@ async function publishWeeklyPlan(){
     if(shared)state.sharedPlans=[shared];
     else await loadSharedPlans();
     state.sharedPlansLoaded=true;state.pendingUnpublish="";el("sharePlanConfirm").checked=false;clearShareValidation();
-    renderOwnSharedPlans();
     setShareStatus("Your week is now available in the Strata+ community library.","success");
     showToast("Your week was published to Strata+.");
   }catch(error){
@@ -263,9 +253,9 @@ async function unpublishSharedPlan(id){
   try{
     await api(`/api/community-plans/${encodeURIComponent(id)}`,{method:"DELETE"});
     state.sharedPlans=state.sharedPlans.filter((item)=>String(item?.id)!==String(id));state.pendingUnpublish="";
-    renderOwnSharedPlans();setShareStatus("Your week was removed from Strata+. Your private Plan is unchanged.","success");showToast("Shared week unpublished.");removed=true;
+    setShareStatus("Your week was removed from Strata+. Your private Plan is unchanged.","success");showToast("Shared week unpublished.");removed=true;
   }catch(error){
-    state.pendingUnpublish="";renderOwnSharedPlans();setShareStatus(error.message||"Your shared week could not be removed.","error");showToast(error.message||"Could not unpublish the week.");
+    state.pendingUnpublish="";setShareStatus(error.message||"Your shared week could not be removed.","error");showToast(error.message||"Could not unpublish the week.");
   }finally{state.shareBusy=false;el("publishWeeklyPlan").disabled=false;el("refreshSharedPlans").disabled=false;el("ownSharedPlans").setAttribute("aria-busy","false");renderOwnSharedPlans();if(removed)el("refreshSharedPlans").focus?.();}
 }
 
@@ -291,7 +281,7 @@ function renderLibrary(){
   el("libraryResultStatus").textContent=items.length?`Showing ${visibleItems.length} of ${items.length} matching movement${items.length===1?"":"s"}.`:`No matching movements.`;
   el("libraryList").innerHTML=items.length?visibleItems.map((exercise,index)=>{
     const id=escapeHtml(exercise.id),name=escapeHtml(exercise.name),sub=escapeHtml(exercise.sub),equipment=escapeHtml(exercise.equipment),youtube=escapeHtml(exercise.youtube);
-    return `<article class="library-card" draggable="true" data-library-id="${id}" data-library-index="${index}"><div class="library-score"><span aria-hidden="true">${escapeHtml(exercise.score)}</span><span class="sr-only">STRATA score ${escapeHtml(exercise.score)}</span></div><div><h3>${name}</h3><p>${sub} · ${equipment}</p></div><div class="library-actions"><button data-quick-add="${id}" type="button" aria-label="Add ${name} to ${escapeHtml(state.selectedDay)}">+</button><a class="yt-link" href="${youtube}" target="_blank" rel="noreferrer" aria-label="Find ${name} tutorials on YouTube">▶</a></div></article>`;
+    return `<article class="library-card" draggable="true" data-library-id="${id}" data-library-index="${index}"><div class="library-score"><span aria-hidden="true">${escapeHtml(exercise.score)}</span><span class="sr-only">STRATA score ${escapeHtml(exercise.score)}</span></div><div><h3>${name}</h3><p>${sub} · ${equipment}</p></div><div class="library-actions"><button data-quick-add="${id}" type="button" aria-label="Add ${name} to ${escapeHtml(state.selectedDay)}">Add</button><a class="yt-link" href="${youtube}" target="_blank" rel="noreferrer" aria-label="Find ${name} tutorials on YouTube">Video</a></div></article>`;
   }).join("")+(!remaining?"":`<div class="library-load-more"><span>${visibleItems.length} of ${items.length}</span><button data-load-more-library type="button" aria-controls="libraryList">Load ${nextCount} more <span aria-hidden="true">↓</span></button></div>`):`<div class="loading">No matching movements.</div>`;
 }
 
@@ -308,7 +298,8 @@ function renderWeek(focusSelector=null){
     const items=state.plan.days[day],rest=state.plan.restDay===day,selected=state.selectedDay===day,conflict=rest&&items.length>0;
     const targetText=rest?"Recovery day":selected?"Adding here":"Add here";
     const restText=rest?"Current recovery day":items.length?"Clear day to make rest":"Make rest day";
-    return `<section class="day-column ${rest?"rest-day":""} ${selected?"selected-day":""} ${conflict?"rest-conflict":""}" data-day="${day}" aria-labelledby="day-title-${index}"><header class="day-head"><div class="day-index"><span>Day ${String(index+1).padStart(2,"0")}</span><span>${items.length} movement${items.length===1?"":"s"}</span></div><div class="day-title-row"><h2 id="day-title-${index}" tabindex="-1">${day}</h2><button class="day-target ${selected?"active":""}" data-select-day="${day}" type="button" aria-pressed="${selected}" ${rest?"disabled":""}>${targetText}</button></div>${rest?`<span class="rest-badge">${conflict?"Recovery day needs clearing":"Recommended rest"}</span>`:""}</header><button class="rest-toggle" data-set-rest="${day}" type="button" aria-pressed="${rest}" ${rest||items.length?"disabled":""}>${restText}</button>${rest?`<div class="rest-callout"><strong>${conflict?"Clear this day":"Recover"}</strong><p>${conflict?"Move every scheduled exercise to another day before saving further recovery changes.":"Keep this day free or use gentle mobility and walking."}</p></div>`:""}<div class="day-dropzone" data-drop-day="${day}" aria-label="${day} exercises">${items.length?items.map((item,itemIndex)=>scheduledMarkup(item,day,itemIndex,items.length)).join(""):`<div class="day-empty">${rest?"Recovery day · keep clear":"Drop exercises here"}</div>`}</div></section>`;
+    const emptyText=rest?"Recovery day · keep clear":selected?'Ready for exercises · use “Add” in the library':'Choose “Add here,” then add an exercise';
+    return `<section class="day-column ${rest?"rest-day":""} ${selected?"selected-day":""} ${conflict?"rest-conflict":""}" data-day="${day}" aria-labelledby="day-title-${index}"><header class="day-head"><div class="day-index"><span>Day ${String(index+1).padStart(2,"0")}</span><span>${items.length} movement${items.length===1?"":"s"}</span></div><div class="day-title-row"><h2 id="day-title-${index}" tabindex="-1">${day}</h2><button class="day-target ${selected?"active":""}" data-select-day="${day}" type="button" aria-pressed="${selected}" ${rest?"disabled":""}>${targetText}</button></div>${rest?`<span class="rest-badge">${conflict?"Recovery day needs clearing":"Recommended rest"}</span>`:""}</header><button class="rest-toggle" data-set-rest="${day}" type="button" aria-pressed="${rest}" ${rest||items.length?"disabled":""}>${restText}</button>${rest?`<div class="rest-callout"><strong>${conflict?"Clear this day":"Recover"}</strong><p>${conflict?"Move every scheduled exercise to another day before saving further recovery changes.":"Keep this day free or use gentle mobility and walking."}</p></div>`:""}<div class="day-dropzone" data-drop-day="${day}" aria-label="${day} exercises">${items.length?items.map((item,itemIndex)=>scheduledMarkup(item,day,itemIndex,items.length)).join(""):`<div class="day-empty">${emptyText}</div>`}</div></section>`;
   }).join("");
   renderDayNav();
   renderSummary();
@@ -513,7 +504,7 @@ async function performSave({keepalive=true,silent=false}={}){
       if(state.revision===revision)state.plan=result.plan;
       state.planUpdatedAt=Number(result.planUpdatedAt)||state.planUpdatedAt;state.lastSaveError=null;
       if(state.conflictReview&&state.savedRevision===state.revision)clearPlanConflict();
-      setSaveStatus(state.savedRevision===state.revision?(state.guest?"Saved on this device":"Saved to account"):"Unsaved changes");
+      setSaveStatus(state.savedRevision===state.revision?(state.guest?"Saved":"Saved to account"):"Unsaved changes");
       return true;
     }catch(error){
       let saveError=error;
@@ -752,7 +743,7 @@ async function init(){
   el("weekSummary").innerHTML="";
   el("weekBoard").innerHTML='<div class="planner-load-state">Loading your weekly plan…</div>';
   try{
-    const exercises=await api("/exercises.json?v=6.9.5");
+    const exercises=await api("/exercises.json?v=6.9.6");
     if(!Array.isArray(exercises))throw new Error("STRATA returned an incomplete exercise library.");
     state.exercises=exercises;
     let result;
@@ -764,16 +755,16 @@ async function init(){
     state.revision=0;state.savedRevision=0;state.savePromise=null;state.lastSaveError=null;
     const repairedRest=repairLegacyRestDay();
     state.selectedDay=DAYS.find((day)=>day!==state.plan.restDay)||"Monday";
-    el("userName").textContent=state.guest?"Guest plan":result.user.name;
+    el("userName").textContent=state.guest?"Account":result.user.name;
+    el("userName").hidden=state.guest;
     el("logoutButton").hidden=state.guest;
     el("plannerSignIn").hidden=!state.guest;
     el("plannerModeNotice").hidden=false;
     el("plannerModeNotice").innerHTML=state.guest
-      ? '<strong>No login needed.</strong> Guest plan saved only on this device and not automatically transferred when you sign in. <a href="/account.html?mode=login&amp;next=planner">Use a separate account plan across devices</a>.'
+      ? '<strong>Guest plan.</strong> This week stays on this device. Signing in opens a separate synced account plan. <a href="/account.html?mode=login&amp;next=planner">Open my account plan</a>.'
       : '<strong>Account plan.</strong> Changes sync securely across your signed-in devices.';
-    renderPlusCta();
     setReady(true);
-    resetLibraryWindow();renderFilters();renderLibrary();renderWeek();renderShareAccess();setSaveStatus(state.guest?"Saved on this device":"Saved to account");
+    resetLibraryWindow();renderFilters();renderLibrary();renderWeek();renderShareAccess();setSaveStatus(state.guest?"Saved":"Saved to account");
     if(!state.guest)void loadSharedPlans();
     if(repairedRest){queueSave();showToast(`Recovery moved to empty ${repairedRest} to keep it clear.`);}
     handlePendingAdd();

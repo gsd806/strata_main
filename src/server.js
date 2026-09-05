@@ -2852,7 +2852,7 @@ async function serveStatic(req,res,url) {
       const add=cleanText(url.searchParams.get("add"),80);
       if (/^[a-z0-9-]{2,80}$/.test(add)&&EXERCISE_IDS.has(add)) params.set("add",add);
     } else if (requested==="discover.html") {
-      params.set("next","pricing");
+      params.set("next","discover");
     }
     res.writeHead(302,{...securityHeaders(),Location:`/account.html?${params}`,"Cache-Control":"no-store"});
     res.end();

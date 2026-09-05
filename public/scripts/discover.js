@@ -26,12 +26,17 @@ const el=(id)=>document.getElementById(id);
 
 async function api(path,options={}) {
   const method=String(options.method||"GET").toUpperCase(),changesState=method!=="GET"&&method!=="HEAD";
-  const response=await fetch(path,{...options,credentials:"same-origin",headers:{Accept:"application/json",...(options.body?{"Content-Type":"application/json"}:{}),...(changesState&&state.csrfToken?{"X-CSRF-Token":state.csrfToken}:{}),...(options.headers||{})}});
+  let response;
+  try{
+    response=await fetch(path,{...options,credentials:"same-origin",headers:{Accept:"application/json",...(options.body?{"Content-Type":"application/json"}:{}),...(changesState&&state.csrfToken?{"X-CSRF-Token":state.csrfToken}:{}),...(options.headers||{})}});
+  }catch(cause){
+    throw Object.assign(new Error("Could not reach STRATA. Check your connection, then try again."),{code:"NETWORK_ERROR",cause});
+  }
   const data=await response.json().catch(()=>({}));
   if(!response.ok){
     const error=Object.assign(new Error(data.error||"Request failed."),{status:response.status,code:data.code||"REQUEST_FAILED"});
-    if(response.status===401)window.location.replace("/account.html?mode=login&next=pricing");
-    else if(response.status===402||data.code==="DISCOVERY_ACCESS_REQUIRED")window.location.replace("/pricing?reason=access-revoked");
+    if(response.status===401){error.redirecting=true;window.location.replace("/account.html?mode=login&next=discover");}
+    else if(response.status===402||data.code==="DISCOVERY_ACCESS_REQUIRED"){error.redirecting=true;window.location.replace("/pricing?reason=access-revoked");}
     throw error;
   }
   return data;
@@ -243,9 +248,22 @@ function metricMarkup(exercise){
 }
 
 function ratingOptions(selected){return [1,2,3,4,5].map((value)=>`<option value="${value}" ${Number(selected)===value?"selected":""}>${value} — ${{1:"Low",2:"Below average",3:"Average",4:"Strong",5:"Excellent"}[value]}</option>`).join("");}
-function ratingFormMarkup(exercise){
-  const current=state.userRatings.get(exercise.id)||{comfort:3,pump:3,enjoyment:3,stability:3,setup:3,overall:3};
+function ratingFormMarkup(exercise,draft=null){
+  const current=draft||state.userRatings.get(exercise.id)||{comfort:3,pump:3,enjoyment:3,stability:3,setup:3,overall:3};
   return `<form class="rating-form" data-rating-form="${exercise.id}"><div class="rating-grid">${[["comfort","Comfort"],["pump","Pump / target feel"],["enjoyment","Enjoyment"],["stability","Perceived stability"],["setup","Setup ease"],["overall","Overall"]].map(([key,label])=>`<label>${label}<select name="${key}">${ratingOptions(current[key])}</select></label>`).join("")}</div><button class="button button-dark" type="submit">${state.userRatings.has(exercise.id)?"Update my rating":"Save my rating"} <span>→</span></button></form>`;
+}
+
+function openRatingDraft(id){
+  if(state.activeExercise!==id||!el("detailDialog")?.open)return null;
+  const form=el("detailContent")?.querySelector?.("[data-rating-form]");
+  if(!form||form.dataset?.ratingForm!==id)return null;
+  const draft={};
+  for(const key of ["comfort","pump","enjoyment","stability","setup","overall"]){
+    const field=form.elements?.namedItem?.(key)||form.querySelector?.(`[name="${key}"]`),value=Number(field?.value);
+    if(!Number.isInteger(value)||value<1||value>5)return null;
+    draft[key]=value;
+  }
+  return draft;
 }
 
 function gainsAndLosses(reference,candidate){
@@ -254,7 +272,7 @@ function gainsAndLosses(reference,candidate){
 }
 
 function openDetail(id){
-  const exercise=exerciseById(id);if(!exercise)return;state.activeExercise=id;
+  const exercise=exerciseById(id);if(!exercise)return;const ratingDraft=openRatingDraft(id);state.activeExercise=id;
   const dialog=el("detailDialog");
   const baseline=weightedBaseline(exercise),adjustment=scoreAdjustment(exercise),personal=personalResult(exercise),aggregate=aggregateFor(id),sources=sourceSelection(exercise),alternatives=alternativesFor(exercise),confidence=state.limited.has(id)?"Limited":"Moderate";
   const community=communitySummary(id),ownRating=state.userRatings.get(id)||null;
@@ -269,7 +287,7 @@ function openDetail(id){
     </div><aside>
       <section class="detail-section"><h3>Practical decision</h3><p><strong>Stability:</strong> ${exercise.metrics.stability}/100 · <strong>Effective range:</strong> ${exercise.metrics.range}/100</p><p><strong>Resistance profile:</strong> ${escapeHtml(resistanceProfile(exercise))}</p><p><strong>Progression:</strong> ${exercise.metrics.progression}/100 · <strong>Setup:</strong> ${escapeHtml(setupLabel(exercise))}</p><p><strong>Editorial practicality:</strong> ${practicality(exercise)}/100</p><h4>Programming starting point</h4><p>${escapeHtml(exercise.sets)} sets · ${escapeHtml(exercise.reps)} reps · ${escapeHtml(exercise.rest)} rest</p><h4>Technique cues</h4><ul>${exercise.cues.map((cue)=>`<li>${escapeHtml(cue)}</li>`).join("")}</ul><h4>Consideration</h4><p>${escapeHtml(exercise.caution)}</p></section>
       <section class="detail-section" id="alternativeSection"><h3 id="alternativeTitle" tabindex="-1">Find an alternative</h3><div class="alternative-list">${alternatives.length?alternatives.map(({exercise:candidate,match})=>`<div class="alternative-item"><div><strong>${escapeHtml(candidate.name)}</strong><small>${escapeHtml(gainsAndLosses(exercise,candidate))}</small></div><span>${match}%</span><div class="alternative-actions"><button data-open-detail="${candidate.id}" type="button" aria-label="Open ${escapeHtml(candidate.name)} details">Open</button><a href="/planner.html?add=${encodeURIComponent(candidate.id)}" aria-label="Add ${escapeHtml(candidate.name)} to weekly plan">Plan +</a></div></div>`).join(""):"<p>No eligible same-target alternative under your saved profile.</p>"}</div><p>Match percentages are transparent editorial similarity scores based on target, pattern, resistance profile, equipment, skill, and factor profile.</p></section>
-      <section class="detail-section"><h3>Community score</h3><div class="rating-summary"><strong>${escapeHtml(community.hasRatings?`${community.score}/10`:community.label)}</strong><span>${escapeHtml(community.attribution)}</span></div>${community.hasRatings?`<div class="community-breakdown">${[["comfort","Comfort"],["pump","Pump"],["enjoyment","Enjoyment"],["stability","Stability"],["setup","Setup"],["overall","Overall"]].map(([key,label])=>`<span>${label}<b>${ratingAverage(aggregate[key])}/5</b></span>`).join("")}</div>`:""}${ownRating?`<p><strong>Your rating:</strong> ${Number(ownRating.overall)}/5 overall</p>`:"<p>Be the first Strata+ user to rate this exercise.</p>"}<p>Your rating is tied to your account and replaces your prior rating. It never changes the official FitScore.</p>${ratingFormMarkup(exercise)}</section>
+      <section class="detail-section"><h3>Community score</h3><div class="rating-summary"><strong>${escapeHtml(community.hasRatings?`${community.score}/10`:community.label)}</strong><span>${escapeHtml(community.attribution)}</span></div>${community.hasRatings?`<div class="community-breakdown">${[["comfort","Comfort"],["pump","Pump"],["enjoyment","Enjoyment"],["stability","Stability"],["setup","Setup"],["overall","Overall"]].map(([key,label])=>`<span>${label}<b>${ratingAverage(aggregate[key])}/5</b></span>`).join("")}</div>`:""}${ownRating?`<p><strong>Your rating:</strong> ${Number(ownRating.overall)}/5 overall</p>`:"<p>Be the first Strata+ user to rate this exercise.</p>"}<p>Your rating is tied to your account and replaces your prior rating. It never changes the official FitScore.</p>${ratingFormMarkup(exercise,ratingDraft)}</section>
     </aside></div></div>`;
   if(!dialog.open)dialog.showModal();document.body.classList.add("dialog-open");
 }
@@ -669,15 +687,37 @@ el("battleForm").addEventListener("submit",(event)=>{event.preventDefault();read
 el("battleReset").addEventListener("click",()=>{state.compare=[];el("battleResults").hidden=true;renderCompareTray();renderRecommendations();renderExplorer();});
 el("shareRanking").addEventListener("click",()=>void shareCard("ranking"));
 el("logoutButton").addEventListener("click",async()=>{try{await api("/api/logout",{method:"POST"});}finally{window.location.replace("/");}});
+el("discoveryRetry").addEventListener("click",()=>{void init();});
 
+let discoveryLoading=false;
+function initialLoadMessage(error){
+  if(error?.code==="NETWORK_ERROR")return error.message;
+  if(Number(error?.status)>=500)return "Strata+ is temporarily unavailable. Please try again in a moment.";
+  return "Strata+ could not load. Please try again.";
+}
+function showInitialLoadProgress(){
+  el("discoveryLoadError").hidden=true;el("discoveryRetry").disabled=true;
+  el("profileStatus").textContent="Loading profile…";el("battleStatus").textContent="Loading exercises…";el("monthlyPlanStatus").textContent="Loading planner…";el("communityPlanStatus").textContent="Loading shared plans…";
+  el("recommendationGrid").innerHTML='<div class="loading-card">Building your ranking…</div>';
+  el("exerciseGrid").hidden=false;el("exerciseGrid").innerHTML='<div class="loading-card">Loading exercise intelligence…</div>';el("emptyState").hidden=true;
+}
+function showInitialLoadError(error){
+  const message=initialLoadMessage(error);
+  el("profileStatus").textContent="Unable to load";el("battleStatus").textContent=message;el("monthlyPlanStatus").textContent=message;el("communityPlanStatus").textContent=message;
+  el("recommendationGrid").innerHTML=`<div class="loading-card">${escapeHtml(message)}</div>`;el("exerciseGrid").innerHTML=`<div class="loading-card">${escapeHtml(message)}</div>`;
+  el("discoveryLoadErrorMessage").textContent=message;el("discoveryLoadError").hidden=false;showToast(message);
+}
 async function init(){
+  if(discoveryLoading)return;
+  discoveryLoading=true;showInitialLoadProgress();
   try{
     const data=await api("/api/discovery");state.exercises=data.exercises;state.methodology=data.methodology;state.sources=data.sources;state.limited=new Set(data.limitedConfidenceExercises);state.preferences=data.preferences;state.user=data.user;state.weeklyPlan=data.weeklyPlan||null;state.weeklyPlanUpdatedAt=Number(data.weeklyPlanUpdatedAt)||0;state.monthlyPlan=data.monthlyPlan||null;
     state.csrfToken=String(data.csrfToken||"");state.aggregate=new Map((data.ratings.aggregates||[]).map((item)=>[item.exercise_id,item]));state.userRatings=new Map((data.ratings.user||[]).map((item)=>[item.exercise_id,item]));state.ratingsRefreshedAt=Date.now();
     el("userName").textContent=data.user.name;el("catalogTotal").textContent=state.exercises.length;el("recommendationTitle").innerHTML=`BEST EXERCISES <em>FOR ${escapeHtml(data.user.name.split(/\s+/)[0].toUpperCase())}.</em>`;
     renderProfile();populateFilters();renderRecommendations();resetExplorerWindow();renderExplorer();renderCompareTray();populateMonthlyBuilder(state.monthlyPlan);
     activateFeature(state.activeFeature||FEATURE_DEFAULT);
-  }catch(error){el("profileStatus").textContent="Unable to load";el("battleStatus").textContent=error.message;el("monthlyPlanStatus").textContent=error.message;el("communityPlanStatus").textContent=error.message;el("recommendationGrid").innerHTML=`<div class="loading-card">${escapeHtml(error.message)}</div>`;el("exerciseGrid").innerHTML=`<div class="loading-card">${escapeHtml(error.message)}</div>`;showToast(error.message);}
+  }catch(error){if(!error?.redirecting)showInitialLoadError(error);}
+  finally{discoveryLoading=false;el("discoveryRetry").disabled=false;}
 }
 
 initializeFeatureNavigation();

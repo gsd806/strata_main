@@ -26,6 +26,7 @@ class Element{
   removeAttribute(name){delete this.attributes[name];}
   getAttribute(name){return this.attributes[name]??null;}
   focus(){this.focused=true;}
+  scrollIntoView(){this.scrolled=true;}
   prepend(node){this.prepended=node;}
   querySelector(selector){return selector==="span"?this.statusText:null;}
 }
@@ -41,7 +42,6 @@ function createPage({search="",route}){
   elements.get("signedInCard").hidden=true;
   elements.get("signupMessage").hidden=true;
   elements.get("loginMessage").hidden=true;
-  elements.get("accountRetry").hidden=true;
   elements.get("storageState").statusText=new Element("storageText");
   const authGrid=new Element("authGrid"),navigations=[],requests=[],replaced=[];
   const location={search,href:`http://strata.test/account.html${search}`,assign:(path)=>navigations.push(path),replace:(path)=>navigations.push(path)};
@@ -74,6 +74,25 @@ test("native forms remain available without the JavaScript enhancement",()=>{
   assert.match(html,/<form id="loginForm" action="\/auth\/login" method="post"/);
   assert.match(html,/<section class="account-access" id="accountAccess"[^>]*>/);
   assert.doesNotMatch(html,/<section class="account-access" id="accountAccess"[^>]*hidden/);
+  assert.doesNotMatch(html,/accountRetry/);
+  assert.doesNotMatch(script,/accountRetry/);
+});
+
+test("explicit account modes bring the requested form into view on every viewport",async()=>{
+  for(const mode of ["signup","login"]){
+    const page=createPage({
+      search:`?mode=${mode}`,
+      route:async(path)=>{
+        if(path==="/api/status")return jsonResponse(200,{persistent:true});
+        if(path==="/healthz")return jsonResponse(200,{ok:true});
+        if(path==="/api/me")return jsonResponse(401,{error:"Not signed in."});
+        throw new Error(`Unexpected route ${path}`);
+      }
+    });
+    await settle();
+    assert.equal(page.elements.get(`${mode}Panel`).scrolled,true,`${mode} panel should scroll into view`);
+    assert.equal(page.elements.get(`${mode}Title`).focused,true,`${mode} title should receive focus`);
+  }
 });
 
 test("login accepts existing password lengths while new passwords keep the stronger minimum",()=>{

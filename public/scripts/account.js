@@ -2,7 +2,8 @@
 
 const el=(id)=>document.getElementById(id);
 const params=new URLSearchParams(location.search);
-const mode=params.get("mode")==="login"?"login":"signup";
+const requestedMode=params.get("mode");
+const mode=requestedMode==="login"?"login":"signup";
 const add=params.get("add");
 const queryError=params.get("error");
 const authForms={signup:el("signupForm"),login:el("loginForm")};
@@ -152,10 +153,11 @@ function friendlyAuthError(error,authMode){
 }
 
 function showRequestedPanel(){
-  if(mode!=="login")return;
-  const compact=globalThis.matchMedia?.("(max-width: 720px)").matches;
-  if(!compact)return;
-  requestAnimationFrame(()=>el("loginTitle").focus({preventScroll:false}));
+  if(requestedMode!=="login"&&requestedMode!=="signup")return;
+  requestAnimationFrame(()=>{
+    preferredPanel.scrollIntoView?.({block:"start"});
+    el(`${mode}Title`).focus({preventScroll:true});
+  });
 }
 
 function showAccess(sessionError=""){
@@ -223,7 +225,6 @@ async function initialize(){
   el("accountAccess").hidden=true;
   el("signedInCard").hidden=true;
   el("accountLoading").hidden=false;
-  el("accountRetry").hidden=true;
   el("accountLoadingMessage").textContent="Confirming whether you are already signed in.";
   void updateStorageStatus();
   try{
@@ -289,8 +290,6 @@ function enhanceForm(authMode){
     }
   });
 }
-
-el("accountRetry").addEventListener("click",()=>{void initialize();});
 
 function securityError(error){
   if(error?.code==="network")return "Could not reach STRATA. Check your connection and try again.";
