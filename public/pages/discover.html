@@ -16,7 +16,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="discover.css?v=6.9.7" />
+    <link rel="stylesheet" href="discover.css?v=6.9.8" />
   </head>
   <body>
     <a class="skip-link" href="#featureHub">Skip to Strata+ tools</a>
@@ -40,11 +40,17 @@
           <div>
             <p class="eyebrow"><span></span> Private Strata+ studio</p>
             <h1>CHOOSE BETTER.<br /><em>KNOW WHY.</em></h1>
-            <p>Compare movements, find close alternatives, build a full month, and discover weekly plans shared by the STRATA community.</p>
-            <div class="hero-actions"><a class="button button-accent" href="#recommendations" data-feature-target="recommendations">Best for you <span>↘</span></a><a class="text-link" href="#communityPlans" data-feature-target="community">Browse community plans →</a></div>
-            <p class="hero-membership"><span aria-hidden="true">✓</span> One private workspace · six focused tools</p>
+            <p>Compare movements, build a focused session, find close alternatives, shape a full month, and discover weekly plans shared by the STRATA community.</p>
+            <div class="hero-actions"><a class="button button-accent" href="#recommendations" data-feature-target="recommendations">Best for you <span aria-hidden="true">↘</span></a><a class="text-link" href="#communityPlans" data-feature-target="community">Browse community plans <span aria-hidden="true">→</span></a></div>
+            <p class="hero-membership"><span aria-hidden="true">✓</span> One private workspace · seven focused tools</p>
           </div>
-          <div class="hero-stats" aria-label="Strata+ workspace statistics"><div><strong id="catalogTotal">200</strong><span>Exercises</span></div><div><strong>2–4</strong><span>Compare</span></div><div><strong>5</strong><span>Score factors</span></div></div>
+          <aside class="weekly-pulse" id="weeklyPulse" aria-labelledby="weeklyPulseTitle">
+            <div class="weekly-pulse-top"><p id="weeklyPulseEyebrow">Next in your week</p><span><i aria-hidden="true"></i> Plan pulse</span></div>
+            <h2 id="weeklyPulseTitle">TODAY, AT A GLANCE.</h2>
+            <p id="weeklyPulseDetail" role="status" aria-live="polite">Checking your saved week for the next workout…</p>
+            <div class="weekly-pulse-progress" aria-hidden="true"><span id="weeklyPulseBar"></span></div>
+            <div class="weekly-pulse-footer"><span><strong id="catalogTotal">200</strong> movement library</span><a id="weeklyPulseAction" href="/planner.html">Open weekly plan <span aria-hidden="true">→</span></a></div>
+          </aside>
         </div>
       </section>
 
@@ -58,6 +64,7 @@
             <a class="feature-block" href="#profile" data-feature-target="profile" aria-controls="profile" aria-expanded="false"><span>04 / Preferences</span><strong>Tune my ranking</strong><small>Set your goal, experience, equipment, and movement limits.</small><b aria-hidden="true">↘</b></a>
             <a class="feature-block" href="#communityPlans" data-feature-target="community" aria-controls="communityPlans" aria-expanded="false"><span>05 / Community plans</span><strong>Find a week</strong><small>Preview a shared week, then choose whether to replace your current plan.</small><b aria-hidden="true">↘</b></a>
             <a class="feature-block" href="#monthlyPlan" data-feature-target="monthly" aria-controls="monthlyPlan" aria-expanded="false"><span>06 / Plan</span><strong>Pick my workouts</strong><small>Turn your weekly split into a complete, downloadable 31-day plan.</small><b aria-hidden="true">↘</b></a>
+            <a class="feature-block feature-block-session" href="#sessionBuilder" data-feature-target="session" aria-controls="sessionBuilder" aria-expanded="false"><span>07 / Session</span><strong>Build today’s workout</strong><small>Turn your profile and available time into one focused routine you can add to Plan.</small><b aria-hidden="true">↘</b></a>
           </nav>
           <p class="sr-only" id="featureStatus" role="status" aria-live="polite"></p>
         </div>
@@ -100,6 +107,38 @@
           <a class="tool-menu-link" href="#featureHub">All Strata+ tools ↑</a>
           <div class="section-heading"><div><p class="kicker">01 / Personalized shortlist</p><h2 id="recommendationTitle" tabindex="-1">BEST EXERCISES <em>FOR YOU.</em></h2></div><div class="heading-action"><p id="recommendationSummary">Based on your saved selection rules.</p><button class="small-button" id="shareRanking" type="button">Share shortlist ↗</button></div></div>
           <div class="recommendation-grid" id="recommendationGrid"><div class="loading-card">Building your ranking…</div></div>
+        </div>
+      </section>
+
+      <section class="session-section feature-panel" id="sessionBuilder" data-feature-panel="session" aria-labelledby="sessionBuilderTitle">
+        <div class="session-ambient" aria-hidden="true"></div>
+        <div class="studio-container">
+          <a class="tool-menu-link tool-menu-link-light" href="#featureHub">All Strata+ tools ↑</a>
+          <div class="section-heading session-heading">
+            <div><p class="kicker kicker-light">07 / Personalized workout builder</p><h2 id="sessionBuilderTitle" tabindex="-1">BUILD TODAY’S <em>SESSION.</em></h2></div>
+            <p>Choose your training focus, time available, and planner day. Strata+ uses your saved equipment, experience, goals, and movement limits to build a compact routine.</p>
+          </div>
+
+          <form class="session-builder" id="sessionBuilderForm">
+            <div class="session-builder-intro">
+              <span class="session-builder-index" aria-hidden="true">07</span>
+              <div><strong>SET THE BRIEF.</strong><p>Three choices are enough. You can review every movement before adding the complete routine to your week.</p></div>
+            </div>
+            <div class="session-controls">
+              <label for="sessionGroup"><span>Training focus</span><select id="sessionGroup" name="group"><option value="full">Full body</option><option value="upper">Upper body</option><option value="lower">Lower body</option><option value="push">Push</option><option value="pull">Pull</option><option value="core">Core</option></select></label>
+              <label for="sessionLength"><span>Time available</span><select id="sessionLength" name="length"><option value="20">Quick · 20 min</option><option value="35" selected>Focused · 35 min</option><option value="50">Extended · 50 min</option></select></label>
+              <label for="sessionDay"><span>Add to planner day</span><select id="sessionDay" name="day"><option value="Monday">Monday</option><option value="Tuesday">Tuesday</option><option value="Wednesday">Wednesday</option><option value="Thursday">Thursday</option><option value="Friday">Friday</option><option value="Saturday">Saturday</option><option value="Sunday">Sunday</option></select></label>
+            </div>
+            <div class="session-builder-actions"><button class="button button-accent" id="sessionGenerate" type="submit" aria-controls="sessionResults">Build my session <span aria-hidden="true">→</span></button><p id="sessionStatus" role="status" aria-live="polite" aria-atomic="true">Choose your brief, then build a session.</p></div>
+          </form>
+
+          <section class="session-results" id="sessionResults" aria-labelledby="sessionResultsTitle" aria-busy="false">
+            <div class="session-empty-state">
+              <span aria-hidden="true">03—07</span>
+              <div><h3 id="sessionResultsTitle">YOUR ROUTINE WILL APPEAR HERE.</h3><p>Strata+ will prioritize personal fit, useful exercise order, and a practical amount of work for the time selected.</p></div>
+            </div>
+          </section>
+          <div class="session-result-actions"><button class="button button-accent" id="sessionAddAll" type="button" hidden>Add all to selected day <span aria-hidden="true">→</span></button><a class="small-button session-open-plan" id="sessionOpenPlan" href="/planner.html" hidden>Open weekly plan →</a></div>
         </div>
       </section>
 
@@ -209,7 +248,7 @@
 
     </main>
 
-    <footer class="build-footer">STRATA · Build 6.9.7 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
+    <footer class="build-footer">STRATA · Build 6.9.8 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
 
     <aside class="compare-tray" id="compareTray" hidden aria-label="Exercise comparison tray">
       <div><span>EXERCISE BATTLE</span><p id="compareNames">Choose 2–4 exercises</p></div>
@@ -230,9 +269,9 @@
       </div>
     </dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=6.9.7"></script>
-    <script src="discovery-core.js?v=6.9.7"></script>
-    <script src="monthly-plan-core.js?v=6.9.7"></script>
-    <script src="discover.js?v=6.9.7"></script>
+    <script src="/pwa.js?v=6.9.8"></script>
+    <script src="discovery-core.js?v=6.9.8"></script>
+    <script src="monthly-plan-core.js?v=6.9.8"></script>
+    <script src="discover.js?v=6.9.8"></script>
   </body>
 </html>

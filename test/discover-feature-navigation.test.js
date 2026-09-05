@@ -8,14 +8,14 @@ const {join}=require("node:path");
 const PROJECT_ROOT=join(__dirname,"..");
 const read=(...parts)=>readFileSync(join(PROJECT_ROOT,"public",...parts),"utf8");
 
-test("Strata+ feature blocks progressively enhance six visible workspaces",()=>{
+test("Strata+ feature blocks progressively enhance seven visible workspaces",()=>{
   const html=read("pages","discover.html");
   const script=read("scripts","discover.js");
   const panels=[...html.matchAll(/<section\b([^>]*\bdata-feature-panel="([^"]+)"[^>]*)>/g)];
   const blocks=[...html.matchAll(/<a\b[^>]*\bclass="[^"]*feature-block[^"]*"[^>]*\bdata-feature-target="([^"]+)"[^>]*>/g)];
 
-  assert.deepEqual(panels.map((match)=>match[2]).sort(),["battle","community","explorer","monthly","profile","recommendations"]);
-  assert.equal(blocks.length,6);
+  assert.deepEqual(panels.map((match)=>match[2]).sort(),["battle","community","explorer","monthly","profile","recommendations","session"]);
+  assert.equal(blocks.length,7);
   for(const [tag] of panels)assert.doesNotMatch(tag,/\bhidden\b/,"feature panels must remain visible when JavaScript is unavailable");
   for(const [tag] of blocks){
     assert.match(tag,/\baria-controls="[^"]+"/);
@@ -23,6 +23,31 @@ test("Strata+ feature blocks progressively enhance six visible workspaces",()=>{
   }
   assert.match(html,/class="studio-account" href="\/account\.html">Account<\/a>/);
   assert.match(script,/account\.html\?mode=login&next=discover/);
+});
+
+test("session builder explains a personalized routine and adds it with plan concurrency protection",()=>{
+  const html=read("pages","discover.html"),script=read("scripts","discover.js");
+  for(const id of ["sessionBuilder","sessionBuilderForm","sessionGroup","sessionLength","sessionGenerate","sessionDay","sessionResults","sessionResultsTitle","sessionStatus","sessionAddAll","sessionOpenPlan"]){
+    assert.match(html,new RegExp(`\\bid="${id}"`),id);
+  }
+  for(const focus of ["full","upper","lower","push","pull","core"])assert.match(html,new RegExp(`<option value="${focus}"`),focus);
+  for(const minutes of [20,35,50])assert.match(html,new RegExp(`<option value="${minutes}"`),String(minutes));
+  assert.match(html,/id="sessionResults"[^>]*aria-labelledby="sessionResultsTitle"/);
+  assert.match(script,/Core\.buildSession\(\{exercises:state\.exercises,preferences:state\.preferences/);
+  assert.match(script,/Core\.mergeSessionIntoPlan\(state\.weeklyPlan,day,state\.session\)/);
+  assert.match(script,/expectedPlanUpdatedAt:state\.weeklyPlanUpdatedAt/);
+  assert.match(script,/error\.status===409\|\|error\.code==="PLAN_CHANGED"/);
+  assert.match(script,/latest plan is loaded; review the selected day, then add the session again/i);
+  assert.match(script,/Time is an estimate; actual duration changes with setup, rest, and training pace/);
+  assert.ok((script.match(/id="sessionResultsTitle"/g)||[]).length>=2,"success and error rendering must retain the results label target");
+});
+
+test("weekly pulse uses saved-plan counts without implying workout completion or readiness",()=>{
+  const html=read("pages","discover.html"),script=read("scripts","discover.js");
+  for(const id of ["weeklyPulse","weeklyPulseEyebrow","weeklyPulseTitle","weeklyPulseDetail","weeklyPulseBar","weeklyPulseAction"])assert.match(html,new RegExp(`\\bid="${id}"`),id);
+  assert.match(script,/Core\.weeklyPulse\(state\.weeklyPlan,\{profileDays:state\.preferences\.days\}\)/);
+  assert.match(script,/weeklyPulseBar"\)\.setAttribute\("style",`width:\$\{pulse\.progressPercent\}%`/);
+  assert.doesNotMatch(script,/weeklyPulse[^\n]*(?:recovered|readiness|completed)/i);
 });
 
 test("community plans preview a full week and require confirmation before replacing My Plan",()=>{
@@ -75,7 +100,8 @@ test("Strata+ feature navigation owns visibility, URL state, focus, and reduced 
   assert.doesNotMatch(script,/finally\{initializeFeatureNavigation\(\);\}/);
   assert.match(css,/\.feature-panel\[hidden\]\s*\{\s*display:\s*none\s*!important/);
   assert.match(css,/@media \(prefers-reduced-motion: reduce\)/);
-  assert.match(css,/\.toast, \.feature-block \{ transition: none; \}/);
+  assert.match(css,/\*,\*::before,\*::after\s*\{\s*animation:none\s*!important;\s*transition:none\s*!important/);
+  assert.match(css,/\.session-result-card:hover[^}]*\{\s*transform:none/);
 });
 
 test("Strata+ initial loading offers a normalized, retryable error without replacing auth redirects",()=>{
