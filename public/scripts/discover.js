@@ -704,7 +704,7 @@ function showInitialLoadProgress(){
 function showInitialLoadError(error){
   const message=initialLoadMessage(error);
   el("profileStatus").textContent="Unable to load";el("battleStatus").textContent=message;el("monthlyPlanStatus").textContent=message;el("communityPlanStatus").textContent=message;
-  el("recommendationGrid").innerHTML=`<div class="loading-card">${escapeHtml(message)}</div>`;el("exerciseGrid").innerHTML=`<div class="loading-card">${escapeHtml(message)}</div>`;
+  el("recommendationGrid").innerHTML=`<div class="loading-card load-error-card">${escapeHtml(message)}</div>`;el("exerciseGrid").innerHTML=`<div class="loading-card load-error-card">${escapeHtml(message)}</div>`;
   el("discoveryLoadErrorMessage").textContent=message;el("discoveryLoadError").hidden=false;showToast(message);
 }
 async function init(){

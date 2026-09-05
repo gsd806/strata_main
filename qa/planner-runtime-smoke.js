@@ -133,6 +133,9 @@ function clickSelectDay(day){
   assert.match(html,/id="exportWeeklyPlan"[^>]*>Export week/,"Export should use a short, familiar label");
   assert.match(html,/id="shareWeeklyPlan"[^>]*>Share week/,"Community publishing should not be described as a file upload");
   assert.match(html,/id="userName" href="\/account\.html"/,"Signed-in planners should have a direct account link");
+  assert.equal((html.match(/class="planner-workflow"/g)||[]).length,1,"Planner onboarding should be a single compact workflow");
+  assert.match(html,/Build a weekly plan in three steps/,"Planner workflow should describe its purpose to assistive technology");
+  assert.match(plannerCss,/\.day-empty::before\s*\{[^}]*content:"\+"/,"Empty days should have a visible add cue");
 
   clickSelectDay("Tuesday");
   assert.equal(vm.runInContext("state.selectedDay",context),"Tuesday","Day chips must update the quick-add target");
