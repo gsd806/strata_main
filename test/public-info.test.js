@@ -34,12 +34,13 @@ test("homepage publishes the founder story without exposing a residential addres
 });
 
 test("published Strata+ price and refund promise are exact and consistent",()=>{
-  assert.equal(BUILD,"6.9.7");
+  assert.equal(BUILD,"6.9.8");
   const pricingHtml=read("pricing.html"),pricing=text("pricing.html"),refunds=text("refunds.html"),terms=text("terms.html");
   assert.match(pricing,/Strata\+/);
   assert.match(pricing,/\$5\.99 USD/i);
   assert.match(pricing,/one[- ]time/i);
   assert.match(pricing,/no recurring subscription/i);
+  assert.match(pricing,/personalized session builder/i);
   assert.match(pricing,/community weekly plans/i);
   assert.match(pricing,/31-day planner/i);
   assert.match(pricingHtml,/href="\/planner\.html">Open free planner/);

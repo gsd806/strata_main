@@ -98,6 +98,95 @@ test("exercise battle rejects incompatible targets and all-ineligible choices",(
   assert.match(unavailable.reason,/none|equipment|constraints/i);
 });
 
+test("session builder is deterministic, time-bounded, and varied across every focus",()=>{
+  const allEquipment={...preferences,equipment:[...new Set(exercises.map((exercise)=>exercise.equipment))]};
+  const expectedCounts=new Map([[20,3],[35,4],[50,6]]);
+  for(const focus of Object.keys(Core.SESSION_FOCUSES))for(const [minutes,count] of expectedCounts){
+    const first=Core.buildSession({exercises,preferences:allEquipment,focus,minutes});
+    const second=Core.buildSession({exercises,preferences:allEquipment,focus,minutes});
+    assert.deepEqual(first.items.map((item)=>item.exerciseId),second.items.map((item)=>item.exerciseId),`${focus} ${minutes} must be deterministic`);
+    assert.equal(first.items.length,count,`${focus} ${minutes} movement count`);
+    assert.equal(new Set(first.items.map((item)=>item.exerciseId)).size,count,`${focus} ${minutes} must not repeat exercises`);
+    assert.equal(new Set(first.items.map((item)=>item.role)).size,count,`${focus} ${minutes} must cover distinct programmed roles`);
+    assert.ok(first.workingSets>=count*2&&first.workingSets<=count*4,`${focus} ${minutes} working sets`);
+    assert.match(first.summary,new RegExp(`about ${minutes} minutes`));
+    for(const [index,item] of first.items.entries()){
+      assert.equal(Core.sessionFocusMatches(item.exercise,focus),true,`${item.exerciseId} must fit ${focus}`);
+      assert.equal(Core.sessionRoleMatches(item.exercise,Core.SESSION_FOCUSES[focus].slots[index]),true,`${item.exerciseId} must fulfill ${item.role}`);
+      assert.equal(Core.personalResult(item.exercise,allEquipment).eligible,true,`${item.exerciseId} must remain profile-eligible`);
+      assert.ok(Number.isInteger(item.sets)&&item.sets>=1&&item.sets<=4,item.exerciseId);
+      assert.equal(item.reps,item.exercise.reps);
+      assert.equal(item.rest,item.exercise.rest);
+      assert.ok(item.match>=40&&item.match<=99,item.exerciseId);
+      assert.ok(item.reasons.length>=2,item.exerciseId);
+    }
+  }
+});
+
+test("session builder honors equipment and movement constraints before ranking",()=>{
+  const constrained={goal:"balanced",level:"Beginner",days:3,equipment:["Dumbbells","Machine","Cables"],preferences:["stable","simple-setup"],limitations:["no-overhead","no-floor","no-unilateral"]};
+  for(const focus of Object.keys(Core.SESSION_FOCUSES).filter((value)=>value!=="core")){
+    const session=Core.buildSession({exercises,preferences:constrained,focus,minutes:35});
+    for(const item of session.items){
+      assert.ok(constrained.equipment.includes(item.exercise.equipment),`${item.exerciseId} equipment`);
+      assert.equal(Core.excludedByLimitations(item.exercise,constrained.limitations),false,`${item.exerciseId} constraint`);
+      assert.equal(Core.personalResult(item.exercise,constrained).eligible,true,item.exerciseId);
+    }
+  }
+  assert.throws(()=>Core.buildSession({exercises,preferences:constrained,focus:"core",minutes:35}),{code:"SESSION_ROLE_UNAVAILABLE",message:/deep-core control/i});
+  assert.throws(()=>Core.buildSession({exercises,preferences:constrained,focus:"unknown",minutes:35}),{code:"INVALID_SESSION_FOCUS"});
+  assert.throws(()=>Core.buildSession({exercises,preferences:constrained,focus:"full",minutes:45}),{code:"INVALID_SESSION_LENGTH"});
+  assert.throws(()=>Core.buildSession({exercises,preferences:{...constrained,equipment:[]},focus:"core",minutes:20}),{code:"SESSION_POOL_TOO_SMALL"});
+  assert.throws(()=>Core.buildSession({exercises,preferences:{...preferences,equipment:["Barbell / Smith"],limitations:["no-unsupported-hinge"]},focus:"full",minutes:20}),{code:"SESSION_ROLE_UNAVAILABLE",message:/upper-body pull/i});
+});
+
+test("session builder rotates strong choices around exercises already in the saved week",()=>{
+  const allEquipment={...preferences,equipment:[...new Set(exercises.map((exercise)=>exercise.equipment))]},baseline=Core.buildSession({exercises,preferences:allEquipment,focus:"upper",minutes:35});
+  const days=Object.fromEntries(Core.WEEKDAYS.map((day)=>[day,[]]));
+  days.Monday=baseline.items.map((item,index)=>({instanceId:`weekly-${index}-${item.exerciseId}`,exerciseId:item.exerciseId,sets:item.sets,reps:item.reps}));
+  const rotated=Core.buildSession({exercises,preferences:allEquipment,focus:"upper",minutes:35,weeklyPlan:{version:1,restDay:"Sunday",days}});
+  assert.notDeepEqual(rotated.items.map((item)=>item.exerciseId),baseline.items.map((item)=>item.exerciseId));
+  assert.ok(rotated.items.some((item)=>item.reasons.includes("was not yet in your saved week when this session was generated")));
+});
+
+test("session merge adds the complete routine without mutating or duplicating a day",()=>{
+  const allEquipment={...preferences,equipment:[...new Set(exercises.map((exercise)=>exercise.equipment))]},session=Core.buildSession({exercises,preferences:allEquipment,focus:"full",minutes:35});
+  const days=Object.fromEntries(Core.WEEKDAYS.map((day)=>[day,[]]));
+  days.Monday.push({instanceId:"existing-session-item",exerciseId:session.items[0].exerciseId,sets:2,reps:"10"});
+  const plan={version:1,restDay:"Sunday",days},before=JSON.stringify(plan),merged=Core.mergeSessionIntoPlan(plan,"Monday",session,{makeInstanceId:()=>"existing-session-item"});
+  assert.equal(JSON.stringify(plan),before,"merge must not mutate the loaded revision");
+  assert.equal(merged.added,session.items.length-1);
+  assert.equal(merged.skipped,1);
+  assert.equal(merged.plan.days.Monday.length,session.items.length);
+  assert.equal(new Set(merged.plan.days.Monday.map((item)=>item.exerciseId)).size,session.items.length);
+  const instanceIds=Core.WEEKDAYS.flatMap((day)=>merged.plan.days[day].map((item)=>item.instanceId));
+  assert.equal(new Set(instanceIds).size,instanceIds.length,"generated instance IDs must stay unique");
+  assert.equal(Core.mergeSessionIntoPlan(merged.plan,"Monday",session).changed,false,"a safe retry should be a no-op");
+  assert.throws(()=>Core.mergeSessionIntoPlan(plan,"Sunday",session),{code:"SESSION_REST_DAY"});
+});
+
+test("session merge fails atomically when the day or week lacks capacity",()=>{
+  const allEquipment={...preferences,equipment:[...new Set(exercises.map((exercise)=>exercise.equipment))]},session=Core.buildSession({exercises,preferences:allEquipment,focus:"full",minutes:20});
+  const item=(index)=>({instanceId:`capacity-item-${index}`,exerciseId:`existing-${index}`,sets:3,reps:"8–12"});
+  const fullDay={version:1,restDay:"Sunday",days:Object.fromEntries(Core.WEEKDAYS.map((day)=>[day,day==="Monday"?Array.from({length:30},(_,index)=>item(index)):[]]))};
+  assert.throws(()=>Core.mergeSessionIntoPlan(fullDay,"Monday",session),{code:"SESSION_DAY_CAPACITY"});
+  const fullWeek={version:1,restDay:"Sunday",days:Object.fromEntries(Core.WEEKDAYS.map((day,dayIndex)=>[day,day==="Sunday"?[]:Array.from({length:day==="Monday"?20:24},(_,index)=>item(dayIndex*30+index))]))};
+  assert.equal(Core.WEEKDAYS.reduce((sum,day)=>sum+fullWeek.days[day].length,0),140);
+  assert.throws(()=>Core.mergeSessionIntoPlan(fullWeek,"Monday",session),{code:"SESSION_PLAN_CAPACITY"});
+});
+
+test("weekly pulse reports only honest today or next-session plan facts",()=>{
+  const days=Object.fromEntries(Core.WEEKDAYS.map((day)=>[day,[]]));
+  days.Wednesday=[{exerciseId:"one",sets:3},{exerciseId:"two",sets:2}];days.Friday=[{exerciseId:"three",sets:4}];
+  const plan={version:1,restDay:"Sunday",days},today=Core.weeklyPulse(plan,{today:"Wednesday",profileDays:4}),next=Core.weeklyPulse(plan,{today:"Thursday",profileDays:4}),wrapped=Core.weeklyPulse(plan,{today:"Saturday",profileDays:4});
+  assert.deepEqual({day:today.day,isToday:today.isToday,movements:today.movements,workingSets:today.workingSets,scheduledDays:today.scheduledDays,progress:today.progressPercent},{day:"Wednesday",isToday:true,movements:2,workingSets:5,scheduledDays:2,progress:50});
+  assert.equal(next.day,"Friday");assert.equal(next.offset,1);assert.match(next.title,/TOMORROW/);
+  assert.equal(wrapped.day,"Wednesday");assert.equal(wrapped.offset,4);
+  for(const pulse of [today,next,wrapped])assert.doesNotMatch(`${pulse.title} ${pulse.detail}`,/completed|recovered|ready|readiness/i);
+  const empty=Core.weeklyPulse({version:1,restDay:"Sunday",days:Object.fromEntries(Core.WEEKDAYS.map((day)=>[day,[]]))},{today:"Monday",profileDays:3});
+  assert.equal(empty.day,null);assert.equal(empty.progressPercent,0);assert.match(empty.detail,/0 scheduled training days · 3-day profile target/);
+});
+
 test("alternative finder stays relevant and explains gains and losses",()=>{
   const reference=byId("flat-dumbbell-press"),items=Core.alternativesFor(reference,exercises,{...preferences,equipment:[...new Set(exercises.map((exercise)=>exercise.equipment))]},4);
   assert.ok(items.length>0&&items.length<=4);

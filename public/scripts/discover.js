@@ -19,9 +19,10 @@ const FEATURE_CONFIG=Object.freeze({
   battle:{panelId:"battle",headingId:"battleTitle",label:"Exercise battle"},
   profile:{panelId:"profile",headingId:"profileTitle",label:"Tune my ranking"},
   community:{panelId:"communityPlans",headingId:"communityPlansTitle",label:"Community weekly plans"},
-  monthly:{panelId:"monthlyPlan",headingId:"monthlyPlanTitle",label:"31-day plan"}
+  monthly:{panelId:"monthlyPlan",headingId:"monthlyPlanTitle",label:"31-day plan"},
+  session:{panelId:"sessionBuilder",headingId:"sessionBuilderTitle",label:"Session builder"}
 });
-const state={exercises:[],methodology:null,sources:[],limited:new Set(),preferences:null,user:null,csrfToken:"",aggregate:new Map(),userRatings:new Map(),ratingsRefreshedAt:0,ratingsRefreshPromise:null,compare:[],collection:"all",query:"",group:"all",equipment:"all",pattern:"all",level:"all",sort:"personal",recommendations:[],activeExercise:null,activeFeature:null,explorerLimit:EXPLORER_DESKTOP_PAGE_SIZE,weeklyPlan:null,weeklyPlanUpdatedAt:0,monthlyPlan:null,monthlySchedule:null,monthlySource:"muscle-schedule",communityPlans:[],communityLoaded:false,communityLoading:false,communityError:"",communityNextOffset:0,communityQuery:"",communityPendingId:null,communityAppliedId:null,communityAppliedUpdatedAt:0};
+const state={exercises:[],methodology:null,sources:[],limited:new Set(),preferences:null,user:null,csrfToken:"",aggregate:new Map(),userRatings:new Map(),ratingsRefreshedAt:0,ratingsRefreshPromise:null,compare:[],collection:"all",query:"",group:"all",equipment:"all",pattern:"all",level:"all",sort:"personal",recommendations:[],activeExercise:null,activeFeature:null,explorerLimit:EXPLORER_DESKTOP_PAGE_SIZE,weeklyPlan:null,weeklyPlanUpdatedAt:0,session:null,sessionSaving:false,monthlyPlan:null,monthlySchedule:null,monthlySource:"muscle-schedule",communityPlans:[],communityLoaded:false,communityLoading:false,communityError:"",communityNextOffset:0,communityQuery:"",communityPendingId:null,communityAppliedId:null,communityAppliedUpdatedAt:0};
 const el=(id)=>document.getElementById(id);
 
 async function api(path,options={}) {
@@ -34,7 +35,7 @@ async function api(path,options={}) {
   }
   const data=await response.json().catch(()=>({}));
   if(!response.ok){
-    const error=Object.assign(new Error(data.error||"Request failed."),{status:response.status,code:data.code||"REQUEST_FAILED"});
+    const error=Object.assign(new Error(data.error||"Request failed."),{status:response.status,code:data.code||"REQUEST_FAILED",payload:data});
     if(response.status===401){error.redirecting=true;window.location.replace("/account.html?mode=login&next=discover");}
     else if(response.status===402||data.code==="DISCOVERY_ACCESS_REQUIRED"){error.redirecting=true;window.location.replace("/pricing?reason=access-revoked");}
     throw error;
@@ -418,13 +419,14 @@ async function applyCommunityPlan(){
   const timeout=controller?setTimeout(()=>controller.abort(),15_000):null;
   try{
     const result=await api(`/api/community-plans/${encodeURIComponent(record.id)}/apply`,{method:"POST",body:JSON.stringify({sourceUpdatedAt:Number(record.updatedAt),targetUpdatedAt:state.weeklyPlanUpdatedAt}),...(controller?{signal:controller.signal}:{})});
-    state.weeklyPlan=Monthly.normalizeWeeklyPlan(result.plan,state.exercises);state.weeklyPlanUpdatedAt=Number(result.planUpdatedAt)||state.weeklyPlanUpdatedAt;state.communityAppliedId=record.id;state.communityAppliedUpdatedAt=Number(record.updatedAt);updateMonthlySourceButtons();closeDialog("communityApplyDialog");state.communityPendingId=null;renderCommunityPlans();
+    state.weeklyPlan=Monthly.normalizeWeeklyPlan(result.plan,state.exercises);state.weeklyPlanUpdatedAt=Number(result.planUpdatedAt)||state.weeklyPlanUpdatedAt;state.communityAppliedId=record.id;state.communityAppliedUpdatedAt=Number(record.updatedAt);syncSessionPlanViews({regenerate:true});closeDialog("communityApplyDialog");state.communityPendingId=null;renderCommunityPlans();
     const planLink=el("communityOpenPlan");planLink.hidden=false;el("communityPlanStatus").textContent=`“${record.title}” is now your weekly plan.`;planLink.focus?.();showToast("Weekly plan replaced with the community week.");
   }catch(error){
     if(error.code==="COMMUNITY_PLAN_CHANGED"){
       const refreshed=await Promise.allSettled([api("/api/plan"),loadCommunityPlans({reset:true})]);
       if(refreshed[0].status==="fulfilled"){
         state.weeklyPlan=Monthly.normalizeWeeklyPlan(refreshed[0].value.plan,state.exercises);state.weeklyPlanUpdatedAt=Number(refreshed[0].value.planUpdatedAt)||0;
+        syncSessionPlanViews({regenerate:true});
       }
       closeDialog("communityApplyDialog");state.communityPendingId=null;el("communityPlanStatus").textContent="A shared plan or your current week changed. Review the latest versions before trying again.";showToast("Plans changed — review them before replacing yours.");
     }else{const node=el("communityApplyError");node.textContent=error.name==="AbortError"?"The request took too long. Your plan was not confirmed as changed; close this window and check My Plan before trying again.":error.message;node.hidden=false;}
@@ -438,6 +440,116 @@ function blankMonthlySchedule(){
 }
 function copyMonthlyValue(value){return JSON.parse(JSON.stringify(value));}
 function weeklyPlanCount(plan){return Monthly.DAYS.reduce((total,day)=>total+(Array.isArray(plan?.days?.[day])?plan.days[day].length:0),0);}
+function renderWeeklyPulse(){
+  const pulseNodes=["weeklyPulse","weeklyPulseEyebrow","weeklyPulseTitle","weeklyPulseDetail","weeklyPulseBar","weeklyPulseAction"].map(el),pulseRoot=pulseNodes[0];
+  if(pulseNodes.some((node)=>!node)||!state.preferences)return;
+  const pulse=Core.weeklyPulse(state.weeklyPlan,{profileDays:state.preferences.days});
+  el("weeklyPulseEyebrow").textContent=pulse.eyebrow;
+  el("weeklyPulseTitle").textContent=pulse.title;
+  el("weeklyPulseDetail").textContent=pulse.detail;
+  el("weeklyPulseBar").setAttribute("style",`width:${pulse.progressPercent}%`);
+  el("weeklyPulseAction").innerHTML=`${escapeHtml(pulse.actionLabel)} <span aria-hidden="true">→</span>`;
+  pulseRoot.dataset.sessionDay=pulse.day||"empty";
+}
+function sessionBuilderAvailable(){return Boolean(el("sessionBuilder")&&el("sessionGroup")&&el("sessionLength")&&el("sessionDay")&&el("sessionGenerate")&&el("sessionResults")&&el("sessionStatus")&&el("sessionAddAll"));}
+function preferredSessionDay(current=""){
+  const available=Core.WEEKDAYS.filter((day)=>day!==state.weeklyPlan?.restDay);
+  if(available.includes(current))return current;
+  const today=Core.WEEKDAYS[(new Date().getDay()+6)%7];
+  if(available.includes(today))return today;
+  const pulse=Core.weeklyPulse(state.weeklyPlan,{today,profileDays:state.preferences?.days});
+  return available.includes(pulse.day)?pulse.day:available[0]||"";
+}
+function populateSessionDay(){
+  if(!sessionBuilderAvailable())return;
+  const select=el("sessionDay"),selected=preferredSessionDay(select.value);
+  select.innerHTML=Core.WEEKDAYS.filter((day)=>day!==state.weeklyPlan?.restDay).map((day)=>{
+    const count=Array.isArray(state.weeklyPlan?.days?.[day])?state.weeklyPlan.days[day].length:0;
+    return `<option value="${day}" ${day===selected?"selected":""}>${day}${count?` · ${count} scheduled`:""}</option>`;
+  }).join("");
+  select.value=selected;
+}
+function populateSessionBrief(){
+  if(!sessionBuilderAvailable())return;
+  const focus=Object.hasOwn(Core.SESSION_FOCUSES,el("sessionGroup").value)?el("sessionGroup").value:"full",minutes=Object.hasOwn(Core.SESSION_LENGTHS,el("sessionLength").value)?Number(el("sessionLength").value):35;
+  el("sessionGroup").innerHTML=Object.entries(Core.SESSION_FOCUSES).map(([value,config])=>`<option value="${value}" ${value===focus?"selected":""}>${escapeHtml(config.label)}</option>`).join("");
+  el("sessionLength").innerHTML=Object.values(Core.SESSION_LENGTHS).map((config)=>`<option value="${config.minutes}" ${config.minutes===minutes?"selected":""}>${escapeHtml(config.label)} · ${config.minutes} min</option>`).join("");
+  el("sessionGroup").value=focus;el("sessionLength").value=String(minutes);populateSessionDay();
+}
+function sessionCardMarkup(item,index){
+  const exercise=item.exercise,name=escapeHtml(exercise.name),reason=item.reasons.map(escapeHtml).join(" · ");
+  return `<li class="session-result-card"><span class="session-result-index" aria-hidden="true">${String(index+1).padStart(2,"0")}</span><div class="session-result-copy"><p>${escapeHtml(item.roleLabel)}</p><h4>${name}</h4><span>${escapeHtml(GROUP_LABELS[exercise.group]||titleCase(exercise.group))} / ${escapeHtml(exercise.sub)} · ${escapeHtml(exercise.equipment)}</span><p class="session-result-reason">${reason}.</p></div><div class="session-result-prescription"><strong>${item.sets} sets × ${escapeHtml(item.reps)}</strong><span>${escapeHtml(item.rest)} rest</span><span class="session-match">${item.match}% personal match</span><button class="small-button" data-open-detail="${escapeHtml(exercise.id)}" type="button" aria-label="Inspect why ${name} fits this session">Why this move</button></div></li>`;
+}
+function sessionMergePreview(){
+  if(!state.session)return null;
+  return Core.mergeSessionIntoPlan(state.weeklyPlan,el("sessionDay").value,state.session);
+}
+function updateSessionAddButton(){
+  if(!sessionBuilderAvailable())return;
+  const button=el("sessionAddAll");button.hidden=!state.session;
+  if(!state.session){button.disabled=true;return;}
+  try{
+    const preview=sessionMergePreview();button.disabled=state.sessionSaving||!preview.changed;button.title=preview.changed?`Add ${preview.added} new movement${preview.added===1?"":"s"}${preview.skipped?` and skip ${preview.skipped} already on this day`:""}`:"Every movement in this session is already on the selected day.";
+  }catch(error){button.disabled=state.sessionSaving;button.title=error.message;}
+}
+function renderSession(session,{announce=false}={}){
+  if(!sessionBuilderAvailable())return;
+  state.session=session;el("sessionResults").innerHTML=`<div class="session-result-summary"><div><p>${escapeHtml(session.timeLabel)} session</p><h3 id="sessionResultsTitle">${escapeHtml(session.focusLabel.toUpperCase())} · ${session.minutes} MIN</h3></div><strong>${escapeHtml(session.summary)}</strong></div><ol class="session-result-list">${session.items.map(sessionCardMarkup).join("")}</ol><p class="session-time-note">Time is an estimate; actual duration changes with setup, rest, and training pace.</p>`;
+  el("sessionStatus").textContent=`${session.focusLabel} session ready · ${session.summary}. Review every movement before adding it.`;
+  el("sessionOpenPlan")&&(el("sessionOpenPlan").hidden=true);updateSessionAddButton();
+  if(announce&&state.activeFeature==="session"){
+    const reduceMotion=window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    el("sessionResults").scrollIntoView?.({behavior:reduceMotion?"auto":"smooth",block:"start"});
+  }
+}
+function showSessionBuildError(error){
+  if(!sessionBuilderAvailable())return;
+  state.session=null;el("sessionResults").innerHTML=`<div class="session-empty-state"><span aria-hidden="true">!</span><div><h3 id="sessionResultsTitle">SESSION NEEDS AN ADJUSTMENT.</h3><p>${escapeHtml(error.message)}</p></div></div>`;el("sessionStatus").textContent=error.message;el("sessionAddAll").hidden=true;el("sessionAddAll").disabled=true;
+}
+function generateSession({announce=false}={}){
+  if(!sessionBuilderAvailable()||!state.exercises.length||!state.preferences)return;
+  el("sessionResults").setAttribute("aria-busy","true");
+  try{renderSession(Core.buildSession({exercises:state.exercises,preferences:state.preferences,focus:el("sessionGroup").value,minutes:Number(el("sessionLength").value),weeklyPlan:state.weeklyPlan}),{announce});}
+  catch(error){showSessionBuildError(error);if(announce)showToast(error.message);}
+  finally{el("sessionResults").setAttribute("aria-busy","false");}
+}
+function setSessionBusy(busy){
+  state.sessionSaving=busy;el("sessionResults")?.setAttribute("aria-busy",String(busy));
+  for(const id of ["sessionGroup","sessionLength","sessionDay","sessionGenerate"])if(el(id))el(id).disabled=busy;
+  if(el("sessionAddAll")){el("sessionAddAll").disabled=busy;el("sessionAddAll").innerHTML=busy?'Adding session… <span aria-hidden="true">→</span>':'Add all to selected day <span aria-hidden="true">→</span>';}
+  if(!busy)updateSessionAddButton();
+}
+function syncSessionPlanViews({regenerate=false}={}){renderWeeklyPulse();populateSessionDay();updateMonthlySourceButtons();if(regenerate)generateSession();else updateSessionAddButton();}
+async function refreshSessionConflict(error){
+  const latest=error?.payload?.plan?error.payload:await api("/api/plan");
+  state.weeklyPlan=Monthly.normalizeWeeklyPlan(latest.plan,state.exercises);state.weeklyPlanUpdatedAt=Number(latest.planUpdatedAt)||0;syncSessionPlanViews();
+}
+async function addSessionToWeek(){
+  if(!sessionBuilderAvailable()||state.sessionSaving||!state.session)return;
+  const day=el("sessionDay").value;let merged;
+  try{merged=Core.mergeSessionIntoPlan(state.weeklyPlan,day,state.session);}
+  catch(error){el("sessionStatus").textContent=error.message;showToast(error.message);updateSessionAddButton();return;}
+  if(!merged.changed){el("sessionStatus").textContent=`Every generated movement is already scheduled on ${day}.`;updateSessionAddButton();return;}
+  setSessionBusy(true);el("sessionStatus").textContent=`Adding ${merged.added} movement${merged.added===1?"":"s"} to ${day}…`;
+  try{
+    const result=await api("/api/plan",{method:"PUT",body:JSON.stringify({plan:merged.plan,expectedPlanUpdatedAt:state.weeklyPlanUpdatedAt})});
+    state.weeklyPlan=Monthly.normalizeWeeklyPlan(result.plan,state.exercises);state.weeklyPlanUpdatedAt=Number(result.planUpdatedAt)||state.weeklyPlanUpdatedAt;syncSessionPlanViews();
+    const skipped=merged.skipped?` ${merged.skipped} already scheduled movement${merged.skipped===1?" was":"s were"} not duplicated.`:"";
+    el("sessionStatus").textContent=`Session added to ${day}: ${merged.added} new movement${merged.added===1?"":"s"}.${skipped}`;
+    if(el("sessionOpenPlan"))el("sessionOpenPlan").hidden=false;showToast(`Session added to ${day}.`);
+  }catch(error){
+    if(error.status===409||error.code==="PLAN_CHANGED"){
+      try{await refreshSessionConflict(error);el("sessionStatus").textContent="Your week changed in another tab or device. The latest plan is loaded; review the selected day, then add the session again.";showToast("Weekly plan changed — latest copy loaded.");}
+      catch{el("sessionStatus").textContent="Your week changed elsewhere, and the latest copy could not be loaded. Refresh before adding this session.";}
+    }else{
+      const message=error.code==="NETWORK_ERROR"?"STRATA could not confirm the plan update. Check My Plan before trying again.":error.message;el("sessionStatus").textContent=message;showToast(message);
+    }
+  }finally{setSessionBusy(false);}
+}
+function initializeSessionBuilder(){
+  if(!sessionBuilderAvailable())return;
+  populateSessionBrief();generateSession();renderWeeklyPulse();
+}
 function localIsoDate(){const date=new Date(),part=(value)=>String(value).padStart(2,"0");return `${date.getFullYear()}-${part(date.getMonth()+1)}-${part(date.getDate())}`;}
 function friendlyMonthlyDate(value){
   if(!/^\d{4}-\d{2}-\d{2}$/.test(String(value||"")))return "";
@@ -583,12 +695,17 @@ profileForm.addEventListener("submit",async(event)=>{
   const formElement=event.currentTarget,form=new FormData(formElement),preferences={goal:form.get("goal"),level:form.get("level"),days:Number(form.get("days")),equipment:form.getAll("equipment"),preferences:form.getAll("preferences"),limitations:form.getAll("limitations")};
   const controls=[...formElement.elements];profileForm.dataset.saving="true";controls.forEach((control)=>{control.disabled=true;});
   el("profileStatus").textContent="Saving…";
-  try{const result=await api("/api/preferences",{method:"PUT",body:JSON.stringify({preferences})});state.preferences=result.preferences;renderProfile();renderRecommendations();resetExplorerWindow();renderExplorer();showToast("Personalized ranking refreshed.");}
+  try{const result=await api("/api/preferences",{method:"PUT",body:JSON.stringify({preferences})});state.preferences=result.preferences;renderProfile();renderRecommendations();resetExplorerWindow();renderExplorer();renderWeeklyPulse();generateSession();showToast("Personalized ranking refreshed.");}
   catch(error){el("profileStatus").textContent=error.message;showToast(error.message);}
   finally{profileForm.dataset.saving="false";controls.forEach((control)=>{control.disabled=false;});}
 });
 
 const monthlyPlanForm=el("monthlyPlanForm");
+el("sessionBuilderForm")?.addEventListener("submit",(event)=>{event.preventDefault();if(!state.sessionSaving)generateSession({announce:true});});
+el("sessionGroup")?.addEventListener("change",()=>{if(!state.sessionSaving)generateSession();});
+el("sessionLength")?.addEventListener("change",()=>{if(!state.sessionSaving)generateSession();});
+el("sessionDay")?.addEventListener("change",()=>{if(!state.sessionSaving){updateSessionAddButton();el("sessionStatus").textContent=state.session?`Session ready to add to ${el("sessionDay").value}.`:"Build a session first.";}});
+el("sessionAddAll")?.addEventListener("click",()=>{void addSessionToWeek();});
 monthlyPlanForm.addEventListener("submit",async(event)=>{
   event.preventDefault();if(monthlyPlanForm.dataset.saving==="true")return;
   const button=el("generateMonthlyPlan");setMonthlyValidation();
@@ -697,13 +814,13 @@ function initialLoadMessage(error){
 }
 function showInitialLoadProgress(){
   el("discoveryLoadError").hidden=true;el("discoveryRetry").disabled=true;
-  el("profileStatus").textContent="Loading profile…";el("battleStatus").textContent="Loading exercises…";el("monthlyPlanStatus").textContent="Loading planner…";el("communityPlanStatus").textContent="Loading shared plans…";
+  el("profileStatus").textContent="Loading profile…";el("battleStatus").textContent="Loading exercises…";el("monthlyPlanStatus").textContent="Loading planner…";el("communityPlanStatus").textContent="Loading shared plans…";if(el("sessionStatus"))el("sessionStatus").textContent="Loading your profile and weekly plan…";
   el("recommendationGrid").innerHTML='<div class="loading-card">Building your ranking…</div>';
   el("exerciseGrid").hidden=false;el("exerciseGrid").innerHTML='<div class="loading-card">Loading exercise intelligence…</div>';el("emptyState").hidden=true;
 }
 function showInitialLoadError(error){
   const message=initialLoadMessage(error);
-  el("profileStatus").textContent="Unable to load";el("battleStatus").textContent=message;el("monthlyPlanStatus").textContent=message;el("communityPlanStatus").textContent=message;
+  el("profileStatus").textContent="Unable to load";el("battleStatus").textContent=message;el("monthlyPlanStatus").textContent=message;el("communityPlanStatus").textContent=message;if(el("sessionStatus"))el("sessionStatus").textContent=message;
   el("recommendationGrid").innerHTML=`<div class="loading-card load-error-card">${escapeHtml(message)}</div>`;el("exerciseGrid").innerHTML=`<div class="loading-card load-error-card">${escapeHtml(message)}</div>`;
   el("discoveryLoadErrorMessage").textContent=message;el("discoveryLoadError").hidden=false;showToast(message);
 }
@@ -714,7 +831,7 @@ async function init(){
     const data=await api("/api/discovery");state.exercises=data.exercises;state.methodology=data.methodology;state.sources=data.sources;state.limited=new Set(data.limitedConfidenceExercises);state.preferences=data.preferences;state.user=data.user;state.weeklyPlan=data.weeklyPlan||null;state.weeklyPlanUpdatedAt=Number(data.weeklyPlanUpdatedAt)||0;state.monthlyPlan=data.monthlyPlan||null;
     state.csrfToken=String(data.csrfToken||"");state.aggregate=new Map((data.ratings.aggregates||[]).map((item)=>[item.exercise_id,item]));state.userRatings=new Map((data.ratings.user||[]).map((item)=>[item.exercise_id,item]));state.ratingsRefreshedAt=Date.now();
     el("userName").textContent=data.user.name;el("catalogTotal").textContent=state.exercises.length;el("recommendationTitle").innerHTML=`BEST EXERCISES <em>FOR ${escapeHtml(data.user.name.split(/\s+/)[0].toUpperCase())}.</em>`;
-    renderProfile();populateFilters();renderRecommendations();resetExplorerWindow();renderExplorer();renderCompareTray();populateMonthlyBuilder(state.monthlyPlan);
+    renderProfile();populateFilters();renderRecommendations();resetExplorerWindow();renderExplorer();renderCompareTray();populateMonthlyBuilder(state.monthlyPlan);initializeSessionBuilder();
     activateFeature(state.activeFeature||FEATURE_DEFAULT);
   }catch(error){if(!error?.redirecting)showInitialLoadError(error);}
   finally{discoveryLoading=false;el("discoveryRetry").disabled=false;}

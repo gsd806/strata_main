@@ -48,12 +48,16 @@ const document={
 const weeklyPlan={version:1,restDay:"Sunday",days:Object.fromEntries(["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].map((day)=>[day,day==="Monday"?[{instanceId:"runtime-plan-item",exerciseId:"flat-dumbbell-press",sets:3,reps:"8–12"}]:[]]))};
 const response={user:{id:"u1",name:"Runtime Audit",email:"audit@example.test"},csrfToken:"csrf",exercises,methodology:discovery.methodology,sources:discovery.sources,limitedConfidenceExercises:discovery.limitedConfidenceExercises,preferences:{version:1,goal:"hypertrophy",level:"Intermediate",days:4,equipment:[...new Set(exercises.map((exercise)=>exercise.equipment))],preferences:["stable","long-range"],limitations:[]},ratings:{aggregates:[],user:[]},weeklyPlan,weeklyPlanUpdatedAt:1_700_000_000_100};
 const communityPlan={id:"11111111-1111-4111-8111-111111111111",title:"Runtime <Week>",description:"A shared smoke-test plan.",authorName:"Other Member",plan:weeklyPlan,createdAt:1_700_000_000_000,updatedAt:1_700_000_000_000};
-const fetches=[],requests=[];let discoveryAttempts=0;
+const fetches=[],requests=[];let discoveryAttempts=0,planSaveRevision=1_700_000_000_300;
 const context={console,document,window:{location:{replace(){}}},location:{},navigator:{},requests,fetch:async(path,options={})=>{
   fetches.push(path);requests.push({path,options});
   if(path==="/api/discovery"&&++discoveryAttempts===1)throw new TypeError("Failed to fetch");
   if(String(path).startsWith("/api/community-plans?"))return {ok:true,json:async()=>({plans:[communityPlan],pagination:{limit:12,offset:0,nextOffset:null}})};
   if(String(path).endsWith("/apply"))return {ok:true,json:async()=>({ok:true,plan:weeklyPlan,planUpdatedAt:1_700_000_000_200})};
+  if(path==="/api/plan"&&options.method==="PUT"){
+    if(context.forcePlanConflict){context.forcePlanConflict=false;return {ok:false,status:409,json:async()=>({error:"Your weekly plan changed in another tab or device.",code:"PLAN_CHANGED",plan:context.authoritativeConflictPlan,planUpdatedAt:1_700_000_000_400})};}
+    const body=JSON.parse(options.body);return {ok:true,json:async()=>({ok:true,plan:body.plan,planUpdatedAt:planSaveRevision})};
+  }
   return {ok:true,json:async()=>response};
 },setTimeout,clearTimeout,URL,File:globalThis.File,FormData:class{},Intl,globalThis:null};
 context.globalThis=context;
@@ -62,7 +66,7 @@ vm.runInContext(readPublic("scripts","discovery-core.js"),context,{filename:"dis
 vm.runInContext(readPublic("scripts","monthly-plan-core.js"),context,{filename:"monthly-plan-core.js"});
 vm.runInContext(readPublic("scripts","discover.js"),context,{filename:"discover.js"});
 assert.equal(vm.runInContext("state.activeFeature",context),"recommendations","feature navigation must initialize before discovery data resolves");
-assert.equal(vm.runInContext('Object.keys(FEATURE_CONFIG).filter((name)=>featurePanel(name).hidden).length',context),5,"only the default workspace should remain visible during discovery loading");
+assert.equal(vm.runInContext('Object.keys(FEATURE_CONFIG).filter((name)=>featurePanel(name).hidden).length',context),6,"only the default workspace should remain visible during discovery loading");
 
 (async()=>{
   await new Promise(setImmediate);
@@ -107,6 +111,22 @@ assert.equal(vm.runInContext('Object.keys(FEATURE_CONFIG).filter((name)=>feature
   await context.communityApplyPromise;
   const applyRequest=requests.find((request)=>String(request.path).endsWith("/apply"));
   const applyBody=applyRequest?JSON.parse(applyRequest.options.body):{};
+  vm.runInContext(`
+    activateFeature("session");
+    el("sessionDay").value="Tuesday";
+    globalThis.sessionSavePromise=addSessionToWeek();
+  `,context);
+  await context.sessionSavePromise;
+  const sessionRequest=requests.find((request)=>request.path==="/api/plan"&&request.options.method==="PUT"),sessionBody=sessionRequest?JSON.parse(sessionRequest.options.body):{};
+  const sessionSavedRevision=vm.runInContext("state.weeklyPlanUpdatedAt",context),sessionPlanLinkShown=elements.get("sessionOpenPlan").hidden===false;
+  context.authoritativeConflictPlan=JSON.parse(JSON.stringify(sessionBody.plan));context.authoritativeConflictPlan.days.Wednesday=[];context.forcePlanConflict=true;
+  vm.runInContext(`
+    el("sessionGroup").value="lower";
+    generateSession();
+    el("sessionDay").value="Wednesday";
+    globalThis.sessionConflictPromise=addSessionToWeek();
+  `,context);
+  await context.sessionConflictPromise;
   const result={
     ...context.audit,
     ...context.featureAudit,
@@ -126,7 +146,14 @@ assert.equal(vm.runInContext('Object.keys(FEATURE_CONFIG).filter((name)=>feature
     communitySevenDayPreview:(elements.get("communityPlanGrid").innerHTML.match(/class="shared-plan-day/g)||[]).length===7,
     communityConfirmation:context.communityBeforeApply.dialogOpen&&context.communityBeforeApply.applyRequests===0,
     communityApplied:Boolean(applyRequest&&applyRequest.options.method==="POST"&&applyRequest.options.headers["X-CSRF-Token"]==="csrf"&&applyBody.sourceUpdatedAt===communityPlan.updatedAt&&applyBody.targetUpdatedAt===response.weeklyPlanUpdatedAt),
-    communityPlanLink:elements.get("communityOpenPlan").hidden===false
+    communityPlanLink:elements.get("communityOpenPlan").hidden===false,
+    sessionGenerated:vm.runInContext("state.session.items.length",context)===4&&/personal match/.test(elements.get("sessionResults").innerHTML)&&/rest/.test(elements.get("sessionResults").innerHTML),
+    sessionOptions:/value="full"/.test(elements.get("sessionGroup").innerHTML)&&/value="20"/.test(elements.get("sessionLength").innerHTML)&&/value="35"/.test(elements.get("sessionLength").innerHTML)&&/value="50"/.test(elements.get("sessionLength").innerHTML),
+    sessionAdded:Boolean(sessionRequest&&sessionRequest.options.headers["X-CSRF-Token"]==="csrf"&&sessionBody.expectedPlanUpdatedAt===1_700_000_000_200&&sessionBody.plan.days.Tuesday.length===4),
+    sessionPlanRevision:sessionSavedRevision===planSaveRevision,
+    sessionPlanLink:sessionPlanLinkShown,
+    sessionConflictHandled:requests.filter((request)=>request.path==="/api/plan"&&request.options.method==="PUT").length===2&&vm.runInContext("state.weeklyPlanUpdatedAt",context)===1_700_000_000_400&&vm.runInContext("state.weeklyPlan.days.Wednesday.length",context)===0&&/latest plan is loaded/i.test(elements.get("sessionStatus").textContent),
+    weeklyPulse:/scheduled training days/.test(elements.get("weeklyPulseDetail").textContent)&&/^width:\d+(?:\.\d+)?%$/.test(elements.get("weeklyPulseBar").attributes.style)
   };
   assert.equal(result.recommendations,8);
   assert.equal(result.results,exercises.length);
@@ -135,13 +162,13 @@ assert.equal(vm.runInContext('Object.keys(FEATURE_CONFIG).filter((name)=>feature
   assert.equal(result.compareCount,3);
   assert.equal(result.defaultFeature,"recommendations");
   assert.equal(result.defaultVisible,true);
-  assert.equal(result.defaultHidden,5);
+  assert.equal(result.defaultHidden,6);
   assert.equal(result.explorerFeature,"explorer");
   assert.equal(result.explorerVisible,true);
-  assert.equal(result.explorerHidden,5);
+  assert.equal(result.explorerHidden,6);
   assert.equal(result.unknownHashFeature,"explorer");
   assert.equal(result.battleSlots,4);
   assert.ok(result.battleRows>=10);
-  for(const key of ["discoveryFetch","battleBuilder","battleTable","battleVisible","battleStatus","detailOpen","bodyLocked","scoreAudit","evidence","alternatives","ratings","ratingDraftPreserved","communityFetch","communityRendered","communitySevenDayPreview","communityConfirmation","communityApplied","communityPlanLink"])assert.equal(result[key],true,key);
+  for(const key of ["discoveryFetch","battleBuilder","battleTable","battleVisible","battleStatus","detailOpen","bodyLocked","scoreAudit","evidence","alternatives","ratings","ratingDraftPreserved","communityFetch","communityRendered","communitySevenDayPreview","communityConfirmation","communityApplied","communityPlanLink","sessionGenerated","sessionOptions","sessionAdded","sessionPlanRevision","sessionPlanLink","sessionConflictHandled","weeklyPulse"])assert.equal(result[key],true,key);
   console.log(JSON.stringify(result,null,2));
 })().catch(error=>{console.error(error);process.exitCode=1;});
