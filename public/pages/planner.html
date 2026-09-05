@@ -16,7 +16,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="planner.css?v=6.9.6" />
+    <link rel="stylesheet" href="planner.css?v=6.9.7" />
   </head>
   <body>
     <a class="skip-link" href="#weekTitle">Skip to weekly plan</a>
@@ -45,7 +45,7 @@
 
     <main class="planner-shell" id="plannerShell" aria-busy="true">
       <aside class="library-panel" id="libraryPanel" aria-label="Exercise library" aria-busy="true">
-        <div class="library-heading"><p>Exercise library</p><strong id="libraryCount">200</strong></div>
+        <div class="library-heading"><div><p>Exercise library</p><span>Ranked by STRATA FitScore</span></div><strong id="libraryCount">200</strong></div>
         <label class="planner-search"><span class="sr-only">Search exercise library</span><span aria-hidden="true">⌕</span><input id="plannerSearch" type="search" placeholder="Search all movements" disabled /></label>
         <div class="planner-day-picker">
           <div class="planner-day-picker-heading"><span id="quickAddDayLabel">Add exercises to</span><strong id="quickAddDayValue">Monday</strong></div>
@@ -59,9 +59,14 @@
 
       <section class="week-section" aria-labelledby="weekTitle">
         <div class="week-toolbar">
-          <div><p class="eyebrow">Weekly training architecture</p><h1 id="weekTitle" tabindex="-1">BUILD YOUR <em>WEEK.</em></h1></div>
+          <div><p class="eyebrow">Weekly training architecture</p><h1 id="weekTitle" tabindex="-1">BUILD YOUR <em>WEEK.</em></h1><p class="week-intro">Shape a balanced seven-day plan, then fine-tune sets, reps, and recovery as you go.</p></div>
           <div class="toolbar-actions"><button class="outline-button" id="recommendRest" type="button" disabled>Recommend rest day <span aria-hidden="true">↻</span></button><button class="outline-button" id="exportWeeklyPlan" type="button" disabled>Export week <span aria-hidden="true">↓</span></button><button class="outline-button share-week-button" id="shareWeeklyPlan" type="button" aria-controls="shareWeeklyPanel" aria-expanded="false" disabled>Share week <span aria-hidden="true">↗</span></button></div>
         </div>
+        <ol class="planner-workflow" aria-label="Build a weekly plan in three steps">
+          <li><span>01</span><p><strong>Choose a day</strong><small>Set the destination in the library or on the board.</small></p></li>
+          <li><span>02</span><p><strong>Add movements</strong><small>Search, filter, then add the exercises that fit.</small></p></li>
+          <li><span>03</span><p><strong>Set your volume</strong><small>Adjust sets and reps; every change saves automatically.</small></p></li>
+        </ol>
         <section class="share-week-panel" id="shareWeeklyPanel" aria-labelledby="shareWeeklyTitle" hidden>
           <div class="share-week-heading">
             <div><p class="eyebrow">Community plans</p><h2 id="shareWeeklyTitle" tabindex="-1">SHARE YOUR <em>WEEK.</em></h2></div>
@@ -96,9 +101,9 @@
       </section>
     </main>
 
-    <footer class="build-footer">STRATA · Build 6.9.6 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
+    <footer class="build-footer">STRATA · Build 6.9.7 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
     <div class="planner-toast" id="plannerToast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=6.9.6"></script>
-    <script src="planner.js?v=6.9.6"></script>
+    <script src="/pwa.js?v=6.9.7"></script>
+    <script src="planner.js?v=6.9.7"></script>
   </body>
 </html>

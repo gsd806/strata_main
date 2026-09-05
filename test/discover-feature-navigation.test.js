@@ -87,6 +87,8 @@ test("Strata+ initial loading offers a normalized, retryable error without repla
   assert.match(script,/if\(!error\?\.redirecting\)showInitialLoadError\(error\)/);
   assert.match(script,/"discoveryRetry"\)\.addEventListener\("click",\(\)=>\{void init\(\);\}\)/);
   assert.match(css,/\.discovery-load-error\[hidden\]\s*\{\s*display:none/);
+  assert.match(script,/class="loading-card load-error-card"/,"Failed requests should not keep showing the loading animation");
+  assert.match(css,/\.load-error-card::before\s*\{[^}]*content:"!"/,"Failed workspaces should show an unmistakable error state");
 });
 
 test("open rating drafts survive aggregate-driven detail re-renders",()=>{
@@ -111,4 +113,6 @@ test("Strata+ polish keeps filters legible and comparison details accessible",()
   assert.match(css,/\.small-button \{ min-height: 44px/);
   assert.match(css,/body:has\(\.compare-tray:not\(\[hidden\]\)\) \{ padding-bottom: 112px/);
   assert.match(css,/@media \(max-width: 520px\)\s*\{\s*\.feature-grid \{ grid-template-columns: 1fr/);
+  assert.match(css,/@media \(max-width: 680px\)[\s\S]*?\.studio-header \{[^}]*backdrop-filter:none/,
+    "Mobile navigation must escape the sticky header's backdrop-filter containing block");
 });
