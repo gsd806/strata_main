@@ -43,6 +43,18 @@ async function api(path,options={}) {
   return data;
 }
 
+function saveErrorDetail(error){
+  if(error?.name==="AbortError")return "The request timed out, so the change was not confirmed. Check the current plan before retrying.";
+  if(error?.code==="NETWORK_ERROR")return "STRATA is offline. Your change was not confirmed; check your connection and retry.";
+  if(error?.status===401)return "Your session ended before this change was saved. Sign in again, then retry.";
+  if(error?.status===403)return "The secure save token expired. Refresh this page, review your changes, and retry.";
+  if(error?.status===409||error?.code==="PLAN_CHANGED")return "Your plan changed in another tab or device. Review the latest copy before retrying.";
+  if([400,422].includes(error?.status)&&error?.message&&error.message!=="Request failed.")return error.message;
+  if(Number(error?.status)>=500)return "STRATA could not save right now. Your changes are still on screen; retry in a moment.";
+  return error?.message&&error.message!=="Request failed."?error.message:"The change was not saved. Review it and retry.";
+}
+function saveRetryMessage(error){return `Couldn't save — Retry. ${saveErrorDetail(error)}`;}
+
 function escapeHtml(value){return String(value??"").replace(/[&<>'"]/g,(char)=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[char]));}
 function exerciseById(id){return state.exercises.find((exercise)=>exercise.id===id);}
 function titleCase(value){return String(value).replace(/(^|[- /])\w/g,(match)=>match.toUpperCase());}
@@ -127,7 +139,6 @@ function communitySummary(id){
 }
 function communityLabel(id){return communitySummary(id).label;}
 function ratingAverage(value){const number=Number(value);return Number.isFinite(number)?number.toFixed(1):"—";}
-const setupScore=Core.setupScore;
 const setupLabel=Core.setupLabel;
 const resistanceProfile=Core.resistanceProfile;
 const practicality=Core.practicality;
@@ -148,7 +159,7 @@ function renderProfile(){
   el("equipmentChoices").innerHTML=equipment.map((value)=>choiceMarkup("equipment",value,value,state.preferences.equipment.includes(value))).join("");
   el("preferenceChoices").innerHTML=Object.entries(PREFERENCE_OPTIONS).map(([value,label])=>choiceMarkup("preferences",value,label,state.preferences.preferences.includes(value))).join("");
   el("limitationChoices").innerHTML=Object.entries(LIMITATION_OPTIONS).map(([value,label])=>choiceMarkup("limitations",value,label,state.preferences.limitations.includes(value))).join("");
-  el("profileStatus").textContent="Saved to your account";
+  el("profileStatus").textContent="Saved";
 }
 
 function scoreButton(exercise){return `<button class="score-button" data-open-detail="${exercise.id}" type="button" aria-label="Open transparent FitScore for ${escapeHtml(exercise.name)}"><strong>${exercise.score}</strong><span>FitScore</span></button>`;}
@@ -251,7 +262,7 @@ function metricMarkup(exercise){
 function ratingOptions(selected){return [1,2,3,4,5].map((value)=>`<option value="${value}" ${Number(selected)===value?"selected":""}>${value} — ${{1:"Low",2:"Below average",3:"Average",4:"Strong",5:"Excellent"}[value]}</option>`).join("");}
 function ratingFormMarkup(exercise,draft=null){
   const current=draft||state.userRatings.get(exercise.id)||{comfort:3,pump:3,enjoyment:3,stability:3,setup:3,overall:3};
-  return `<form class="rating-form" data-rating-form="${exercise.id}"><div class="rating-grid">${[["comfort","Comfort"],["pump","Pump / target feel"],["enjoyment","Enjoyment"],["stability","Perceived stability"],["setup","Setup ease"],["overall","Overall"]].map(([key,label])=>`<label>${label}<select name="${key}">${ratingOptions(current[key])}</select></label>`).join("")}</div><button class="button button-dark" type="submit">${state.userRatings.has(exercise.id)?"Update my rating":"Save my rating"} <span>→</span></button></form>`;
+  return `<form class="rating-form" data-rating-form="${exercise.id}"><div class="rating-grid">${[["comfort","Comfort"],["pump","Pump / target feel"],["enjoyment","Enjoyment"],["stability","Perceived stability"],["setup","Setup ease"],["overall","Overall"]].map(([key,label])=>`<label>${label}<select name="${key}">${ratingOptions(current[key])}</select></label>`).join("")}</div><button class="button button-dark" type="submit">${state.userRatings.has(exercise.id)?"Update my rating":"Save my rating"} <span>→</span></button><p class="rating-save-status" data-rating-status role="status" aria-live="polite" aria-atomic="true"></p></form>`;
 }
 
 function openRatingDraft(id){
@@ -290,7 +301,7 @@ function openDetail(id){
       <section class="detail-section" id="alternativeSection"><h3 id="alternativeTitle" tabindex="-1">Find an alternative</h3><div class="alternative-list">${alternatives.length?alternatives.map(({exercise:candidate,match})=>`<div class="alternative-item"><div><strong>${escapeHtml(candidate.name)}</strong><small>${escapeHtml(gainsAndLosses(exercise,candidate))}</small></div><span>${match}%</span><div class="alternative-actions"><button data-open-detail="${candidate.id}" type="button" aria-label="Open ${escapeHtml(candidate.name)} details">Open</button><a href="/planner.html?add=${encodeURIComponent(candidate.id)}" aria-label="Add ${escapeHtml(candidate.name)} to weekly plan">Plan +</a></div></div>`).join(""):"<p>No eligible same-target alternative under your saved profile.</p>"}</div><p>Match percentages are transparent editorial similarity scores based on target, pattern, resistance profile, equipment, skill, and factor profile.</p></section>
       <section class="detail-section"><h3>Community score</h3><div class="rating-summary"><strong>${escapeHtml(community.hasRatings?`${community.score}/10`:community.label)}</strong><span>${escapeHtml(community.attribution)}</span></div>${community.hasRatings?`<div class="community-breakdown">${[["comfort","Comfort"],["pump","Pump"],["enjoyment","Enjoyment"],["stability","Stability"],["setup","Setup"],["overall","Overall"]].map(([key,label])=>`<span>${label}<b>${ratingAverage(aggregate[key])}/5</b></span>`).join("")}</div>`:""}${ownRating?`<p><strong>Your rating:</strong> ${Number(ownRating.overall)}/5 overall</p>`:"<p>Be the first Strata+ user to rate this exercise.</p>"}<p>Your rating is tied to your account and replaces your prior rating. It never changes the official FitScore.</p>${ratingFormMarkup(exercise,ratingDraft)}</section>
     </aside></div></div>`;
-  if(!dialog.open)dialog.showModal();document.body.classList.add("dialog-open");
+  openDialog(dialog,dialog.querySelector?.('[data-close-dialog="detailDialog"]'));
 }
 
 function comparisonWinner(exercises){
@@ -330,8 +341,23 @@ function openComparison(){
   el("battleResults").hidden=false;el("battleStatus").textContent=`Compared ${exercises.length} exercises.`;
 }
 
-function syncDialogState(){document.body.classList.toggle("dialog-open",Boolean(document.querySelector("dialog[open]")));}
-function closeDialog(id){const dialog=el(id);if(dialog?.open)dialog.close();syncDialogState();}
+const dialogReturnFocus=new WeakMap();
+function syncDialogState(){document.body.classList.toggle("dialog-open",[...document.querySelectorAll("dialog")].some((dialog)=>dialog.open));}
+function queueDialogFocus(control){if(!control?.focus)return;if(typeof globalThis.requestAnimationFrame==="function")globalThis.requestAnimationFrame(()=>control.focus());else control.focus();}
+function rememberDialogFocus(dialog){
+  const active=document.activeElement;
+  if(active&&active!==document.body&&typeof active.focus==="function"&&!dialog.contains?.(active))dialogReturnFocus.set(dialog,active);
+}
+function restoreDialogFocus(dialog){
+  if(!dialog)return;
+  const control=dialogReturnFocus.get(dialog);dialogReturnFocus.delete(dialog);
+  if(control&&control.isConnected!==false&&!control.hidden&&!control.disabled)queueDialogFocus(control);
+}
+function openDialog(dialog,initialFocus){
+  if(!dialog?.open){rememberDialogFocus(dialog);dialog.showModal?.();}
+  syncDialogState();queueDialogFocus(initialFocus||dialog.querySelector?.("[data-close-dialog],button,[href],input,select,textarea"));
+}
+function closeDialog(id){const dialog=el(id);if(dialog?.open)dialog.close();syncDialogState();restoreDialogFocus(dialog);}
 let toastTimer;function showToast(message){const toast=el("toast");toast.textContent=message;toast.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove("show"),2200);}
 
 function normalizeCommunityPlan(record){
@@ -409,18 +435,18 @@ function openCommunityApplyDialog(id){
   state.communityPendingId=record.id;el("communityApplyError").hidden=true;el("communityApplyError").textContent="";
   el("communityApplyDescription").textContent=`Replace your current weekly plan with “${record.title}” by ${record.authorName}?`;
   el("communityApplySummary").innerHTML=`<div><span>New week</span><strong>${escapeHtml(record.title)}</strong></div><div><span>Creator</span><strong>${escapeHtml(record.authorName)}</strong></div><div><span>New exercises</span><strong>${incoming.exercises}</strong></div><div><span>Your current week</span><strong>${currentCount} exercise${currentCount===1?"":"s"}</strong></div>`;
-  dialog.showModal?.();document.body.classList.add("dialog-open");el("communityApplyCancel").focus?.();
+  openDialog(dialog,el("communityApplyCancel"));
 }
 async function applyCommunityPlan(){
   const record=state.communityPlans.find((plan)=>plan.id===state.communityPendingId);if(!record)return;
   const dialog=el("communityApplyDialog"),confirm=el("communityApplyConfirm"),controls=[...dialog.querySelectorAll("button")];
-  dialog.dataset.busy="true";dialog.setAttribute?.("aria-busy","true");controls.forEach((control)=>{control.disabled=true;});confirm.textContent="Replacing your plan…";el("communityApplyError").hidden=true;
+  dialog.dataset.busy="true";dialog.setAttribute?.("aria-busy","true");controls.forEach((control)=>{control.disabled=true;});confirm.textContent="Saving…";el("communityApplyError").hidden=true;el("communityPlanStatus").textContent="Saving…";
   const controller=typeof globalThis.AbortController==="function"?new AbortController():null;
   const timeout=controller?setTimeout(()=>controller.abort(),15_000):null;
   try{
     const result=await api(`/api/community-plans/${encodeURIComponent(record.id)}/apply`,{method:"POST",body:JSON.stringify({sourceUpdatedAt:Number(record.updatedAt),targetUpdatedAt:state.weeklyPlanUpdatedAt}),...(controller?{signal:controller.signal}:{})});
     state.weeklyPlan=Monthly.normalizeWeeklyPlan(result.plan,state.exercises);state.weeklyPlanUpdatedAt=Number(result.planUpdatedAt)||state.weeklyPlanUpdatedAt;state.communityAppliedId=record.id;state.communityAppliedUpdatedAt=Number(record.updatedAt);syncSessionPlanViews({regenerate:true});closeDialog("communityApplyDialog");state.communityPendingId=null;renderCommunityPlans();
-    const planLink=el("communityOpenPlan");planLink.hidden=false;el("communityPlanStatus").textContent=`“${record.title}” is now your weekly plan.`;planLink.focus?.();showToast("Weekly plan replaced with the community week.");
+    const planLink=el("communityOpenPlan");planLink.hidden=false;el("communityPlanStatus").textContent=`Saved. “${record.title}” is now your weekly plan.`;planLink.focus?.();showToast("Saved. Weekly plan replaced with the community week.");
   }catch(error){
     if(error.code==="COMMUNITY_PLAN_CHANGED"){
       const refreshed=await Promise.allSettled([api("/api/plan"),loadCommunityPlans({reset:true})]);
@@ -428,8 +454,8 @@ async function applyCommunityPlan(){
         state.weeklyPlan=Monthly.normalizeWeeklyPlan(refreshed[0].value.plan,state.exercises);state.weeklyPlanUpdatedAt=Number(refreshed[0].value.planUpdatedAt)||0;
         syncSessionPlanViews({regenerate:true});
       }
-      closeDialog("communityApplyDialog");state.communityPendingId=null;el("communityPlanStatus").textContent="A shared plan or your current week changed. Review the latest versions before trying again.";showToast("Plans changed — review them before replacing yours.");
-    }else{const node=el("communityApplyError");node.textContent=error.name==="AbortError"?"The request took too long. Your plan was not confirmed as changed; close this window and check My Plan before trying again.":error.message;node.hidden=false;}
+      closeDialog("communityApplyDialog");state.communityPendingId=null;el("communityPlanStatus").textContent="Couldn't save — Retry. A shared plan or your current week changed; the latest versions are loaded for review.";showToast("Couldn't save — Retry. Review the latest plans first.");
+    }else{const message=saveRetryMessage(error),node=el("communityApplyError");node.textContent=message;node.hidden=false;el("communityPlanStatus").textContent=message;}
   }
   finally{if(timeout!==null)clearTimeout(timeout);dialog.dataset.busy="false";dialog.setAttribute?.("aria-busy","false");controls.forEach((control)=>{control.disabled=false;});confirm.innerHTML='Replace with this plan <span>→</span>';}
 }
@@ -485,18 +511,19 @@ function sessionMergePreview(){
   return Core.mergeSessionIntoPlan(state.weeklyPlan,el("sessionDay").value,state.session);
 }
 function updateSessionAddButton(){
-  if(!sessionBuilderAvailable())return;
+  if(!sessionBuilderAvailable())return null;
   const button=el("sessionAddAll");button.hidden=!state.session;
-  if(!state.session){button.disabled=true;return;}
+  if(!state.session){button.disabled=true;return null;}
   try{
-    const preview=sessionMergePreview();button.disabled=state.sessionSaving||!preview.changed;button.title=preview.changed?`Add ${preview.added} new movement${preview.added===1?"":"s"}${preview.skipped?` and skip ${preview.skipped} already on this day`:""}`:"Every movement in this session is already on the selected day.";
-  }catch(error){button.disabled=state.sessionSaving;button.title=error.message;}
+    const preview=sessionMergePreview();button.disabled=state.sessionSaving||!preview.changed;button.title=preview.changed?`Add ${preview.added} new movement${preview.added===1?"":"s"}${preview.skipped?` and skip ${preview.skipped} already on this day`:""}`:"Every movement in this session is already on the selected day.";return null;
+  }catch(error){button.disabled=true;button.title=error.message;return error;}
 }
 function renderSession(session,{announce=false}={}){
   if(!sessionBuilderAvailable())return;
   state.session=session;el("sessionResults").innerHTML=`<div class="session-result-summary"><div><p>${escapeHtml(session.timeLabel)} session</p><h3 id="sessionResultsTitle">${escapeHtml(session.focusLabel.toUpperCase())} · ${session.minutes} MIN</h3></div><strong>${escapeHtml(session.summary)}</strong></div><ol class="session-result-list">${session.items.map(sessionCardMarkup).join("")}</ol><p class="session-time-note">Time is an estimate; actual duration changes with setup, rest, and training pace.</p>`;
   el("sessionStatus").textContent=`${session.focusLabel} session ready · ${session.summary}. Review every movement before adding it.`;
-  el("sessionOpenPlan")&&(el("sessionOpenPlan").hidden=true);updateSessionAddButton();
+  el("sessionOpenPlan")&&(el("sessionOpenPlan").hidden=true);const previewError=updateSessionAddButton();
+  if(previewError)el("sessionStatus").textContent=`This session does not fit the selected day: ${previewError.message}`;
   if(announce&&state.activeFeature==="session"){
     const reduceMotion=window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
     el("sessionResults").scrollIntoView?.({behavior:reduceMotion?"auto":"smooth",block:"start"});
@@ -516,7 +543,7 @@ function generateSession({announce=false}={}){
 function setSessionBusy(busy){
   state.sessionSaving=busy;el("sessionResults")?.setAttribute("aria-busy",String(busy));
   for(const id of ["sessionGroup","sessionLength","sessionDay","sessionGenerate"])if(el(id))el(id).disabled=busy;
-  if(el("sessionAddAll")){el("sessionAddAll").disabled=busy;el("sessionAddAll").innerHTML=busy?'Adding session… <span aria-hidden="true">→</span>':'Add all to selected day <span aria-hidden="true">→</span>';}
+  if(el("sessionAddAll")){el("sessionAddAll").disabled=busy;el("sessionAddAll").innerHTML=busy?'Saving… <span aria-hidden="true">→</span>':'Add all to selected day <span aria-hidden="true">→</span>';}
   if(!busy)updateSessionAddButton();
 }
 function syncSessionPlanViews({regenerate=false}={}){renderWeeklyPulse();populateSessionDay();updateMonthlySourceButtons();if(regenerate)generateSession();else updateSessionAddButton();}
@@ -528,21 +555,21 @@ async function addSessionToWeek(){
   if(!sessionBuilderAvailable()||state.sessionSaving||!state.session)return;
   const day=el("sessionDay").value;let merged;
   try{merged=Core.mergeSessionIntoPlan(state.weeklyPlan,day,state.session);}
-  catch(error){el("sessionStatus").textContent=error.message;showToast(error.message);updateSessionAddButton();return;}
+  catch(error){const message=saveRetryMessage(error);el("sessionStatus").textContent=message;showToast(message);updateSessionAddButton();return;}
   if(!merged.changed){el("sessionStatus").textContent=`Every generated movement is already scheduled on ${day}.`;updateSessionAddButton();return;}
-  setSessionBusy(true);el("sessionStatus").textContent=`Adding ${merged.added} movement${merged.added===1?"":"s"} to ${day}…`;
+  setSessionBusy(true);el("sessionStatus").textContent="Saving…";
   try{
     const result=await api("/api/plan",{method:"PUT",body:JSON.stringify({plan:merged.plan,expectedPlanUpdatedAt:state.weeklyPlanUpdatedAt})});
     state.weeklyPlan=Monthly.normalizeWeeklyPlan(result.plan,state.exercises);state.weeklyPlanUpdatedAt=Number(result.planUpdatedAt)||state.weeklyPlanUpdatedAt;syncSessionPlanViews();
     const skipped=merged.skipped?` ${merged.skipped} already scheduled movement${merged.skipped===1?" was":"s were"} not duplicated.`:"";
-    el("sessionStatus").textContent=`Session added to ${day}: ${merged.added} new movement${merged.added===1?"":"s"}.${skipped}`;
-    if(el("sessionOpenPlan"))el("sessionOpenPlan").hidden=false;showToast(`Session added to ${day}.`);
+    el("sessionStatus").textContent=`Saved. Session added to ${day}: ${merged.added} new movement${merged.added===1?"":"s"}.${skipped}`;
+    if(el("sessionOpenPlan"))el("sessionOpenPlan").hidden=false;showToast(`Saved. Session added to ${day}.`);
   }catch(error){
     if(error.status===409||error.code==="PLAN_CHANGED"){
-      try{await refreshSessionConflict(error);el("sessionStatus").textContent="Your week changed in another tab or device. The latest plan is loaded; review the selected day, then add the session again.";showToast("Weekly plan changed — latest copy loaded.");}
-      catch{el("sessionStatus").textContent="Your week changed elsewhere, and the latest copy could not be loaded. Refresh before adding this session.";}
+      try{await refreshSessionConflict(error);el("sessionStatus").textContent="Couldn't save — Retry. Your week changed in another tab or device. The latest plan is loaded; review the selected day, then add the session again.";showToast("Couldn't save — Retry. Weekly plan changed; latest copy loaded.");}
+      catch{el("sessionStatus").textContent="Couldn't save — Retry. Your week changed elsewhere, and the latest copy could not be loaded. Refresh before adding this session.";}
     }else{
-      const message=error.code==="NETWORK_ERROR"?"STRATA could not confirm the plan update. Check My Plan before trying again.":error.message;el("sessionStatus").textContent=message;showToast(message);
+      const message=saveRetryMessage(error);el("sessionStatus").textContent=message;showToast(message);
     }
   }finally{setSessionBusy(false);}
 }
@@ -619,7 +646,7 @@ function renderMonthlyPlan(plan,{announce=false}={}){
   el("monthlySummary").innerHTML=`<div><span>Plan</span><strong>31 days</strong></div><div><span>Training</span><strong>${workoutDays}</strong></div><div><span>Rest</span><strong>${restDays}</strong></div><div><span>Exercises</span><strong>${totalExercises}</strong></div>`;
   el("monthlyDays").innerHTML=plan.days.map((day)=>`<article class="monthly-day-card ${day.rest?"is-rest":""}" data-rest="${day.rest}"><header class="monthly-day-head"><span class="monthly-day-number">Day ${String(day.dayNumber).padStart(2,"0")}</span><time datetime="${escapeHtml(day.date)}">${escapeHtml(friendlyMonthlyDate(day.date))}</time></header><h4>${escapeHtml(day.weekday)}</h4>${day.rest?'<p class="monthly-rest-copy"><strong>REST / RECOVERY</strong><br />Keep the day clear or use gentle movement.</p>':`<p class="monthly-day-targets">${day.targets.map((target)=>escapeHtml(Monthly.TARGET_LABELS[target]||titleCase(target))).join(" + ")}</p><ol class="monthly-exercise-list">${day.exercises.map(monthlyExerciseMarkup).join("")}</ol>`}</article>`).join("");
   el("monthlyResults").hidden=false;
-  if(announce){el("monthlyPlanStatus").textContent=`31-day plan ready and saved to your account. ${workoutDays} training days and ${restDays} rest days.`;el("monthlyResults").scrollIntoView?.({behavior:window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches?"auto":"smooth",block:"start"});}
+  if(announce){el("monthlyPlanStatus").textContent=`Saved. 31-day plan ready with ${workoutDays} training days and ${restDays} rest days.`;el("monthlyResults").scrollIntoView?.({behavior:window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches?"auto":"smooth",block:"start"});}
 }
 function populateMonthlyBuilder(plan=null){
   el("monthlyTitle").value=plan?.title||"My 31-day Strata plan";
@@ -627,7 +654,7 @@ function populateMonthlyBuilder(plan=null){
   el("monthlyExercisesPerTarget").value=String(plan?.exercisesPerTarget||2);
   state.monthlySource=plan?.source||"muscle-schedule";
   renderMonthlySchedule(plan?.schedule||blankMonthlySchedule());updateMonthlyDateRange();updateMonthlySourceButtons();renderMonthlyPlan(plan);
-  el("monthlyPlanStatus").textContent=plan?"Your saved 31-day plan is ready on this account.":"Choose your split, start date, and rest days.";
+  el("monthlyPlanStatus").textContent=plan?"Saved. Your 31-day plan is ready on this account.":"Choose your split, start date, and rest days.";
 }
 function downloadTextFile(text,filename,type="text/plain"){
   const blob=new Blob([text],{type}),url=URL.createObjectURL(blob),link=document.createElement("a");
@@ -696,7 +723,7 @@ profileForm.addEventListener("submit",async(event)=>{
   const controls=[...formElement.elements];profileForm.dataset.saving="true";controls.forEach((control)=>{control.disabled=true;});
   el("profileStatus").textContent="Saving…";
   try{const result=await api("/api/preferences",{method:"PUT",body:JSON.stringify({preferences})});state.preferences=result.preferences;renderProfile();renderRecommendations();resetExplorerWindow();renderExplorer();renderWeeklyPulse();generateSession();showToast("Personalized ranking refreshed.");}
-  catch(error){el("profileStatus").textContent=error.message;showToast(error.message);}
+  catch(error){const message=saveRetryMessage(error);el("profileStatus").textContent=message;showToast(message);}
   finally{profileForm.dataset.saving="false";controls.forEach((control)=>{control.disabled=false;});}
 });
 
@@ -704,17 +731,17 @@ const monthlyPlanForm=el("monthlyPlanForm");
 el("sessionBuilderForm")?.addEventListener("submit",(event)=>{event.preventDefault();if(!state.sessionSaving)generateSession({announce:true});});
 el("sessionGroup")?.addEventListener("change",()=>{if(!state.sessionSaving)generateSession();});
 el("sessionLength")?.addEventListener("change",()=>{if(!state.sessionSaving)generateSession();});
-el("sessionDay")?.addEventListener("change",()=>{if(!state.sessionSaving){updateSessionAddButton();el("sessionStatus").textContent=state.session?`Session ready to add to ${el("sessionDay").value}.`:"Build a session first.";}});
+el("sessionDay")?.addEventListener("change",()=>{if(!state.sessionSaving){const error=updateSessionAddButton();el("sessionStatus").textContent=error?`This session does not fit the selected day: ${error.message}`:state.session?`Session ready to add to ${el("sessionDay").value}.`:"Build a session first.";}});
 el("sessionAddAll")?.addEventListener("click",()=>{void addSessionToWeek();});
 monthlyPlanForm.addEventListener("submit",async(event)=>{
   event.preventDefault();if(monthlyPlanForm.dataset.saving==="true")return;
   const button=el("generateMonthlyPlan");setMonthlyValidation();
   try{
     const schedule=readMonthlySchedule(),generated={...Monthly.generateMonthPlan({title:el("monthlyTitle").value,startDate:el("monthlyStartDate").value,exercisesPerTarget:Number(el("monthlyExercisesPerTarget").value),schedule,exercises:state.exercises,preferences:state.preferences}),source:state.monthlySource};
-    monthlyPlanForm.dataset.saving="true";monthlyPlanForm.setAttribute("aria-busy","true");button.disabled=true;el("monthlyPlanStatus").textContent="Choosing exercises and saving your month…";
+    monthlyPlanForm.dataset.saving="true";monthlyPlanForm.setAttribute("aria-busy","true");button.disabled=true;el("monthlyPlanStatus").textContent="Saving…";
     const result=await api("/api/monthly-plan",{method:"PUT",body:JSON.stringify({monthlyPlan:generated})});
-    state.monthlySchedule=copyMonthlyValue(result.monthlyPlan.schedule);renderMonthlyPlan(result.monthlyPlan,{announce:true});showToast("31-day plan saved to your account.");
-  }catch(error){setMonthlyValidation(error.message);el("monthlyPlanStatus").textContent="Your plan was not replaced. Fix the highlighted issue and try again.";showToast(error.message);}
+    state.monthlySchedule=copyMonthlyValue(result.monthlyPlan.schedule);renderMonthlyPlan(result.monthlyPlan,{announce:true});showToast("Saved. Your 31-day plan is ready.");
+  }catch(error){setMonthlyValidation(error.message);const message=saveRetryMessage(error);el("monthlyPlanStatus").textContent=message;showToast(message);}
   finally{monthlyPlanForm.dataset.saving="false";monthlyPlanForm.setAttribute("aria-busy","false");button.disabled=false;}
 });
 el("monthlySchedule").addEventListener("change",(event)=>{
@@ -760,15 +787,15 @@ el("communityApplyConfirm").addEventListener("click",()=>void applyCommunityPlan
 el("communityApplyDialog").addEventListener("close",()=>{if(el("communityApplyDialog").dataset.busy!=="true")state.communityPendingId=null;});
 
 document.addEventListener("submit",async(event)=>{
-  const form=event.target.closest("[data-rating-form]");if(!form)return;event.preventDefault();const id=form.dataset.ratingForm,data=Object.fromEntries(new FormData(form));const rating=Object.fromEntries(Object.entries(data).map(([key,value])=>[key,Number(value)]));const button=form.querySelector("button"),originalHtml=button.innerHTML;button.disabled=true;button.textContent="Saving…";
-  try{const result=await api(`/api/ratings/${encodeURIComponent(id)}`,{method:"PUT",body:JSON.stringify({rating})});state.userRatings.set(id,result.rating);if(result.aggregate)state.aggregate.set(id,result.aggregate);else state.aggregate.delete(id);state.ratingsRefreshedAt=Date.now();renderCommunityViews();showToast("Your account rating was saved.");}
-  catch(error){button.innerHTML=originalHtml;showToast(error.message);}finally{button.disabled=false;}
+  const form=event.target.closest("[data-rating-form]");if(!form)return;event.preventDefault();const id=form.dataset.ratingForm,data=Object.fromEntries(new FormData(form));const rating=Object.fromEntries(Object.entries(data).map(([key,value])=>[key,Number(value)]));const button=form.querySelector("button"),status=form.querySelector("[data-rating-status]"),originalHtml=button.innerHTML;button.disabled=true;button.textContent="Saving…";if(status)status.textContent="Saving…";
+  try{const result=await api(`/api/ratings/${encodeURIComponent(id)}`,{method:"PUT",body:JSON.stringify({rating})});state.userRatings.set(id,result.rating);if(result.aggregate)state.aggregate.set(id,result.aggregate);else state.aggregate.delete(id);state.ratingsRefreshedAt=Date.now();renderCommunityViews();const saved=el("detailContent")?.querySelector?.("[data-rating-status]");if(saved)saved.textContent="Saved";showToast("Saved. Your rating is on this account.");}
+  catch(error){const message=saveRetryMessage(error);button.innerHTML=originalHtml;if(status)status.textContent=message;showToast(message);}finally{button.disabled=false;}
 });
 
 document.addEventListener("click",(event)=>{
   const feature=event.target.closest("[data-feature-target]"),detail=event.target.closest("[data-open-detail]"),compare=event.target.closest("[data-toggle-compare]"),scrollAlternatives=event.target.closest("[data-scroll-alternatives]"),close=event.target.closest("[data-close-dialog]"),collection=event.target.closest("[data-collection]"),reset=event.target.closest("[data-reset-filters]"),loadMore=event.target.closest("[data-load-more-exercises]"),share=event.target.closest("[data-share-exercise]"),shareBattle=event.target.closest("[data-share-battle]");
   if(feature&&featureName(feature.dataset.featureTarget)){event.preventDefault();activateFeature(feature.dataset.featureTarget,{focus:true,scroll:true,smooth:true,announce:true,historyMode:"push"});}
-  else if(detail){if(el("detailDialog").open)closeDialog("detailDialog");openDetail(detail.dataset.openDetail);}
+  else if(detail)openDetail(detail.dataset.openDetail);
   else if(compare){toggleCompare(compare.dataset.toggleCompare);if(el("detailDialog").open)openDetail(compare.dataset.toggleCompare);}
   else if(scrollAlternatives){const section=el("alternativeSection"),heading=el("alternativeTitle"),reduceMotion=window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;section?.scrollIntoView?.({behavior:reduceMotion?"auto":"smooth",block:"start"});heading?.focus?.({preventScroll:true});}
   else if(close)closeDialog(close.dataset.closeDialog);
@@ -782,7 +809,7 @@ document.addEventListener("click",(event)=>{
 document.querySelectorAll("dialog").forEach((dialog)=>{
   dialog.addEventListener("click",(event)=>{if(event.target===dialog&&dialog.dataset.busy!=="true")closeDialog(dialog.id);});
   dialog.addEventListener("cancel",(event)=>{event.preventDefault();if(dialog.dataset.busy!=="true")closeDialog(dialog.id);});
-  dialog.addEventListener("close",syncDialogState);
+  dialog.addEventListener("close",()=>{syncDialogState();restoreDialogFocus(dialog);});
 });
 function refreshCommunityRatingsWhenVisible(){
   if(document.visibilityState&&document.visibilityState!=="visible")return;

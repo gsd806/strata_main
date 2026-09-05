@@ -290,9 +290,25 @@ function syncDialogState() {
   document.body.classList.toggle("dialog-open", detailDialog.open || compareDialog.open);
 }
 
+const dialogReturnFocus = new WeakMap();
+function restoreModalFocus(dialog) {
+  const control = dialogReturnFocus.get(dialog);
+  dialogReturnFocus.delete(dialog);
+  if (control && control.isConnected !== false && !control.hidden && !control.disabled) requestAnimationFrame(() => control.focus());
+}
 function openModal(dialog) {
-  if (!dialog.open) dialog.showModal();
+  if (!dialog.open) {
+    const active = document.activeElement;
+    if (active && active !== document.body && typeof active.focus === "function" && !dialog.contains?.(active)) dialogReturnFocus.set(dialog,active);
+    dialog.showModal();
+  }
   syncDialogState();
+  requestAnimationFrame(() => dialog.querySelector?.("[data-close-dialog],button,[href],input,select,textarea")?.focus());
+}
+function closeModal(dialog) {
+  if (dialog?.open) dialog.close();
+  syncDialogState();
+  if (dialog) restoreModalFocus(dialog);
 }
 
 function openDetail(id) {
@@ -349,7 +365,7 @@ async function initializeCatalog() {
   state.catalogStatus = "loading";
   renderAll();
   try {
-    exercises = normalizeCatalog(await api("/exercises.json?v=6.9.8"));
+    exercises = normalizeCatalog(await api("/exercises.json?v=6.9.9"));
     state.catalogStatus = "ready";
     el("catalogTotal").textContent = exercises.length;
   } catch {
@@ -423,7 +439,7 @@ document.addEventListener("click", (event) => {
   else if (detailButton) openDetail(detailButton.dataset.detail);
   else if (addButton) addToPlanner(addButton.dataset.addPlanner);
   else if (compareButton) toggleCompare(compareButton.dataset.compare);
-  else if (closeButton) document.getElementById(closeButton.dataset.closeDialog)?.close();
+  else if (closeButton) closeModal(document.getElementById(closeButton.dataset.closeDialog));
 });
 
 groupTabs.addEventListener("keydown", (event) => {
@@ -453,10 +469,10 @@ el("resetActiveFilters").addEventListener("click", resetFilters);
 el("clearCompare").addEventListener("click", () => { state.compare=[];updateCompareDock();renderExercises();requestAnimationFrame(()=>el("searchInput").focus()); });
 el("openCompare").addEventListener("click", openComparison);
 [detailDialog,compareDialog].forEach((dialog) => {
-  dialog.addEventListener("close", syncDialogState);
+  dialog.addEventListener("close", () => { syncDialogState();restoreModalFocus(dialog); });
   dialog.addEventListener("click", (event) => {
     const rect=dialog.getBoundingClientRect();
-    if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)dialog.close();
+    if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)closeModal(dialog);
   });
 });
 

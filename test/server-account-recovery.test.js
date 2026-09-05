@@ -271,7 +271,7 @@ function completedEvent(transactionId,userId,label="complete"){
     data:{
       id:transactionId,status:"completed",
       customer_id:"ctm_000000000000000000000001",
-      subscription_id:null,collection_mode:"automatic",updated_at:occurredAt,
+      subscription_id:null,collection_mode:"automatic",origin:"api",updated_at:occurredAt,
       custom_data:{strata_user_id:userId,strata_version:1},
       items:[{quantity:1,price:{id:PRICE_ID,product_id:PRODUCT_ID,billing_cycle:null}}],
       details:{totals:{subtotal:"599",discount:"0",tax:"0",total:"599"}}
@@ -379,11 +379,11 @@ test("password recovery is private, preserves account data, and revokes every se
   assert.equal(adjustment.response.status,200);
   assert.equal(adjustment.data.outcome,"adjustment-recorded");
 
-  const plan=await jsonRequest("/api/plan",{plan:planFixture(),expectedPlanUpdatedAt:0},{cookie:account.cookie,method:"PUT"});
+  const plan=await jsonRequest("/api/plan",{plan:planFixture(),expectedPlanUpdatedAt:0},{cookie:account.cookie,csrf:account.csrfToken,method:"PUT"});
   assert.equal(plan.response.status,200);
   const rating=await jsonRequest("/api/ratings/flat-dumbbell-press",{rating:ratingFixture},{cookie:account.cookie,csrf:account.csrfToken,method:"PUT"});
   assert.equal(rating.response.status,200);
-  const preferences=await jsonRequest("/api/preferences",{preferences:preferencesFixture},{cookie:account.cookie,method:"PUT"});
+  const preferences=await jsonRequest("/api/preferences",{preferences:preferencesFixture},{cookie:account.cookie,csrf:account.csrfToken,method:"PUT"});
   assert.equal(preferences.response.status,200);
 
   const beforeEmails=deliveries.length;
@@ -728,8 +728,8 @@ test("account deletion requires email confirmation, supports cancel, blocks pend
   assert.equal(granted.data.outcome,"granted");
   assert.equal((await request("/api/me",{headers:{Cookie:account.cookie}})).data.user.discovery.active,true);
 
-  const savedPlan=await jsonRequest("/api/plan",{plan:planFixture(),expectedPlanUpdatedAt:0},{cookie:account.cookie,method:"PUT"});
-  const savedPreferences=await jsonRequest("/api/preferences",{preferences:preferencesFixture},{cookie:account.cookie,method:"PUT"});
+  const savedPlan=await jsonRequest("/api/plan",{plan:planFixture(),expectedPlanUpdatedAt:0},{cookie:account.cookie,csrf:account.csrfToken,method:"PUT"});
+  const savedPreferences=await jsonRequest("/api/preferences",{preferences:preferencesFixture},{cookie:account.cookie,csrf:account.csrfToken,method:"PUT"});
   const savedRating=await jsonRequest("/api/ratings/flat-dumbbell-press",{rating:ratingFixture},{cookie:account.cookie,csrf:account.csrfToken,method:"PUT"});
   assert.equal(savedPlan.response.status,200);
   assert.equal(savedPreferences.response.status,200);

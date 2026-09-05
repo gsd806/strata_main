@@ -65,7 +65,7 @@ test.before(startServer);
 test.after(stopServer);
 
 test("serves rankings and gates private account pages",async()=>{
-  assert.equal(BUILD,"6.9.8");
+  assert.equal(BUILD,"6.9.9");
   const home=await request("/");
   assert.equal(home.response.status,200);
   assert.equal(home.response.headers.get("cache-control"),"private, no-store");
@@ -181,6 +181,8 @@ test("creates an account with a private default plan",async()=>{
   assert.equal(plan.response.status,200);
   assert.equal(plan.data.plan.restDay,"Sunday");
   assert.deepEqual(plan.data.plan.days.Monday,[]);
+  const csrfToken=plan.data.csrfToken;
+  assert.ok(csrfToken);
 
   const me=await request("/api/me",{headers:{Cookie:signup.cookie}});
   assert.equal(me.data.user.discovery.trial.eligible,true);
@@ -197,16 +199,34 @@ test("creates an account with a private default plan",async()=>{
   const trialDiscovery=await request("/api/discovery",{headers:{Cookie:signup.cookie}});
   assert.equal(trialDiscovery.response.status,200);
 
+  const profile={version:1,goal:"strength",level:"Intermediate",days:4,equipment:["Dumbbells","Bodyweight"],preferences:["stable"],limitations:[]};
+  const missingProfileCsrf=await request("/api/preferences",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({preferences:profile})});
+  assert.equal(missingProfileCsrf.response.status,403);
+  assert.equal(missingProfileCsrf.data.code,"INVALID_CSRF");
+  const wrongProfileCsrf=await request("/api/preferences",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":"wrong-token"},body:JSON.stringify({preferences:profile})});
+  assert.equal(wrongProfileCsrf.response.status,403);
+  assert.equal(wrongProfileCsrf.data.code,"INVALID_CSRF");
+  const savedProfile=await request("/api/preferences",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":csrfToken},body:JSON.stringify({preferences:profile})});
+  assert.equal(savedProfile.response.status,200);
+  assert.deepEqual(savedProfile.data.preferences,profile);
+
   const unauthenticatedSave=await request("/api/plan",{method:"PUT",headers:{Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:plan.data.plan})});
   assert.equal(unauthenticatedSave.response.status,401);
 
-  const missingPlanVersion=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:plan.data.plan})});
+  const missingPlanCsrf=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:plan.data.plan,expectedPlanUpdatedAt:plan.data.planUpdatedAt})});
+  assert.equal(missingPlanCsrf.response.status,403);
+  assert.equal(missingPlanCsrf.data.code,"INVALID_CSRF");
+  const wrongPlanCsrf=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":"wrong-token"},body:JSON.stringify({plan:plan.data.plan,expectedPlanUpdatedAt:plan.data.planUpdatedAt})});
+  assert.equal(wrongPlanCsrf.response.status,403);
+  assert.equal(wrongPlanCsrf.data.code,"INVALID_CSRF");
+
+  const missingPlanVersion=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":csrfToken},body:JSON.stringify({plan:plan.data.plan})});
   assert.equal(missingPlanVersion.response.status,400);
   assert.equal(missingPlanVersion.data.code,"PLAN_VERSION_REQUIRED");
 
   plan.data.plan.days.Monday.push({instanceId:"test-instance-001",exerciseId:"incline-smith-press",sets:3,reps:"8–10"});
   plan.data.plan.days.Tuesday.push({instanceId:"test-instance-001",exerciseId:"flat-dumbbell-press",sets:4,reps:"8–12"});
-  const saved=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:plan.data.plan,expectedPlanUpdatedAt:plan.data.planUpdatedAt})});
+  const saved=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":csrfToken},body:JSON.stringify({plan:plan.data.plan,expectedPlanUpdatedAt:plan.data.planUpdatedAt})});
   assert.equal(saved.response.status,200);
   assert.equal(saved.data.stats.planCount,2);
   const savedIds=[saved.data.plan.days.Monday[0].instanceId,saved.data.plan.days.Tuesday[0].instanceId];
@@ -214,41 +234,41 @@ test("creates an account with a private default plan",async()=>{
 
   const fractionalPlan=structuredClone(saved.data.plan);
   fractionalPlan.days.Monday[0].sets=2.5;
-  const fractional=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:fractionalPlan,expectedPlanUpdatedAt:saved.data.planUpdatedAt})});
+  const fractional=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":csrfToken},body:JSON.stringify({plan:fractionalPlan,expectedPlanUpdatedAt:saved.data.planUpdatedAt})});
   assert.equal(fractional.response.status,400);
   assert.equal(fractional.data.error,"Sets must be a whole number from 1 to 10.");
 
   const occupiedRestPlan=structuredClone(saved.data.plan);
   occupiedRestPlan.restDay="Monday";
-  const occupiedRest=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:occupiedRestPlan,expectedPlanUpdatedAt:saved.data.planUpdatedAt})});
+  const occupiedRest=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":csrfToken},body:JSON.stringify({plan:occupiedRestPlan,expectedPlanUpdatedAt:saved.data.planUpdatedAt})});
   assert.equal(occupiedRest.response.status,400);
   assert.equal(occupiedRest.data.error,"The selected rest day must not contain exercises.");
 
   const invalidRestPlan=structuredClone(saved.data.plan);
   invalidRestPlan.restDay="Funday";
-  const invalidRest=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:invalidRestPlan,expectedPlanUpdatedAt:saved.data.planUpdatedAt})});
+  const invalidRest=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":csrfToken},body:JSON.stringify({plan:invalidRestPlan,expectedPlanUpdatedAt:saved.data.planUpdatedAt})});
   assert.equal(invalidRest.response.status,400);
   assert.equal(invalidRest.data.error,"Choose a valid rest day.");
 
-  const malformedPlan=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:null,expectedPlanUpdatedAt:saved.data.planUpdatedAt})});
+  const malformedPlan=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":csrfToken},body:JSON.stringify({plan:null,expectedPlanUpdatedAt:saved.data.planUpdatedAt})});
   assert.equal(malformedPlan.response.status,400);
 
   const unknownExercisePlan=structuredClone(saved.data.plan);
   unknownExercisePlan.days.Wednesday.push({instanceId:"unknown-exercise-001",exerciseId:"not-in-the-library",sets:3,reps:"8–12"});
-  const unknownExercise=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:unknownExercisePlan,expectedPlanUpdatedAt:saved.data.planUpdatedAt})});
+  const unknownExercise=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":csrfToken},body:JSON.stringify({plan:unknownExercisePlan,expectedPlanUpdatedAt:saved.data.planUpdatedAt})});
   assert.equal(unknownExercise.response.status,400);
   assert.equal(unknownExercise.data.error,"Plan contains an unknown exercise.");
 
   const newerPlan=structuredClone(saved.data.plan);
   newerPlan.days.Monday[0].reps="6–8";
-  const newerSave=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:newerPlan,expectedPlanUpdatedAt:saved.data.planUpdatedAt})});
+  const newerSave=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":csrfToken},body:JSON.stringify({plan:newerPlan,expectedPlanUpdatedAt:saved.data.planUpdatedAt})});
   assert.equal(newerSave.response.status,200);
   assert.ok(newerSave.data.planUpdatedAt>saved.data.planUpdatedAt);
-  const lostResponseRetry=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:newerPlan,expectedPlanUpdatedAt:saved.data.planUpdatedAt})});
+  const lostResponseRetry=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":csrfToken},body:JSON.stringify({plan:newerPlan,expectedPlanUpdatedAt:saved.data.planUpdatedAt})});
   assert.equal(lostResponseRetry.response.status,200,"retrying an already-committed identical plan is idempotent");
   assert.equal(lostResponseRetry.data.reused,true);
   assert.equal(lostResponseRetry.data.planUpdatedAt,newerSave.data.planUpdatedAt,"an idempotent retry must not invent a new revision");
-  const staleSave=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:saved.data.plan,expectedPlanUpdatedAt:saved.data.planUpdatedAt})});
+  const staleSave=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":csrfToken},body:JSON.stringify({plan:saved.data.plan,expectedPlanUpdatedAt:saved.data.planUpdatedAt})});
   assert.equal(staleSave.response.status,409);
   assert.equal(staleSave.data.code,"PLAN_CHANGED");
   assert.equal(staleSave.data.planUpdatedAt,newerSave.data.planUpdatedAt);
@@ -257,7 +277,7 @@ test("creates an account with a private default plan",async()=>{
   const oversizedBody=JSON.stringify({plan:saved.data.plan,padding:"😀".repeat(17000)});
   assert.ok(oversizedBody.length<65536);
   assert.ok(Buffer.byteLength(oversizedBody)>65536);
-  const oversized=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:oversizedBody});
+  const oversized=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":csrfToken},body:oversizedBody});
   assert.equal(oversized.response.status,413);
   const healthAfterOversize=await request("/healthz");
   assert.equal(healthAfterOversize.response.status,200);

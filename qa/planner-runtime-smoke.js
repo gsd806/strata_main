@@ -203,10 +203,12 @@ function clickSelectDay(day){
   vm.runInContext("state.plan.days.Wednesday.push({instanceId:'retry-save-item',exerciseId:state.exercises[2].id,sets:3,reps:'8–12'});state.revision+=1;",context);
   assert.equal(await vm.runInContext("flushSave()",context),false,"A failed save must remain unsaved");
   assert.equal(elements.get("retryPlanSave").hidden,false,"A failed save must expose Retry");
+  assert.equal(elements.get("saveStatus").textContent,"Couldn't save — Retry","A failed save must use the shared retry state");
+  assert.match(elements.get("retryPlanSave").title,/could not save right now/i,"Retry must explain a temporary server failure");
   await Promise.all((elements.get("retryPlanSave").listeners.click||[]).map((handler)=>handler({currentTarget:elements.get("retryPlanSave")})));
   assert.equal(retrySaveAttempts,2,"Retry must make one fresh save request");
   assert.equal(elements.get("retryPlanSave").hidden,true,"Retry should hide after the plan saves");
-  assert.match(elements.get("saveStatus").textContent,/Saved to account/);
+  assert.equal(elements.get("saveStatus").textContent,"Saved");
 
   const authoritativePlan=JSON.parse(JSON.stringify(plan));
   authoritativePlan.days.Monday[0].reps="5–7";

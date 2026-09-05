@@ -249,12 +249,13 @@ test("adjustment upserts keep the newest event and revocation is monotonic",asyn
     assert.equal(revoked.access_revoked_at,6_000);
     assert.equal(revoked.revocation_reason,"approved_full_refund");
     await store.revokePurchase("txn_refund","duplicate_or_later_reason",7_000,7_000);
-    await store.completePurchase("txn_refund",{customerId:"ctm_refund",completedAt:8_000,updatedAt:8_000});
+    await store.completePurchase("txn_refund",{customerId:"ctm_replayed",completedAt:8_000,updatedAt:8_000});
 
     const preserved=await store.purchaseByTransaction("txn_refund");
     assert.equal(preserved.access_revoked_at,6_000,"replayed completion must not restore revoked access");
     assert.equal(preserved.revocation_reason,"approved_full_refund");
     assert.equal(preserved.completed_at,2_000,"replayed completion must preserve the first completion time");
+    assert.equal(preserved.customer_id,"ctm_refund","replayed completion must preserve the first provider customer identity");
     assert.equal(await store.hasDiscoveryAccess("user-1"),false);
   } finally {
     await close();

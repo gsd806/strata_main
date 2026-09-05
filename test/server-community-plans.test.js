@@ -114,7 +114,7 @@ function write(account,path,body,{method="POST",csrf=account.csrfToken,origin=BA
 }
 
 async function saveWeeklyPlan(account,plan){
-  const saved=await write(account,"/api/plan",{plan,expectedPlanUpdatedAt:account.planUpdatedAt||0},{method:"PUT",csrf:null});
+  const saved=await write(account,"/api/plan",{plan,expectedPlanUpdatedAt:account.planUpdatedAt||0},{method:"PUT"});
   assert.equal(saved.response.status,200);
   assert.ok(Number.isSafeInteger(saved.data.planUpdatedAt)&&saved.data.planUpdatedAt>0);
   account.planUpdatedAt=saved.data.planUpdatedAt;

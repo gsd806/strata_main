@@ -520,6 +520,7 @@ dialog::backdrop { background: rgba(8,9,7,.78); backdrop-filter: blur(4px); }
 .rating-grid select { height: 44px; border: 1px solid var(--line); background: var(--white); padding: 0 9px; }
 .rating-grid label:last-child { grid-column: 1 / -1; }
 .rating-form .button { margin-top: 13px; }
+.rating-save-status { min-height: 1.4em; margin: 9px 0 0; color: var(--muted); font: 500 10px/1.4 var(--mono); }
 .rating-summary { display: flex; align-items: baseline; gap: 8px; margin-bottom: 15px; }
 .rating-summary strong { font: 600 36px var(--display); }
 .rating-summary span { color: var(--muted); font-size: 11px; }

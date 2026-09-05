@@ -65,7 +65,7 @@ test("community plans preview a full week and require confirmation before replac
   assert.match(script,/Replace My Plan/);
   assert.match(script,/sourceUpdatedAt:Number\(record\.updatedAt\)/);
   assert.match(script,/targetUpdatedAt:state\.weeklyPlanUpdatedAt/);
-  assert.match(script,/communityApplyCancel"\)\.focus/);
+  assert.match(script,/openDialog\(dialog,el\("communityApplyCancel"\)\)/);
   assert.doesNotMatch(script,/items\.slice\(0,8\)/,"the preview must show every exercise that can be applied");
   assert.match(script,/state\.weeklyPlan=Monthly\.normalizeWeeklyPlan\(result\.plan/);
   assert.match(script,/communityApplyDialog/);

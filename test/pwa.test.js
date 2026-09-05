@@ -20,8 +20,9 @@ function pngDimensions(file) {
   return {width:body.readUInt32BE(16),height:body.readUInt32BE(20)};
 }
 
-function serviceWorkerHarness() {
-  const listeners={},precache=[],offlineResponse={kind:"offline"},networkResponse={kind:"network"};
+function serviceWorkerHarness({cacheKeys=[]}={}) {
+  const listeners={},precache=[],deletedCaches=[],cachePuts=[],lifecycle={claimed:false,skipped:false},offlineResponse={kind:"offline"};
+  const networkResponse={kind:"network",ok:true,type:"basic",clone(){return this;}};
   const pageResponses=new Map(["install","pricing","contact","terms","privacy","refunds","planner"].map((name)=>[`/${name}.html`,{kind:name}]));
   let networkFails=false;
   const cache={
@@ -30,27 +31,27 @@ function serviceWorkerHarness() {
       const value=typeof request==="string"?request:new URL(request.url).pathname;
       return value==="/offline.html"?offlineResponse:pageResponses.get(value);
     },
-    async put(){}
+    async put(request,response){cachePuts.push({request,response});}
   };
   const context={
     URL,Response,
     self:{
       location:{origin:"https://strata.test"},
       addEventListener(type,handler){listeners[type]=handler;},
-      async skipWaiting(){},
-      clients:{async claim(){}}
+      async skipWaiting(){lifecycle.skipped=true;},
+      clients:{async claim(){lifecycle.claimed=true;}}
     },
     caches:{
       async open(){return cache;},
       async match(request){return cache.match(request);},
-      async keys(){return [];},
-      async delete(){return true;}
+      async keys(){return [...cacheKeys];},
+      async delete(key){deletedCaches.push(key);return true;}
     },
     async fetch(){if(networkFails)throw new Error("offline");return networkResponse;}
   };
   vm.createContext(context);
   vm.runInContext(read("service-worker.js"),context,{filename:"service-worker.js"});
-  return {listeners,precache,offlineResponse,networkResponse,pageResponses,setOffline(value){networkFails=value;}};
+  return {listeners,precache,deletedCaches,cachePuts,lifecycle,offlineResponse,networkResponse,pageResponses,setOffline(value){networkFails=value;}};
 }
 
 function dispatchServiceWorkerFetch(handler,pathName,{method="GET",mode="same-origin",origin="https://strata.test"}={}) {
@@ -93,7 +94,7 @@ test("release version, cache keys, asset URLs, and catalog claims stay aligned",
   const serviceWorker=read("service-worker.js");
   const pages=["index.html","account.html","verify-email.html","forgot-password.html","reset-password.html","delete-account.html","admin.html","planner.html","discover.html","install.html","offline.html","pricing.html","contact.html","terms.html","privacy.html","refunds.html"];
 
-  assert.equal(version,"6.9.8");
+  assert.equal(version,"6.9.9");
   assert.match(serviceWorker,new RegExp(`const BUILD="${versionPattern}";`));
   assert.match(serviceWorker,/const CACHE_PREFIX="strata-static-";/);
   assert.match(serviceWorker,/const STATIC_CACHE=`\$\{CACHE_PREFIX\}\$\{BUILD\}`;/);
@@ -199,8 +200,8 @@ test("bearer-link pages stay mobile friendly but do not initialize the PWA",()=>
 
 test("the private admin surface is versioned but never initialized as an offline PWA page",()=>{
   const html=read("pages/admin.html");
-  assert.match(html,/<meta\s+name="viewport"\s+content="[^"]*width=device-width[^\"]*viewport-fit=cover[^\"]*"\s*\/>/i);
-  assert.match(html,/<meta\s+name="robots"\s+content="[^"]*noindex[^\"]*nofollow[^\"]*"\s*\/>/i);
+  assert.match(html,/<meta\s+name="viewport"\s+content="[^"]*width=device-width[^"]*viewport-fit=cover[^"]*"\s*\/>/i);
+  assert.match(html,/<meta\s+name="robots"\s+content="[^"]*noindex[^"]*nofollow[^"]*"\s*\/>/i);
   assert.match(html,/<meta\s+name="referrer"\s+content="no-referrer"\s*\/>/i);
   assert.doesNotMatch(html,/href="\/manifest\.webmanifest"/i);
   assert.doesNotMatch(html,/src="\/pwa\.js/i);
@@ -213,6 +214,8 @@ test("service worker precaches only public assets and never handles account APIs
   let installPromise;
   harness.listeners.install({waitUntil(value){installPromise=value;}});
   await installPromise;
+  assert.equal(harness.lifecycle.skipped,true,"the installed worker must activate without waiting for old tabs to close");
+  assert.equal(new Set(harness.precache).size,harness.precache.length,"precache entries must stay unique");
   assert.ok(harness.precache.includes("/offline.html"));
   assert.ok(harness.precache.includes("/install.html"));
   assert.ok(harness.precache.includes("/manifest.webmanifest"));
@@ -236,6 +239,22 @@ test("service worker precaches only public assets and never handles account APIs
   }
   assert.equal(dispatchServiceWorkerFetch(harness.listeners.fetch,"/styles.css",{method:"POST"}),undefined,"writes must never be intercepted");
   assert.equal(dispatchServiceWorkerFetch(harness.listeners.fetch,"/styles.css",{origin:"https://cdn.test"}),undefined,"cross-origin requests must never be intercepted");
+
+  const publicAsset=dispatchServiceWorkerFetch(harness.listeners.fetch,`/styles.css?v=${BUILD}`);
+  assert.equal(await publicAsset,harness.networkResponse);
+  assert.equal(harness.cachePuts.length,1,"an allowlisted successful same-origin asset may enter the runtime cache");
+  assert.equal(dispatchServiceWorkerFetch(harness.listeners.fetch,"/styles.css?v=unexpected"),undefined,"query variants outside the release allowlist must remain network-only");
+  assert.equal(dispatchServiceWorkerFetch(harness.listeners.fetch,"/unlisted.js"),undefined,"unlisted assets must remain network-only");
+});
+
+test("service worker activation removes stale STRATA caches without touching unrelated storage",async()=>{
+  const active=`strata-static-${BUILD}`;
+  const harness=serviceWorkerHarness({cacheKeys:["strata-static-6.0.0",active,"other-app-cache","strata-static-preview"]});
+  let activationPromise;
+  harness.listeners.activate({waitUntil(value){activationPromise=value;}});
+  await activationPromise;
+  assert.deepEqual(harness.deletedCaches.sort(),["strata-static-6.0.0","strata-static-preview"]);
+  assert.equal(harness.lifecycle.claimed,true,"the current worker must claim pages after cleanup");
 });
 
 test("private navigations are network-first and fall back to the non-sensitive offline page",async()=>{

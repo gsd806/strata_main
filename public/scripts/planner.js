@@ -24,7 +24,7 @@ async function api(path,options={}) {
       headers:{Accept:"application/json",...(options.body?{"Content-Type":"application/json"}:{}),...(changesState&&state.csrfToken?{"X-CSRF-Token":state.csrfToken}:{}),...(options.headers||{})}
     });
   } catch(cause) {
-    throw Object.assign(new Error("Could not reach STRATA. Check your connection and try again."),{cause});
+    throw Object.assign(new Error("Could not reach STRATA. Check your connection and try again."),{code:"NETWORK_ERROR",cause});
   }
   const data=await response.json().catch(()=>({}));
   if(!response.ok) {
@@ -32,6 +32,16 @@ async function api(path,options={}) {
     throw error;
   }
   return data;
+}
+
+function planSaveError(error){
+  if(error?.code==="NETWORK_ERROR")return "STRATA is offline. Your changes are still unsaved; check your connection and retry.";
+  if(error?.status===401)return "Your session ended before the plan was saved. Sign in again, then retry.";
+  if(error?.status===403)return "The secure save token expired. Refresh this page, review your plan, and retry.";
+  if(error?.status===413)return "This plan is too large to save. Remove a few movements, then retry.";
+  if([400,422].includes(error?.status)&&error?.message&&error.message!=="Request failed.")return error.message;
+  if(Number(error?.status)>=500)return "STRATA could not save right now. Your changes are still here; retry in a moment.";
+  return error?.message&&error.message!=="Request failed."?error.message:"Your plan was not saved. Review your changes and retry.";
 }
 
 function escapeHtml(value){return String(value??"").replace(/[&<>'"]/g,(char)=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[char]));}
@@ -404,9 +414,10 @@ function setSaveStatus(message,error=false){
   const status=el("saveStatus"),retry=el("retryPlanSave");
   status.textContent=message;
   status.parentElement.classList.toggle("error",error);
+  retry.removeAttribute("title");
   if(state.conflictDraft){retry.textContent="Review my changes";retry.hidden=false;return;}
   if(state.conflictReview){retry.textContent="Save reviewed changes";retry.hidden=false;return;}
-  retry.textContent="Retry save";
+  retry.textContent="Retry";
   retry.hidden=!(error&&state.ready&&state.savedRevision<state.revision&&!hasRestConflict());
 }
 
@@ -504,7 +515,7 @@ async function performSave({keepalive=true,silent=false}={}){
       if(state.revision===revision)state.plan=result.plan;
       state.planUpdatedAt=Number(result.planUpdatedAt)||state.planUpdatedAt;state.lastSaveError=null;
       if(state.conflictReview&&state.savedRevision===state.revision)clearPlanConflict();
-      setSaveStatus(state.savedRevision===state.revision?(state.guest?"Saved":"Saved to account"):"Unsaved changes");
+      setSaveStatus(state.savedRevision===state.revision?"Saved":"Unsaved changes");
       return true;
     }catch(error){
       let saveError=error;
@@ -513,8 +524,10 @@ async function performSave({keepalive=true,silent=false}={}){
         catch(recoveryError){saveError=recoveryError;}
       }
       state.lastSaveError=saveError;
-      setSaveStatus("Save failed · retry needed",true);
-      if(!silent)showToast(saveError.message);
+      const detail=planSaveError(saveError);
+      setSaveStatus("Couldn't save — Retry",true);
+      el("retryPlanSave").title=detail;
+      if(!silent)showToast(detail);
       return false;
     }finally{
       state.savePromise=null;
@@ -689,7 +702,7 @@ el("retryPlanSave").addEventListener("click",async(event)=>{
   const button=event.currentTarget;
   if(state.conflictDraft){reviewConflictDraft();return;}
   button.disabled=true;
-  setSaveStatus(state.conflictReview?"Saving reviewed changes…":"Retrying save…");
+  setSaveStatus("Saving…");
   try{await flushSave({confirmConflict:state.conflictReview});}
   finally{button.disabled=false;}
 });
@@ -743,7 +756,7 @@ async function init(){
   el("weekSummary").innerHTML="";
   el("weekBoard").innerHTML='<div class="planner-load-state">Loading your weekly plan…</div>';
   try{
-    const exercises=await api("/exercises.json?v=6.9.8");
+    const exercises=await api("/exercises.json?v=6.9.9");
     if(!Array.isArray(exercises))throw new Error("STRATA returned an incomplete exercise library.");
     state.exercises=exercises;
     let result;
@@ -764,7 +777,7 @@ async function init(){
       ? '<strong>Guest plan.</strong> This week stays on this device. Signing in opens a separate synced account plan. <a href="/account.html?mode=login&amp;next=planner">Open my account plan</a>.'
       : '<strong>Account plan.</strong> Changes sync securely across your signed-in devices.';
     setReady(true);
-    resetLibraryWindow();renderFilters();renderLibrary();renderWeek();renderShareAccess();setSaveStatus(state.guest?"Saved":"Saved to account");
+    resetLibraryWindow();renderFilters();renderLibrary();renderWeek();renderShareAccess();setSaveStatus("Saved");
     if(!state.guest)void loadSharedPlans();
     if(repairedRest){queueSave();showToast(`Recovery moved to empty ${repairedRest} to keep it clear.`);}
     handlePendingAdd();
