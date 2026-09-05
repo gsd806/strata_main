@@ -65,7 +65,7 @@ test.before(startServer);
 test.after(stopServer);
 
 test("serves rankings and gates private account pages",async()=>{
-  assert.equal(BUILD,"6.9.4");
+  assert.equal(BUILD,"6.9.5");
   const home=await request("/");
   assert.equal(home.response.status,200);
   assert.equal(home.response.headers.get("cache-control"),"private, no-store");
@@ -200,9 +200,13 @@ test("creates an account with a private default plan",async()=>{
   const unauthenticatedSave=await request("/api/plan",{method:"PUT",headers:{Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:plan.data.plan})});
   assert.equal(unauthenticatedSave.response.status,401);
 
+  const missingPlanVersion=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:plan.data.plan})});
+  assert.equal(missingPlanVersion.response.status,400);
+  assert.equal(missingPlanVersion.data.code,"PLAN_VERSION_REQUIRED");
+
   plan.data.plan.days.Monday.push({instanceId:"test-instance-001",exerciseId:"incline-smith-press",sets:3,reps:"8–10"});
   plan.data.plan.days.Tuesday.push({instanceId:"test-instance-001",exerciseId:"flat-dumbbell-press",sets:4,reps:"8–12"});
-  const saved=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:plan.data.plan})});
+  const saved=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:plan.data.plan,expectedPlanUpdatedAt:plan.data.planUpdatedAt})});
   assert.equal(saved.response.status,200);
   assert.equal(saved.data.stats.planCount,2);
   const savedIds=[saved.data.plan.days.Monday[0].instanceId,saved.data.plan.days.Tuesday[0].instanceId];
@@ -210,30 +214,45 @@ test("creates an account with a private default plan",async()=>{
 
   const fractionalPlan=structuredClone(saved.data.plan);
   fractionalPlan.days.Monday[0].sets=2.5;
-  const fractional=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:fractionalPlan})});
+  const fractional=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:fractionalPlan,expectedPlanUpdatedAt:saved.data.planUpdatedAt})});
   assert.equal(fractional.response.status,400);
   assert.equal(fractional.data.error,"Sets must be a whole number from 1 to 10.");
 
   const occupiedRestPlan=structuredClone(saved.data.plan);
   occupiedRestPlan.restDay="Monday";
-  const occupiedRest=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:occupiedRestPlan})});
+  const occupiedRest=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:occupiedRestPlan,expectedPlanUpdatedAt:saved.data.planUpdatedAt})});
   assert.equal(occupiedRest.response.status,400);
   assert.equal(occupiedRest.data.error,"The selected rest day must not contain exercises.");
 
   const invalidRestPlan=structuredClone(saved.data.plan);
   invalidRestPlan.restDay="Funday";
-  const invalidRest=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:invalidRestPlan})});
+  const invalidRest=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:invalidRestPlan,expectedPlanUpdatedAt:saved.data.planUpdatedAt})});
   assert.equal(invalidRest.response.status,400);
   assert.equal(invalidRest.data.error,"Choose a valid rest day.");
 
-  const malformedPlan=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:null})});
+  const malformedPlan=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:null,expectedPlanUpdatedAt:saved.data.planUpdatedAt})});
   assert.equal(malformedPlan.response.status,400);
 
   const unknownExercisePlan=structuredClone(saved.data.plan);
   unknownExercisePlan.days.Wednesday.push({instanceId:"unknown-exercise-001",exerciseId:"not-in-the-library",sets:3,reps:"8–12"});
-  const unknownExercise=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:unknownExercisePlan})});
+  const unknownExercise=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:unknownExercisePlan,expectedPlanUpdatedAt:saved.data.planUpdatedAt})});
   assert.equal(unknownExercise.response.status,400);
   assert.equal(unknownExercise.data.error,"Plan contains an unknown exercise.");
+
+  const newerPlan=structuredClone(saved.data.plan);
+  newerPlan.days.Monday[0].reps="6–8";
+  const newerSave=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:newerPlan,expectedPlanUpdatedAt:saved.data.planUpdatedAt})});
+  assert.equal(newerSave.response.status,200);
+  assert.ok(newerSave.data.planUpdatedAt>saved.data.planUpdatedAt);
+  const lostResponseRetry=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:newerPlan,expectedPlanUpdatedAt:saved.data.planUpdatedAt})});
+  assert.equal(lostResponseRetry.response.status,200,"retrying an already-committed identical plan is idempotent");
+  assert.equal(lostResponseRetry.data.reused,true);
+  assert.equal(lostResponseRetry.data.planUpdatedAt,newerSave.data.planUpdatedAt,"an idempotent retry must not invent a new revision");
+  const staleSave=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({plan:saved.data.plan,expectedPlanUpdatedAt:saved.data.planUpdatedAt})});
+  assert.equal(staleSave.response.status,409);
+  assert.equal(staleSave.data.code,"PLAN_CHANGED");
+  assert.equal(staleSave.data.planUpdatedAt,newerSave.data.planUpdatedAt);
+  assert.deepEqual(staleSave.data.plan,newerSave.data.plan,"a stale tab receives the authoritative plan without overwriting it");
 
   const oversizedBody=JSON.stringify({plan:saved.data.plan,padding:"😀".repeat(17000)});
   assert.ok(oversizedBody.length<65536);

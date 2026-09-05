@@ -9,6 +9,7 @@ const { createStore } = require("../src/database");
 const PROJECT_ROOT=join(__dirname,"..");
 
 const PRICE_ID="pri_01m1kyc2zd313d7a3ssmg02424";
+const OTHER_PRICE_ID="pri_01m1kyc2zd313d7a3ssmg09999";
 const PRODUCT_ID="pro_01m1ky8j916ybyacs836dxbz8x";
 
 async function fixture() {
@@ -55,6 +56,68 @@ function pending(transactionId,createdAt,status="ready") {
     updatedAt:createdAt
   };
 }
+
+test("checkout creation claims serialize per user, track provider work, and recover after expiry",async() => {
+  const {store,close}=await fixture();
+  try {
+    const first=await store.claimCheckoutCreation({
+      userId:"user-1",priceId:PRICE_ID,claimId:"claim-first",expiresAt:2_000,now:1_000
+    });
+    assert.deepEqual(first,{
+      user_id:"user-1",price_id:PRICE_ID,claim_id:"claim-first",transaction_id:null,
+      expires_at:2_000,created_at:1_000,updated_at:1_000
+    });
+    assert.equal(await store.claimCheckoutCreation({
+      userId:"user-1",priceId:OTHER_PRICE_ID,claimId:"claim-second",expiresAt:2_500,now:1_500
+    }),null,"an unexpired claim must admit only one checkout creator per user, even across prices");
+    assert.equal(await store.releaseCheckoutCreation("user-1","wrong-claim"),false);
+
+    const recorded=await store.recordCheckoutCreationTransaction("user-1","claim-first","txn_claim_first",1_600);
+    assert.deepEqual(recorded,{
+      ...first,transaction_id:"txn_claim_first",updated_at:1_600
+    });
+    assert.equal(await store.recordCheckoutCreationTransaction("user-1","wrong-claim","txn_wrong",1_700),null);
+    assert.equal(
+      await store.recordCheckoutCreationTransaction("user-1","claim-first","txn_replacement",1_700),
+      null,
+      "a claim must not be rebound to a different provider transaction"
+    );
+
+    const extended=await store.extendCheckoutCreation("user-1","claim-first",4_000,1_800);
+    assert.deepEqual(extended,{
+      ...recorded,expires_at:4_000,updated_at:1_800
+    });
+    assert.equal(await store.extendCheckoutCreation("user-1","wrong-claim",5_000,1_900),null);
+    assert.equal(await store.claimCheckoutCreation({
+      userId:"user-1",priceId:OTHER_PRICE_ID,claimId:"claim-too-soon",expiresAt:4_500,now:2_000
+    }),null,"extending the lease must keep other checkout creators out");
+
+    assert.equal(await store.claimCheckoutCreation({
+      userId:"user-1",priceId:OTHER_PRICE_ID,claimId:"claim-attached-takeover",expiresAt:5_000,now:4_000
+    }),null,"an expired claim with an attached provider transaction must not be taken over");
+    assert.deepEqual(await store.checkoutCreationForUser("user-1"),extended);
+    assert.equal(await store.releaseCheckoutCreation("user-1","claim-first"),false,"a null expectation cannot erase an attached transaction");
+    assert.equal(await store.releaseCheckoutCreation("user-1","claim-first","txn_wrong"),false,"a mismatched transaction cannot release the claim");
+    assert.equal(await store.releaseCheckoutCreation("user-1","claim-first","txn_claim_first"),true);
+
+    const unbound=await store.claimCheckoutCreation({
+      userId:"user-1",priceId:PRICE_ID,claimId:"claim-unbound",expiresAt:6_000,now:5_000
+    });
+    assert.equal(unbound.transaction_id,null);
+    const recovered=await store.claimCheckoutCreation({
+      userId:"user-1",priceId:OTHER_PRICE_ID,claimId:"claim-recovered",expiresAt:7_000,now:6_000
+    });
+    assert.deepEqual(recovered,{
+      user_id:"user-1",price_id:OTHER_PRICE_ID,claim_id:"claim-recovered",transaction_id:null,
+      expires_at:7_000,created_at:6_000,updated_at:6_000
+    },"an expired claim without a provider transaction must not strand checkout");
+    assert.equal(await store.releaseCheckoutCreation("user-1","claim-unbound"),false,"an older owner cannot release a replacement claim");
+    assert.equal(await store.releaseCheckoutCreation("user-1","claim-recovered"),true);
+    assert.equal(await store.checkoutCreationForUser("user-1"),null);
+  } finally {
+    await close();
+  }
+});
 
 test("one-time Strata+ trials grant temporary access without becoming purchases",async()=>{
   const {store,close}=await fixture();

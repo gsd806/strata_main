@@ -16,7 +16,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="planner.css?v=6.9.4" />
+    <link rel="stylesheet" href="planner.css?v=6.9.5" />
   </head>
   <body>
     <a class="skip-link" href="#weekTitle">Skip to weekly plan</a>
@@ -27,6 +27,21 @@
     </header>
 
     <div class="planner-mode-notice" id="plannerModeNotice" role="status"><strong>No login needed.</strong> Guest plan saved only on this device and not automatically transferred when you sign in.</div>
+
+    <section class="plan-conflict-panel" id="planConflictPanel" aria-labelledby="planConflictTitle" hidden>
+      <div class="plan-conflict-heading">
+        <div><p class="eyebrow">Save conflict</p><h2 id="planConflictTitle" tabindex="-1">CHOOSE WHICH <em>WEEK TO KEEP.</em></h2></div>
+        <p>Your account changed in another tab or device. Nothing has been overwritten. Compare both copies, then keep the account version or review your unsaved changes before explicitly saving them.</p>
+      </div>
+      <div class="plan-conflict-choices">
+        <article><h3>Latest account plan</h3><div id="latestPlanSummary"></div></article>
+        <article><h3>Your unsaved changes</h3><div id="localPlanSummary"></div></article>
+      </div>
+      <div class="plan-conflict-actions">
+        <button class="outline-button" id="keepLatestPlan" type="button">Keep latest account plan <span aria-hidden="true">✓</span></button>
+        <button class="dark-button" id="reviewLocalPlan" type="button">Review my unsaved changes <span aria-hidden="true">↗</span></button>
+      </div>
+    </section>
 
     <main class="planner-shell" id="plannerShell" aria-busy="true">
       <aside class="library-panel" id="libraryPanel" aria-label="Exercise library" aria-busy="true">
@@ -81,9 +96,9 @@
       </section>
     </main>
 
-    <footer class="build-footer">STRATA · Build 6.9.4 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
+    <footer class="build-footer">STRATA · Build 6.9.5 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
     <div class="planner-toast" id="plannerToast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=6.9.4"></script>
-    <script src="planner.js?v=6.9.4"></script>
+    <script src="/pwa.js?v=6.9.5"></script>
+    <script src="planner.js?v=6.9.5"></script>
   </body>
 </html>

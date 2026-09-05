@@ -146,6 +146,17 @@ const SCHEMA = [
   )`,
   "CREATE INDEX IF NOT EXISTS paddle_purchases_user_id ON paddle_purchases(user_id)",
   "CREATE INDEX IF NOT EXISTS paddle_purchases_customer_id ON paddle_purchases(customer_id)",
+  `CREATE TABLE IF NOT EXISTS paddle_checkout_claims (
+    user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    price_id TEXT NOT NULL,
+    claim_id TEXT NOT NULL,
+    transaction_id TEXT,
+    expires_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`,
+  "CREATE UNIQUE INDEX IF NOT EXISTS paddle_checkout_claims_claim_id ON paddle_checkout_claims(claim_id)",
+  "CREATE UNIQUE INDEX IF NOT EXISTS paddle_checkout_claims_transaction_id ON paddle_checkout_claims(transaction_id)",
   `CREATE TABLE IF NOT EXISTS discovery_trials (
     user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     started_at INTEGER NOT NULL,
@@ -275,6 +286,7 @@ const SQL = {
   deleteOldStagedAccountActions:"DELETE FROM account_action_deliveries WHERE expires_at<=?",
   deleteOldAccountActionSends:"DELETE FROM account_action_sends WHERE sent_at<?",
   activeAccountDeletion:"SELECT request_id,expires_at FROM account_action_requests WHERE user_id=? AND purpose='account_delete' AND delivery_state='sent' AND consumed_at IS NULL AND expires_at>?",
+  activeCheckoutCreationForUser:"SELECT user_id,price_id,claim_id,transaction_id,expires_at,created_at,updated_at FROM paddle_checkout_claims WHERE user_id=? AND expires_at>?",
   cancelAccountDeletion:"DELETE FROM account_action_requests WHERE user_id=? AND purpose='account_delete' AND delivery_state='sent' AND consumed_at IS NULL RETURNING request_id",
   cancelStagedAccountDeletions:"DELETE FROM account_action_deliveries WHERE user_id=? AND purpose='account_delete' RETURNING request_id",
   cancelStagedAccountDeletionsIfAudit:"DELETE FROM account_action_deliveries WHERE user_id=? AND purpose='account_delete' AND EXISTS(SELECT 1 FROM admin_audit_events WHERE id=?) RETURNING request_id",
@@ -285,13 +297,14 @@ const SQL = {
   completePasswordResetDeleteActions:"DELETE FROM account_action_requests WHERE user_id=(SELECT user_id FROM account_action_requests WHERE token_hash=? AND purpose='password_reset' AND consumed_at=?) RETURNING request_id",
   pendingPurchasesForUser:"SELECT COUNT(*) AS pending_count FROM paddle_purchases WHERE user_id=? AND paddle_status<>'canceled' AND completed_at IS NULL AND access_revoked_at IS NULL",
   unsettledPurchasesForUser:"SELECT transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at FROM paddle_purchases WHERE user_id=? AND paddle_status<>'canceled' AND completed_at IS NULL AND access_revoked_at IS NULL ORDER BY created_at",
-  deleteUserWithAction:"DELETE FROM users WHERE id=(SELECT user_id FROM account_action_requests WHERE token_hash=? AND purpose='account_delete' AND delivery_state='sent' AND consumed_at IS NULL AND expires_at>?) AND NOT EXISTS (SELECT 1 FROM admin_principal ap WHERE ap.user_id=users.id) AND NOT EXISTS (SELECT 1 FROM paddle_purchases p WHERE p.user_id=users.id AND p.paddle_status<>'canceled' AND p.completed_at IS NULL AND p.access_revoked_at IS NULL) RETURNING id,email",
+  deleteUserWithAction:"DELETE FROM users WHERE id=(SELECT user_id FROM account_action_requests WHERE token_hash=? AND purpose='account_delete' AND delivery_state='sent' AND consumed_at IS NULL AND expires_at>?) AND NOT EXISTS (SELECT 1 FROM admin_principal ap WHERE ap.user_id=users.id) AND NOT EXISTS (SELECT 1 FROM paddle_purchases p WHERE p.user_id=users.id AND p.paddle_status<>'canceled' AND p.completed_at IS NULL AND p.access_revoked_at IS NULL) AND NOT EXISTS (SELECT 1 FROM paddle_checkout_claims c WHERE c.user_id=users.id AND c.expires_at>?) RETURNING id,email",
   deleteVerificationSendsForDeletedUser:"DELETE FROM email_verification_sends WHERE challenge_id IN (SELECT challenge_id FROM signup_verifications WHERE user_id=? OR email=?) AND NOT EXISTS (SELECT 1 FROM users WHERE id=?)",
   deleteVerificationsForDeletedUser:"DELETE FROM signup_verifications WHERE (user_id=? OR email=?) AND NOT EXISTS (SELECT 1 FROM users WHERE id=?)",
   deleteActionSendsForDeletedUser:"DELETE FROM account_action_sends WHERE email_hash=? AND NOT EXISTS (SELECT 1 FROM users WHERE id=?)",
   deleteCommunityPlanForDeletedUser:"DELETE FROM community_weekly_plans WHERE user_id=? AND NOT EXISTS (SELECT 1 FROM users WHERE id=?) RETURNING id",
+  deleteCheckoutClaimsForDeletedUser:"DELETE FROM paddle_checkout_claims WHERE user_id=? AND NOT EXISTS (SELECT 1 FROM users WHERE id=?) RETURNING claim_id",
   plan:"SELECT plan_json,updated_at FROM plans WHERE user_id=?",
-  upsertPlan:"INSERT INTO plans(user_id,plan_json,updated_at) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan_json=excluded.plan_json,updated_at=MAX(plans.updated_at+1,excluded.updated_at) RETURNING plan_json,updated_at",
+  upsertPlan:"INSERT INTO plans(user_id,plan_json,updated_at) SELECT u.id,?,? FROM users u WHERE u.id=? AND u.suspended_at IS NULL AND (?=0 OR EXISTS(SELECT 1 FROM plans current_plan WHERE current_plan.user_id=u.id AND current_plan.updated_at=?)) ON CONFLICT(user_id) DO UPDATE SET plan_json=excluded.plan_json,updated_at=MAX(plans.updated_at+1,excluded.updated_at) WHERE ?<>0 AND plans.updated_at=? RETURNING plan_json,updated_at",
   communityWeeklyPlans:"SELECT c.id,c.title,c.description,c.plan_json,c.created_at,c.updated_at,u.name AS author_name FROM community_weekly_plans c JOIN users u ON u.id=c.user_id AND u.suspended_at IS NULL WHERE c.is_published=1 ORDER BY c.updated_at DESC,c.id DESC LIMIT ? OFFSET ?",
   communityWeeklyPlan:"SELECT c.id,c.title,c.description,c.plan_json,c.created_at,c.updated_at,u.name AS author_name FROM community_weekly_plans c JOIN users u ON u.id=c.user_id AND u.suspended_at IS NULL WHERE c.id=? AND c.is_published=1",
   communityWeeklyPlansForUser:"SELECT c.id,c.title,c.description,c.plan_json,c.is_published,c.created_at,c.updated_at,u.name AS author_name FROM community_weekly_plans c JOIN users u ON u.id=c.user_id WHERE c.user_id=? ORDER BY c.updated_at DESC,c.id DESC",
@@ -309,7 +322,12 @@ const SQL = {
   ratingAggregates:"SELECT exercise_id,COUNT(*) AS rating_count,AVG(comfort) AS comfort,AVG(pump) AS pump,AVG(enjoyment) AS enjoyment,AVG(stability) AS stability,AVG(setup) AS setup,AVG(overall) AS overall FROM ratings GROUP BY exercise_id",
   ratingAggregate:"SELECT exercise_id,COUNT(*) AS rating_count,AVG(comfort) AS comfort,AVG(pump) AS pump,AVG(enjoyment) AS enjoyment,AVG(stability) AS stability,AVG(setup) AS setup,AVG(overall) AS overall FROM ratings WHERE exercise_id=? GROUP BY exercise_id",
   upsertRating:"INSERT INTO ratings(user_id,exercise_id,comfort,pump,enjoyment,stability,setup,overall,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,exercise_id) DO UPDATE SET comfort=excluded.comfort,pump=excluded.pump,enjoyment=excluded.enjoyment,stability=excluded.stability,setup=excluded.setup,overall=excluded.overall,updated_at=excluded.updated_at",
-  insertPendingPurchase:"INSERT INTO paddle_purchases(transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at) SELECT ?,u.id,?,?,NULL,?,NULL,NULL,NULL,?,? FROM users u WHERE u.id=? AND u.suspended_at IS NULL AND NOT EXISTS (SELECT 1 FROM account_action_requests a WHERE a.user_id=u.id AND a.purpose='account_delete' AND a.delivery_state='sent' AND a.consumed_at IS NULL AND a.expires_at>?) RETURNING transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at",
+  insertPendingPurchase:"INSERT INTO paddle_purchases(transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at) SELECT ?,u.id,?,?,NULL,?,NULL,NULL,NULL,?,? FROM users u WHERE u.id=? AND u.suspended_at IS NULL AND NOT EXISTS (SELECT 1 FROM account_action_requests a WHERE a.user_id=u.id AND a.purpose='account_delete' AND a.delivery_state='sent' AND a.consumed_at IS NULL AND a.expires_at>?) AND NOT EXISTS (SELECT 1 FROM paddle_purchases p WHERE p.user_id=u.id AND p.paddle_status<>'canceled' AND p.completed_at IS NULL AND p.access_revoked_at IS NULL) RETURNING transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at",
+  checkoutCreationForUser:"SELECT user_id,price_id,claim_id,transaction_id,expires_at,created_at,updated_at FROM paddle_checkout_claims WHERE user_id=?",
+  claimCheckoutCreation:"INSERT INTO paddle_checkout_claims(user_id,price_id,claim_id,transaction_id,expires_at,created_at,updated_at) SELECT u.id,?,?,NULL,?,?,? FROM users u WHERE u.id=? AND u.suspended_at IS NULL AND NOT EXISTS (SELECT 1 FROM account_action_requests a WHERE a.user_id=u.id AND a.purpose='account_delete' AND a.delivery_state='sent' AND a.consumed_at IS NULL AND a.expires_at>?) ON CONFLICT(user_id) DO UPDATE SET price_id=excluded.price_id,claim_id=excluded.claim_id,transaction_id=NULL,expires_at=excluded.expires_at,created_at=excluded.created_at,updated_at=excluded.updated_at WHERE paddle_checkout_claims.expires_at<=? AND paddle_checkout_claims.transaction_id IS NULL RETURNING user_id,price_id,claim_id,transaction_id,expires_at,created_at,updated_at",
+  recordCheckoutCreationTransaction:"UPDATE paddle_checkout_claims SET transaction_id=?,updated_at=MAX(updated_at,?) WHERE user_id=? AND claim_id=? AND (transaction_id IS NULL OR transaction_id=?) RETURNING user_id,price_id,claim_id,transaction_id,expires_at,created_at,updated_at",
+  extendCheckoutCreation:"UPDATE paddle_checkout_claims SET expires_at=MAX(expires_at,?),updated_at=MAX(updated_at,?) WHERE user_id=? AND claim_id=? RETURNING user_id,price_id,claim_id,transaction_id,expires_at,created_at,updated_at",
+  releaseCheckoutCreation:"DELETE FROM paddle_checkout_claims WHERE user_id=? AND claim_id=? AND transaction_id IS ? RETURNING claim_id",
   purchaseByTransaction:"SELECT transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at FROM paddle_purchases WHERE transaction_id=?",
   pendingPurchaseForUser:"SELECT transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at FROM paddle_purchases WHERE user_id=? AND price_id=? AND paddle_status IN ('draft','ready') AND completed_at IS NULL AND access_revoked_at IS NULL ORDER BY created_at DESC LIMIT 1",
   completePurchase:"UPDATE paddle_purchases SET customer_id=COALESCE(?,customer_id),paddle_status='completed',completed_at=COALESCE(completed_at,?),updated_at=MAX(updated_at,?) WHERE transaction_id=?",
@@ -794,6 +812,7 @@ function localStore(root) {
       return Number(plainRow(statements.pendingPurchasesForUser.get(userId))?.pending_count||0);
     },
     async unsettledPurchasesForUser(userId) { return plainRows(statements.unsettledPurchasesForUser.all(userId)); },
+    async activeCheckoutCreationForUser(userId,now) { return plainRow(statements.activeCheckoutCreationForUser.get(userId,now)); },
     async deleteAccount(tokenHash,deletedAt,emailHash) {
       let transactionOpen=false;
       try {
@@ -810,11 +829,17 @@ function localStore(root) {
           transactionOpen=false;
           return {status:"purchase_pending"};
         }
-        const user=plainRow(statements.deleteUserWithAction.get(tokenHash,deletedAt));
+        if (plainRow(statements.activeCheckoutCreationForUser.get(action.user_id,deletedAt))) {
+          db.exec("ROLLBACK");
+          transactionOpen=false;
+          return {status:"checkout_pending"};
+        }
+        const user=plainRow(statements.deleteUserWithAction.get(tokenHash,deletedAt,deletedAt));
         if (!user) throw new Error("Account deletion did not remove the requested user.");
         // Keep deletion complete even if a future database connection loses
         // its per-session foreign-key PRAGMA state.
         statements.deleteCommunityPlanForDeletedUser.get(user.id,user.id);
+        statements.deleteCheckoutClaimsForDeletedUser.all(user.id,user.id);
         statements.deleteVerificationSendsForDeletedUser.run(user.id,user.email,user.id);
         statements.deleteVerificationsForDeletedUser.run(user.id,user.email,user.id);
         statements.deleteActionSendsForDeletedUser.run(emailHash,user.id);
@@ -836,7 +861,9 @@ function localStore(root) {
       return {actions:actions+staged,sends};
     },
     async plan(userId) { return plainRow(statements.plan.get(userId)); },
-    async upsertPlan(userId,planJson,updatedAt) { return plainRow(statements.upsertPlan.get(userId,planJson,updatedAt)); },
+    async upsertPlan(userId,planJson,updatedAt,expectedUpdatedAt) {
+      return plainRow(statements.upsertPlan.get(planJson,updatedAt,userId,expectedUpdatedAt,expectedUpdatedAt,expectedUpdatedAt,expectedUpdatedAt));
+    },
     async communityWeeklyPlans(limit,offset) { return plainRows(statements.communityWeeklyPlans.all(limit,offset)); },
     async communityWeeklyPlan(id) { return plainRow(statements.communityWeeklyPlan.get(id)); },
     async communityWeeklyPlansForUser(userId) { return plainRows(statements.communityWeeklyPlansForUser.all(userId)); },
@@ -872,6 +899,19 @@ function localStore(root) {
     async upsertRating(userId,exerciseId,rating,createdAt,updatedAt) { statements.upsertRating.run(userId,exerciseId,rating.comfort,rating.pump,rating.enjoyment,rating.stability,rating.setup,rating.overall,createdAt,updatedAt); },
     async insertPendingPurchase(purchase) {
       return plainRow(statements.insertPendingPurchase.get(purchase.transactionId,purchase.priceId,purchase.productId,purchase.paddleStatus||"ready",purchase.createdAt,purchase.updatedAt,purchase.userId,purchase.updatedAt));
+    },
+    async checkoutCreationForUser(userId) { return plainRow(statements.checkoutCreationForUser.get(userId)); },
+    async claimCheckoutCreation({userId,priceId,claimId,expiresAt,now}) {
+      return plainRow(statements.claimCheckoutCreation.get(priceId,claimId,expiresAt,now,now,userId,now,now));
+    },
+    async recordCheckoutCreationTransaction(userId,claimId,transactionId,updatedAt) {
+      return plainRow(statements.recordCheckoutCreationTransaction.get(transactionId,updatedAt,userId,claimId,transactionId));
+    },
+    async extendCheckoutCreation(userId,claimId,expiresAt,updatedAt) {
+      return plainRow(statements.extendCheckoutCreation.get(expiresAt,updatedAt,userId,claimId));
+    },
+    async releaseCheckoutCreation(userId,claimId,expectedTransactionId=null) {
+      return Boolean(plainRow(statements.releaseCheckoutCreation.get(userId,claimId,expectedTransactionId)));
     },
     async purchaseByTransaction(transactionId) { return plainRow(statements.purchaseByTransaction.get(transactionId)); },
     async pendingPurchaseForUser(userId,priceId) { return plainRow(statements.pendingPurchaseForUser.get(userId,priceId)); },
@@ -1282,25 +1322,28 @@ async function tursoStore(url,authToken) {
       return Number((await first(SQL.pendingPurchasesForUser,[userId]))?.pending_count||0);
     },
     unsettledPurchasesForUser:(userId) => all(SQL.unsettledPurchasesForUser,[userId]),
+    activeCheckoutCreationForUser:(userId,now) => first(SQL.activeCheckoutCreationForUser,[userId,now]),
     async deleteAccount(tokenHash,deletedAt,emailHash) {
       const action=await first(SQL.accountActionByTokenHash,[tokenHash]);
       if (!action||action.purpose!=="account_delete"||action.delivery_state!=="sent"||action.consumed_at!=null||Number(action.expires_at)<=deletedAt) return {status:"invalid"};
       if (Number((await first(SQL.pendingPurchasesForUser,[action.user_id]))?.pending_count||0)>0) return {status:"purchase_pending"};
+      if (await first(SQL.activeCheckoutCreationForUser,[action.user_id,deletedAt])) return {status:"checkout_pending"};
       const results=await client.batch([
-        {sql:SQL.deleteUserWithAction,args:[tokenHash,deletedAt]},
+        {sql:SQL.deleteUserWithAction,args:[tokenHash,deletedAt,deletedAt]},
         // This conditional cleanup is intentionally explicit. Turso PRAGMA
         // state is connection-scoped, so account privacy must not depend only
         // on ON DELETE CASCADE surviving a renewed serverless session.
         {sql:SQL.deleteCommunityPlanForDeletedUser,args:[action.user_id,action.user_id]},
+        {sql:SQL.deleteCheckoutClaimsForDeletedUser,args:[action.user_id,action.user_id]},
         {sql:SQL.deleteVerificationSendsForDeletedUser,args:[action.user_id,action.email,action.user_id]},
         {sql:SQL.deleteVerificationsForDeletedUser,args:[action.user_id,action.email,action.user_id]},
         {sql:SQL.deleteActionSendsForDeletedUser,args:[emailHash,action.user_id]}
       ],"write");
       const user=plainRow(results[0]?.rows?.[0],results[0]?.columns);
       if (user) return {status:"deleted",user};
-      return Number((await first(SQL.pendingPurchasesForUser,[action.user_id]))?.pending_count||0)>0
-        ? {status:"purchase_pending"}
-        : {status:"invalid"};
+      if (Number((await first(SQL.pendingPurchasesForUser,[action.user_id]))?.pending_count||0)>0) return {status:"purchase_pending"};
+      if (await first(SQL.activeCheckoutCreationForUser,[action.user_id,deletedAt])) return {status:"checkout_pending"};
+      return {status:"invalid"};
     },
     async deleteOldAccountActionData(now,sendBefore=now-VERIFICATION_SEND_RETENTION_MS) {
       const consumedBefore=now-CONSUMED_VERIFICATION_RETENTION_MS;
@@ -1312,8 +1355,8 @@ async function tursoStore(url,authToken) {
       return {actions:affectedRows(results[0])+affectedRows(results[1]),sends:affectedRows(results[2])};
     },
     plan:(userId) => first(SQL.plan,[userId]),
-    async upsertPlan(userId,planJson,updatedAt) {
-      const result=await run(SQL.upsertPlan,[userId,planJson,updatedAt]);
+    async upsertPlan(userId,planJson,updatedAt,expectedUpdatedAt) {
+      const result=await run(SQL.upsertPlan,[planJson,updatedAt,userId,expectedUpdatedAt,expectedUpdatedAt,expectedUpdatedAt,expectedUpdatedAt]);
       return plainRow(result.rows?.[0],result.columns);
     },
     communityWeeklyPlans:(limit,offset) => all(SQL.communityWeeklyPlans,[limit,offset]),
@@ -1359,6 +1402,23 @@ async function tursoStore(url,authToken) {
     async insertPendingPurchase(purchase) {
       const result=await run(SQL.insertPendingPurchase,[purchase.transactionId,purchase.priceId,purchase.productId,purchase.paddleStatus||"ready",purchase.createdAt,purchase.updatedAt,purchase.userId,purchase.updatedAt]);
       return plainRow(result.rows?.[0],result.columns);
+    },
+    checkoutCreationForUser:(userId) => first(SQL.checkoutCreationForUser,[userId]),
+    async claimCheckoutCreation({userId,priceId,claimId,expiresAt,now}) {
+      const result=await run(SQL.claimCheckoutCreation,[priceId,claimId,expiresAt,now,now,userId,now,now]);
+      return plainRow(result.rows?.[0],result.columns);
+    },
+    async recordCheckoutCreationTransaction(userId,claimId,transactionId,updatedAt) {
+      const result=await run(SQL.recordCheckoutCreationTransaction,[transactionId,updatedAt,userId,claimId,transactionId]);
+      return plainRow(result.rows?.[0],result.columns);
+    },
+    async extendCheckoutCreation(userId,claimId,expiresAt,updatedAt) {
+      const result=await run(SQL.extendCheckoutCreation,[expiresAt,updatedAt,userId,claimId]);
+      return plainRow(result.rows?.[0],result.columns);
+    },
+    async releaseCheckoutCreation(userId,claimId,expectedTransactionId=null) {
+      const result=await run(SQL.releaseCheckoutCreation,[userId,claimId,expectedTransactionId]);
+      return Boolean(plainRow(result.rows?.[0],result.columns));
     },
     purchaseByTransaction:(transactionId) => first(SQL.purchaseByTransaction,[transactionId]),
     pendingPurchaseForUser:(userId,priceId) => first(SQL.pendingPurchaseForUser,[userId,priceId]),

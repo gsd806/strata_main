@@ -10,7 +10,7 @@ const GUEST_PLAN_KEY="strata_guest_plan_v1";
 const state={
   exercises:[],plan:null,user:null,query:"",group:"all",drag:null,selectedDay:"Monday",
   ready:false,guest:false,saveTimer:null,savePromise:null,lastSaveError:null,planUpdatedAt:0,revision:0,savedRevision:0,navigating:false,libraryLimit:LIBRARY_DESKTOP_PAGE_SIZE,
-  csrfToken:"",sharedPlans:[],sharedPlansLoaded:false,sharedPlansRequest:0,shareBusy:false,pendingUnpublish:""
+  conflictDraft:null,conflictLatest:null,conflictReview:false,csrfToken:"",sharedPlans:[],sharedPlansLoaded:false,sharedPlansRequest:0,shareBusy:false,pendingUnpublish:""
 };
 const el=(id)=>document.getElementById(id);
 
@@ -28,7 +28,7 @@ async function api(path,options={}) {
   }
   const data=await response.json().catch(()=>({}));
   if(!response.ok) {
-    const error=Object.assign(new Error(data.error||"Request failed."),{status:response.status,code:data.code||"REQUEST_FAILED"});
+    const error=Object.assign(new Error(data.error||"Request failed."),{status:response.status,code:data.code||"REQUEST_FAILED",data});
     throw error;
   }
   return data;
@@ -62,6 +62,7 @@ function saveGuestPlan(){
   try{localStorage.setItem(GUEST_PLAN_KEY,JSON.stringify(state.plan));return true;}
   catch{return false;}
 }
+function copyPlan(plan){return JSON.parse(JSON.stringify(plan));}
 function focusSoon(selector){if(!selector)return;requestAnimationFrame(()=>document.querySelector(selector)?.focus());}
 function instanceSelector(attribute,instanceId){return `[${attribute}="${String(instanceId).replace(/[^a-zA-Z0-9_-]/g,"")}"]`;}
 
@@ -403,6 +404,7 @@ function queueSave(){
   state.revision+=1;
   clearTimeout(state.saveTimer);
   if(hasRestConflict()){setSaveStatus("Clear recovery day to save",true);return;}
+  if(state.conflictReview){setSaveStatus("Review recovered changes · save when ready",true);return;}
   setSaveStatus("Unsaved changes");
   state.saveTimer=setTimeout(()=>{void flushSave();},500);
 }
@@ -411,15 +413,96 @@ function setSaveStatus(message,error=false){
   const status=el("saveStatus"),retry=el("retryPlanSave");
   status.textContent=message;
   status.parentElement.classList.toggle("error",error);
+  if(state.conflictDraft){retry.textContent="Review my changes";retry.hidden=false;return;}
+  if(state.conflictReview){retry.textContent="Save reviewed changes";retry.hidden=false;return;}
+  retry.textContent="Retry save";
   retry.hidden=!(error&&state.ready&&state.savedRevision<state.revision&&!hasRestConflict());
 }
 
-async function performSave({keepalive=false,silent=false}={}){
+function planConflictSummary(plan){
+  const rows=DAYS.map((day)=>{
+    const items=Array.isArray(plan?.days?.[day])?plan.days[day]:[];
+    const detail=items.length?items.map((item)=>{
+      const exercise=exerciseById(item.exerciseId);
+      return `${escapeHtml(exercise?.name||"Unknown movement")} <span>${escapeHtml(item.sets)} × ${escapeHtml(item.reps)}</span>`;
+    }).join(", "):"No movements";
+    return `<li><strong>${escapeHtml(day)}${plan?.restDay===day?" · recovery":""}</strong><p>${detail}</p></li>`;
+  }).join("");
+  return `<p class="plan-conflict-total">${planMovementCount(plan)} movement${planMovementCount(plan)===1?"":"s"} · ${escapeHtml(plan?.restDay||"No")} recovery day</p><ul>${rows}</ul>`;
+}
+
+function renderPlanConflict(){
+  const panel=el("planConflictPanel"),local=state.conflictDraft||state.conflictReview&&state.plan;
+  if(!state.conflictLatest||!local){panel.hidden=true;return;}
+  el("latestPlanSummary").innerHTML=planConflictSummary(state.conflictLatest);
+  el("localPlanSummary").innerHTML=planConflictSummary(local);
+  el("reviewLocalPlan").hidden=state.conflictReview;
+  panel.hidden=false;
+}
+
+function clearPlanConflict(){
+  state.conflictDraft=null;
+  state.conflictLatest=null;
+  state.conflictReview=false;
+  el("planConflictPanel").hidden=true;
+  el("plannerShell").inert=false;
+}
+
+async function recoverPlanConflict(error,{silent=false}={}){
+  let latest=error.data;
+  if(!latest?.plan?.days||!Number.isSafeInteger(latest.planUpdatedAt)||latest.planUpdatedAt<0)latest=await api("/api/plan");
+  if(!latest?.plan?.days||!Number.isSafeInteger(latest.planUpdatedAt)||latest.planUpdatedAt<0)throw new Error("The newer account plan could not be loaded. Refresh this page before editing again.");
+  state.conflictDraft=copyPlan(state.plan);
+  state.conflictLatest=copyPlan(latest.plan);
+  state.conflictReview=false;
+  state.plan=copyPlan(latest.plan);
+  state.planUpdatedAt=latest.planUpdatedAt;
+  state.lastSaveError=error;
+  el("plannerShell").inert=true;
+  renderWeek();renderLibrary();renderPlanConflict();
+  setSaveStatus("Plan changed elsewhere · latest copy loaded",true);
+  if(!silent)showToast("A newer account plan was loaded. Your unsaved changes are ready to review.");
+  focusSoon("#planConflictTitle");
+}
+
+function reviewConflictDraft(){
+  if(!state.conflictDraft)return false;
+  state.plan=copyPlan(state.conflictDraft);
+  state.conflictDraft=null;
+  state.conflictReview=true;
+  state.revision+=1;
+  state.lastSaveError=null;
+  el("plannerShell").inert=false;
+  renderWeek();renderLibrary();renderPlanConflict();
+  setSaveStatus("Review recovered changes · save when ready",true);
+  showToast("Your unsaved changes are restored for review. Save them when you are ready.");
+  focusSoon("#weekTitle");
+  return true;
+}
+
+function keepLatestPlan(){
+  if(!state.conflictLatest)return false;
+  state.plan=copyPlan(state.conflictLatest);
+  state.savedRevision=state.revision;
+  state.lastSaveError=null;
+  clearPlanConflict();
+  renderWeek();renderLibrary();
+  setSaveStatus("Latest account plan kept");
+  showToast("The latest account plan was kept. Your unsaved copy was discarded.");
+  focusSoon("#weekTitle");
+  return true;
+}
+
+async function performSave({keepalive=true,silent=false}={}){
   if(state.savePromise)return state.savePromise;
   if(!state.ready||state.savedRevision>=state.revision)return true;
-  const revision=state.revision,payload=JSON.stringify({plan:state.plan});
+  const revision=state.revision,payload=JSON.stringify({plan:state.plan,expectedPlanUpdatedAt:state.planUpdatedAt});
   setSaveStatus("Saving…");
   const operation=(async()=>{
+    // Defer both the account and guest branches until savePromise owns this
+    // operation. Without the yield, a synchronous guest save can clear the
+    // field before assignment and leave an already-resolved promise stuck in it.
+    await Promise.resolve();
     try{
       let result;
       if(state.guest){
@@ -429,12 +512,18 @@ async function performSave({keepalive=false,silent=false}={}){
       state.savedRevision=Math.max(state.savedRevision,revision);
       if(state.revision===revision)state.plan=result.plan;
       state.planUpdatedAt=Number(result.planUpdatedAt)||state.planUpdatedAt;state.lastSaveError=null;
+      if(state.conflictReview&&state.savedRevision===state.revision)clearPlanConflict();
       setSaveStatus(state.savedRevision===state.revision?(state.guest?"Saved on this device":"Saved to account"):"Unsaved changes");
       return true;
     }catch(error){
-      state.lastSaveError=error;
+      let saveError=error;
+      if(!state.guest&&error.status===409&&error.code==="PLAN_CHANGED"){
+        try{await recoverPlanConflict(error,{silent});return false;}
+        catch(recoveryError){saveError=recoveryError;}
+      }
+      state.lastSaveError=saveError;
       setSaveStatus("Save failed · retry needed",true);
-      if(!silent)showToast(error.message);
+      if(!silent)showToast(saveError.message);
       return false;
     }finally{
       state.savePromise=null;
@@ -446,6 +535,16 @@ async function performSave({keepalive=false,silent=false}={}){
 
 async function flushSave(options={}){
   clearTimeout(state.saveTimer);
+  if(state.conflictDraft){
+    setSaveStatus("Plan changed elsewhere · latest copy loaded",true);
+    if(!options.silent)showToast("Review your unsaved changes before saving over the newer account plan.");
+    return false;
+  }
+  if(state.conflictReview&&!options.confirmConflict){
+    setSaveStatus("Review recovered changes · save when ready",true);
+    if(!options.silent)showToast("Review your recovered changes, then choose Save reviewed changes.");
+    return false;
+  }
   if(hasRestConflict()){
     setSaveStatus("Clear recovery day to save",true);
     if(!options.silent)showToast(`Move all exercises off ${state.plan.restDay} before saving.`);
@@ -459,11 +558,12 @@ async function flushSave(options={}){
 }
 
 function sendKeepaliveSave(){
-  if(!state.ready||state.savedRevision>=state.revision||hasRestConflict())return;
+  if(!state.ready||state.savedRevision>=state.revision||state.conflictDraft||state.conflictReview||hasRestConflict())return;
   clearTimeout(state.saveTimer);
-  if(state.guest){if(saveGuestPlan())state.savedRevision=state.revision;return;}
-  const body=JSON.stringify({plan:state.plan});
-  void fetch("/api/plan",{method:"PUT",body,keepalive:true,credentials:"same-origin",headers:{Accept:"application/json","Content-Type":"application/json",...(state.csrfToken?{"X-CSRF-Token":state.csrfToken}:{})}}).catch(()=>{});
+  // Reuse the tracked save operation so beforeunload and pagehide cannot
+  // launch two compare-and-swap writes with the same account revision. The
+  // flush loop also follows an older in-flight save with any newer edit.
+  void flushSave({keepalive:true,silent:true});
 }
 
 let toastTimer;
@@ -546,26 +646,43 @@ document.addEventListener("click",(event)=>{
   else if(unpublish){void unpublishSharedPlan(unpublish.dataset.unpublishPlan);}
 });
 
+function updatePrescriptionInput(event,{normalize=false}={}){
+  const column=event.target.closest("[data-day]");
+  if(!column||!state.ready)return false;
+  const day=column.dataset.day;
+  let item,field,value;
+  if(event.target.dataset.itemSets){
+    item=itemByInstance(day,event.target.dataset.itemSets);field="sets";
+    if(!item)return false;
+    const raw=String(event.target.value).trim();
+    if(!raw&&!normalize)return false;
+    const numeric=Number(raw),normalized=Math.max(1,Math.min(10,Number.isFinite(numeric)&&raw?Math.round(numeric):1));
+    value=normalized;
+    if(normalize)event.target.value=String(normalized);
+  }else if(event.target.dataset.itemReps){
+    item=itemByInstance(day,event.target.dataset.itemReps);field="reps";
+    if(!item)return false;
+    value=String(event.target.value).trim().slice(0,20)||"8–12";
+    if(normalize)event.target.value=value;
+  }else return false;
+  if(item[field]===value)return false;
+  item[field]=value;
+  renderSummary();queueSave();
+  return true;
+}
+
+// Capture edits as they are typed so a background/pagehide save cannot miss a
+// value merely because the field has not blurred and emitted `change` yet.
+document.addEventListener("input",(event)=>{updatePrescriptionInput(event);});
 document.addEventListener("change",(event)=>{
   const column=event.target.closest("[data-day]");
   if(!column||!state.ready)return;
-  const day=column.dataset.day;
   if(event.target.dataset.itemDay){
-    const sourceDay=day,targetDay=event.target.value,instanceId=event.target.dataset.itemDay;
+    const sourceDay=column.dataset.day,targetDay=event.target.value,instanceId=event.target.dataset.itemDay;
     if(sourceDay!==targetDay&&!moveItem(sourceDay,targetDay,instanceId))event.target.value=sourceDay;
     return;
   }
-  if(event.target.dataset.itemSets){
-    const item=itemByInstance(day,event.target.dataset.itemSets);
-    if(!item)return;
-    const numeric=Number(event.target.value),normalized=Math.max(1,Math.min(10,Number.isFinite(numeric)?Math.round(numeric):1));
-    item.sets=normalized;event.target.value=String(normalized);
-  }else if(event.target.dataset.itemReps){
-    const item=itemByInstance(day,event.target.dataset.itemReps);
-    if(!item)return;
-    item.reps=event.target.value.trim().slice(0,20)||"8–12";event.target.value=item.reps;
-  }else return;
-  renderSummary();queueSave();
+  updatePrescriptionInput(event,{normalize:true});
 });
 
 let librarySearchTimer=null;
@@ -579,11 +696,14 @@ el("recommendRest").addEventListener("click",()=>{
 el("exportWeeklyPlan").addEventListener("click",downloadWeeklyPlan);
 el("retryPlanSave").addEventListener("click",async(event)=>{
   const button=event.currentTarget;
+  if(state.conflictDraft){reviewConflictDraft();return;}
   button.disabled=true;
-  setSaveStatus("Retrying save…");
-  try{await flushSave();}
+  setSaveStatus(state.conflictReview?"Saving reviewed changes…":"Retrying save…");
+  try{await flushSave({confirmConflict:state.conflictReview});}
   finally{button.disabled=false;}
 });
+el("reviewLocalPlan").addEventListener("click",reviewConflictDraft);
+el("keepLatestPlan").addEventListener("click",keepLatestPlan);
 el("shareWeeklyPlan").addEventListener("click",()=>{
   if(el("shareWeeklyPanel").hidden)openSharePanel();else closeSharePanel();
 });
@@ -603,11 +723,15 @@ el("logoutButton").addEventListener("click",async(event)=>{
 });
 
 document.addEventListener("click",(event)=>{
-  if(event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey||state.navigating)return;
+  if(event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
   const link=event.target.closest("a[href]");
-  if(!link||link.target||link.hasAttribute("download")||!state.ready||state.savedRevision>=state.revision)return;
+  if(!link||link.target||link.hasAttribute("download"))return;
   const destination=new URL(link.href,location.href);
   if(destination.origin!==location.origin)return;
+  // A native second click would otherwise leave while the first click is still
+  // waiting for its compare-and-swap save (and possibly a follow-up revision).
+  if(state.navigating){event.preventDefault();return;}
+  if(!state.ready||state.savedRevision>=state.revision)return;
   event.preventDefault();
   state.navigating=true;
   void (async()=>{
@@ -617,6 +741,7 @@ document.addEventListener("click",(event)=>{
   })();
 });
 
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")sendKeepaliveSave();});
 window.addEventListener("pagehide",sendKeepaliveSave);
 window.addEventListener("beforeunload",(event)=>{if(state.ready&&state.savedRevision<state.revision){sendKeepaliveSave();event.preventDefault();event.returnValue="";}});
 
@@ -627,7 +752,7 @@ async function init(){
   el("weekSummary").innerHTML="";
   el("weekBoard").innerHTML='<div class="planner-load-state">Loading your weekly plan…</div>';
   try{
-    const exercises=await api("/exercises.json?v=6.9.4");
+    const exercises=await api("/exercises.json?v=6.9.5");
     if(!Array.isArray(exercises))throw new Error("STRATA returned an incomplete exercise library.");
     state.exercises=exercises;
     let result;
@@ -635,6 +760,7 @@ async function init(){
     catch(error){if(error.status!==401)throw error;result={plan:guestPlan(),user:null};}
     if(!result.plan?.days)throw new Error("STRATA returned an incomplete plan.");
     state.plan=result.plan;state.user=result.user;state.guest=!result.user?.id;state.csrfToken=String(result.csrfToken||"");state.planUpdatedAt=Number(result.planUpdatedAt)||0;state.sharedPlans=[];state.sharedPlansLoaded=false;state.sharedPlansRequest=0;state.shareBusy=false;state.pendingUnpublish="";
+    clearPlanConflict();
     state.revision=0;state.savedRevision=0;state.savePromise=null;state.lastSaveError=null;
     const repairedRest=repairLegacyRestDay();
     state.selectedDay=DAYS.find((day)=>day!==state.plan.restDay)||"Monday";

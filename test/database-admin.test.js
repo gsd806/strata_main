@@ -472,12 +472,12 @@ test("admin overview, user search, detail, and support queries are accurate and 
     assert.equal(await store.insertSession(session("percent-b",percent.id,now+1)),true);
     assert.equal(await store.insertSession(session("percent-expired",percent.id,now-2*60*60*1000,1,{expiresAt:now-1})),true);
 
-    await store.upsertPlan(percent.id,JSON.stringify({days:["push","pull"]}),now);
+    await store.upsertPlan(percent.id,JSON.stringify({days:["push","pull"]}),now,0);
     await store.upsertRating(percent.id,"bench-press",{comfort:5,pump:4,enjoyment:5,stability:4,setup:3,overall:5},now,now);
-    await store.insertPendingPurchase(pendingPurchase("txn_SEARCHABLE_123",percent.id,now));
     await store.insertPendingPurchase(pendingPurchase("txn-completed-one",percent.id,now+1));
     await store.completePurchase("txn-completed-one",{customerId:"ctm-admin-query",completedAt:now+2,updatedAt:now+2});
-    await store.upsertAccountAction(accountAction("query-delete",percent.id,"account_delete",now+3));
+    await store.insertPendingPurchase(pendingPurchase("txn_SEARCHABLE_123",percent.id,now+3));
+    await store.upsertAccountAction(accountAction("query-delete",percent.id,"account_delete",now+4));
 
     await store.insertPendingPurchase(pendingPurchase("txn-paid-user",paid.id,now+4));
     await store.completePurchase("txn-paid-user",{customerId:"ctm-paid",completedAt:now+5,updatedAt:now+5});
@@ -571,7 +571,7 @@ test("revocation, suspension, and restore preserve account data while closing st
   try {
     await store.insertUser(target);
     await store.insertUser(unrelated);
-    await store.upsertPlan(target.id,JSON.stringify({days:["keep-me"]}),now);
+    await store.upsertPlan(target.id,JSON.stringify({days:["keep-me"]}),now,0);
     await store.insertSession(session("target-a",target.id,now));
     await store.insertSession(session("target-b",target.id,now+1));
     await store.insertSession(session("unrelated",unrelated.id,now+2));

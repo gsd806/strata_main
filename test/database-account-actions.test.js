@@ -306,7 +306,7 @@ test("account deletion cascades private data and precisely cleans non-FK email r
     await store.insertUser(target);
     await store.insertUser(survivor);
     await store.insertSession(session("delete-target",target.id,now));
-    await store.upsertPlan(target.id,JSON.stringify({days:["push"]}),now);
+    await store.upsertPlan(target.id,JSON.stringify({days:["push"]}),now,0);
     await store.upsertMonthlyPlan(target.id,JSON.stringify({days:["month"]}),now);
     await store.upsertPreferences(target.id,JSON.stringify({units:"metric"}),now);
     await store.upsertRating(target.id,"bench-press",{
@@ -381,11 +381,12 @@ test("account deletion cascades private data and precisely cleans non-FK email r
   }
 });
 
-test("pending purchases block deletion and active deletion links block new checkouts",{concurrency:false},async()=>{
+test("pending purchases and active checkout claims block deletion while active deletion links block checkout",{concurrency:false},async()=>{
   const {store,close}=await fixture("account-delete-purchase-race-");
   const now=1_810_300_000_000;
   const pendingUser=user("pending-purchase",now);
   const deletingUser=user("deleting",now+1);
+  const checkoutUser=user("checkout-in-flight",now+2);
   try {
     await store.insertUser(pendingUser);
     await store.insertSession(session("pending-purchase",pendingUser.id,now));
@@ -410,9 +411,23 @@ test("pending purchases block deletion and active deletion links block new check
     await store.completePurchase("txn-already-pending",{customerId:"ctm-pending",completedAt:now+5,updatedAt:now+5});
     assert.equal((await store.deleteAccount(pendingDeletion.token_hash,now+6,"pending-user-hash")).status,"deleted");
 
+    await store.insertUser(checkoutUser);
+    const checkoutClaim=await store.claimCheckoutCreation({
+      userId:checkoutUser.id,priceId:PRICE_ID,claimId:"claim-in-flight",expiresAt:now+60_000,now:now+10
+    });
+    assert.equal(checkoutClaim.claim_id,"claim-in-flight");
+    const checkoutDeletion=await store.upsertAccountAction(action("checkout-in-flight-delete",checkoutUser.id,"account_delete",now+11));
+    assert.deepEqual(await store.deleteAccount(checkoutDeletion.token_hash,now+12,"checkout-user-hash"),{status:"checkout_pending"});
+    assert.ok(await store.userById(checkoutUser.id),"an active checkout claim must preserve the account");
+    assert.equal(await store.releaseCheckoutCreation(checkoutUser.id,"wrong-claim"),false);
+    assert.deepEqual(await store.deleteAccount(checkoutDeletion.token_hash,now+13,"checkout-user-hash"),{status:"checkout_pending"});
+    assert.equal(await store.releaseCheckoutCreation(checkoutUser.id,"claim-in-flight"),true);
+    assert.equal((await store.deleteAccount(checkoutDeletion.token_hash,now+14,"checkout-user-hash")).status,"deleted");
+
     await store.insertUser(deletingUser);
     const deletion=await store.upsertAccountAction(action("blocks-checkout",deletingUser.id,"account_delete",now+10));
     assert.equal(await store.insertPendingPurchase(purchase("blocked",deletingUser.id,now+11)),null);
+    assert.equal(await store.claimCheckoutCreation({userId:deletingUser.id,priceId:PRICE_ID,claimId:"blocked-claim",expiresAt:now+60_000,now:now+11}),null);
     assert.equal(await store.pendingPurchasesForUser(deletingUser.id),0);
     assert.equal(await store.cancelAccountDeletion(deletingUser.id),true);
     assert.equal((await store.insertPendingPurchase(purchase("after-cancel",deletingUser.id,now+12))).transaction_id,"txn-after-cancel");

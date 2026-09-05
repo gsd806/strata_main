@@ -34,7 +34,7 @@ test("homepage publishes the founder story without exposing a residential addres
 });
 
 test("published Strata+ price and refund promise are exact and consistent",()=>{
-  assert.equal(BUILD,"6.9.4");
+  assert.equal(BUILD,"6.9.5");
   const pricingHtml=read("pricing.html"),pricing=text("pricing.html"),refunds=text("refunds.html"),terms=text("terms.html");
   assert.match(pricing,/Strata\+/);
   assert.match(pricing,/\$5\.99 USD/i);
@@ -106,4 +106,6 @@ test("public copy describes active secure checkout without overpromising access"
   const pricingClient=fs.readFileSync(path.join(PUBLIC_ROOT,"scripts","pricing.js"),"utf8");
   assert.doesNotMatch(pricingClient,/permanently unlocked/i);
   assert.match(pricingClient,/unlocked on this account with no recurring subscription/i);
+  assert.match(pricingClient,/error\.code==="CHECKOUT_PREPARING"/);
+  assert.doesNotMatch(pricingClient,/error\.status===409/,"a concurrent-checkout response must stay retryable instead of impersonating a completed payment");
 });

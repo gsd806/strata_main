@@ -28,6 +28,8 @@ let runtimeDir;
 let appErrors="";
 let transactionSequence=0;
 let requestAddressOctet=10;
+let malformedCancellationResponses=0;
+let transactionListHook=null;
 const deliveries=[];
 const paddleRequests=[];
 const paddleTransactions=new Map();
@@ -72,22 +74,35 @@ async function startPaddle(){
     let body=null;
     try{body=raw?JSON.parse(raw):null;}catch{}
     paddleRequests.push({method:req.method,url:req.url,headers:{...req.headers},body});
+    if(req.method==="GET"&&req.url.startsWith("/transactions?")){
+      if(transactionListHook){const hook=transactionListHook;transactionListHook=null;await hook();}
+      res.writeHead(200,{"Content-Type":"application/json"});
+      res.end(JSON.stringify({data:[],meta:{pagination:{has_more:false}}}));
+      return;
+    }
     if(req.method==="GET"&&/^\/transactions\/txn_[a-z0-9]+$/.test(req.url)){
       const id=req.url.split("/").at(-1),transaction=paddleTransactions.get(id);
       res.writeHead(transaction?200:404,{"Content-Type":"application/json"});
-      res.end(JSON.stringify(transaction?{data:{id,...transaction}}:{error:{detail:"not found"}}));
+      res.end(JSON.stringify(transaction?{data:transaction}:{error:{detail:"not found"}}));
       return;
     }
     if(req.method==="PATCH"&&/^\/transactions\/txn_[a-z0-9]+$/.test(req.url)){
       const id=req.url.split("/").at(-1),transaction=paddleTransactions.get(id);
-      if(!transaction||!new Set(["draft","ready"]).has(transaction.status)||body?.status!=="canceled"){
+      if(!transaction||!new Set(["draft","ready","billed"]).has(transaction.status)||body?.status!=="canceled"){
         res.writeHead(409,{"Content-Type":"application/json"});
         res.end(JSON.stringify({error:{detail:"transaction cannot be canceled"}}));
         return;
       }
+      if(malformedCancellationResponses>0){
+        malformedCancellationResponses-=1;
+        res.writeHead(200,{"Content-Type":"application/json"});
+        res.end(JSON.stringify({data:{...transaction,status:"ready"}}));
+        return;
+      }
       transaction.status="canceled";
+      transaction.updated_at=new Date().toISOString();
       res.writeHead(200,{"Content-Type":"application/json"});
-      res.end(JSON.stringify({data:{id,status:"canceled"}}));
+      res.end(JSON.stringify({data:transaction}));
       return;
     }
     if(req.method!=="POST"||req.url!=="/transactions"){
@@ -96,10 +111,14 @@ async function startPaddle(){
       return;
     }
     transactionSequence+=1;
-    const id=`txn_${String(transactionSequence).padStart(24,"0")}`;
-    paddleTransactions.set(id,{status:"ready"});
+    const id=`txn_${String(transactionSequence).padStart(26,"0")}`;
+    const transaction=paddleTransactionFixture({
+      id,userId:body?.custom_data?.strata_user_id,checkoutId:body?.custom_data?.strata_checkout_id,
+      status:"ready",priceId:body?.items?.[0]?.price_id,quantity:body?.items?.[0]?.quantity
+    });
+    paddleTransactions.set(id,transaction);
     res.writeHead(201,{"Content-Type":"application/json"});
-    res.end(JSON.stringify({data:{id,status:"ready"}}));
+    res.end(JSON.stringify({data:transaction}));
   });
   paddleBase=await listen(paddle);
 }
@@ -273,6 +292,16 @@ function adjustmentEvent(transactionId,label="partial"){
   };
 }
 
+function transactionStatusEvent(transactionId,status,label=status,eventType=`transaction.${status}`){
+  const id=eventId(label);
+  return {
+    event_id:id,event_type:eventType,
+    occurred_at:new Date(Date.now()+eventSequence).toISOString(),
+    notification_id:`ntf_${id.slice(4)}`,
+    data:{id:transactionId,status}
+  };
+}
+
 async function signedWebhook(event){
   const raw=JSON.stringify(event);
   const timestamp=Math.floor(Date.now()/1000);
@@ -285,7 +314,17 @@ async function signedWebhook(event){
 }
 
 function database(options={}){
-  return new DatabaseSync(join(runtimeDir,"strata.sqlite"),options);
+  return new DatabaseSync(join(runtimeDir,"strata.sqlite"),{timeout:5000,...options});
+}
+
+function paddleTransactionFixture({id,userId,checkoutId,status="ready",priceId=PRICE_ID,productId=PRODUCT_ID,quantity=1}={}){
+  const now=new Date().toISOString();
+  return {
+    id,status,customer_id:null,subscription_id:null,
+    collection_mode:"automatic",origin:"api",created_at:now,updated_at:now,
+    custom_data:{strata_user_id:userId,strata_checkout_id:checkoutId,strata_version:1},
+    items:[{quantity:Number(quantity),price:{id:priceId,product_id:productId,billing_cycle:null}}]
+  };
 }
 
 function planFixture(){
@@ -340,7 +379,7 @@ test("password recovery is private, preserves account data, and revokes every se
   assert.equal(adjustment.response.status,200);
   assert.equal(adjustment.data.outcome,"adjustment-recorded");
 
-  const plan=await jsonRequest("/api/plan",{plan:planFixture()},{cookie:account.cookie,method:"PUT"});
+  const plan=await jsonRequest("/api/plan",{plan:planFixture(),expectedPlanUpdatedAt:0},{cookie:account.cookie,method:"PUT"});
   assert.equal(plan.response.status,200);
   const rating=await jsonRequest("/api/ratings/flat-dumbbell-press",{rating:ratingFixture},{cookie:account.cookie,csrf:account.csrfToken,method:"PUT"});
   assert.equal(rating.response.status,200);
@@ -438,6 +477,136 @@ test("password recovery is private, preserves account data, and revokes every se
 });
 
 test("account deletion requires email confirmation, supports cancel, blocks pending checkout, and cannot be undone by a late webhook",async()=>{
+  const failed=await verifiedSignup({
+    name:"Failed Checkout",email:"failed-checkout@example.test",password:"failed-checkout-password-123"
+  });
+  const failedCheckout=await checkout(failed);
+  assert.equal(failedCheckout.response.status,201);
+  const failureEvent=await signedWebhook(transactionStatusEvent(
+    failedCheckout.data.transactionId,"ready","failed","transaction.payment_failed"
+  ));
+  assert.equal(failureEvent.response.status,200);
+  assert.equal(failureEvent.data.outcome,"updated");
+  const failedPaddleBefore=paddleRequests.length;
+  const retryCheckout=await checkout(failed);
+  assert.equal(retryCheckout.response.status,200,"a failed payment that remains ready should reuse its checkout");
+  assert.equal(retryCheckout.data.reused,true);
+  assert.equal(retryCheckout.data.transactionId,failedCheckout.data.transactionId);
+  assert.equal(paddleRequests.length,failedPaddleBefore,"retrying a ready checkout should not create or cancel a Paddle transaction");
+  assert.equal(paddleTransactions.get(failedCheckout.data.transactionId).status,"ready");
+
+  const claimed=await verifiedSignup({
+    name:"Claimed Checkout",email:"claimed-checkout@example.test",password:"claimed-checkout-password-123"
+  });
+  const claimedDeleteRequest=await jsonRequest("/api/account/delete/request",{},
+    {cookie:claimed.cookie,csrf:claimed.csrfToken});
+  assert.equal(claimedDeleteRequest.response.status,202);
+  const claimedDeleteToken=actionToken(latestDelivery("Confirm deletion of your STRATA account"));
+  const claimNow=Date.now();
+  {
+    const db=database();
+    db.prepare(`INSERT INTO paddle_checkout_claims
+      (user_id,price_id,claim_id,transaction_id,expires_at,created_at,updated_at)
+      VALUES(?,?,?,?,?,?,?)`).run(claimed.user.id,PRICE_ID,"claim_active_deletion",null,claimNow+60_000,claimNow,claimNow);
+    db.close();
+  }
+  const claimBlocked=await jsonRequest("/api/account/delete/complete",{token:claimedDeleteToken,confirmation:"DELETE"});
+  assert.equal(claimBlocked.response.status,409,"an active checkout-creation claim must block account deletion");
+  assert.equal(claimBlocked.data.code,"CHECKOUT_PREPARING");
+  assert.equal((await request("/api/me",{headers:{Cookie:claimed.cookie}})).response.status,200,"the blocked account must remain signed in");
+  {
+    const db=database();
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM users WHERE id=?").get(claimed.user.id).count,1);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM paddle_checkout_claims WHERE user_id=?").get(claimed.user.id).count,1);
+    db.prepare("UPDATE paddle_checkout_claims SET expires_at=?,updated_at=? WHERE user_id=?")
+      .run(Date.now()-1,Date.now(),claimed.user.id);
+    db.close();
+  }
+  const claimedDeleted=await jsonRequest("/api/account/delete/complete",{token:claimedDeleteToken,confirmation:"DELETE"});
+  assert.equal(claimedDeleted.response.status,200,"the same deletion link should work after the checkout claim expires");
+  {
+    const db=database({readOnly:true});
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM users WHERE id=?").get(claimed.user.id).count,0);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM paddle_checkout_claims WHERE user_id=?").get(claimed.user.id).count,0);
+    db.close();
+  }
+
+  const draftClaimed=await verifiedSignup({
+    name:"Draft Checkout Claim",email:"draft-claim@example.test",password:"draft-claim-password-123"
+  });
+  const draftDeleteRequest=await jsonRequest("/api/account/delete/request",{},
+    {cookie:draftClaimed.cookie,csrf:draftClaimed.csrfToken});
+  assert.equal(draftDeleteRequest.response.status,202);
+  const draftDeleteToken=actionToken(latestDelivery("Confirm deletion of your STRATA account"));
+  const draftClaimId="claim_draft_cancellation";
+  const draftTransactionId=`txn_${"d".repeat(26)}`;
+  const draftNow=Date.now();
+  paddleTransactions.set(draftTransactionId,paddleTransactionFixture({
+    id:draftTransactionId,userId:draftClaimed.user.id,checkoutId:draftClaimId,status:"draft"
+  }));
+  {
+    const db=database();
+    db.prepare(`INSERT INTO paddle_checkout_claims
+      (user_id,price_id,claim_id,transaction_id,expires_at,created_at,updated_at)
+      VALUES(?,?,?,?,?,?,?)`).run(draftClaimed.user.id,PRICE_ID,draftClaimId,draftTransactionId,draftNow+60_000,draftNow,draftNow);
+    db.close();
+  }
+  malformedCancellationResponses=1;
+  const draftPaddleBefore=paddleRequests.length;
+  const unconfirmedDraftDeletion=await jsonRequest("/api/account/delete/complete",{token:draftDeleteToken,confirmation:"DELETE"});
+  assert.equal(unconfirmedDraftDeletion.response.status,503,"deletion must stop when Paddle does not confirm draft cancellation");
+  assert.equal(unconfirmedDraftDeletion.data.code,"PURCHASE_RECONCILIATION_UNAVAILABLE");
+  assert.deepEqual(paddleRequests.slice(draftPaddleBefore).map((entry)=>entry.method),["GET","PATCH"]);
+  assert.equal(paddleTransactions.get(draftTransactionId).status,"draft","an unconfirmed cancellation must not be recorded locally");
+  {
+    const db=database({readOnly:true});
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM users WHERE id=?").get(draftClaimed.user.id).count,1);
+    assert.equal(db.prepare("SELECT transaction_id FROM paddle_checkout_claims WHERE user_id=?").get(draftClaimed.user.id).transaction_id,draftTransactionId);
+    db.close();
+  }
+  const confirmedDraftDeletion=await jsonRequest("/api/account/delete/complete",{token:draftDeleteToken,confirmation:"DELETE"});
+  assert.equal(confirmedDraftDeletion.response.status,200,"a provider-confirmed draft cancellation should allow deletion");
+  assert.equal(paddleTransactions.get(draftTransactionId).status,"canceled");
+
+  const releaseRace=await verifiedSignup({
+    name:"Checkout Release Race",email:"claim-release-race@example.test",password:"claim-release-race-password-123"
+  });
+  const releaseRaceRequest=await jsonRequest("/api/account/delete/request",{},
+    {cookie:releaseRace.cookie,csrf:releaseRace.csrfToken});
+  assert.equal(releaseRaceRequest.response.status,202);
+  const releaseRaceToken=actionToken(latestDelivery("Confirm deletion of your STRATA account"));
+  const releaseRaceClaimId="claim_release_race";
+  const releaseRaceTransactionId=`txn_${"r".repeat(26)}`;
+  const releaseRaceNow=Date.now();
+  {
+    const db=database();
+    db.prepare(`INSERT INTO paddle_checkout_claims
+      (user_id,price_id,claim_id,transaction_id,expires_at,created_at,updated_at)
+      VALUES(?,?,?,?,?,?,?)`).run(releaseRace.user.id,PRICE_ID,releaseRaceClaimId,null,releaseRaceNow-1,releaseRaceNow-1000,releaseRaceNow-1000);
+    db.close();
+  }
+  transactionListHook=async()=>{
+    const db=database();
+    db.prepare("UPDATE paddle_checkout_claims SET transaction_id=?,updated_at=? WHERE user_id=? AND claim_id=?")
+      .run(releaseRaceTransactionId,Date.now(),releaseRace.user.id,releaseRaceClaimId);
+    db.close();
+  };
+  const racedDeletion=await jsonRequest("/api/account/delete/complete",{token:releaseRaceToken,confirmation:"DELETE"});
+  assert.equal(racedDeletion.response.status,409,"an expired unbound claim must not be released after a transaction is attached concurrently");
+  assert.equal(racedDeletion.data.code,"CHECKOUT_PREPARING");
+  {
+    const db=database({readOnly:true});
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM users WHERE id=?").get(releaseRace.user.id).count,1);
+    assert.equal(db.prepare("SELECT transaction_id FROM paddle_checkout_claims WHERE user_id=?").get(releaseRace.user.id).transaction_id,releaseRaceTransactionId);
+    db.close();
+  }
+  paddleTransactions.set(releaseRaceTransactionId,paddleTransactionFixture({
+    id:releaseRaceTransactionId,userId:releaseRace.user.id,checkoutId:releaseRaceClaimId,status:"ready"
+  }));
+  const releaseRaceDeleted=await jsonRequest("/api/account/delete/complete",{token:releaseRaceToken,confirmation:"DELETE"});
+  assert.equal(releaseRaceDeleted.response.status,200,"a later retry can reconcile the transaction that won the release race");
+  assert.equal(paddleTransactions.get(releaseRaceTransactionId).status,"canceled");
+
   const abandoned=await verifiedSignup({
     name:"Abandoned Checkout",email:"abandoned-checkout@example.test",password:"abandoned-checkout-password-123"
   });
@@ -448,6 +617,7 @@ test("account deletion requires email confirmation, supports cancel, blocks pend
     db.prepare("UPDATE paddle_purchases SET updated_at=? WHERE transaction_id=?").run(Date.now()-31*60*1000,abandonedCheckout.data.transactionId);
     db.close();
   }
+  delete paddleTransactions.get(abandonedCheckout.data.transactionId).custom_data.strata_checkout_id;
   const paddleBefore=paddleRequests.length;
   const abandonedDeleteRequest=await jsonRequest("/api/account/delete/request",{},
     {cookie:abandoned.cookie,csrf:abandoned.csrfToken});
@@ -455,9 +625,44 @@ test("account deletion requires email confirmation, supports cancel, blocks pend
   assert.equal(paddleRequests.length,paddleBefore,"requesting a deletion email must not mutate a Paddle checkout");
   const abandonedDeleteToken=actionToken(latestDelivery("Confirm deletion of your STRATA account"));
   const abandonedDeleted=await jsonRequest("/api/account/delete/complete",{token:abandonedDeleteToken,confirmation:"DELETE"});
-  assert.equal(abandonedDeleted.response.status,200,"a confirmed deletion should close an abandoned checkout instead of blocking forever");
+  assert.equal(abandonedDeleted.response.status,200,"a confirmed deletion should close an abandoned legacy checkout instead of blocking forever");
   assert.deepEqual(paddleRequests.slice(paddleBefore).map((entry)=>entry.method),["GET","PATCH"]);
   assert.equal(paddleTransactions.get(abandonedCheckout.data.transactionId).status,"canceled");
+
+  const mismatched=await verifiedSignup({
+    name:"Mismatched Checkout",email:"mismatched-checkout@example.test",password:"mismatched-checkout-password-123"
+  });
+  const mismatchedCheckout=await checkout(mismatched);
+  assert.equal(mismatchedCheckout.response.status,201);
+  {
+    const db=database();
+    db.prepare("UPDATE paddle_purchases SET updated_at=? WHERE transaction_id=?")
+      .run(Date.now()-31*60*1000,mismatchedCheckout.data.transactionId);
+    db.close();
+  }
+  const mismatchedRemote=paddleTransactions.get(mismatchedCheckout.data.transactionId);
+  mismatchedRemote.custom_data.strata_user_id="different-account";
+  const mismatchedDeleteRequest=await jsonRequest("/api/account/delete/request",{},
+    {cookie:mismatched.cookie,csrf:mismatched.csrfToken});
+  assert.equal(mismatchedDeleteRequest.response.status,202);
+  const mismatchedDeleteToken=actionToken(latestDelivery("Confirm deletion of your STRATA account"));
+  const mismatchedPaddleBefore=paddleRequests.length;
+  const mismatchedDeletion=await jsonRequest("/api/account/delete/complete",{token:mismatchedDeleteToken,confirmation:"DELETE"});
+  assert.equal(mismatchedDeletion.response.status,503,"STRATA must not cancel a remote transaction whose ownership metadata does not match");
+  assert.equal(mismatchedDeletion.data.code,"PURCHASE_RECONCILIATION_INVALID");
+  assert.deepEqual(paddleRequests.slice(mismatchedPaddleBefore).map((entry)=>entry.method),["GET"],"invalid ownership must be rejected before PATCH");
+  assert.equal(mismatchedRemote.status,"ready");
+  mismatchedRemote.custom_data.strata_user_id=mismatched.user.id;
+  mismatchedRemote.items[0].price.product_id="pro_wrong_catalog_item";
+  const wrongCatalogBefore=paddleRequests.length;
+  const wrongCatalogDeletion=await jsonRequest("/api/account/delete/complete",{token:mismatchedDeleteToken,confirmation:"DELETE"});
+  assert.equal(wrongCatalogDeletion.response.status,503,"STRATA must not cancel a remote transaction for a different product");
+  assert.equal(wrongCatalogDeletion.data.code,"PURCHASE_RECONCILIATION_INVALID");
+  assert.deepEqual(paddleRequests.slice(wrongCatalogBefore).map((entry)=>entry.method),["GET"],"invalid catalog data must be rejected before PATCH");
+  mismatchedRemote.items[0].price.product_id=PRODUCT_ID;
+  const matchedDeletion=await jsonRequest("/api/account/delete/complete",{token:mismatchedDeleteToken,confirmation:"DELETE"});
+  assert.equal(matchedDeletion.response.status,200);
+  assert.equal(mismatchedRemote.status,"canceled");
 
   const repaired=await verifiedSignup({
     name:"Recovered Checkout",email:"recovered-checkout@example.test",password:"recovered-checkout-password-123"
@@ -523,7 +728,7 @@ test("account deletion requires email confirmation, supports cancel, blocks pend
   assert.equal(granted.data.outcome,"granted");
   assert.equal((await request("/api/me",{headers:{Cookie:account.cookie}})).data.user.discovery.active,true);
 
-  const savedPlan=await jsonRequest("/api/plan",{plan:planFixture()},{cookie:account.cookie,method:"PUT"});
+  const savedPlan=await jsonRequest("/api/plan",{plan:planFixture(),expectedPlanUpdatedAt:0},{cookie:account.cookie,method:"PUT"});
   const savedPreferences=await jsonRequest("/api/preferences",{preferences:preferencesFixture},{cookie:account.cookie,method:"PUT"});
   const savedRating=await jsonRequest("/api/ratings/flat-dumbbell-press",{rating:ratingFixture},{cookie:account.cookie,csrf:account.csrfToken,method:"PUT"});
   assert.equal(savedPlan.response.status,200);
@@ -558,7 +763,7 @@ test("account deletion requires email confirmation, supports cancel, blocks pend
 
   {
     const db=database({readOnly:true});
-    for(const table of ["users","sessions","plans","preferences","ratings","paddle_purchases","account_action_requests","signup_verifications"]){
+    for(const table of ["users","sessions","plans","preferences","ratings","paddle_purchases","paddle_checkout_claims","account_action_requests","signup_verifications"]){
       const column=table==="users"?"id":table==="signup_verifications"?"user_id":"user_id";
       assert.equal(db.prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE ${column}=?`).get(account.user.id).count,0,`${table} should not retain deleted account data`);
     }
