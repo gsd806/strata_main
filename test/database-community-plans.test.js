@@ -173,7 +173,7 @@ test("publishing snapshots one exact saved-plan revision atomically",{concurrenc
   };
   try {
     await store.insertUser(owner);
-    const firstSave=await store.upsertPlan(owner.id,firstPrivatePlan,now+10);
+    const firstSave=await store.upsertPlan(owner.id,firstPrivatePlan,now+10,0);
 
     assert.equal(await store.upsertCommunityWeeklyPlanFromPlan({
       ...listing,expectedPlanUpdatedAt:firstSave.updated_at-1,storedPlanJson:firstPrivatePlan
@@ -186,7 +186,7 @@ test("publishing snapshots one exact saved-plan revision atomically",{concurrenc
     assert.equal(published.plan_json,firstPrivatePlan);
     assert.equal(published.id,listing.id);
 
-    const secondSave=await store.upsertPlan(owner.id,secondPrivatePlan,now+40);
+    const secondSave=await store.upsertPlan(owner.id,secondPrivatePlan,now+40,firstSave.updated_at);
     assert.equal(await store.upsertCommunityWeeklyPlanFromPlan({
       ...listing,id:"ignored-replacement-id",updatedAt:now+50,
       expectedPlanUpdatedAt:firstSave.updated_at,storedPlanJson:firstPrivatePlan
@@ -219,7 +219,7 @@ test("applying a published community plan is atomic and source account deletion 
     await store.insertUser(recipient);
     await store.upsertCommunityWeeklyPlan(published);
     await store.upsertCommunityWeeklyPlan(draft);
-    await store.upsertPlan(recipient.id,originalPrivatePlan,now+30);
+    await store.upsertPlan(recipient.id,originalPrivatePlan,now+30,0);
 
     assert.equal(await store.applyCommunityWeeklyPlan({
       id:draft.id,userId:recipient.id,sourceUpdatedAt:draft.updatedAt,targetUpdatedAt:now+30,

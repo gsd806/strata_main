@@ -26,10 +26,12 @@ let focusedSelector="";
 class Element{
   constructor(id){
     this.id=id;this.value="";this.innerHTML="";this.textContent="";this.hidden=false;this.disabled=false;
-    this.dataset={};this.attributes={};this.listeners={};this.classList=new ClassList();this.parentElement={classList:new ClassList()};
+    this.checked=false;this.href="";this.inert=false;this.dataset={};this.attributes={};this.listeners={};this.classList=new ClassList();this.parentElement={classList:new ClassList()};
   }
   addEventListener(type,handler){(this.listeners[type]||=[]).push(handler);}
   setAttribute(name,value){this.attributes[name]=String(value);}
+  removeAttribute(name){delete this.attributes[name];}
+  focus(){focusedSelector=`#${this.id}`;}
   querySelector(selector){
     if(this.id!=="libraryList")return null;
     return {focus(){focusedSelector=selector;}};
@@ -39,9 +41,10 @@ class Element{
 const elements=new Map(ids.map((id)=>[id,new Element(id)]));
 const documentListeners={};
 const document={
+  visibilityState:"visible",
   getElementById(id){return elements.get(id)||null;},
   addEventListener(type,handler){(documentListeners[type]||=[]).push(handler);},
-  querySelector(){return null;},
+  querySelector(selector){return selector.startsWith("#")?elements.get(selector.slice(1))||null:null;},
   querySelectorAll(){return [];}
 };
 
@@ -49,6 +52,7 @@ const plan={version:1,restDay:"Sunday",days:Object.fromEntries(DAYS.map((day)=>[
 plan.days.Monday.push({instanceId:"runtime-plan-item",exerciseId:exercises[0].id,sets:3,reps:"8–12"});
 const fetches=[];
 const requests=[];
+const guestStorageWrites=[];
 const windowListeners={};
 const context={
   console,document,history:{replaceState(){}},location:{search:"",href:"http://strata.test/planner.html",origin:"http://strata.test",assign(){}},
@@ -57,7 +61,7 @@ const context={
     matchMedia:()=>({matches:false}),
     addEventListener(type,handler){(windowListeners[type]||=[]).push(handler);}
   },
-  localStorage:{getItem(){return null;},setItem(){}},
+  localStorage:{getItem(){return null;},setItem(key,value){guestStorageWrites.push({key,value});}},
   fetch:async(path,options={})=>{
     fetches.push(path);
     requests.push({path,options});
@@ -135,9 +139,17 @@ function clickSelectDay(day){
   assert.notEqual(recommendedRest,originalRest,"Recommend rest day must exclude the current recovery day");
   assert.equal(vm.runInContext("state.plan.days[state.plan.restDay].length",context),0,"A recommendation must choose an empty day");
 
+  const focusedRepsInput={
+    dataset:{itemReps:"runtime-plan-item"},value:"12–15",
+    closest(selector){return selector==="[data-day]"?{dataset:{day:"Monday"}}:null;}
+  };
+  for(const handler of documentListeners.input||[])handler({target:focusedRepsInput});
+  assert.equal(vm.runInContext("state.plan.days.Monday[0].reps",context),"12–15","Typing must update plan state before the field blurs");
+
   clickLoadMore();
 
   const expandedIds=renderedIds();
+  const loadMoreFocused=focusedSelector==='[data-library-index="32"] [data-quick-add]';
   assert.equal(elements.get("sharePlanGuest").hidden,true,"Signed-in planners should not see the guest publishing prompt");
   assert.equal(elements.get("sharePlanAccount").hidden,false,"Signed-in planners should see publishing controls");
   elements.get("sharePlanTitle").value="Runtime strength week";
@@ -159,6 +171,9 @@ function clickSelectDay(day){
   assert.equal(publishBody.expectedPlanUpdatedAt,1_700_000_000_100,"Publishing must bind the upload to the Plan revision shown to the user");
   const saveIndex=requests.findIndex((request)=>request.path==="/api/plan"&&request.options.method==="PUT"),publishIndex=requests.indexOf(publishRequest);
   assert.ok(saveIndex>=0&&saveIndex<publishIndex,"A dirty weekly plan must finish saving before its community snapshot is published");
+  assert.equal(JSON.parse(requests[saveIndex].options.body).expectedPlanUpdatedAt,1_700_000_000_100,"Account saves must include the plan revision that the browser loaded");
+  assert.equal(JSON.parse(requests[saveIndex].options.body).plan.days.Monday[0].reps,"12–15","A lifecycle-style save must include the value from a still-focused reps field");
+  assert.equal(requests[saveIndex].options.keepalive,true,"Plan saves must be eligible to finish while the page is backgrounded");
   assert.match(elements.get("ownSharedPlans").innerHTML,/Runtime strength week/);
 
   clickUnpublish();
@@ -186,6 +201,69 @@ function clickSelectDay(day){
   assert.equal(elements.get("retryPlanSave").hidden,true,"Retry should hide after the plan saves");
   assert.match(elements.get("saveStatus").textContent,/Saved to account/);
 
+  const authoritativePlan=JSON.parse(JSON.stringify(plan));
+  authoritativePlan.days.Monday[0].reps="5–7";
+  let conflictSaveAttempts=0;
+  const conflictSaveBodies=[];
+  context.fetch=async(path,options={})=>{
+    if(path==="/api/plan"&&options.method==="PUT"){
+      conflictSaveAttempts+=1;
+      conflictSaveBodies.push(JSON.parse(options.body));
+      if(conflictSaveAttempts===1)return {ok:false,status:409,json:async()=>({error:"Your weekly plan changed in another tab or device.",code:"PLAN_CHANGED",plan:authoritativePlan,planUpdatedAt:1_700_000_000_300})};
+      const submitted=conflictSaveBodies.at(-1);
+      return {ok:true,status:200,json:async()=>({ok:true,plan:submitted.plan,planUpdatedAt:1_700_000_000_400})};
+    }
+    return {ok:false,status:404,json:async()=>({error:"Not found"})};
+  };
+  vm.runInContext("state.plan.days.Saturday.push({instanceId:'conflicting-local-item',exerciseId:state.exercises[3].id,sets:3,reps:'8–12'});state.revision+=1;",context);
+  assert.equal(await vm.runInContext("flushSave()",context),false,"A stale save must pause instead of overwriting the newer account plan");
+  assert.equal(conflictSaveAttempts,1,"The dirty plan must reach the conflict response");
+  assert.equal(vm.runInContext("Boolean(state.conflictDraft)",context),true,"The conflict response must enter recovery mode");
+  assert.equal(vm.runInContext("state.plan.days.Monday[0].reps",context),"5–7","The planner must display the authoritative account plan after a conflict");
+  assert.equal(vm.runInContext("state.conflictDraft.days.Saturday[0].instanceId",context),"conflicting-local-item","The unsaved local draft must remain recoverable");
+  assert.equal(vm.runInContext("state.savedRevision<state.revision",context),true,"Conflict recovery must keep navigation and unload safeguards active");
+  assert.equal(elements.get("plannerShell").inert,true,"Editing stays locked while the user considers the newer account copy");
+  assert.equal(elements.get("planConflictPanel").hidden,false,"Conflict recovery must expose choices outside the inert planner");
+  assert.match(elements.get("latestPlanSummary").innerHTML,/5–7/,"The comparison must show the latest account copy");
+  assert.match(elements.get("localPlanSummary").innerHTML,/conflicting-local-item|movement/i,"The comparison must show the unsaved local copy");
+  assert.equal(elements.get("retryPlanSave").textContent,"Review my changes");
+  await Promise.all((elements.get("reviewLocalPlan").listeners.click||[]).map((handler)=>handler({currentTarget:elements.get("reviewLocalPlan")})));
+  assert.equal(vm.runInContext("state.conflictReview",context),true);
+  assert.equal(vm.runInContext("state.plan.days.Saturday[0].instanceId",context),"conflicting-local-item","Review restores the local draft without saving it");
+  assert.equal(conflictSaveAttempts,1,"Restoring the draft must not silently retry the overwrite");
+  assert.equal(elements.get("retryPlanSave").textContent,"Save reviewed changes");
+  assert.equal(await vm.runInContext("flushSave()",context),false,"Navigation-style flushes cannot bypass explicit conflict confirmation");
+  assert.equal(conflictSaveAttempts,1);
+  await Promise.all((elements.get("retryPlanSave").listeners.click||[]).map((handler)=>handler({currentTarget:elements.get("retryPlanSave")})));
+  assert.equal(conflictSaveAttempts,2);
+  assert.equal(JSON.parse(vm.runInContext("JSON.stringify(state.plan)",context)).days.Saturday[0].instanceId,"conflicting-local-item");
+  assert.equal(conflictSaveBodies[1].expectedPlanUpdatedAt,1_700_000_000_300,"A confirmed recovery is based on the newer account revision");
+  assert.equal(vm.runInContext("state.planUpdatedAt",context),1_700_000_000_400,"The confirmed save adopts its new account revision");
+  assert.equal(vm.runInContext("state.conflictReview",context),false);
+  assert.equal(vm.runInContext("state.conflictLatest",context),null);
+  assert.equal(elements.get("planConflictPanel").hidden,true);
+  assert.equal(elements.get("retryPlanSave").hidden,true);
+
+  let keepLatestAttempts=0;
+  const nextAuthoritativePlan=JSON.parse(JSON.stringify(authoritativePlan));
+  nextAuthoritativePlan.days.Monday[0].reps="3–5";
+  context.fetch=async(path,options={})=>{
+    if(path==="/api/plan"&&options.method==="PUT"){
+      keepLatestAttempts+=1;
+      return {ok:false,status:409,json:async()=>({error:"Your weekly plan changed in another tab or device.",code:"PLAN_CHANGED",plan:nextAuthoritativePlan,planUpdatedAt:1_700_000_000_500})};
+    }
+    return {ok:false,status:404,json:async()=>({error:"Not found"})};
+  };
+  vm.runInContext("state.plan.days.Friday.push({instanceId:'discarded-local-item',exerciseId:state.exercises[4].id,sets:2,reps:'10'});state.revision+=1;",context);
+  assert.equal(await vm.runInContext("flushSave()",context),false);
+  await Promise.all((elements.get("keepLatestPlan").listeners.click||[]).map((handler)=>handler({currentTarget:elements.get("keepLatestPlan")})));
+  assert.equal(keepLatestAttempts,1,"Keeping the account plan must not issue an overwrite");
+  assert.equal(vm.runInContext("state.plan.days.Monday[0].reps",context),"3–5");
+  assert.equal(vm.runInContext("state.plan.days.Friday.length",context),0,"Keeping latest must discard only the unsaved local copy");
+  assert.equal(vm.runInContext("state.savedRevision",context),vm.runInContext("state.revision",context),"Keeping latest must leave the planner clean");
+  assert.equal(elements.get("plannerShell").inert,false);
+  assert.equal(elements.get("planConflictPanel").hidden,true);
+
   let guestCommunityFetches=0;
   context.fetch=async(path)=>{
     if(path===CATALOG_URL)return {ok:true,json:async()=>exercises};
@@ -200,6 +278,23 @@ function clickSelectDay(day){
   assert.match(elements.get("plannerModeNotice").innerHTML,/Guest plan[\s\S]*not automatically transferred/i,"Guest copy must explain that signing in does not migrate the local plan");
   assert.doesNotMatch(elements.get("plannerModeNotice").innerHTML,/Sign in for cross-device sync/i);
   assert.match(elements.get("plannerPlusCta").innerHTML,/Explore Strata\+/,"Unknown guest entitlement must not promise a new trial");
+  guestStorageWrites.length=0;
+  vm.runInContext("state.plan.days.Monday.push({instanceId:'guest-save-one',exerciseId:state.exercises[0].id,sets:3,reps:'8–12'});state.revision+=1;",context);
+  assert.equal(await vm.runInContext("flushSave()",context),true,"A guest edit must save locally");
+  vm.runInContext("state.plan.days.Tuesday.push({instanceId:'guest-save-two',exerciseId:state.exercises[1].id,sets:3,reps:'8–12'});state.revision+=1;",context);
+  assert.equal(await vm.runInContext("flushSave()",context),true,"A second guest edit must not deadlock behind the first save promise");
+  assert.equal(guestStorageWrites.length,2,"Each guest revision must reach local storage");
+  assert.equal(vm.runInContext("state.savePromise",context),null,"Guest saves must always release the tracked save promise");
+  assert.equal(vm.runInContext("state.savedRevision",context),vm.runInContext("state.revision",context));
+
+  vm.runInContext("state.navigating=true",context);
+  let secondNavigationPrevented=false;
+  const navigationLink={href:"http://strata.test/pricing",target:"",hasAttribute(){return false;}};
+  const navigationTarget={closest(selector){return selector==="a[href]"?navigationLink:null;}};
+  const navigationEvent={target:navigationTarget,defaultPrevented:false,button:0,metaKey:false,ctrlKey:false,shiftKey:false,altKey:false,preventDefault(){this.defaultPrevented=true;secondNavigationPrevented=true;}};
+  for(const handler of documentListeners.click||[])handler(navigationEvent);
+  assert.equal(secondNavigationPrevented,true,"A second same-origin navigation must stay blocked while the first save is pending");
+  vm.runInContext("state.navigating=false",context);
   const result={
     catalogFetch:fetches.filter((path)=>path===CATALOG_URL).length===1,
     planFetch:requests.filter((request)=>request.path==="/api/plan"&&!request.options.method).length===1,
@@ -214,7 +309,7 @@ function clickSelectDay(day){
     uniqueExpandedCards:new Set(expandedIds).size,
     firstPagePreserved:initialIds.every((id,index)=>expandedIds[index]===id),
     loadMoreStillAvailable:/data-load-more-library/.test(elements.get("libraryList").innerHTML),
-    focusedFirstNewCard:focusedSelector==='[data-library-index="32"] [data-quick-add]',
+    focusedFirstNewCard:loadMoreFocused,
     resultStatus:expandedResultStatus
   };
 

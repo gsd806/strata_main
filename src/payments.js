@@ -6,6 +6,9 @@ const DEFAULT_PRODUCT_ID="pro_01m1ky8j916ybyacs836dxbz8x";
 const DEFAULT_PRICE_ID="pri_01m1kyc2zd313d7a3ssmg02424";
 const LIVE_API_BASE="https://api.paddle.com";
 const TRANSACTION_STATUSES=new Set(["draft","ready","billed","paid","completed","canceled","past_due"]);
+const CREATED_TRANSACTION_STATUSES=new Set(["draft","ready"]);
+const CHECKOUT_RECOVERY_CLOCK_SKEW_MS=60_000;
+const CHECKOUT_RECOVERY_WINDOW_MS=5*60_000;
 const secretsByConfig=new WeakMap();
 
 function clean(value) { return String(value||"").trim(); }
@@ -96,12 +99,13 @@ function verifyPaddleSignature(rawBody,header,secret,{now=Math.floor(Date.now()/
   });
 }
 
-async function createPaddleTransaction(config,{userId}={},fetchImpl=globalThis.fetch) {
+async function createPaddleTransaction(config,{userId,checkoutId}={},fetchImpl=globalThis.fetch) {
   const secrets=secretsByConfig.get(config);
   if (!config?.enabled||!secrets?.apiKey) {
     throw Object.assign(new Error("Checkout is not available yet."),{status:503,code:"CHECKOUT_UNAVAILABLE"});
   }
   if (!userId) throw Object.assign(new Error("Sign in required."),{status:401,code:"SIGN_IN_REQUIRED"});
+  if (!clean(checkoutId)) throw new TypeError("A checkout reference is required.");
   let response;
   try {
     response=await fetchImpl(`${secrets.apiBase}/transactions`,{
@@ -115,7 +119,7 @@ async function createPaddleTransaction(config,{userId}={},fetchImpl=globalThis.f
       body:JSON.stringify({
         items:[{price_id:config.priceId,quantity:1}],
         collection_mode:"automatic",
-        custom_data:{strata_user_id:userId,strata_version:1}
+        custom_data:{strata_user_id:userId,...(checkoutId?{strata_checkout_id:checkoutId}:{}),strata_version:1}
       })
     });
   } catch {
@@ -126,9 +130,10 @@ async function createPaddleTransaction(config,{userId}={},fetchImpl=globalThis.f
   }
   let payload;
   try { payload=await response.json(); } catch { payload=null; }
-  const transactionId=payload?.data?.id;
+  const transactionId=validTransactionId(payload?.data?.id);
   const status=clean(payload?.data?.status);
-  if (!/^txn_[a-z0-9]{20,}$/.test(String(transactionId||""))||!new Set(["draft","ready"]).has(status)) {
+  const validation=validateCheckoutTransaction(payload?.data,config,{userId,checkoutId});
+  if (!transactionId||!CREATED_TRANSACTION_STATUSES.has(status)||!validation.ok) {
     throw Object.assign(new Error("Checkout could not be prepared. Please try again."),{status:502,code:"PADDLE_INVALID_RESPONSE"});
   }
   return {transactionId,status};
@@ -136,7 +141,7 @@ async function createPaddleTransaction(config,{userId}={},fetchImpl=globalThis.f
 
 function validTransactionId(value) {
   const id=clean(value);
-  return /^txn_[a-z0-9]{20,}$/.test(id)?id:"";
+  return /^txn_[a-z0-9]{26}$/.test(id)?id:"";
 }
 
 function paddleTransactionError(message,code) {
@@ -183,6 +188,83 @@ async function cancelPaddleTransaction(config,transactionId,fetchImpl=globalThis
   return {transactionId:transaction.transactionId,status:transaction.status};
 }
 
+function validateCheckoutTransaction(data,config,{userId,checkoutId,priceId=config?.priceId,productId=config?.productId}={}) {
+  if (!data||!validTransactionId(data.id)||!TRANSACTION_STATUSES.has(clean(data.status))) return {ok:false,reason:"transaction"};
+  if (data.origin!=="api") return {ok:false,reason:"origin"};
+  if (data.subscription_id!=null) return {ok:false,reason:"subscription"};
+  if (data.collection_mode!=="automatic") return {ok:false,reason:"collection"};
+  if (clean(data.custom_data?.strata_user_id)!==clean(userId)) return {ok:false,reason:"account"};
+  if (clean(data.custom_data?.strata_checkout_id)!==clean(checkoutId)) return {ok:false,reason:"checkout"};
+  if (data.custom_data?.strata_version!==1) return {ok:false,reason:"metadata"};
+  if (!Array.isArray(data.items)||data.items.length!==1) return {ok:false,reason:"items"};
+  const item=data.items[0]||{},price=item.price||{};
+  if (Number(item.quantity)!==1) return {ok:false,reason:"quantity"};
+  if (price.id!==priceId) return {ok:false,reason:"price"};
+  if (price.product_id!==productId||price.billing_cycle!=null) return {ok:false,reason:"product"};
+  return {ok:true};
+}
+
+async function findPaddleCheckoutTransaction(config,{userId,checkoutId,createdAt,priceId=config?.priceId,productId=config?.productId}={},fetchImpl=globalThis.fetch) {
+  const secrets=secretsByConfig.get(config);
+  if (!secrets?.apiKey) throw paddleTransactionError("Paddle transaction status is temporarily unavailable.","PADDLE_RECONCILIATION_UNAVAILABLE");
+  const referenceTime=Number(createdAt);
+  const windowStart=Math.max(0,referenceTime-CHECKOUT_RECOVERY_CLOCK_SKEW_MS);
+  const windowEnd=referenceTime+CHECKOUT_RECOVERY_WINDOW_MS;
+  if (!clean(userId)||!clean(checkoutId)||!Number.isFinite(referenceTime)||referenceTime<0||!Number.isFinite(new Date(windowEnd).getTime())) {
+    throw new TypeError("A checkout reference is required.");
+  }
+  const base=new URL(`${secrets.apiBase.replace(/\/$/,"")}/transactions`);
+  base.searchParams.set("created_at[GTE]",new Date(windowStart).toISOString());
+  base.searchParams.set("created_at[LTE]",new Date(windowEnd).toISOString());
+  base.searchParams.set("origin","api");
+  base.searchParams.set("collection_mode","automatic");
+  base.searchParams.set("subscription_id","null");
+  base.searchParams.set("order_by","created_at[ASC]");
+  base.searchParams.set("per_page","30");
+  let pageUrl=new URL(base);
+  const visitedPages=new Set();
+  while (true) {
+    if (visitedPages.has(pageUrl.href)) {
+      throw paddleTransactionError("Paddle returned a repeated transaction page.","PADDLE_RECONCILIATION_INVALID_RESPONSE");
+    }
+    visitedPages.add(pageUrl.href);
+    let response;
+    try {
+      response=await fetchImpl(pageUrl,{
+        headers:{Authorization:`Bearer ${secrets.apiKey}`,"Paddle-Version":"1","Skip-Count":"true"},
+        signal:timeoutSignal(10_000)
+      });
+    } catch {
+      throw paddleTransactionError("Paddle transaction status is temporarily unavailable.","PADDLE_RECONCILIATION_UNAVAILABLE");
+    }
+    if (!response?.ok) throw paddleTransactionError("Paddle transaction status could not be confirmed.","PADDLE_RECONCILIATION_FAILED");
+    let payload;
+    try { payload=await response.json(); } catch { payload=null; }
+    if (!Array.isArray(payload?.data)) throw paddleTransactionError("Paddle returned an invalid transaction list.","PADDLE_RECONCILIATION_INVALID_RESPONSE");
+    const match=payload.data.find((transaction)=>{
+      const transactionTime=Date.parse(clean(transaction?.created_at));
+      return Number.isFinite(transactionTime)&&transactionTime>=windowStart&&transactionTime<=windowEnd
+        &&validateCheckoutTransaction(transaction,config,{userId,checkoutId,priceId,productId}).ok;
+    });
+    if (match) return {transactionId:validTransactionId(match.id),status:clean(match.status),data:match};
+    const pagination=payload?.meta?.pagination;
+    if (typeof pagination?.has_more!=="boolean") {
+      throw paddleTransactionError("Paddle returned invalid transaction pagination.","PADDLE_RECONCILIATION_INVALID_RESPONSE");
+    }
+    if (!pagination.has_more) return null;
+    const nextValue=clean(pagination.next);
+    let next;
+    try { next=new URL(nextValue,base); } catch { next=null; }
+    const cursors=next?.searchParams.getAll("after")||[];
+    const cursor=cursors.length===1?clean(cursors[0]):"";
+    if (!next||next.origin!==base.origin||next.pathname!==base.pathname||next.username||next.password||next.hash||!cursor||cursor.length>512) {
+      throw paddleTransactionError("Paddle returned an invalid transaction page.","PADDLE_RECONCILIATION_INVALID_RESPONSE");
+    }
+    pageUrl=new URL(base);
+    pageUrl.searchParams.set("after",cursor);
+  }
+}
+
 async function fetchPaddleIpv4Cidrs(config,fetchImpl=globalThis.fetch) {
   const secrets=secretsByConfig.get(config);
   if (!secrets?.apiKey) throw new Error("Paddle IP verification is not configured.");
@@ -225,8 +307,9 @@ function isPaddleWebhookAddress(address,cidrs) {
 
 function validateCompletedTransaction(data,config) {
   if (!data||data.status!=="completed") return {ok:false,reason:"status"};
+  if (!validTransactionId(data.id)) return {ok:false,reason:"transaction"};
   if (data.subscription_id!=null) return {ok:false,reason:"subscription"};
-  if (data.collection_mode&&data.collection_mode!=="automatic") return {ok:false,reason:"collection"};
+  if (data.collection_mode!=="automatic") return {ok:false,reason:"collection"};
   if (!Array.isArray(data.items)||data.items.length!==1) return {ok:false,reason:"items"};
   const item=data.items[0]||{};
   const price=item.price||{};
@@ -240,7 +323,7 @@ function validateCompletedTransaction(data,config) {
 function fullRevocationFromAdjustment(data) {
   if (!data||data.status!=="approved"||data.type!=="full") return null;
   if (!new Set(["refund","chargeback"]).has(data.action)) return null;
-  const transactionId=clean(data.transaction_id);
+  const transactionId=validTransactionId(data.transaction_id);
   if (!transactionId) return null;
   return {transactionId,reason:data.action};
 }
@@ -256,6 +339,8 @@ module.exports={
   createPaddleTransaction,
   fetchPaddleTransaction,
   cancelPaddleTransaction,
+  validateCheckoutTransaction,
+  findPaddleCheckoutTransaction,
   fetchPaddleIpv4Cidrs,
   isPaddleWebhookAddress,
   validateCompletedTransaction,

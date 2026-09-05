@@ -30,6 +30,8 @@ const {
   createPaddleTransaction,
   fetchPaddleTransaction,
   cancelPaddleTransaction,
+  validateCheckoutTransaction,
+  findPaddleCheckoutTransaction,
   fetchPaddleIpv4Cidrs,
   isPaddleWebhookAddress,
   validateCompletedTransaction,
@@ -63,6 +65,7 @@ const SUPPORT_REQUESTS_PER_IP = 5;
 const SUPPORT_REQUESTS_PER_EMAIL = 4;
 const SUPPORT_REQUESTS_GLOBAL = 100;
 const ABANDONED_CHECKOUT_MS = 30 * 60 * 1000;
+const CHECKOUT_CREATION_CLAIM_MS = 60 * 1000;
 const MAX_DELETION_RECONCILIATIONS = 8;
 const MAX_BODY_BYTES = 64 * 1024;
 const MAX_WEBHOOK_BYTES = 256 * 1024;
@@ -79,6 +82,13 @@ const EMAIL_CONFIG = getEmailVerificationConfig(process.env);
 const ADMIN_EMAIL = configuredAdminEmail(process.env.ADMIN_EMAIL);
 const ENFORCE_PADDLE_IPS=String(process.env.PADDLE_ENFORCE_IP_ALLOWLIST||"").toLowerCase()==="true";
 const PADDLE_IP_CACHE_MS=6*60*60*1000;
+const PADDLE_TRANSACTION_STATUSES=new Set(["draft","ready","billed","paid","completed","canceled","past_due"]);
+const PADDLE_STATUS_EVENTS=new Set([
+  "transaction.created","transaction.ready","transaction.billed","transaction.paid",
+  "transaction.past_due","transaction.payment_failed","transaction.canceled",
+  "transaction.revised","transaction.updated"
+]);
+const PADDLE_CANCELABLE_STALE_STATUSES=new Set(["draft","ready","billed"]);
 const EXERCISE_IDS = new Set(EXERCISES.map((exercise) => exercise.id));
 const EXERCISE_BY_ID = new Map(EXERCISES.map((exercise) => [exercise.id,exercise]));
 const EQUIPMENT = [...new Set(EXERCISES.map((exercise) => exercise.equipment))];
@@ -481,6 +491,13 @@ function communityAuthorName(value) {
 function communityRevision(value,label,{allowZero=false}={}) {
   if (!Number.isSafeInteger(value)||(allowZero?value<0:value<=0)) {
     throw communityPlanError(`${label} is invalid. Refresh and try again.`,"INVALID_COMMUNITY_REVISION");
+  }
+  return value;
+}
+
+function expectedPlanRevision(value) {
+  if (!Number.isSafeInteger(value)||value<0) {
+    throw Object.assign(new Error("Your plan version is missing or invalid. Refresh and try again."),{status:400,code:"PLAN_VERSION_REQUIRED"});
   }
   return value;
 }
@@ -1353,33 +1370,202 @@ async function requestSignedInAccountAction(session,purpose) {
   }
 }
 
-async function reconcilePurchasesBeforeDeletion(userId) {
+function checkoutReconciliationError(message,code="PURCHASE_RECONCILIATION_UNAVAILABLE") {
+  return accountActionError(message,503,code);
+}
+
+async function releaseCheckoutClaim(claim,expectedTransactionId=null) {
+  if (await store.releaseCheckoutCreation(claim.user_id,claim.claim_id,expectedTransactionId)) return true;
+  // A concurrent recovery may already have removed this claim. A replacement
+  // claim (or one that gained a transaction) must be left intact and handled by
+  // the next request rather than being mistaken for successful cleanup.
+  return !(await store.checkoutCreationForUser(claim.user_id));
+}
+
+function validatePurchaseCheckoutForCancellation(remote,purchase) {
+  const checkoutId=cleanText(remote.data?.custom_data?.strata_checkout_id,100);
+  return validateCheckoutTransaction(remote.data,PAYMENT_CONFIG,{
+    userId:purchase.user_id,
+    checkoutId,
+    priceId:purchase.price_id,
+    productId:purchase.product_id
+  });
+}
+
+async function transactionForCheckoutClaim(claim) {
+  const validationOptions={
+    userId:claim.user_id,
+    checkoutId:claim.claim_id,
+    priceId:claim.price_id,
+    productId:PAYMENT_CONFIG.productId
+  };
+  let remote;
+  try {
+    remote=claim.transaction_id
+      ? await fetchPaddleTransaction(PAYMENT_CONFIG,claim.transaction_id)
+      : await findPaddleCheckoutTransaction(PAYMENT_CONFIG,{
+        ...validationOptions,
+        createdAt:Number(claim.created_at)
+      });
+  } catch {
+    throw checkoutReconciliationError("STRATA could not safely confirm an interrupted Strata+ checkout. Please try again later.");
+  }
+  if (!remote) return null;
+  const validation=validateCheckoutTransaction(remote.data,PAYMENT_CONFIG,validationOptions);
+  if (!validation.ok) {
+    throw checkoutReconciliationError("STRATA could not safely validate an interrupted Strata+ checkout. Please contact support.","PURCHASE_RECONCILIATION_INVALID");
+  }
+  if (!claim.transaction_id) {
+    const recorded=await store.recordCheckoutCreationTransaction(claim.user_id,claim.claim_id,remote.transactionId,Date.now());
+    if (!recorded) {
+      // The creator may have attached the same transaction and released the
+      // claim between our provider lookup and this write. Treat that as a
+      // successful handoff, but never accept a transaction attached elsewhere.
+      const attached=await store.purchaseByTransaction(remote.transactionId);
+      if (attached?.user_id!==claim.user_id) {
+        throw checkoutReconciliationError("The interrupted checkout changed while it was being recovered. Please try again.");
+      }
+    }
+  }
+  return remote;
+}
+
+async function recoverCheckoutCreation(claim) {
+  const remote=await transactionForCheckoutClaim(claim);
+  if (!remote) {
+    if (Number(claim.expires_at)>Date.now()) return {state:"waiting"};
+    return await releaseCheckoutClaim(claim,null)?{state:"replace"}:{state:"waiting"};
+  }
+  let purchase=await store.purchaseByTransaction(remote.transactionId);
+  if (purchase&&purchase.user_id!==claim.user_id) {
+    throw checkoutReconciliationError("STRATA could not safely attach an interrupted Strata+ checkout. Please contact support.","PURCHASE_RECONCILIATION_INVALID");
+  }
+  if (remote.status==="canceled") {
+    if (purchase) await store.updatePurchaseStatus(remote.transactionId,"canceled",Math.max(Date.now(),Number(purchase.updated_at)+1));
+    return await releaseCheckoutClaim(claim,remote.transactionId)?{state:"replace"}:{state:"waiting"};
+  }
+  if (!purchase) {
+    const createdAt=eventTime(remote.data.created_at,Number(claim.created_at)||Date.now());
+    const updatedAt=Math.max(createdAt,eventTime(remote.data.updated_at,Date.now()));
+    try {
+      purchase=await store.insertPendingPurchase({
+        transactionId:remote.transactionId,
+        userId:claim.user_id,
+        priceId:claim.price_id,
+        productId:cleanText(remote.data?.items?.[0]?.price?.product_id,100)||PAYMENT_CONFIG.productId,
+        paddleStatus:remote.status,
+        createdAt,
+        updatedAt
+      });
+    } catch(error) {
+      if (!isUniqueViolation(error)) throw error;
+      purchase=await store.purchaseByTransaction(remote.transactionId);
+    }
+  }
+  if (!purchase) {
+    return await store.activeAccountDeletion(claim.user_id,Date.now())?{state:"deletion"}:{state:"blocked"};
+  }
+  let entitled=false;
+  if (remote.status==="completed") {
+    const validation=validateCompletedTransaction(remote.data,{...PAYMENT_CONFIG,priceId:claim.price_id});
+    if (!validation.ok) throw checkoutReconciliationError("STRATA could not safely validate a completed Strata+ checkout. Please contact support.","PURCHASE_RECONCILIATION_INVALID");
+    const completedAt=eventTime(remote.data.updated_at,Date.now());
+    await store.completePurchase(remote.transactionId,{
+      customerId:cleanText(remote.data.customer_id,100)||null,
+      completedAt,
+      updatedAt:completedAt
+    });
+    entitled=await store.hasPaidDiscoveryAccess(claim.user_id);
+  } else if (purchase.paddle_status!==remote.status) {
+    await store.updatePurchaseStatus(remote.transactionId,remote.status,Math.max(Date.now(),Number(purchase.updated_at)+1));
+  }
+  const released=await releaseCheckoutClaim(claim,remote.transactionId);
+  if (remote.status==="completed") {
+    if (entitled) return {state:"entitled"};
+    return released?{state:"replace"}:{state:"waiting"};
+  }
+  if (!released) return {state:"waiting"};
+  if (remote.status==="draft"||remote.status==="ready") return {state:"transaction",transactionId:remote.transactionId};
+  return {state:"pending"};
+}
+
+async function reconcileCheckoutCreationBeforeDeletion(userId) {
+  const claim=await store.checkoutCreationForUser(userId);
+  if (!claim) return 0;
+  const remote=await transactionForCheckoutClaim(claim);
+  if (!remote) {
+    if (Number(claim.expires_at)<=Date.now()) {
+      return await releaseCheckoutClaim(claim,null)?0:1;
+    }
+    return 1;
+  }
+  const purchase=await store.purchaseByTransaction(remote.transactionId);
+  if (purchase&&purchase.user_id!==userId) {
+    throw checkoutReconciliationError("STRATA could not safely attach an interrupted Strata+ checkout. Please contact support.","PURCHASE_RECONCILIATION_INVALID");
+  }
+  if (remote.status==="canceled") {
+    if (purchase) await store.updatePurchaseStatus(remote.transactionId,"canceled",Math.max(Date.now(),Number(purchase.updated_at)+1));
+    return await releaseCheckoutClaim(claim,remote.transactionId)?0:1;
+  }
+  if (PADDLE_CANCELABLE_STALE_STATUSES.has(remote.status)) {
+    try { await cancelPaddleTransaction(PAYMENT_CONFIG,remote.transactionId); }
+    catch { throw checkoutReconciliationError("STRATA could not safely close an interrupted Strata+ checkout. Please try again later."); }
+    if (purchase) await store.updatePurchaseStatus(remote.transactionId,"canceled",Math.max(Date.now(),Number(purchase.updated_at)+1));
+    return await releaseCheckoutClaim(claim,remote.transactionId)?0:1;
+  }
+  if (remote.status==="completed") {
+    const validation=validateCompletedTransaction(remote.data,{...PAYMENT_CONFIG,priceId:claim.price_id});
+    if (!validation.ok) throw checkoutReconciliationError("STRATA could not safely validate a completed Strata+ checkout. Please contact support.","PURCHASE_RECONCILIATION_INVALID");
+    if (!purchase) throw checkoutReconciliationError("STRATA could not safely attach a completed Strata+ checkout while account deletion is pending. Please cancel deletion and contact support.","PURCHASE_RECONCILIATION_INVALID");
+    const completedAt=eventTime(remote.data.updated_at,Date.now());
+    await store.completePurchase(remote.transactionId,{
+      customerId:cleanText(remote.data.customer_id,100)||null,
+      completedAt,
+      updatedAt:completedAt
+    });
+    return await releaseCheckoutClaim(claim,remote.transactionId)?0:1;
+  }
+  await store.extendCheckoutCreation(userId,claim.claim_id,Date.now()+CHECKOUT_CREATION_CLAIM_MS,Date.now());
+  return 1;
+}
+
+async function reconcileUnsettledPurchases(userId) {
   const purchases=await store.unsettledPurchasesForUser(userId);
-  const staleBefore=Date.now()-ABANDONED_CHECKOUT_MS;
-  const stale=purchases.filter((purchase)=>Number(purchase.updated_at)<=staleBefore).slice(0,MAX_DELETION_RECONCILIATIONS);
+  const now=Date.now();
+  const staleBefore=now-ABANDONED_CHECKOUT_MS;
+  const stale=purchases.filter((purchase)=>purchase.paddle_status==="past_due"||Number(purchase.updated_at)<=staleBefore).slice(0,MAX_DELETION_RECONCILIATIONS);
   const reconciled=await Promise.allSettled(stale.map(async(purchase)=>{
     let remote;
     try { remote=await fetchPaddleTransaction(PAYMENT_CONFIG,purchase.transaction_id); }
     catch {
-      throw accountActionError("STRATA could not safely confirm an older Strata+ checkout. Nothing was deleted; please try again later.",503,"PURCHASE_RECONCILIATION_UNAVAILABLE");
+      throw accountActionError("STRATA could not safely confirm an older Strata+ checkout. Please try again later.",503,"PURCHASE_RECONCILIATION_UNAVAILABLE");
     }
+    const reconciledAt=Math.max(Date.now(),Number(purchase.updated_at)+1);
     if (remote.status==="canceled") {
-      await store.updatePurchaseStatus(purchase.transaction_id,"canceled",Date.now());
+      await store.updatePurchaseStatus(purchase.transaction_id,"canceled",reconciledAt);
       return;
     }
-    if (remote.status==="draft"||remote.status==="ready") {
+    if (PADDLE_CANCELABLE_STALE_STATUSES.has(remote.status)) {
+      const validation=validatePurchaseCheckoutForCancellation(remote,purchase);
+      if (!validation.ok) {
+        throw accountActionError("STRATA could not safely validate an abandoned Strata+ checkout. Please contact support.",503,"PURCHASE_RECONCILIATION_INVALID");
+      }
       try { await cancelPaddleTransaction(PAYMENT_CONFIG,purchase.transaction_id); }
       catch {
-        throw accountActionError("STRATA could not safely close an abandoned Strata+ checkout. Nothing was deleted; please try again later.",503,"PURCHASE_RECONCILIATION_UNAVAILABLE");
+        throw accountActionError("STRATA could not safely close an abandoned Strata+ checkout. Please try again later.",503,"PURCHASE_RECONCILIATION_UNAVAILABLE");
       }
-      await store.updatePurchaseStatus(purchase.transaction_id,"canceled",Date.now());
+      await store.updatePurchaseStatus(purchase.transaction_id,"canceled",reconciledAt);
       return;
     }
     if (remote.status==="completed") {
-      const validation=validateCompletedTransaction(remote.data,PAYMENT_CONFIG);
+      const validation=validateCompletedTransaction(remote.data,{
+        ...PAYMENT_CONFIG,
+        priceId:purchase.price_id,
+        productId:purchase.product_id
+      });
       const claimedUser=cleanText(remote.data?.custom_data?.strata_user_id,100);
       if (!validation.ok||claimedUser!==purchase.user_id) {
-        throw accountActionError("STRATA could not safely validate a completed Strata+ checkout. Nothing was deleted; please contact support.",503,"PURCHASE_RECONCILIATION_INVALID");
+        throw accountActionError("STRATA could not safely validate a completed Strata+ checkout. Please contact support.",503,"PURCHASE_RECONCILIATION_INVALID");
       }
       const completedAt=eventTime(remote.data.updated_at,Date.now());
       await store.completePurchase(purchase.transaction_id,{
@@ -1447,13 +1633,19 @@ async function deleteAccountWithToken(input) {
     if (principal?.user_id===action.user_id) {
       throw accountActionError("The primary administrator account cannot be deleted while it owns site management.",409,"ADMIN_ACCOUNT_PROTECTED");
     }
-    if (await reconcilePurchasesBeforeDeletion(action.user_id)>0) {
+    if (await reconcileCheckoutCreationBeforeDeletion(action.user_id)>0) {
+      throw accountActionError("A Strata+ checkout is still being prepared. Nothing was deleted; please try again later.",409,"CHECKOUT_PREPARING");
+    }
+    if (await reconcileUnsettledPurchases(action.user_id)>0) {
       throw accountActionError("A Strata+ payment is still being processed. Nothing was deleted; please try again later.",409,"PURCHASE_PENDING");
     }
     const emailHash=verificationEmailHash(EMAIL_CONFIG,action.email);
     const result=await store.deleteAccount(hashToken(token),Date.now(),emailHash);
     if (result.status==="purchase_pending") {
       throw accountActionError("A Strata+ payment is still being processed. Nothing was deleted; please try again later.",409,"PURCHASE_PENDING");
+    }
+    if (result.status==="checkout_pending") {
+      throw accountActionError("A Strata+ checkout is still being prepared. Nothing was deleted; please try again later.",409,"CHECKOUT_PREPARING");
     }
     if (result.status!=="deleted") throw accountActionError("This deletion link is invalid or expired. Request a new one from your account.",400,"INVALID_DELETE_LINK");
     authAudit("account_deleted",{purpose:"account_delete",email:action.email});
@@ -1711,7 +1903,11 @@ async function processPaddleEvent(event) {
   if (eventType==="transaction.completed") {
     const transactionId=cleanText(data.id,100);
     const purchase=await store.purchaseByTransaction(transactionId);
-    const validation=validateCompletedTransaction(data,PAYMENT_CONFIG);
+    const validation=validateCompletedTransaction(data,purchase?{
+      ...PAYMENT_CONFIG,
+      priceId:purchase.price_id,
+      productId:purchase.product_id
+    }:PAYMENT_CONFIG);
     const claimedUser=cleanText(data.custom_data?.strata_user_id,100);
     if (purchase&&validation.ok&&claimedUser===purchase.user_id) {
       await store.completePurchase(transactionId,{
@@ -1723,10 +1919,11 @@ async function processPaddleEvent(event) {
     } else {
       outcome=purchase?`rejected:${validation.ok?"account":validation.reason}`:"ignored:unknown-transaction";
     }
-  } else if (eventType==="transaction.canceled"||eventType==="transaction.payment_failed") {
+  } else if (PADDLE_STATUS_EVENTS.has(eventType)) {
     const transactionId=cleanText(data.id,100);
-    if (await store.purchaseByTransaction(transactionId)) {
-      await store.updatePurchaseStatus(transactionId,cleanText(data.status,40)||eventType.split(".")[1],occurredAt);
+    const transactionStatus=cleanText(data.status,40);
+    if (transactionStatus!=="completed"&&PADDLE_TRANSACTION_STATUSES.has(transactionStatus)&&await store.purchaseByTransaction(transactionId)) {
+      await store.updatePurchaseStatus(transactionId,transactionStatus,occurredAt);
       outcome="updated";
     }
   } else if (eventType==="adjustment.created"||eventType==="adjustment.updated") {
@@ -2303,26 +2500,121 @@ async function handleApi(req,res,url) {
     if (await store.hasPaidDiscoveryAccess(session.id)) {
       json(res,409,{error:"Strata+ is already unlocked for this account.",code:"ALREADY_ENTITLED"}); return;
     }
-    const pending=await store.pendingPurchaseForUser(session.id,PAYMENT_CONFIG.priceId);
-    if (pending) {
-      json(res,200,{transactionId:pending.transaction_id,reused:true}); return;
+
+    const interrupted=await store.checkoutCreationForUser(session.id);
+    if (interrupted) {
+      const recovery=await recoverCheckoutCreation(interrupted);
+      if (recovery.state==="transaction") {
+        json(res,200,{transactionId:recovery.transactionId,reused:true,recovered:true}); return;
+      }
+      if (recovery.state==="entitled") {
+        json(res,409,{error:"Strata+ is already unlocked for this account.",code:"ALREADY_ENTITLED"}); return;
+      }
+      if (recovery.state==="deletion") {
+        json(res,409,{error:"Cancel the pending account-deletion request before starting checkout.",code:"ACCOUNT_DELETION_PENDING"}); return;
+      }
+      if (recovery.state==="pending"||recovery.state==="blocked") {
+        json(res,409,{error:"A previous Strata+ payment is still being confirmed. Please wait before starting another checkout.",code:"CHECKOUT_PENDING_CONFIRMATION"}); return;
+      }
+      if (recovery.state==="waiting") {
+        json(res,409,{error:"Another checkout is already being prepared. Please try again in a moment.",code:"CHECKOUT_PREPARING"}); return;
+      }
     }
-    if (await store.pendingPurchasesForUser(session.id)>0) {
-      json(res,409,{error:"A previous Strata+ payment is still being confirmed. Please wait before starting another checkout.",code:"CHECKOUT_PENDING_CONFIRMATION"}); return;
-    }
-    const created=await createPaddleTransaction(PAYMENT_CONFIG,{userId:session.id});
-    const now=Date.now();
-    const storedPurchase=await store.insertPendingPurchase({
-      transactionId:created.transactionId,
+
+    const claimedAt=Date.now(), claimId=randomUUID();
+    const claim=await store.claimCheckoutCreation({
       userId:session.id,
       priceId:PAYMENT_CONFIG.priceId,
-      productId:PAYMENT_CONFIG.productId,
-      paddleStatus:created.status,
-      createdAt:now,
-      updatedAt:now
+      claimId,
+      expiresAt:claimedAt+CHECKOUT_CREATION_CLAIM_MS,
+      now:claimedAt
     });
-    if (!storedPurchase) { json(res,409,{error:"Checkout could not be attached because account deletion is pending. Cancel deletion and try again.",code:"ACCOUNT_DELETION_PENDING"}); return; }
-    json(res,201,{transactionId:created.transactionId}); return;
+    if (!claim) {
+      const pending=await store.pendingPurchaseForUser(session.id,PAYMENT_CONFIG.priceId);
+      if (pending) { json(res,200,{transactionId:pending.transaction_id,reused:true}); return; }
+      json(res,409,{error:"Another checkout is already being prepared. Please try again in a moment.",code:"CHECKOUT_PREPARING"}); return;
+    }
+    let preserveClaim=false,releaseTransactionId=null;
+    try {
+      if (await store.activeAccountDeletion(session.id,Date.now())) {
+        json(res,409,{error:"Cancel the pending account-deletion request before starting checkout.",code:"ACCOUNT_DELETION_PENDING"}); return;
+      }
+      if (await store.hasPaidDiscoveryAccess(session.id)) {
+        json(res,409,{error:"Strata+ is already unlocked for this account.",code:"ALREADY_ENTITLED"}); return;
+      }
+      let pending=await store.pendingPurchaseForUser(session.id,PAYMENT_CONFIG.priceId);
+      if (pending&&Number(pending.updated_at)>Date.now()-ABANDONED_CHECKOUT_MS) {
+        json(res,200,{transactionId:pending.transaction_id,reused:true}); return;
+      }
+      if (await store.pendingPurchasesForUser(session.id)>0) {
+        await reconcileUnsettledPurchases(session.id);
+        if (await store.hasPaidDiscoveryAccess(session.id)) {
+          json(res,409,{error:"Strata+ is already unlocked for this account.",code:"ALREADY_ENTITLED"}); return;
+        }
+        pending=await store.pendingPurchaseForUser(session.id,PAYMENT_CONFIG.priceId);
+        if (pending) { json(res,200,{transactionId:pending.transaction_id,reused:true}); return; }
+        if (await store.pendingPurchasesForUser(session.id)>0) {
+          json(res,409,{error:"A previous Strata+ payment is still being confirmed. Please wait before starting another checkout.",code:"CHECKOUT_PENDING_CONFIRMATION"}); return;
+        }
+      }
+
+      // From this point forward, any failure may have happened after Paddle
+      // accepted the create request. Keep the durable claim so a retry can
+      // find the transaction by its stable checkout reference before creating
+      // another payable transaction.
+      preserveClaim=true;
+      const created=await createPaddleTransaction(PAYMENT_CONFIG,{userId:session.id,checkoutId:claimId});
+      releaseTransactionId=created.transactionId;
+      const now=Date.now();
+      const recorded=await store.recordCheckoutCreationTransaction(session.id,claimId,created.transactionId,now);
+      if (!recorded) {
+        const recoveredPurchase=await store.purchaseByTransaction(created.transactionId);
+        if (recoveredPurchase?.user_id===session.id) {
+          preserveClaim=false;
+          json(res,201,{transactionId:created.transactionId,recovered:true}); return;
+        }
+        throw checkoutReconciliationError("STRATA could not safely record the prepared Strata+ checkout. Please try again later.");
+      }
+      let storedPurchase;
+      try {
+        storedPurchase=await store.insertPendingPurchase({
+          transactionId:created.transactionId,
+          userId:session.id,
+          priceId:PAYMENT_CONFIG.priceId,
+          productId:PAYMENT_CONFIG.productId,
+          paddleStatus:created.status,
+          createdAt:now,
+          updatedAt:now
+        });
+      } catch(error) {
+        if (isUniqueViolation(error)) storedPurchase=await store.purchaseByTransaction(created.transactionId);
+        if (storedPurchase?.user_id!==session.id) throw error;
+        if (!storedPurchase) throw error;
+      }
+      if (!storedPurchase) {
+        if (await store.activeAccountDeletion(session.id,Date.now())) {
+          json(res,409,{error:"Checkout could not be attached because account deletion is pending. Cancel deletion and try again.",code:"ACCOUNT_DELETION_PENDING"}); return;
+        }
+        json(res,409,{error:"A previous Strata+ payment is still being confirmed. Please wait before starting another checkout.",code:"CHECKOUT_PENDING_CONFIRMATION"}); return;
+      }
+      if (storedPurchase.user_id!==session.id) {
+        throw checkoutReconciliationError("STRATA could not safely attach the prepared Strata+ checkout. Please contact support.","PURCHASE_RECONCILIATION_INVALID");
+      }
+      preserveClaim=false;
+      json(res,201,{transactionId:created.transactionId}); return;
+    } finally {
+      try {
+        if (preserveClaim) {
+          await store.extendCheckoutCreation(session.id,claimId,Date.now()+CHECKOUT_CREATION_CLAIM_MS,Date.now());
+        } else {
+          const released=await releaseCheckoutClaim(claim,releaseTransactionId);
+          if (!released) console.error("Could not release a checkout-creation claim because its transaction binding changed; recovery will reconcile the current claim.");
+        }
+      } catch {
+        if (preserveClaim) console.error("Could not extend a checkout-creation claim; recovery will retry from its stored reference.");
+        else console.error("Could not release a checkout-creation claim; it will expire automatically.");
+      }
+    }
   }
   if (url.pathname === "/api/logout" && req.method === "POST") {
     // Logout is intentionally idempotent. Even an expired or newly blocked
@@ -2345,8 +2637,26 @@ async function handleApi(req,res,url) {
   }
   if (url.pathname === "/api/plan" && req.method === "PUT") {
     const session=await requireSession(req,res); if (!session) return;
-    const input=await bodyJson(req), plan=sanitizePlan(input.plan);
-    const saved=await store.upsertPlan(session.id,JSON.stringify(plan),Date.now());
+    const input=await bodyJson(req), expectedPlanUpdatedAt=expectedPlanRevision(input.expectedPlanUpdatedAt), plan=sanitizePlan(input.plan);
+    const saved=await store.upsertPlan(session.id,JSON.stringify(plan),Date.now(),expectedPlanUpdatedAt);
+    if (!saved) {
+      const current=await planSnapshotFor(session.id);
+      // A retry after a committed response was lost is not a conflict. The
+      // canonical plan is already stored, so return its authoritative revision
+      // and let the browser resume from it without asking for an overwrite.
+      if (JSON.stringify(current.plan)===JSON.stringify(plan)) {
+        json(res,200,{ok:true,plan:current.plan,planUpdatedAt:current.updatedAt,stats:planStats(current.plan),reused:true});
+        return;
+      }
+      json(res,409,{
+        error:"Your weekly plan changed in another tab or device. Review the latest copy before saving again.",
+        code:"PLAN_CHANGED",
+        plan:current.plan,
+        planUpdatedAt:current.updatedAt,
+        stats:planStats(current.plan)
+      });
+      return;
+    }
     json(res,200,{ok:true,plan,planUpdatedAt:Number(saved.updated_at),stats:planStats(plan)}); return;
   }
   if (url.pathname === "/api/community-plans/mine" && req.method === "GET") {

@@ -239,8 +239,16 @@
       state.checkoutOpen=true;
     }catch(error){
       if(error.status===401){location.assign("/account.html?mode=login&next=pricing");return;}
-      if(error.code==="ALREADY_ENTITLED"||error.code==="DISCOVERY_ALREADY_ACTIVE"||error.status===409){
+      if(error.code==="ALREADY_ENTITLED"||error.code==="DISCOVERY_ALREADY_ACTIVE"){
         await refreshAccess({focus:true});
+        return;
+      }
+      if(error.code==="CHECKOUT_PENDING_CONFIRMATION"){
+        await refreshAccess({focus:true});
+        return;
+      }
+      if(error.code==="CHECKOUT_PREPARING"){
+        state.actionError=error.message||"Another checkout is being prepared. Try again in a moment.";
         return;
       }
       const message=error.status===403

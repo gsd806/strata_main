@@ -23,7 +23,9 @@ let runtimeDir;
 let BASE;
 let PADDLE_BASE;
 let transactionSequence=0;
+let malformedCreateResponses=0;
 const paddleRequests=[];
+const paddleTransactions=new Map();
 
 function listen(server) {
   return new Promise((resolve,reject) => {
@@ -53,15 +55,53 @@ async function startFakePaddle() {
       return;
     }
     paddleRequests.push({method:req.method,url:req.url,headers:{...req.headers},body,raw});
-    if (req.method!=="POST"||req.url!=="/transactions") {
+    const requestUrl=new URL(req.url,"http://paddle.test");
+    if (req.method==="GET"&&requestUrl.pathname==="/transactions") {
+      res.writeHead(200,{"Content-Type":"application/json"});
+      res.end(JSON.stringify({
+        data:[...paddleTransactions.values()].reverse(),
+        meta:{pagination:{has_more:false,next:null}}
+      }));
+      return;
+    }
+    const transactionMatch=requestUrl.pathname.match(/^\/transactions\/(txn_[a-z0-9]+)$/);
+    if (req.method==="GET"&&transactionMatch) {
+      const transaction=paddleTransactions.get(transactionMatch[1]);
+      res.writeHead(transaction?200:404,{"Content-Type":"application/json"});
+      res.end(JSON.stringify(transaction?{data:transaction}:{error:{detail:"not found"}}));
+      return;
+    }
+    if (req.method!=="POST"||requestUrl.pathname!=="/transactions") {
       res.writeHead(404,{"Content-Type":"application/json"});
       res.end(JSON.stringify({error:{detail:"not found"}}));
       return;
     }
     transactionSequence+=1;
-    const id=`txn_${String(transactionSequence).padStart(24,"0")}`;
+    const id=`txn_${String(transactionSequence).padStart(26,"0")}`;
+    const now=new Date().toISOString();
+    const transaction={
+      id,
+      status:"ready",
+      customer_id:null,
+      subscription_id:null,
+      collection_mode:"automatic",
+      origin:"api",
+      created_at:now,
+      updated_at:now,
+      custom_data:body?.custom_data||null,
+      items:[{
+        quantity:Number(body?.items?.[0]?.quantity||0),
+        price:{id:body?.items?.[0]?.price_id||null,product_id:PRODUCT_ID,billing_cycle:null}
+      }]
+    };
+    paddleTransactions.set(id,transaction);
     res.writeHead(201,{"Content-Type":"application/json"});
-    res.end(JSON.stringify({data:{id,status:"ready"}}));
+    if (malformedCreateResponses>0) {
+      malformedCreateResponses-=1;
+      res.end(JSON.stringify({data:{id,status:"not-a-paddle-status"}}));
+      return;
+    }
+    res.end(JSON.stringify({data:transaction}));
   });
   PADDLE_BASE=await listen(fakePaddle);
 }
@@ -170,6 +210,10 @@ async function checkout(account) {
   });
 }
 
+function database(options={}) {
+  return new DatabaseSync(join(runtimeDir,"strata.sqlite"),options);
+}
+
 function eventId(label,sequence) {
   const safe=String(label).toLowerCase().replace(/[^a-z0-9]/g,"").slice(0,8);
   return `evt_${safe}${String(sequence).padStart(24-safe.length,"0")}`;
@@ -196,6 +240,17 @@ function completedEvent({id,transactionId,userId}) {
       }],
       details:{totals:{subtotal:"599",discount:"599",tax:"0",total:"0"}}
     }
+  };
+}
+
+function transactionStatusEvent({id,transactionId,eventType,status}) {
+  const occurredAt=new Date().toISOString();
+  return {
+    event_id:id,
+    event_type:eventType,
+    occurred_at:occurredAt,
+    notification_id:`ntf_${id.slice(4)}`,
+    data:{id:transactionId,status,updated_at:occurredAt}
   };
 }
 
@@ -309,7 +364,7 @@ test("live one-time checkout grants and revokes the Discovery entitlement secure
 
   const prepared=await checkout(account);
   assert.equal(prepared.response.status,201);
-  assert.match(prepared.data.transactionId,/^txn_[a-z0-9]{20,}$/);
+  assert.match(prepared.data.transactionId,/^txn_[a-z0-9]{26}$/);
   assert.equal(paddleRequests.length,1);
   const paddleRequest=paddleRequests[0];
   assert.equal(paddleRequest.method,"POST");
@@ -317,7 +372,9 @@ test("live one-time checkout grants and revokes the Discovery entitlement secure
   assert.equal(paddleRequest.headers.authorization,`Bearer ${API_KEY}`);
   assert.equal(paddleRequest.body.collection_mode,"automatic");
   assert.deepEqual(paddleRequest.body.items,[{price_id:PRICE_ID,quantity:1}]);
-  assert.deepEqual(paddleRequest.body.custom_data,{strata_user_id:account.user.id,strata_version:1});
+  assert.equal(paddleRequest.body.custom_data.strata_user_id,account.user.id);
+  assert.equal(paddleRequest.body.custom_data.strata_version,1);
+  assert.match(paddleRequest.body.custom_data.strata_checkout_id,/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
 
   const reused=await checkout(account);
   assert.equal(reused.response.status,200);
@@ -425,4 +482,159 @@ test("live one-time checkout grants and revokes the Discovery entitlement secure
   const revokedSecondDevice=await request("/api/discovery",{headers:{Cookie:secondDevice.cookie}});
   assert.equal(revokedFirstDevice.response.status,402);
   assert.equal(revokedSecondDevice.response.status,402);
+});
+
+test("concurrent checkout requests create only one Paddle transaction",async() => {
+  const account=await signup({
+    name:"Concurrent Checkout Tester",
+    email:"concurrent-checkout@example.test",
+    password:"concurrent-checkout-password-123"
+  });
+  const postsBefore=paddleRequests.filter((entry)=>entry.method==="POST"&&entry.url==="/transactions").length;
+  const results=await Promise.all([checkout(account),checkout(account)]);
+  const postsAfter=paddleRequests.filter((entry)=>entry.method==="POST"&&entry.url==="/transactions").length;
+
+  assert.equal(postsAfter-postsBefore,1,"parallel requests must be serialized before calling Paddle");
+  const created=results.find((result)=>result.response.status===201);
+  const concurrent=results.find((result)=>result!==created);
+  assert.ok(created,"one request should create the checkout");
+  assert.ok(
+    [200,409].includes(concurrent.response.status),
+    `unexpected concurrent response: ${concurrent.response.status} ${JSON.stringify(concurrent.data)}`
+  );
+  if (concurrent.response.status===200) {
+    assert.equal(concurrent.data.reused,true);
+    assert.equal(concurrent.data.transactionId,created.data.transactionId);
+  } else {
+    assert.equal(concurrent.data.code,"CHECKOUT_PREPARING");
+  }
+
+  const paymentFailed=await signedWebhook(transactionStatusEvent({
+    id:eventId("retry",6),
+    transactionId:created.data.transactionId,
+    eventType:"transaction.payment_failed",
+    status:"ready"
+  }));
+  assert.equal(paymentFailed.response.status,200);
+  assert.equal(paymentFailed.data.outcome,"updated","a failed attempt may leave a one-time checkout ready for retry");
+  const retry=await checkout(account);
+  assert.equal(retry.response.status,200);
+  assert.equal(retry.data.reused,true);
+  assert.equal(retry.data.transactionId,created.data.transactionId);
+});
+
+test("checkout retry recovers a transaction after Paddle returns a malformed create response",async() => {
+  const account=await signup({
+    name:"Interrupted Checkout Tester",
+    email:"interrupted-checkout@example.test",
+    password:"interrupted-checkout-password-123"
+  });
+  const postsBefore=paddleRequests.filter((entry)=>entry.method==="POST"&&entry.url==="/transactions").length;
+  const listsBefore=paddleRequests.filter((entry)=>entry.method==="GET"&&entry.url.startsWith("/transactions?")).length;
+  malformedCreateResponses=1;
+
+  const interrupted=await checkout(account);
+  assert.equal(interrupted.response.status,502);
+  assert.equal(interrupted.data.code,"PADDLE_INVALID_RESPONSE");
+
+  const createRequests=paddleRequests
+    .filter((entry)=>entry.method==="POST"&&entry.url==="/transactions")
+    .slice(postsBefore);
+  assert.equal(createRequests.length,1);
+  const createBody=createRequests[0].body;
+  assert.equal(createBody.custom_data.strata_user_id,account.user.id);
+  assert.match(createBody.custom_data.strata_checkout_id,/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+  const providerTransaction=[...paddleTransactions.values()].find(
+    (transaction)=>transaction.custom_data?.strata_checkout_id===createBody.custom_data.strata_checkout_id
+  );
+  assert.ok(providerTransaction,"the fake provider should retain the transaction despite its malformed response");
+
+  const recovered=await checkout(account);
+  assert.equal(recovered.response.status,200);
+  assert.equal(recovered.data.reused,true);
+  assert.equal(recovered.data.recovered,true);
+  assert.equal(recovered.data.transactionId,providerTransaction.id);
+  assert.equal(
+    paddleRequests.filter((entry)=>entry.method==="POST"&&entry.url==="/transactions").length-postsBefore,
+    1,
+    "recovery must not create a second Paddle transaction"
+  );
+  const recoveryLists=paddleRequests
+    .filter((entry)=>entry.method==="GET"&&entry.url.startsWith("/transactions?"))
+    .slice(listsBefore);
+  assert.equal(recoveryLists.length,1);
+  const recoveryUrl=new URL(recoveryLists[0].url,"http://paddle.test");
+  assert.equal(recoveryUrl.pathname,"/transactions");
+  assert.ok(recoveryUrl.searchParams.get("created_at[GTE]"));
+  assert.ok(recoveryUrl.searchParams.get("created_at[LTE]"));
+  assert.equal(recoveryUrl.searchParams.get("origin"),"api");
+  assert.equal(recoveryUrl.searchParams.get("collection_mode"),"automatic");
+  assert.equal(recoveryUrl.searchParams.get("subscription_id"),"null");
+  assert.equal(recoveryUrl.searchParams.get("order_by"),"created_at[ASC]");
+});
+
+test("completed checkout recovery reports entitlement only after durable access exists",async() => {
+  const entitled=await signup({
+    name:"Completed Recovery Tester",
+    email:"completed-recovery@example.test",
+    password:"completed-recovery-password-123"
+  });
+  malformedCreateResponses=1;
+  const interruptedEntitled=await checkout(entitled);
+  assert.equal(interruptedEntitled.response.status,502);
+  const entitledRemote=[...paddleTransactions.values()].find(
+    (transaction)=>transaction.custom_data?.strata_user_id===entitled.user.id
+  );
+  assert.ok(entitledRemote);
+  entitledRemote.status="completed";
+  entitledRemote.customer_id="ctm_000000000000000000000002";
+  entitledRemote.updated_at=new Date().toISOString();
+
+  const completedRecovery=await checkout(entitled);
+  assert.equal(completedRecovery.response.status,409);
+  assert.equal(completedRecovery.data.code,"ALREADY_ENTITLED");
+  assert.equal((await request("/api/me",{headers:{Cookie:entitled.cookie}})).data.user.discovery.active,true);
+
+  const revoked=await signup({
+    name:"Revoked Recovery Tester",
+    email:"revoked-recovery@example.test",
+    password:"revoked-recovery-password-123"
+  });
+  const postsBefore=paddleRequests.filter((entry)=>entry.method==="POST"&&entry.url==="/transactions").length;
+  malformedCreateResponses=1;
+  const interruptedRevoked=await checkout(revoked);
+  assert.equal(interruptedRevoked.response.status,502);
+  const revokedRemote=[...paddleTransactions.values()].find(
+    (transaction)=>transaction.custom_data?.strata_user_id===revoked.user.id
+  );
+  assert.ok(revokedRemote);
+  revokedRemote.status="completed";
+  revokedRemote.customer_id="ctm_000000000000000000000003";
+  revokedRemote.updated_at=new Date().toISOString();
+  const now=Date.now();
+  {
+    const db=database();
+    db.prepare(`INSERT INTO paddle_purchases
+      (transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at)
+      VALUES(?,?,?,?,?,'completed',?,?,?, ?,?)`).run(
+      revokedRemote.id,revoked.user.id,PRICE_ID,PRODUCT_ID,revokedRemote.customer_id,
+      now,now,"refund",now,now
+    );
+    db.close();
+  }
+
+  const replacement=await checkout(revoked);
+  assert.equal(replacement.response.status,201,"a completed but revoked recovery must proceed to a new checkout");
+  assert.notEqual(replacement.data.transactionId,revokedRemote.id);
+  assert.equal(
+    paddleRequests.filter((entry)=>entry.method==="POST"&&entry.url==="/transactions").length-postsBefore,
+    2,
+    "the interrupted transaction and its replacement should be the only provider creates"
+  );
+  assert.equal((await request("/api/me",{headers:{Cookie:revoked.cookie}})).data.user.discovery.active,false);
+  {
+    const db=database({readOnly:true});
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM paddle_checkout_claims WHERE user_id=?").get(revoked.user.id).count,0);
+    db.close();
+  }
 });

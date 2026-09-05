@@ -1,8 +1,8 @@
 # STRATA — Exercise Rankings and Workout Planning
 
-STRATA is an evidence-informed workout index with server-backed, email-verified accounts, a private Strata+ studio, and weekly, community, and monthly workout planning. It includes 200 resistance-training exercises—25 per muscle group, including 50 bodyweight options—across 8 muscle groups and 26 sub-muscle targets. Build 6.9.4 is an installable Progressive Web App (PWA) with Resend-powered account email, Paddle-powered one-time Strata+ access, and a private owner dashboard.
+STRATA is an evidence-informed workout index with server-backed, email-verified accounts, a private Strata+ studio, and weekly, community, and monthly workout planning. It includes 200 resistance-training exercises—25 per muscle group, including 50 bodyweight options—across 8 muscle groups and 26 sub-muscle targets. Build 6.9.5 is an installable Progressive Web App (PWA) with Resend-powered account email, Paddle-powered one-time Strata+ access, and a private owner dashboard.
 
-**Build 6.9.4 is a product-wide usability and accessibility release.** It improves information hierarchy, filter clarity, readable type, touch targets, keyboard focus, loading and error feedback, mobile safe-area behavior, and offline recovery across the public index, Strata+ Studio, weekly planner, accounts, support, installation, and administration. The planner now exposes an explicit quick-add day, a real failed-save retry, an entitlement-aware Strata+ action, and a useful recovery-day recommendation. Community-plan actions now state clearly when they replace the current week, and administrator account controls remain locked until authoritative detail has loaded.
+**Build 6.9.5 hardens plan sync, checkout recovery, and repository delivery.** Account plan writes now compare an explicit revision so two tabs or devices cannot silently overwrite each other; the planner preserves both copies and asks whether to keep the latest account week or review and explicitly save local changes. Paddle checkout creation now uses a durable per-account claim and stable recovery identifier so parallel requests, interrupted provider responses, failed payments, and deletion reconciliation cannot create duplicate payable transactions or discard an unresolved one. This release also adds a reproducible Node 24/npm lockfile setup, an environment template, secret-safe ignore rules, and required CI coverage for tests and browser-free runtime QA.
 
 The community weekly plans introduced in Build 6.9.3 remain included. Any signed-in member can publish a structured copy of their current saved week from the Plan page and later unpublish their own listing. Strata+ members can browse those plans and deliberately apply one to Plan; applying replaces the member's current saved week after an explicit confirmation. A shared listing shows the author's STRATA display name, never their email address. STRATA stores validated plan data rather than accepting binary file uploads.
 
@@ -25,7 +25,7 @@ This build retains the Build 6.7.5 account-security work: password reset and ema
 
 ## Project structure
 
-Build 6.9.4 separates browser files from private server code while preserving every public URL used by visitors, Paddle, Render, and installed PWAs:
+Build 6.9.5 separates browser files from private server code while preserving every public URL used by visitors, Paddle, Render, and installed PWAs:
 
 ```text
 server.js          Small root bootstrap used by `npm start`
@@ -61,7 +61,7 @@ The PWA caches only public interface assets and an offline explanation page. Acc
 
 ## Public pricing, support, and policies
 
-Build 6.9.4 has public, mobile-friendly pages at `/pricing`, `/contact`, `/terms`, `/privacy`, and `/refunds`. The homepage links to all five without requiring JavaScript or an account. `/contact` submits help requests into Turso and sends acknowledgments and reference-only owner notifications through Resend; the full message stays in the private Admin help desk. Durable one-way IP/email quotas, a honeypot, and secret/card detection protect the form across Render restarts. If the form is unavailable, the public mail link still works.
+Build 6.9.5 has public, mobile-friendly pages at `/pricing`, `/contact`, `/terms`, `/privacy`, and `/refunds`. The homepage links to all five without requiring JavaScript or an account. `/contact` submits help requests into Turso and sends acknowledgments and reference-only owner notifications through Resend; the full message stays in the private Admin help desk. Durable one-way IP/email quotas, a honeypot, and secret/card detection protect the form across Render restarts. If the form is unavailable, the public mail link still works.
 
 The homepage also includes an **About the Founder** section for Saeed Abdalla Alketbi, describing STRATA’s UAE roots and the engineering mindset behind the project. It intentionally publishes only the city-level location `Al Ain, UAE`; do not add a residential street address to the public site.
 
@@ -82,7 +82,7 @@ ADMIN_EMAIL=stratafitness.official@gmail.com
 SUPPORT_EMAIL=stratafitness.official@gmail.com
 ```
 
-To activate the owner account after deploying Build 6.9.4:
+To activate the owner account after deploying Build 6.9.5:
 
 1. If `stratafitness.official@gmail.com` already has a verified STRATA account, deploy and sign in again. Startup binds that immutable user ID as the primary administrator, revokes older sessions, and invalidates any recovery or deletion links issued before promotion.
 2. If it has no STRATA account, create one with that exact address, complete the six-digit email verification, then sign out and sign back in once. The first verified login securely claims the empty administrator slot.
@@ -150,7 +150,7 @@ PADDLE_ENFORCE_IP_ALLOWLIST=false
 
 The live checkout has already passed an end-to-end test, so the current production service may keep `PADDLE_CHECKOUT_ENABLED=true`. For a fresh or unverified Paddle setup, begin with `false`, finish the webhook test, and enable checkout only after the signed notification grants access correctly. An existing deployment whose signup email already works should keep `EMAIL_VERIFICATION_ENABLED=true`; the same verified Resend configuration powers verification, password reset, account deletion, support acknowledgments, support notifications, and administrator replies. Build 6.9.1 adds only the non-secret `ADMIN_EMAIL` and `SUPPORT_EMAIL` settings shown above.
 
-`EMAIL_VERIFICATION_ENABLED` must be spelled exactly and set explicitly to `true` or `false`; Build 6.9.4 refuses to start in production if the value is absent or invalid. Do not set `ALLOW_UNVERIFIED_SIGNUP_FOR_TESTS` in Render. That test-only escape hatch is accepted only when `NODE_ENV=test` and cannot enable production signup.
+`EMAIL_VERIFICATION_ENABLED` must be spelled exactly and set explicitly to `true` or `false`; Build 6.9.5 refuses to start in production if the value is absent or invalid. Do not set `ALLOW_UNVERIFIED_SIGNUP_FOR_TESTS` in Render. That test-only escape hatch is accepted only when `NODE_ENV=test` and cannot enable production signup.
 
 `TRUST_PROXY=true` tells the login limiter to use the client address supplied by Render's trusted reverse proxy instead of treating every proxied request as one visitor. Do not enable it when exposing the Node process directly to the public internet.
 
@@ -162,7 +162,7 @@ Do not add `STRATA_DATA_DIR` and do not add a Render disk. Save the variables an
 
 Open these URLs on the deployed site before testing signup:
 
-- `/api/status` should return JSON containing `"build":"6.9.4"`, `"storage":"turso"`, `"persistent":true`, `"emailVerificationEnabled":true`, `"emailVerificationConfigured":true`, `"passwordResetEnabled":true`, `"accountDeletionEnabled":true`, and `"adminConfigured":true`. The response exposes readiness booleans only, never the administrator address or any credential value.
+- `/api/status` should return JSON containing `"build":"6.9.5"`, `"storage":"turso"`, `"persistent":true`, `"emailVerificationEnabled":true`, `"emailVerificationConfigured":true`, `"passwordResetEnabled":true`, `"accountDeletionEnabled":true`, and `"adminConfigured":true`. The response exposes readiness booleans only, never the administrator address or any credential value.
 - `/healthz` should return HTTP `200` with `{"ok":true}`.
 - A `404` or an HTML page means the project is not running as the Node Web Service.
 - `/api/status` succeeding while `/healthz` returns `503` means Render cannot currently query Turso; recheck the database URL, token, and Turso database availability.
@@ -211,9 +211,9 @@ EMAIL_REPLY_TO=stratafitness.official@gmail.com
 EMAIL_VERIFICATION_SECRET=<the independent random value>
 ```
 
-If these exact settings are already working in Build 6.7.1, keep them unchanged while deploying 6.9.4. Startup creates the new tables and columns before the server begins accepting requests, so a separate database reset or email-off migration deploy is not required. After the deploy:
+If these exact settings are already working in Build 6.7.1, keep them unchanged while deploying 6.9.5. Startup creates the new tables and columns before the server begins accepting requests, so a separate database reset or email-off migration deploy is not required. After the deploy:
 
-1. Confirm `/healthz` still returns HTTP `200` and `/api/status` reports Build 6.9.4 with Turso persistent, every account-email flag `true`, and `adminConfigured:true`.
+1. Confirm `/healthz` still returns HTTP `200` and `/api/status` reports Build 6.9.5 with Turso persistent, every account-email flag `true`, and `adminConfigured:true`.
 2. Sign in to one existing account and confirm its planner and Strata+ entitlement are unchanged.
 3. Confirm the Resend domain is verified and the API key, From address, Reply-To address, and HMAC secret remain present in Render.
 
@@ -241,7 +241,7 @@ Password reset is available from both account states:
 
 Each reset email contains a random, one-time link that expires after 30 minutes. The bearer token is placed in the URL fragment, removed from the address bar immediately by the reset page, and stored only as a SHA-256 hash in Turso. After the user enters a new 10–128 character password, STRATA stores a new per-user salted scrypt hash, increments `auth_version`, invalidates every old session and pending account-action link, and requires a fresh sign-in. The version check also prevents a login that verified the old password just before reset from creating a surviving session afterward.
 
-Account deletion starts only from the signed-in **Account Security** panel. STRATA sends the confirmation link to the account’s registered email. Opening that link is read-only: deletion requires a second explicit submit with the exact word `DELETE`. A pending request can be canceled from the Account page, and checkout cannot start while deletion is pending. Requesting or opening the email never changes a Paddle transaction; payment reconciliation occurs only after the owner submits `DELETE`. A recent or processing Paddle payment then blocks deletion so a late payment cannot be detached from its account. When an abandoned local checkout is more than 30 minutes old, STRATA checks its live Paddle state and cancels it only if it is still `draft` or `ready`. A valid remote completion repairs a missed local completion before deletion proceeds; paid, billed, past-due, malformed, unknown, or unreachable states fail closed.
+Account deletion starts only from the signed-in **Account Security** panel. STRATA sends the confirmation link to the account’s registered email. Opening that link is read-only: deletion requires a second explicit submit with the exact word `DELETE`. A pending request can be canceled from the Account page, and checkout cannot start while deletion is pending. Requesting or opening the email never changes a Paddle transaction; payment reconciliation occurs only after the owner submits `DELETE`. A recent or processing Paddle payment then blocks deletion so a late payment cannot be detached from its account. When an abandoned local checkout is more than 30 minutes old, STRATA checks its live Paddle state and cancels it only if Paddle reports a cancelable `draft`, `ready`, or `billed` status and confirms the cancellation. A valid remote completion repairs a missed local completion before deletion proceeds; paid, past-due, malformed, unknown, or unreachable states fail closed.
 
 Completed deletion permanently removes the local user, sessions, planner, preferences, ratings, account-action data, and local Paddle purchase/entitlement mapping. It does not erase Paddle’s independent merchant-of-record records and does not issue a refund. A newly created account using the same email receives a new user ID and does not inherit Strata+; request any eligible refund before deleting. Test deletion only with a disposable account, not an account whose data or purchase access you need.
 
@@ -302,6 +302,8 @@ URL: https://stratafitness.online/api/paddle/webhook
 Events:
   transaction.completed
   transaction.canceled
+  transaction.paid
+  transaction.past_due
   transaction.payment_failed
   adjustment.created
   adjustment.updated
@@ -309,7 +311,7 @@ Events:
 
 Copy the destination's endpoint signing secret into Render as `PADDLE_WEBHOOK_SECRET`. Reuse this destination after it exists—do not delete and recreate it as cleanup, because that changes the signing secret and stops STRATA from accepting future notifications. On a new integration, redeploy while `PADDLE_CHECKOUT_ENABLED` remains `false`; the already-tested live deployment keeps it `true`.
 
-STRATA verifies the `Paddle-Signature` HMAC against the exact raw request body before processing an event. It records webhook event IDs for idempotency, validates the live product and price before granting access, and treats refund/chargeback adjustments as entitlement changes. Paddle's [signature-verification guide](https://developer.paddle.com/webhooks/about/signature-verification) explains why the raw body and signing secret must be preserved.
+STRATA verifies the `Paddle-Signature` HMAC against the exact raw request body before processing an event. It records webhook event IDs for idempotency, validates the live product and price before granting access, and treats refund/chargeback adjustments as entitlement changes. Payment-status events keep the local purchase ledger current. A failed attempt that remains `ready` reuses the same checkout; only stale `draft`, `ready`, or `billed` transactions are canceled after Paddle validates ownership and catalog metadata and confirms their cancellation, while unresolved `paid` or `past_due` transactions stay blocked. Every create attempt also carries a durable server checkout reference, so a retry searches Paddle for an interrupted transaction before it can create another. Paddle's [signature-verification guide](https://developer.paddle.com/webhooks/about/signature-verification) explains why the raw body and signing secret must be preserved.
 
 On Render, keep `PADDLE_ENFORCE_IP_ALLOWLIST=false`. During the live test, Render's proxy did not expose Paddle's source address in a form that matched Paddle's published CIDRs, so enabling the optional allowlist rejected genuine notifications with HTTP `403`. This setting disables only the additional source-IP filter. STRATA still rejects every webhook without a valid `Paddle-Signature` HMAC calculated over the exact raw request body using the private `PADDLE_WEBHOOK_SECRET`. A host that reliably preserves the originating IP may opt into the dynamically fetched allowlist after testing it.
 
