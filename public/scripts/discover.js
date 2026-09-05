@@ -2,6 +2,8 @@
 
 const Core=globalThis.StrataDiscovery;
 if(!Core)throw new Error("The Strata+ engine did not load.");
+const Monthly=globalThis.StrataMonthlyPlan;
+if(!Monthly)throw new Error("The Strata+ monthly-plan engine did not load.");
 const GROUP_LABELS={chest:"Chest",back:"Back",shoulders:"Shoulders",arms:"Arms",legs:"Legs",glutes:"Glutes",calves:"Calves",core:"Core"};
 const PREFERENCE_OPTIONS={stable:"Stable setup","long-range":"Long-range friendly","simple-setup":"Simple setup",compound:"Compound lifts",isolation:"Isolation work"};
 const LIMITATION_OPTIONS={"no-overhead":"Avoid overhead positions","no-deep-knee":"Avoid deep knee flexion","no-unsupported-hinge":"Avoid unsupported hinges","no-floor":"Avoid floor exercises","no-unilateral":"Avoid unilateral work"};
@@ -15,9 +17,10 @@ const FEATURE_CONFIG=Object.freeze({
   explorer:{panelId:"exerciseExplorer",headingId:"explorerTitle",label:"Explore and rate"},
   battle:{panelId:"battle",headingId:"battleTitle",label:"Exercise battle"},
   profile:{panelId:"profile",headingId:"profileTitle",label:"Tune my ranking"},
+  monthly:{panelId:"monthlyPlan",headingId:"monthlyPlanTitle",label:"31-day plan"},
   methodology:{panelId:"methodology",headingId:"methodTitle",label:"FitScore method"}
 });
-const state={exercises:[],methodology:null,sources:[],limited:new Set(),preferences:null,user:null,csrfToken:"",aggregate:new Map(),userRatings:new Map(),ratingsRefreshedAt:0,ratingsRefreshPromise:null,compare:[],collection:"all",query:"",group:"all",equipment:"all",pattern:"all",level:"all",sort:"personal",recommendations:[],activeExercise:null,activeFeature:null,explorerLimit:EXPLORER_DESKTOP_PAGE_SIZE};
+const state={exercises:[],methodology:null,sources:[],limited:new Set(),preferences:null,user:null,csrfToken:"",aggregate:new Map(),userRatings:new Map(),ratingsRefreshedAt:0,ratingsRefreshPromise:null,compare:[],collection:"all",query:"",group:"all",equipment:"all",pattern:"all",level:"all",sort:"personal",recommendations:[],activeExercise:null,activeFeature:null,explorerLimit:EXPLORER_DESKTOP_PAGE_SIZE,weeklyPlan:null,monthlyPlan:null,monthlySchedule:null,monthlySource:"muscle-schedule"};
 const el=(id)=>document.getElementById(id);
 
 async function api(path,options={}) {
@@ -314,6 +317,115 @@ function syncDialogState(){document.body.classList.toggle("dialog-open",Boolean(
 function closeDialog(id){const dialog=el(id);if(dialog?.open)dialog.close();syncDialogState();}
 let toastTimer;function showToast(message){const toast=el("toast");toast.textContent=message;toast.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove("show"),2200);}
 
+function blankMonthlySchedule(){
+  const training={Monday:["chest","triceps"],Wednesday:["back","biceps"],Friday:["legs","glutes"],Saturday:["shoulders","core"]};
+  return Object.fromEntries(Monthly.DAYS.map((day)=>[day,{rest:!training[day],targets:training[day]||[],sourceItems:[]}]))
+}
+function copyMonthlyValue(value){return JSON.parse(JSON.stringify(value));}
+function weeklyPlanCount(plan){return Monthly.DAYS.reduce((total,day)=>total+(Array.isArray(plan?.days?.[day])?plan.days[day].length:0),0);}
+function localIsoDate(){const date=new Date(),part=(value)=>String(value).padStart(2,"0");return `${date.getFullYear()}-${part(date.getMonth()+1)}-${part(date.getDate())}`;}
+function friendlyMonthlyDate(value){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(value||"")))return "";
+  const date=new Date(`${value}T12:00:00`);
+  return Number.isNaN(date.getTime())?"":new Intl.DateTimeFormat(undefined,{weekday:"short",month:"short",day:"numeric",year:"numeric"}).format(date);
+}
+function updateMonthlyDateRange(){
+  const start=el("monthlyStartDate")?.value;
+  try{const end=Monthly.addUtcDays(start,30);el("monthlyEndDate").value=end;el("monthlyDateHelp").textContent=`31 consecutive days: ${friendlyMonthlyDate(start)} – ${friendlyMonthlyDate(end)}.`;}
+  catch{el("monthlyEndDate").value="";el("monthlyDateHelp").textContent="Choose a valid starting date.";}
+}
+function setMonthlyValidation(message=""){const node=el("monthlyValidation");node.textContent=message;node.hidden=!message;}
+function monthlyTargetMarkup(day,target,selected,disabled){
+  const id=`monthly-${day.toLowerCase()}-${target.key}`;
+  return `<label class="monthly-target-chip" for="${id}"><input id="${id}" type="checkbox" value="${escapeHtml(target.key)}" data-monthly-target ${selected?"checked":""} ${disabled?"disabled":""}/><span>${escapeHtml(target.label)}</span></label>`;
+}
+function renderMonthlySchedule(schedule=state.monthlySchedule){
+  state.monthlySchedule=copyMonthlyValue(schedule||blankMonthlySchedule());
+  el("monthlySchedule").innerHTML=Monthly.DAYS.map((day,index)=>{
+    const config=state.monthlySchedule[day]||{rest:true,targets:[],sourceItems:[]},rest=Boolean(config.rest),sourceCount=Array.isArray(config.sourceItems)?config.sourceItems.length:0;
+    return `<fieldset class="monthly-weekday-card ${rest?"is-rest":""}" data-monthly-day="${day}"><legend class="sr-only">${day} schedule</legend><div class="monthly-weekday-head"><h3>${String(index+1).padStart(2,"0")} / ${day}</h3><label class="monthly-rest-toggle"><input type="checkbox" data-monthly-rest ${rest?"checked":""}/><span>${rest?"Rest day":"Training day"}</span></label></div><div class="monthly-target-grid" aria-label="Muscle groups for ${day}">${Monthly.TARGETS.map((target)=>monthlyTargetMarkup(day,target,config.targets.includes(target.key),rest)).join("")}</div><p class="monthly-day-note">${sourceCount?`${sourceCount} exercise${sourceCount===1?"":"s"} copied from your week. Editing this day lets Strata+ choose new exercises.`:rest?"Recovery day · no exercises will be scheduled.":"Choose up to four muscle groups."}</p></fieldset>`;
+  }).join("");
+}
+function readMonthlySchedule(){
+  const schedule={};
+  for(const day of Monthly.DAYS){
+    const card=document.querySelector(`[data-monthly-day="${day}"]`),rest=Boolean(card?.querySelector("[data-monthly-rest]")?.checked);
+    const targets=rest?[]:[...card.querySelectorAll("[data-monthly-target]:checked")].map((input)=>input.value);
+    if(!rest&&!targets.length)throw new Error(`${day} needs at least one muscle group or must be marked as rest.`);
+    if(targets.length>4)throw new Error(`${day} can use at most four muscle groups.`);
+    schedule[day]={rest,targets,sourceItems:rest?[]:copyMonthlyValue(state.monthlySchedule?.[day]?.sourceItems||[])};
+  }
+  if(!Monthly.DAYS.some((day)=>!schedule[day].rest))throw new Error("Choose at least one training day.");
+  return Monthly.normalizeSchedule(schedule,state.exercises);
+}
+function setMonthlySource(plan,label,source="weekly"){
+  try{
+    const normalized=Monthly.normalizeWeeklyPlan(plan,state.exercises),count=weeklyPlanCount(normalized);
+    if(!count)throw new Error("That weekly plan is empty. Add exercises first or build the split manually.");
+    state.monthlySource=source;state.monthlySchedule=Monthly.scheduleFromWeeklyPlan(normalized,state.exercises);renderMonthlySchedule();
+    document.querySelectorAll(".monthly-source-actions button").forEach((button)=>{const active=(label.includes("account")&&button.id==="monthlySourceAccount")||(label.includes("device")&&button.id==="monthlySourceGuest")||(label.includes("file")&&button.id==="monthlyFileButton");button.classList.toggle("active",active);button.setAttribute("aria-pressed",String(active));});
+    setMonthlyValidation();el("monthlyPlanStatus").textContent=`${label} copied as a private snapshot · ${count} exercises.`;
+    showToast(`${label} loaded.`);
+  }catch(error){setMonthlyValidation(error.message);showToast(error.message);}
+}
+function deviceGuestPlan(){
+  try{const raw=localStorage.getItem("strata_guest_plan_v1");return raw?Monthly.normalizeWeeklyPlan(JSON.parse(raw),state.exercises):null;}
+  catch{return null;}
+}
+function updateMonthlySourceButtons(){
+  const accountCount=weeklyPlanCount(state.weeklyPlan),guest=deviceGuestPlan(),guestCount=weeklyPlanCount(guest);
+  const accountButton=el("monthlySourceAccount"),guestButton=el("monthlySourceGuest");
+  if(accountButton){accountButton.disabled=!accountCount;accountButton.textContent=accountCount?`Use saved weekly plan (${accountCount})`:"Saved weekly plan is empty";accountButton.title=accountCount?`Copy ${accountCount} saved exercises`:"Add exercises in the free weekly planner first";}
+  if(guestButton){guestButton.hidden=!guestCount;guestButton.disabled=!guestCount;guestButton.textContent=`Use this device’s plan (${guestCount})`;guestButton.title=guestCount?`Copy ${guestCount} exercises saved on this device`:"";}
+}
+function monthlyExerciseMarkup(item){
+  const exercise=exerciseById(item.exerciseId);
+  if(!exercise)return"";
+  const target=Monthly.inferTarget(exercise),label=Monthly.TARGET_LABELS[target]||GROUP_LABELS[exercise.group]||titleCase(exercise.group);
+  return `<li><strong>${escapeHtml(exercise.name)}<small>${escapeHtml(label)} · ${escapeHtml(exercise.equipment)}</small></strong><span>${escapeHtml(item.sets)} sets × ${escapeHtml(item.reps)}<small>${escapeHtml(exercise.rest)} rest</small></span></li>`;
+}
+function renderMonthlyPlan(plan,{announce=false}={}){
+  state.monthlyPlan=plan||null;
+  if(!plan){el("monthlyResults").hidden=true;return;}
+  const workoutDays=plan.days.filter((day)=>!day.rest).length,restDays=plan.days.length-workoutDays,totalExercises=plan.days.reduce((sum,day)=>sum+day.exercises.length,0);
+  el("monthlyResultsTitle").textContent=plan.title;
+  el("monthlySummary").innerHTML=`<div><span>Plan</span><strong>31 days</strong></div><div><span>Training</span><strong>${workoutDays}</strong></div><div><span>Rest</span><strong>${restDays}</strong></div><div><span>Exercises</span><strong>${totalExercises}</strong></div>`;
+  el("monthlyDays").innerHTML=plan.days.map((day)=>`<article class="monthly-day-card ${day.rest?"is-rest":""}" data-rest="${day.rest}"><header class="monthly-day-head"><span class="monthly-day-number">Day ${String(day.dayNumber).padStart(2,"0")}</span><time datetime="${escapeHtml(day.date)}">${escapeHtml(friendlyMonthlyDate(day.date))}</time></header><h4>${escapeHtml(day.weekday)}</h4>${day.rest?'<p class="monthly-rest-copy"><strong>REST / RECOVERY</strong><br />Keep the day clear or use gentle movement.</p>':`<p class="monthly-day-targets">${day.targets.map((target)=>escapeHtml(Monthly.TARGET_LABELS[target]||titleCase(target))).join(" + ")}</p><ol class="monthly-exercise-list">${day.exercises.map(monthlyExerciseMarkup).join("")}</ol>`}</article>`).join("");
+  el("monthlyResults").hidden=false;
+  if(announce){el("monthlyPlanStatus").textContent=`31-day plan ready and saved to your account. ${workoutDays} training days and ${restDays} rest days.`;el("monthlyResults").scrollIntoView?.({behavior:window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches?"auto":"smooth",block:"start"});}
+}
+function populateMonthlyBuilder(plan=null){
+  el("monthlyTitle").value=plan?.title||"My 31-day Strata plan";
+  el("monthlyStartDate").value=plan?.startDate||localIsoDate();
+  el("monthlyExercisesPerTarget").value=String(plan?.exercisesPerTarget||2);
+  state.monthlySource=plan?.source||"muscle-schedule";
+  renderMonthlySchedule(plan?.schedule||blankMonthlySchedule());updateMonthlyDateRange();updateMonthlySourceButtons();renderMonthlyPlan(plan);
+  el("monthlyPlanStatus").textContent=plan?"Your saved 31-day plan is ready on this account.":"Choose your split, start date, and rest days.";
+}
+function downloadTextFile(text,filename,type="text/plain"){
+  const blob=new Blob([text],{type}),url=URL.createObjectURL(blob),link=document.createElement("a");
+  link.href=url;link.download=filename;link.hidden=true;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+async function shareMonthlyPlan(){
+  if(!state.monthlyPlan)return;
+  const text=Monthly.shareText(state.monthlyPlan,state.exercises),title=state.monthlyPlan.title||"My STRATA 31-day plan";
+  try{
+    if(typeof File==="function"&&navigator.share){
+      const file=new File([text],"strata-31-day-plan.txt",{type:"text/plain"});
+      if(navigator.canShare?.({files:[file]})){await navigator.share({title,text:"My private STRATA workout plan",files:[file]});showToast("Plan shared.");return;}
+      await navigator.share({title,text});showToast("Plan shared.");return;
+    }
+    if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(text);showToast("Plan copied to your clipboard.");return;}
+    downloadTextFile(text,"strata-31-day-plan.txt");showToast("Share file downloaded.");
+  }catch(error){if(error?.name!=="AbortError"){downloadTextFile(text,"strata-31-day-plan.txt");showToast("Sharing was unavailable, so a plan file was downloaded.");}}
+}
+function printMonthlyPlan(){
+  if(!state.monthlyPlan)return;
+  document.body.classList.add("print-monthly-plan");
+  const finish=()=>document.body.classList.remove("print-monthly-plan");
+  window.addEventListener?.("afterprint",finish,{once:true});window.print?.();setTimeout(finish,750);
+}
+
 function cardLines(kind,id){
   if(kind==="exercise"){
     const exercise=exerciseById(id),personal=personalResult(exercise);return {eyebrow:`${GROUP_LABELS[exercise.group]||titleCase(exercise.group)} / ${exercise.sub}`,title:exercise.name,score:`${exercise.score}`,scoreLabel:"OFFICIAL FITSCORE",lines:[personalLabel(personal,{long:true}),`${exercise.equipment} · ${exercise.pattern}`,exercise.why],footer:"Evidence-aware Strata+ comparison"};
@@ -360,6 +472,51 @@ profileForm.addEventListener("submit",async(event)=>{
   catch(error){el("profileStatus").textContent=error.message;showToast(error.message);}
   finally{profileForm.dataset.saving="false";controls.forEach((control)=>{control.disabled=false;});}
 });
+
+const monthlyPlanForm=el("monthlyPlanForm");
+monthlyPlanForm.addEventListener("submit",async(event)=>{
+  event.preventDefault();if(monthlyPlanForm.dataset.saving==="true")return;
+  const button=el("generateMonthlyPlan");setMonthlyValidation();
+  try{
+    const schedule=readMonthlySchedule(),generated={...Monthly.generateMonthPlan({title:el("monthlyTitle").value,startDate:el("monthlyStartDate").value,exercisesPerTarget:Number(el("monthlyExercisesPerTarget").value),schedule,exercises:state.exercises,preferences:state.preferences}),source:state.monthlySource};
+    monthlyPlanForm.dataset.saving="true";monthlyPlanForm.setAttribute("aria-busy","true");button.disabled=true;el("monthlyPlanStatus").textContent="Choosing exercises and saving your month…";
+    const result=await api("/api/monthly-plan",{method:"PUT",body:JSON.stringify({monthlyPlan:generated})});
+    state.monthlySchedule=copyMonthlyValue(result.monthlyPlan.schedule);renderMonthlyPlan(result.monthlyPlan,{announce:true});showToast("31-day plan saved to your account.");
+  }catch(error){setMonthlyValidation(error.message);el("monthlyPlanStatus").textContent="Your plan was not replaced. Fix the highlighted issue and try again.";showToast(error.message);}
+  finally{monthlyPlanForm.dataset.saving="false";monthlyPlanForm.setAttribute("aria-busy","false");button.disabled=false;}
+});
+el("monthlySchedule").addEventListener("change",(event)=>{
+  const card=event.target.closest("[data-monthly-day]");if(!card)return;
+  const day=card.dataset.monthlyDay,rest=card.querySelector("[data-monthly-rest]"),targets=[...card.querySelectorAll("[data-monthly-target]")];
+  if(event.target.matches("[data-monthly-rest]")){
+    targets.forEach((input)=>{input.disabled=rest.checked;if(rest.checked)input.checked=false;});
+  }else if(event.target.matches("[data-monthly-target]")){
+    const checked=targets.filter((input)=>input.checked);
+    if(checked.length>4){event.target.checked=false;setMonthlyValidation(`${day} can use at most four muscle groups.`);return;}
+    if(checked.length){rest.checked=false;targets.forEach((input)=>{input.disabled=false;});}
+  }
+  card.classList.toggle("is-rest",rest.checked);rest.nextElementSibling.textContent=rest.checked?"Rest day":"Training day";
+  state.monthlySource="muscle-schedule";state.monthlySchedule[day].sourceItems=[];
+  state.monthlySchedule[day].rest=rest.checked;state.monthlySchedule[day].targets=rest.checked?[]:targets.filter((input)=>input.checked).map((input)=>input.value);
+  const note=card.querySelector(".monthly-day-note");if(note)note.textContent=rest.checked?"Recovery day · no exercises will be scheduled.":"Custom split · Strata+ will choose suitable exercises.";
+  document.querySelectorAll(".monthly-source-actions button").forEach((button)=>{button.classList.remove("active");button.setAttribute("aria-pressed","false");});
+  setMonthlyValidation();el("monthlyPlanStatus").textContent="Split changed · create the plan to save it.";
+});
+el("monthlyStartDate").addEventListener("input",updateMonthlyDateRange);
+el("monthlySourceAccount").addEventListener("click",()=>setMonthlySource(state.weeklyPlan,"Saved account plan"));
+el("monthlySourceGuest").addEventListener("click",()=>setMonthlySource(deviceGuestPlan(),"This device’s plan"));
+el("monthlyFileButton").addEventListener("click",()=>el("monthlyFileInput").click());
+el("monthlyFileInput").addEventListener("change",async(event)=>{
+  const file=event.target.files?.[0];if(!file)return;
+  try{
+    if(file.size>256*1024)throw new Error("Plan files must be 256 KB or smaller.");
+    const plan=Monthly.parseWeeklyPlanFile(await file.text(),state.exercises);setMonthlySource(plan,"Uploaded plan file");
+  }catch(error){setMonthlyValidation(error.message);showToast(error.message);}
+  finally{event.target.value="";}
+});
+el("monthlyPdfButton").addEventListener("click",printMonthlyPlan);
+el("monthlyShareButton").addEventListener("click",()=>void shareMonthlyPlan());
+el("monthlyEditButton").addEventListener("click",()=>{monthlyPlanForm.scrollIntoView?.({behavior:window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches?"auto":"smooth",block:"start"});el("monthlyTitle").focus?.({preventScroll:true});});
 
 document.addEventListener("submit",async(event)=>{
   const form=event.target.closest("[data-rating-form]");if(!form)return;event.preventDefault();const id=form.dataset.ratingForm,data=Object.fromEntries(new FormData(form));const rating=Object.fromEntries(Object.entries(data).map(([key,value])=>[key,Number(value)]));const button=form.querySelector("button"),originalHtml=button.innerHTML;button.disabled=true;button.textContent="Saving…";
@@ -408,11 +565,11 @@ el("logoutButton").addEventListener("click",async()=>{try{await api("/api/logout
 
 async function init(){
   try{
-    const data=await api("/api/discovery");state.exercises=data.exercises;state.methodology=data.methodology;state.sources=data.sources;state.limited=new Set(data.limitedConfidenceExercises);state.preferences=data.preferences;state.user=data.user;
+    const data=await api("/api/discovery");state.exercises=data.exercises;state.methodology=data.methodology;state.sources=data.sources;state.limited=new Set(data.limitedConfidenceExercises);state.preferences=data.preferences;state.user=data.user;state.weeklyPlan=data.weeklyPlan||null;state.monthlyPlan=data.monthlyPlan||null;
     state.csrfToken=String(data.csrfToken||"");state.aggregate=new Map((data.ratings.aggregates||[]).map((item)=>[item.exercise_id,item]));state.userRatings=new Map((data.ratings.user||[]).map((item)=>[item.exercise_id,item]));state.ratingsRefreshedAt=Date.now();
     el("userName").textContent=data.user.name;el("catalogTotal").textContent=state.exercises.length;el("recommendationTitle").innerHTML=`BEST EXERCISES <em>FOR ${escapeHtml(data.user.name.split(/\s+/)[0].toUpperCase())}.</em>`;
-    renderProfile();populateFilters();renderMethodology();renderRecommendations();resetExplorerWindow();renderExplorer();renderCompareTray();
-  }catch(error){el("profileStatus").textContent="Unable to load";el("battleStatus").textContent=error.message;el("recommendationGrid").innerHTML=`<div class="loading-card">${escapeHtml(error.message)}</div>`;el("exerciseGrid").innerHTML=`<div class="loading-card">${escapeHtml(error.message)}</div>`;showToast(error.message);}
+    renderProfile();populateFilters();renderMethodology();renderRecommendations();resetExplorerWindow();renderExplorer();renderCompareTray();populateMonthlyBuilder(state.monthlyPlan);
+  }catch(error){el("profileStatus").textContent="Unable to load";el("battleStatus").textContent=error.message;el("monthlyPlanStatus").textContent=error.message;el("recommendationGrid").innerHTML=`<div class="loading-card">${escapeHtml(error.message)}</div>`;el("exerciseGrid").innerHTML=`<div class="loading-card">${escapeHtml(error.message)}</div>`;showToast(error.message);}
   finally{initializeFeatureNavigation();}
 }
 

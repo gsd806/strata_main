@@ -46,6 +46,7 @@ const context={console,document,window:{location:{replace(){}}},location:{},navi
 context.globalThis=context;
 vm.createContext(context);
 vm.runInContext(readPublic("scripts","discovery-core.js"),context,{filename:"discovery-core.js"});
+vm.runInContext(readPublic("scripts","monthly-plan-core.js"),context,{filename:"monthly-plan-core.js"});
 vm.runInContext(readPublic("scripts","discover.js"),context,{filename:"discover.js"});
 
 (async()=>{
@@ -85,10 +86,10 @@ vm.runInContext(readPublic("scripts","discover.js"),context,{filename:"discover.
   assert.equal(result.compareCount,3);
   assert.equal(result.defaultFeature,"recommendations");
   assert.equal(result.defaultVisible,true);
-  assert.equal(result.defaultHidden,4);
+  assert.equal(result.defaultHidden,5);
   assert.equal(result.explorerFeature,"explorer");
   assert.equal(result.explorerVisible,true);
-  assert.equal(result.explorerHidden,4);
+  assert.equal(result.explorerHidden,5);
   assert.equal(result.battleSlots,4);
   assert.ok(result.battleRows>=10);
   for(const key of ["discoveryFetch","battleBuilder","battleTable","battleVisible","battleStatus","detailOpen","bodyLocked","scoreAudit","evidence","alternatives","ratings"])assert.equal(result[key],true,key);

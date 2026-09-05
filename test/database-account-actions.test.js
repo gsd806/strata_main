@@ -307,6 +307,7 @@ test("account deletion cascades private data and precisely cleans non-FK email r
     await store.insertUser(survivor);
     await store.insertSession(session("delete-target",target.id,now));
     await store.upsertPlan(target.id,JSON.stringify({days:["push"]}),now);
+    await store.upsertMonthlyPlan(target.id,JSON.stringify({days:["month"]}),now);
     await store.upsertPreferences(target.id,JSON.stringify({units:"metric"}),now);
     await store.upsertRating(target.id,"bench-press",{
       comfort:4,pump:5,enjoyment:4,stability:4,setup:3,overall:4
@@ -351,6 +352,7 @@ test("account deletion cascades private data and precisely cleans non-FK email r
     assert.equal(await store.userById(target.id),null);
     assert.equal(await store.session("session-token-delete-target",now+101),null);
     assert.equal(await store.plan(target.id),null);
+    assert.equal(await store.monthlyPlan(target.id),null);
     assert.equal(await store.preferences(target.id),null);
     assert.deepEqual(await store.ratingsForUser(target.id),[]);
     assert.equal(await store.purchaseByTransaction("txn-completed"),null);

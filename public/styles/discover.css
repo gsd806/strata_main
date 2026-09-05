@@ -69,9 +69,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .feature-hub-heading h2 { max-width: 760px; margin: 0; text-transform: uppercase; font: 600 clamp(46px, 5vw, 70px)/.92 var(--display); letter-spacing: -.035em; }
 .feature-hub-heading h2 em { color: var(--orange); font-style: normal; }
 .feature-hub-heading > p { margin: 0; color: #35372f; font-size: 13px; line-height: 1.65; }
-.feature-grid { display: grid; grid-template-columns: repeat(6,1fr); gap: 10px; }
-.feature-block { position: relative; grid-column: span 2; min-height: 158px; display: flex; flex-direction: column; padding: 18px; border: 1px solid var(--ink); color: var(--ink); background: rgba(250,249,245,.78); text-decoration: none; transition: transform .16s ease,background-color .16s ease,color .16s ease; }
-.feature-block:nth-child(-n+2) { grid-column: span 3; }
+.feature-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }
+.feature-block { position: relative; min-height: 158px; display: flex; flex-direction: column; padding: 18px; border: 1px solid var(--ink); color: var(--ink); background: rgba(250,249,245,.78); text-decoration: none; transition: transform .16s ease,background-color .16s ease,color .16s ease; }
 .feature-block:hover { transform: translateY(-3px); background: var(--white); }
 .feature-block.active, .feature-block[aria-expanded="true"] { color: var(--white); background: var(--ink); box-shadow: inset 0 -5px 0 var(--orange); }
 .feature-block span { color: currentColor; opacity: .62; text-transform: uppercase; font: 500 8px var(--mono); letter-spacing: .08em; }
@@ -80,7 +79,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .feature-block b { position: absolute; top: 15px; right: 17px; color: var(--orange); font: 600 20px var(--display); }
 .feature-block.active b, .feature-block[aria-expanded="true"] b { color: var(--accent); }
 .feature-panel[hidden] { display: none !important; }
-.profile-section, .battle-section, .recommendation-section, .explorer-section { padding: 86px 0; }
+.profile-section, .battle-section, .recommendation-section, .explorer-section, .monthly-section { padding: 86px 0; }
 .tool-menu-link { display: inline-flex; align-items: center; min-height: 44px; margin: -18px 0 14px; color: var(--orange); text-underline-offset: 4px; text-transform: uppercase; font: 500 8px var(--mono); letter-spacing: .06em; }
 .tool-menu-link-light { color: var(--accent); }
 .build-footer { padding: 22px 34px; color: var(--accent); background: var(--ink); border-top: 1px solid rgba(255,255,255,.14); text-align: center; text-transform: uppercase; font: 500 8px var(--mono); letter-spacing: .1em; }
@@ -185,6 +184,80 @@ legend { margin-bottom: 12px; text-transform: uppercase; font: 500 9px var(--mon
 .empty-state strong { font: 600 28px var(--display); text-transform: uppercase; }
 .empty-state p { color: var(--muted); font-size: 12px; }
 
+.monthly-section { background: var(--paper); }
+.monthly-builder { padding: 28px; border: 1px solid var(--ink); background: var(--white); box-shadow: 12px 12px 0 var(--accent); }
+.monthly-basics { display: grid; grid-template-columns: 1.4fr repeat(3,minmax(0,1fr)); border: 1px solid var(--line); }
+.monthly-basics label { min-width: 0; display: grid; gap: 9px; padding: 13px 14px; border-right: 1px solid var(--line); color: var(--muted); text-transform: uppercase; font: 500 8px var(--mono); }
+.monthly-basics label:last-child { border-right: 0; }
+.monthly-basics input, .monthly-basics select { width: 100%; min-height: 44px; padding: 0; border: 0; color: var(--ink); background: transparent; font: 600 13px var(--body); }
+.monthly-basics input[readonly] { color: var(--muted); cursor: default; }
+.monthly-date-help, .monthly-schedule-help, .monthly-pdf-note { margin: 11px 0 0; color: var(--muted); font-size: 10px; line-height: 1.6; }
+.monthly-import, .monthly-week-setup { margin-top: 30px; padding-top: 24px; border-top: 1px solid var(--line); }
+.monthly-import legend span { margin-left: 8px; color: var(--muted); font-size: 7px; }
+.monthly-import-layout { display: grid; grid-template-columns: minmax(0,1fr) minmax(380px,.9fr); gap: 32px; align-items: center; }
+.monthly-import-layout strong { display: block; text-transform: uppercase; font: 600 23px/1 var(--display); }
+.monthly-import-layout p { max-width: 650px; margin: 8px 0 0; color: var(--muted); font-size: 10px; line-height: 1.65; }
+.monthly-source-actions { position: relative; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+.monthly-source-actions .small-button { width: 100%; min-height: 44px; }
+.monthly-source-actions .small-button:last-of-type { grid-column: 1 / -1; }
+.monthly-source-actions .small-button.active, .monthly-source-actions .small-button[aria-pressed="true"] { border-color: var(--ink); color: var(--ink); background: var(--accent); }
+.monthly-file-input { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.monthly-schedule-help { max-width: 720px; margin-bottom: 16px; }
+.monthly-schedule { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.monthly-schedule-loading { grid-column: 1 / -1; min-height: 110px; display: grid; place-items: center; border: 1px dashed var(--line); color: var(--muted); background: var(--paper); text-transform: uppercase; font: 500 9px var(--mono); }
+.monthly-day-note { margin: 12px 0 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
+.monthly-weekday, .monthly-weekday-card { min-width: 0; margin: 0; padding: 16px; border: 1px solid var(--line); background: var(--paper); }
+.monthly-weekday.is-rest, .monthly-weekday-card.is-rest, .monthly-weekday[data-rest="true"], .monthly-weekday-card[data-rest="true"] { background: #e2e1da; }
+.monthly-weekday-head, .monthly-weekday-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 13px; }
+.monthly-weekday-head h3, .monthly-weekday-header h3, .monthly-weekday > legend, .monthly-weekday-card > legend { margin: 0; color: var(--ink); text-transform: uppercase; font: 600 23px/1 var(--display); }
+.monthly-rest, .monthly-rest-toggle { position: relative; flex: none; }
+.monthly-rest input, .monthly-rest-toggle input, .monthly-target input, .monthly-target-chip input { position: absolute; opacity: 0; pointer-events: none; }
+.monthly-rest span, .monthly-rest-toggle span { min-height: 44px; display: inline-flex; align-items: center; padding: 0 12px; border: 1px solid var(--ink); color: var(--ink); background: var(--white); text-transform: uppercase; font: 500 8px var(--mono); }
+.monthly-rest span::before, .monthly-rest-toggle span::before { content: "○"; margin-right: 7px; font-size: 12px; }
+.monthly-rest input:checked + span, .monthly-rest-toggle input:checked + span { color: var(--white); background: var(--ink); }
+.monthly-rest input:checked + span::before, .monthly-rest-toggle input:checked + span::before { content: "✓"; color: var(--accent); }
+.monthly-rest input:focus-visible + span, .monthly-rest-toggle input:focus-visible + span, .monthly-target input:focus-visible + span, .monthly-target-chip input:focus-visible + span { outline: 3px solid var(--orange); outline-offset: 2px; }
+.monthly-targets, .monthly-target-grid { display: flex; flex-wrap: wrap; gap: 7px; }
+.monthly-target, .monthly-target-chip { position: relative; }
+.monthly-target span, .monthly-target-chip span { min-height: 44px; display: inline-flex; align-items: center; padding: 0 11px; border: 1px solid var(--line); color: var(--muted); background: var(--white); font-size: 10px; }
+.monthly-target span::before, .monthly-target-chip span::before { content: "+"; margin-right: 7px; font: 500 12px var(--mono); }
+.monthly-target input:checked + span, .monthly-target-chip input:checked + span { border-color: var(--ink); color: var(--ink); background: var(--accent); }
+.monthly-target input:checked + span::before, .monthly-target-chip input:checked + span::before { content: "✓"; }
+.monthly-target input:disabled + span, .monthly-target-chip input:disabled + span { cursor: not-allowed; opacity: .4; }
+.monthly-validation { margin: 22px 0 0; padding: 14px 16px; border-left: 4px solid var(--orange); color: #842614; background: #fff0eb; font-size: 11px; line-height: 1.55; }
+.monthly-validation[hidden] { display: none; }
+.monthly-builder-actions { display: flex; align-items: center; gap: 18px; margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--line); }
+#monthlyPlanStatus { color: var(--muted); font-size: 10px; line-height: 1.5; }
+.monthly-results { margin-top: 44px; padding: 28px; border: 1px solid var(--ink); background: var(--white); }
+.monthly-results[hidden] { display: none; }
+.monthly-results-head { display: flex; align-items: end; justify-content: space-between; gap: 24px; padding-bottom: 22px; border-bottom: 1px solid var(--ink); }
+.monthly-results-head .kicker { margin-bottom: 8px; }
+.monthly-results-head h3 { margin: 0; text-transform: uppercase; font: 600 clamp(38px,5vw,62px)/.95 var(--display); letter-spacing: -.035em; }
+.monthly-results-actions { display: flex; flex-wrap: wrap; justify-content: end; gap: 8px; }
+.monthly-results-actions .button, .monthly-results-actions .small-button { min-height: 44px; }
+.monthly-summary { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); margin: 20px 0; border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+.monthly-summary > div, .monthly-summary-item { min-width: 0; padding: 13px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.monthly-summary span, .monthly-summary-item span { display: block; color: var(--muted); text-transform: uppercase; font: 500 7px var(--mono); }
+.monthly-summary strong, .monthly-summary-item strong { display: block; margin-top: 5px; overflow-wrap: anywhere; font: 600 18px/1.1 var(--display); text-transform: uppercase; }
+.monthly-days { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.monthly-day, .monthly-day-card { min-width: 0; padding: 17px; border: 1px solid var(--line); background: var(--paper); break-inside: avoid; }
+.monthly-day.is-rest, .monthly-day-card.is-rest, .monthly-day[data-rest="true"], .monthly-day-card[data-rest="true"] { color: rgba(255,255,255,.8); background: var(--ink); border-color: var(--ink); }
+.monthly-day-head, .monthly-day-header { display: flex; align-items: start; justify-content: space-between; gap: 15px; padding-bottom: 11px; border-bottom: 1px solid var(--line); }
+.monthly-day.is-rest .monthly-day-head, .monthly-day-card.is-rest .monthly-day-head, .monthly-day[data-rest="true"] .monthly-day-head, .monthly-day-card[data-rest="true"] .monthly-day-head { border-bottom-color: rgba(255,255,255,.2); }
+.monthly-day-number { color: var(--orange); text-transform: uppercase; font: 500 8px var(--mono); letter-spacing: .06em; }
+.monthly-day.is-rest .monthly-day-number, .monthly-day-card.is-rest .monthly-day-number, .monthly-day[data-rest="true"] .monthly-day-number, .monthly-day-card[data-rest="true"] .monthly-day-number { color: var(--accent); }
+.monthly-day time, .monthly-day-card time { color: var(--muted); text-align: right; font: 500 8px/1.5 var(--mono); text-transform: uppercase; }
+.monthly-day.is-rest time, .monthly-day-card.is-rest time, .monthly-day[data-rest="true"] time, .monthly-day-card[data-rest="true"] time { color: rgba(255,255,255,.58); }
+.monthly-day h4, .monthly-day-card h4 { margin: 14px 0 4px; text-transform: uppercase; font: 600 24px/1 var(--display); }
+.monthly-day-targets { margin: 0 0 13px; color: var(--orange); text-transform: uppercase; font: 500 8px/1.45 var(--mono); }
+.monthly-exercises, .monthly-exercise-list { margin: 13px 0 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+.monthly-exercises li, .monthly-exercise-list li { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 10px; line-height: 1.45; }
+.monthly-exercises li strong, .monthly-exercise-list li strong { min-width: 0; overflow-wrap: anywhere; }
+.monthly-exercises li small, .monthly-exercise-list li small { display: block; margin-top: 3px; color: var(--muted); font: 400 7px/1.4 var(--mono); }
+.monthly-exercises li span, .monthly-exercise-list li span { color: var(--muted); text-align: right; white-space: nowrap; font: 500 8px var(--mono); text-transform: uppercase; }
+.monthly-rest-copy { margin: 20px 0; color: inherit; font-size: 11px; line-height: 1.6; }
+.monthly-pdf-note { padding-top: 14px; border-top: 1px solid var(--line); }
+
 .method-section { padding: 110px 0; color: var(--white); background: var(--ink); }
 .method-layout { display: grid; grid-template-columns: .8fr 1.2fr; gap: 90px; }
 .method-intro h2 { color: var(--white); }
@@ -286,10 +359,14 @@ dialog::backdrop { background: rgba(8,9,7,.78); backdrop-filter: blur(4px); }
   .hero-stats { max-width: 350px; }
   .feature-hub-heading { gap: 18px; }
   .feature-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
-  .feature-block, .feature-block:nth-child(-n+2) { grid-column: auto; }
-  .feature-block:last-child { grid-column: 1 / -1; }
   .section-heading { gap: 20px; }
   .heading-action { justify-content: start; }
+  .monthly-basics { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .monthly-basics label:nth-child(2) { border-right: 0; }
+  .monthly-basics label:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+  .monthly-import-layout { grid-template-columns: 1fr; gap: 18px; }
+  .monthly-results-head { align-items: start; flex-direction: column; }
+  .monthly-results-actions { justify-content: start; }
   .recommendation-grid { grid-template-columns: repeat(2, 1fr); }
   .explorer-toolbar { grid-template-columns: repeat(2, 1fr); }
   .explorer-toolbar > label { border-bottom: 1px solid var(--line); }
@@ -324,7 +401,7 @@ dialog::backdrop { background: rgba(8,9,7,.78); backdrop-filter: blur(4px); }
   .feature-block strong { padding-top: 22px; font-size: 23px; }
   .feature-block small { font-size: 9px; }
   .feature-block b { top: 11px; right: 13px; }
-  .profile-section, .battle-section, .recommendation-section, .explorer-section, .method-section { padding: 72px 0; }
+  .profile-section, .battle-section, .recommendation-section, .explorer-section, .monthly-section, .method-section { padding: 72px 0; }
   .section-heading h2, .method-intro h2 { font-size: 50px; }
   .profile-card { padding: 18px; box-shadow: 7px 7px 0 var(--accent); }
   .profile-primary, .profile-split { grid-template-columns: 1fr; }
@@ -332,6 +409,19 @@ dialog::backdrop { background: rgba(8,9,7,.78); backdrop-filter: blur(4px); }
   .profile-primary label:last-child { border-bottom: 0; }
   .profile-split { gap: 0; }
   .profile-actions { align-items: stretch; flex-direction: column; }
+  .monthly-builder { padding: 18px; box-shadow: 7px 7px 0 var(--accent); }
+  .monthly-basics, .monthly-schedule, .monthly-days { grid-template-columns: 1fr; }
+  .monthly-basics label, .monthly-basics label:nth-child(2) { border-right: 0; border-bottom: 1px solid var(--line); }
+  .monthly-basics label:last-child { border-bottom: 0; }
+  .monthly-source-actions { grid-template-columns: 1fr; }
+  .monthly-source-actions .small-button:last-of-type { grid-column: auto; }
+  .monthly-weekday-head, .monthly-weekday-header { align-items: stretch; flex-direction: column; }
+  .monthly-rest span, .monthly-rest-toggle span { width: 100%; justify-content: center; }
+  .monthly-target, .monthly-target-chip { flex: 1 1 calc(50% - 7px); }
+  .monthly-target span, .monthly-target-chip span { width: 100%; justify-content: center; }
+  .monthly-builder-actions, .monthly-results-actions { align-items: stretch; flex-direction: column; }
+  .monthly-builder-actions .button, .monthly-results-actions .button, .monthly-results-actions .small-button { width: 100%; }
+  .monthly-summary { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .battle-selects { grid-template-columns: 1fr; }
   .battle-builder-actions { align-items: stretch; flex-direction: column; }
   #battleStatus { margin-left: 0; }
@@ -355,7 +445,7 @@ dialog::backdrop { background: rgba(8,9,7,.78); backdrop-filter: blur(4px); }
   .metric-row small { display: none; }
   .rating-grid { grid-template-columns: 1fr; }
   .rating-grid label:last-child { grid-column: auto; }
-  .profile-primary select, .profile-primary input, .battle-slot select, .explorer-toolbar input, .explorer-toolbar select, .rating-grid select { font-size: 16px; }
+  .profile-primary select, .profile-primary input, .battle-slot select, .explorer-toolbar input, .explorer-toolbar select, .rating-grid select, .monthly-basics input, .monthly-basics select { font-size: 16px; }
 }
 
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .toast, .feature-block { transition: none; } .feature-block:hover { transform: none; } }
@@ -363,4 +453,65 @@ dialog::backdrop { background: rgba(8,9,7,.78); backdrop-filter: blur(4px); }
 /* Mobile/PWA polish */
 html{overflow-x:clip}:where(a,button,input,select){touch-action:manipulation}.studio-header{min-height:calc(72px + env(safe-area-inset-top));padding-top:env(safe-area-inset-top);padding-left:max(32px,env(safe-area-inset-left));padding-right:max(32px,env(safe-area-inset-right))}.build-footer{padding-bottom:calc(22px + env(safe-area-inset-bottom))}.build-footer a{display:inline-flex;align-items:center;min-height:44px}.comparison-scroll{scrollbar-gutter:stable;-webkit-overflow-scrolling:touch;overscroll-behavior-inline:contain}.detail-dialog{overflow:auto;max-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}.recommend-card h3,.exercise-card h3,.detail-title,.section-heading h2{overflow-wrap:anywhere}
 @media(max-width:680px){.studio-container{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}.studio-header{min-height:calc(64px + env(safe-area-inset-top));padding-top:env(safe-area-inset-top);padding-left:max(14px,env(safe-area-inset-left));padding-right:max(14px,env(safe-area-inset-right))}.studio-nav{grid-template-columns:repeat(4,1fr);padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}.small-button,.choice-pill span,.mini-actions button,.mini-actions a,.collection-row button,.icon-button,.detail-quick-actions a,.detail-quick-actions button,.alternative-actions button,.alternative-actions a,.rating-grid select,.plain-button{min-height:44px}.icon-button{min-width:44px;width:44px;height:44px}.plain-button{padding-inline:9px}.choice-pill span{font-size:11px}.mini-actions button,.mini-actions a,.mini-meta,.community-line,.field-note,#battleStatus,.alternative-item small,.alternative-actions button,.alternative-actions a{font-size:11px}.detail-section p,.detail-section li,.comparison-table th,.comparison-table td{font-size:11px}.results-line{flex-wrap:wrap;gap:8px;padding-block:6px}.alternative-item{grid-template-columns:minmax(0,1fr) auto;gap:10px}.alternative-item>span{grid-column:2}.alternative-actions{grid-column:1/-1;grid-template-columns:1fr 1fr}.alternative-actions a,.alternative-actions button{display:grid;place-items:center;padding:0 8px;border:1px solid var(--line);text-decoration:none}#compareNames{display:-webkit-box;overflow:hidden;overflow-wrap:anywhere;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2}}
-@media(max-width:360px){.feature-grid{grid-template-columns:1fr}.feature-block:last-child{grid-column:auto}.feature-block{min-height:118px}.explorer-toolbar{grid-template-columns:1fr}.search-control{grid-column:1}.explorer-toolbar>label{border-left:0}.brand>span:last-child{display:none}.studio-user button{font-size:8px}}
+@media(max-width:360px){.feature-grid{grid-template-columns:1fr}.feature-block{min-height:118px}.explorer-toolbar{grid-template-columns:1fr}.search-control{grid-column:1}.explorer-toolbar>label{border-left:0}.brand>span:last-child{display:none}.studio-user button{font-size:8px}.monthly-target,.monthly-target-chip{flex-basis:100%}}
+
+@media print {
+  @page { size: A4 portrait; margin: 10mm; }
+  body.print-monthly-plan { padding: 0 !important; color: #000; background: #fff; font-family: Arial, sans-serif; }
+  body.print-monthly-plan > .studio-header,
+  body.print-monthly-plan > .build-footer,
+  body.print-monthly-plan > .compare-tray,
+  body.print-monthly-plan > .detail-dialog,
+  body.print-monthly-plan > .toast,
+  body.print-monthly-plan .studio-hero,
+  body.print-monthly-plan .feature-hub,
+  body.print-monthly-plan main > section:not(#monthlyPlan),
+  body.print-monthly-plan #monthlyPlan > .studio-container > .tool-menu-link,
+  body.print-monthly-plan #monthlyPlan > .studio-container > .section-heading,
+  body.print-monthly-plan .monthly-builder,
+  body.print-monthly-plan .monthly-results-actions,
+  body.print-monthly-plan .monthly-pdf-note { display: none !important; }
+  body.print-monthly-plan main,
+  body.print-monthly-plan #monthlyPlan,
+  body.print-monthly-plan #monthlyPlan > .studio-container,
+  body.print-monthly-plan .monthly-results { display: block !important; width: 100%; margin: 0; padding: 0; border: 0; background: #fff; }
+  body.print-monthly-plan .monthly-results-head { display: block; padding: 0 0 5mm; border-bottom: 2px solid #000; }
+  body.print-monthly-plan .monthly-results-head .kicker { margin: 0 0 2mm; color: #444; font: 8pt/1.3 monospace; }
+  body.print-monthly-plan .monthly-results-head h3 { color: #000; font: 700 28pt/1 Arial, sans-serif; letter-spacing: -.02em; }
+  body.print-monthly-plan .monthly-summary { grid-template-columns: repeat(4,minmax(0,1fr)); margin: 5mm 0; border-color: #888; }
+  body.print-monthly-plan .monthly-summary > div,
+  body.print-monthly-plan .monthly-summary-item { padding: 3mm; border-color: #aaa; }
+  body.print-monthly-plan .monthly-summary span,
+  body.print-monthly-plan .monthly-summary-item span { color: #444; font: 6.5pt/1.3 monospace; }
+  body.print-monthly-plan .monthly-summary strong,
+  body.print-monthly-plan .monthly-summary-item strong { color: #000; font: 700 11pt/1.1 Arial, sans-serif; }
+  body.print-monthly-plan .monthly-days { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 3mm; }
+  body.print-monthly-plan .monthly-week { display: contents; }
+  body.print-monthly-plan .monthly-day,
+  body.print-monthly-plan .monthly-day-card { padding: 3.5mm; border: 1px solid #888; color: #000; background: #fff; box-shadow: none; break-inside: avoid; page-break-inside: avoid; }
+  body.print-monthly-plan .monthly-day.is-rest,
+  body.print-monthly-plan .monthly-day-card.is-rest,
+  body.print-monthly-plan .monthly-day[data-rest="true"],
+  body.print-monthly-plan .monthly-day-card[data-rest="true"] { color: #000; background: #eee; border-color: #777; }
+  body.print-monthly-plan .monthly-day-head,
+  body.print-monthly-plan .monthly-day-header { padding-bottom: 2mm; border-color: #aaa !important; }
+  body.print-monthly-plan .monthly-day-number,
+  body.print-monthly-plan .monthly-day.is-rest .monthly-day-number,
+  body.print-monthly-plan .monthly-day-card.is-rest .monthly-day-number,
+  body.print-monthly-plan .monthly-day[data-rest="true"] .monthly-day-number,
+  body.print-monthly-plan .monthly-day-card[data-rest="true"] .monthly-day-number { color: #000; font: 700 7pt/1 monospace; }
+  body.print-monthly-plan .monthly-day time,
+  body.print-monthly-plan .monthly-day-card time,
+  body.print-monthly-plan .monthly-day.is-rest time,
+  body.print-monthly-plan .monthly-day-card.is-rest time { color: #333; font: 6.5pt/1.3 monospace; }
+  body.print-monthly-plan .monthly-day h4,
+  body.print-monthly-plan .monthly-day-card h4 { margin: 2.5mm 0 1mm; font: 700 13pt/1 Arial, sans-serif; }
+  body.print-monthly-plan .monthly-day-targets { margin-bottom: 2mm; color: #333; font: 6.5pt/1.3 monospace; }
+  body.print-monthly-plan .monthly-exercises,
+  body.print-monthly-plan .monthly-exercise-list { margin-top: 2mm; border-color: #aaa; }
+  body.print-monthly-plan .monthly-exercises li,
+  body.print-monthly-plan .monthly-exercise-list li { padding: 1.8mm 0; border-color: #bbb; font-size: 7.5pt; line-height: 1.25; }
+  body.print-monthly-plan .monthly-exercises li span,
+  body.print-monthly-plan .monthly-exercise-list li span { color: #333; font-size: 6.5pt; }
+  body.print-monthly-plan .monthly-rest-copy { margin: 3mm 0; font-size: 8pt; }
+}

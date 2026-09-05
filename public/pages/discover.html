@@ -16,7 +16,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="discover.css?v=6.9.1" />
+    <link rel="stylesheet" href="discover.css?v=6.9.2" />
   </head>
   <body>
     <a class="skip-link" href="#featureHub">Skip to Strata+ tools</a>
@@ -49,6 +49,7 @@
             <a class="feature-block" href="#battle" data-feature-target="battle" aria-controls="battle" aria-expanded="false"><span>03 / Compare</span><strong>Exercise battle</strong><small>Compare two to four movements side by side.</small><b aria-hidden="true">↘</b></a>
             <a class="feature-block" href="#profile" data-feature-target="profile" aria-controls="profile" aria-expanded="false"><span>04 / Preferences</span><strong>Tune my ranking</strong><small>Set your goal, experience, equipment, and movement limits.</small><b aria-hidden="true">↘</b></a>
             <a class="feature-block" href="#methodology" data-feature-target="methodology" aria-controls="methodology" aria-expanded="false"><span>05 / Evidence</span><strong>FitScore method</strong><small>See every factor, weight, boundary, and source.</small><b aria-hidden="true">↘</b></a>
+            <a class="feature-block" href="#monthlyPlan" data-feature-target="monthly" aria-controls="monthlyPlan" aria-expanded="false"><span>06 / Plan</span><strong>Pick my workouts</strong><small>Turn your weekly split into a complete, downloadable 31-day plan.</small><b aria-hidden="true">↘</b></a>
           </nav>
           <p class="sr-only" id="featureStatus" role="status" aria-live="polite"></p>
         </div>
@@ -113,6 +114,68 @@
         </div>
       </section>
 
+      <section class="monthly-section feature-panel" id="monthlyPlan" data-feature-panel="monthly" aria-labelledby="monthlyPlanTitle">
+        <div class="studio-container">
+          <a class="tool-menu-link" href="#featureHub">All Strata+ tools ↑</a>
+          <div class="section-heading">
+            <div><p class="kicker">06 / Your 31-day training block</p><h2 id="monthlyPlanTitle" tabindex="-1">PICK MY <em>WORKOUTS.</em></h2></div>
+            <p>Choose one or more muscle groups for every training day, mark your rest days, and STRATA will rotate suitable movements into exactly 31 dated days.</p>
+          </div>
+
+          <form class="monthly-builder" id="monthlyPlanForm" novalidate>
+            <div class="monthly-basics" role="group" aria-label="Monthly plan details">
+              <label for="monthlyTitle"><span>Plan name</span><input id="monthlyTitle" name="title" type="text" maxlength="80" autocomplete="off" placeholder="My next 31 days" required /></label>
+              <label for="monthlyStartDate"><span>First day</span><input id="monthlyStartDate" name="startDate" type="date" required /></label>
+              <label for="monthlyEndDate"><span>Day 31</span><input id="monthlyEndDate" name="endDate" type="date" readonly aria-describedby="monthlyDateHelp" /></label>
+              <label for="monthlyExercisesPerTarget"><span>Exercises per muscle group</span><select id="monthlyExercisesPerTarget" name="exercisesPerTarget"><option value="1">1 exercise</option><option value="2" selected>2 exercises</option><option value="3">3 exercises</option></select></label>
+            </div>
+            <p class="monthly-date-help" id="monthlyDateHelp">The finish date updates automatically so your plan always covers exactly 31 consecutive days.</p>
+
+            <fieldset class="monthly-import" aria-describedby="monthlyImportHelp">
+              <legend>Bring in a weekly plan <span>Optional</span></legend>
+              <div class="monthly-import-layout">
+                <div>
+                  <strong>Start with work you already did</strong>
+                  <p id="monthlyImportHelp">Use your saved account plan, the weekly plan on this device, or a STRATA weekly-plan JSON file. Uploaded files are read privately in your browser and are never stored as raw uploads.</p>
+                </div>
+                <div class="monthly-source-actions">
+                  <button class="small-button" id="monthlySourceAccount" type="button">Use saved weekly plan</button>
+                  <button class="small-button" id="monthlySourceGuest" type="button">Use this device’s plan</button>
+                  <button class="small-button" id="monthlyFileButton" type="button">Upload plan file</button>
+                  <input class="monthly-file-input" id="monthlyFileInput" type="file" accept=".json,application/json" aria-label="Upload a STRATA weekly-plan JSON file" hidden />
+                </div>
+              </div>
+            </fieldset>
+
+            <fieldset class="monthly-week-setup" aria-describedby="monthlyScheduleHelp">
+              <legend>Build your repeating week</legend>
+              <p class="monthly-schedule-help" id="monthlyScheduleHelp">Select up to four muscle groups on a training day, or make it a rest day. Your saved preferences and equipment guide the exercise picks.</p>
+              <div class="monthly-schedule" id="monthlySchedule" role="group" aria-label="Monday through Sunday workout choices"><div class="monthly-schedule-loading">Preparing your week…</div></div>
+            </fieldset>
+
+            <p class="monthly-validation" id="monthlyValidation" role="alert" hidden></p>
+            <div class="monthly-builder-actions">
+              <button class="button button-dark" id="generateMonthlyPlan" type="submit">Create my 31-day plan <span>→</span></button>
+              <span id="monthlyPlanStatus" role="status" aria-live="polite" aria-atomic="true">Choose a start date and set every weekday.</span>
+            </div>
+          </form>
+
+          <section class="monthly-results" id="monthlyResults" aria-labelledby="monthlyResultsTitle" hidden>
+            <div class="monthly-results-head">
+              <div><p class="kicker">Your generated training block</p><h3 id="monthlyResultsTitle">YOUR 31-DAY PLAN</h3></div>
+              <div class="monthly-results-actions">
+                <button class="button button-dark" id="monthlyPdfButton" type="button">Download PDF <span>↓</span></button>
+                <button class="small-button" id="monthlyShareButton" type="button">Share plan ↗</button>
+                <button class="small-button" id="monthlyEditButton" type="button">Edit split</button>
+              </div>
+            </div>
+            <div class="monthly-summary" id="monthlySummary"></div>
+            <div class="monthly-days" id="monthlyDays" aria-label="31-day workout plan"></div>
+            <p class="monthly-pdf-note">For a PDF, your device’s print window will open. Choose <strong>Save as PDF</strong>. Sharing uses your device’s share menu when available, with a private copy or download fallback.</p>
+          </section>
+        </div>
+      </section>
+
       <section class="method-section feature-panel" id="methodology" data-feature-panel="methodology" aria-labelledby="methodTitle">
         <div class="studio-container method-layout">
           <div class="method-intro"><a class="tool-menu-link tool-menu-link-light" href="#featureHub">All Strata+ tools ↑</a><p class="kicker kicker-light">05 / Transparent FitScore</p><h2 id="methodTitle" tabindex="-1">NO BLACK <em>BOX.</em></h2><p id="methodSummary"></p><p class="method-warning">FitScore is editorial synthesis, not a validated scientific measurement. Community ratings are always shown separately.</p></div>
@@ -121,7 +184,7 @@
       </section>
     </main>
 
-    <footer class="build-footer">STRATA · Build 6.9.1 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
+    <footer class="build-footer">STRATA · Build 6.9.2 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
 
     <aside class="compare-tray" id="compareTray" hidden aria-label="Exercise comparison tray">
       <div><span>EXERCISE BATTLE</span><p id="compareNames">Choose 2–4 exercises</p></div>
@@ -130,8 +193,9 @@
 
     <dialog class="detail-dialog" id="detailDialog" aria-labelledby="detailTitle"><div id="detailContent"></div></dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=6.9.1"></script>
-    <script src="discovery-core.js?v=6.9.1"></script>
-    <script src="discover.js?v=6.9.1"></script>
+    <script src="/pwa.js?v=6.9.2"></script>
+    <script src="discovery-core.js?v=6.9.2"></script>
+    <script src="monthly-plan-core.js?v=6.9.2"></script>
+    <script src="discover.js?v=6.9.2"></script>
   </body>
 </html>

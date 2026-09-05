@@ -67,9 +67,20 @@ function setReady(ready){
   state.ready=ready;
   el("plannerSearch").disabled=!ready;
   el("recommendRest").disabled=!ready;
+  el("exportWeeklyPlan").disabled=!ready;
   el("plannerShell").setAttribute("aria-busy",String(!ready));
   el("libraryPanel").setAttribute("aria-busy",String(!ready));
   el("weekBoard").setAttribute("aria-busy",String(!ready));
+}
+
+function downloadWeeklyPlan(){
+  if(!state.ready||!state.plan)return;
+  const exported={format:"strata-weekly-plan",version:1,exportedAt:new Date().toISOString(),plan:state.plan};
+  const blob=new Blob([JSON.stringify(exported,null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob),link=document.createElement("a");
+  link.href=url;link.download=`strata-weekly-plan-${new Date().toISOString().slice(0,10)}.json`;link.hidden=true;
+  document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  showToast("Weekly plan file downloaded. You can import it in Strata+.");
 }
 
 function renderFilters(focusGroup=null){
@@ -368,6 +379,7 @@ el("recommendRest").addEventListener("click",()=>{
   if(!day){showToast("Clear a day before requesting a recovery-day recommendation.");return;}
   setRestDay(day,{recommended:true});
 });
+el("exportWeeklyPlan").addEventListener("click",downloadWeeklyPlan);
 el("logoutButton").addEventListener("click",async(event)=>{
   const button=event.currentTarget;
   button.disabled=true;
@@ -402,7 +414,7 @@ async function init(){
   el("weekSummary").innerHTML="";
   el("weekBoard").innerHTML='<div class="planner-load-state">Loading your weekly plan…</div>';
   try{
-    const exercises=await api("/exercises.json?v=6.9.1");
+    const exercises=await api("/exercises.json?v=6.9.2");
     if(!Array.isArray(exercises))throw new Error("STRATA returned an incomplete exercise library.");
     state.exercises=exercises;
     let result;
@@ -426,7 +438,7 @@ async function init(){
     handlePendingAdd();
   }catch(error){
     state.ready=false;
-    el("plannerSearch").disabled=true;el("recommendRest").disabled=true;
+    el("plannerSearch").disabled=true;el("recommendRest").disabled=true;el("exportWeeklyPlan").disabled=true;
     el("plannerShell").setAttribute("aria-busy","false");el("libraryPanel").setAttribute("aria-busy","false");
     setSaveStatus("Unable to load",true);renderLoadError(error);
   }

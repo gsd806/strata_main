@@ -96,6 +96,11 @@ const SCHEMA = [
     plan_json TEXT NOT NULL,
     updated_at INTEGER NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS monthly_plans (
+    user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    plan_json TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`,
   `CREATE TABLE IF NOT EXISTS preferences (
     user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     preferences_json TEXT NOT NULL,
@@ -275,6 +280,8 @@ const SQL = {
   deleteActionSendsForDeletedUser:"DELETE FROM account_action_sends WHERE email_hash=? AND NOT EXISTS (SELECT 1 FROM users WHERE id=?)",
   plan:"SELECT plan_json,updated_at FROM plans WHERE user_id=?",
   upsertPlan:"INSERT INTO plans(user_id,plan_json,updated_at) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan_json=excluded.plan_json,updated_at=excluded.updated_at",
+  monthlyPlan:"SELECT plan_json,updated_at FROM monthly_plans WHERE user_id=?",
+  upsertMonthlyPlan:"INSERT INTO monthly_plans(user_id,plan_json,updated_at) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan_json=excluded.plan_json,updated_at=excluded.updated_at",
   preferences:"SELECT preferences_json,updated_at FROM preferences WHERE user_id=?",
   upsertPreferences:"INSERT INTO preferences(user_id,preferences_json,updated_at) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET preferences_json=excluded.preferences_json,updated_at=excluded.updated_at",
   ratingsForUser:"SELECT exercise_id,comfort,pump,enjoyment,stability,setup,overall,updated_at FROM ratings WHERE user_id=?",
@@ -806,6 +813,8 @@ function localStore(root) {
     },
     async plan(userId) { return plainRow(statements.plan.get(userId)); },
     async upsertPlan(userId,planJson,updatedAt) { statements.upsertPlan.run(userId,planJson,updatedAt); },
+    async monthlyPlan(userId) { return plainRow(statements.monthlyPlan.get(userId)); },
+    async upsertMonthlyPlan(userId,planJson,updatedAt) { statements.upsertMonthlyPlan.run(userId,planJson,updatedAt); },
     async preferences(userId) { return plainRow(statements.preferences.get(userId)); },
     async upsertPreferences(userId,preferencesJson,updatedAt) { statements.upsertPreferences.run(userId,preferencesJson,updatedAt); },
     async ratingsForUser(userId) { return plainRows(statements.ratingsForUser.all(userId)); },
@@ -1251,6 +1260,8 @@ async function tursoStore(url,authToken) {
     },
     plan:(userId) => first(SQL.plan,[userId]),
     upsertPlan:(userId,planJson,updatedAt) => run(SQL.upsertPlan,[userId,planJson,updatedAt]),
+    monthlyPlan:(userId) => first(SQL.monthlyPlan,[userId]),
+    upsertMonthlyPlan:(userId,planJson,updatedAt) => run(SQL.upsertMonthlyPlan,[userId,planJson,updatedAt]),
     preferences:(userId) => first(SQL.preferences,[userId]),
     upsertPreferences:(userId,preferencesJson,updatedAt) => run(SQL.upsertPreferences,[userId,preferencesJson,updatedAt]),
     ratingsForUser:(userId) => all(SQL.ratingsForUser,[userId]),
