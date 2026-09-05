@@ -16,7 +16,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="discover.css?v=6.9.6" />
+    <link rel="stylesheet" href="discover.css?v=6.9.7" />
   </head>
   <body>
     <a class="skip-link" href="#featureHub">Skip to Strata+ tools</a>
@@ -28,7 +28,7 @@
 
     <section class="discovery-load-error" id="discoveryLoadError" role="alert" aria-labelledby="discoveryLoadErrorTitle" aria-describedby="discoveryLoadErrorMessage" hidden>
       <div class="studio-container discovery-load-error-inner">
-        <div><strong id="discoveryLoadErrorTitle">STRATA+ COULDN’T LOAD.</strong><p id="discoveryLoadErrorMessage">Check your connection, then try again.</p></div>
+        <div class="discovery-error-copy"><span class="discovery-error-mark" aria-hidden="true">!</span><div><strong id="discoveryLoadErrorTitle">STRATA+ COULDN’T LOAD.</strong><p id="discoveryLoadErrorMessage">Check your connection, then try again.</p></div></div>
         <button class="small-button" id="discoveryRetry" type="button">Try again <span aria-hidden="true">↻</span></button>
       </div>
     </section>
@@ -42,6 +42,7 @@
             <h1>CHOOSE BETTER.<br /><em>KNOW WHY.</em></h1>
             <p>Compare movements, find close alternatives, build a full month, and discover weekly plans shared by the STRATA community.</p>
             <div class="hero-actions"><a class="button button-accent" href="#recommendations" data-feature-target="recommendations">Best for you <span>↘</span></a><a class="text-link" href="#communityPlans" data-feature-target="community">Browse community plans →</a></div>
+            <p class="hero-membership"><span aria-hidden="true">✓</span> One private workspace · six focused tools</p>
           </div>
           <div class="hero-stats" aria-label="Strata+ workspace statistics"><div><strong id="catalogTotal">200</strong><span>Exercises</span></div><div><strong>2–4</strong><span>Compare</span></div><div><strong>5</strong><span>Score factors</span></div></div>
         </div>
@@ -208,7 +209,7 @@
 
     </main>
 
-    <footer class="build-footer">STRATA · Build 6.9.6 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
+    <footer class="build-footer">STRATA · Build 6.9.7 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
 
     <aside class="compare-tray" id="compareTray" hidden aria-label="Exercise comparison tray">
       <div><span>EXERCISE BATTLE</span><p id="compareNames">Choose 2–4 exercises</p></div>
@@ -229,9 +230,9 @@
       </div>
     </dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=6.9.6"></script>
-    <script src="discovery-core.js?v=6.9.6"></script>
-    <script src="monthly-plan-core.js?v=6.9.6"></script>
-    <script src="discover.js?v=6.9.6"></script>
+    <script src="/pwa.js?v=6.9.7"></script>
+    <script src="discovery-core.js?v=6.9.7"></script>
+    <script src="monthly-plan-core.js?v=6.9.7"></script>
+    <script src="discover.js?v=6.9.7"></script>
   </body>
 </html>

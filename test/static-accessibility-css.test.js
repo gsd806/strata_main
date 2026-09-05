@@ -30,6 +30,17 @@ test("the focusable horizontal comparison region has a visible focus treatment",
   assert.match(css,/\.compare-table-wrap:focus-visible\s*\{[^}]*outline:\s*3px solid var\(--orange-text\);[^}]*box-shadow:/);
 });
 
+test("compact mobile navigation keeps account actions and every muscle group easy to reach",()=>{
+  const home=read("public/pages/index.html");
+  const account=read("public/pages/account.html");
+  const homeCss=read("public/styles/styles.css");
+  const accountCss=read("public/styles/account.css");
+  assert.match(home,/class="group-tabs-hint"[^>]*>Swipe to explore all 8 muscle groups/);
+  assert.match(homeCss,/\.group-tabs\s*\{[^}]*display:\s*flex;[^}]*overflow-x:\s*auto;[^}]*scroll-snap-type:\s*x proximity;/);
+  assert.match(account,/class="account-choice-nav"[^>]*>[\s\S]*href="#signupPanel"[\s\S]*href="#loginPanel"/);
+  assert.match(accountCss,/\.account-choice-nav\{display:grid;grid-template-columns:1fr 1fr;/);
+});
+
 test("the support honeypot stays outside the accessibility tree",()=>{
   const contact=read("public/pages/contact.html");
   assert.match(contact,/<div class="support-honeypot" aria-hidden="true">[\s\S]*?<input[^>]*tabindex="-1"/);

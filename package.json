@@ -1,14 +1,16 @@
 {
   "name": "strata-workout-index",
-  "version": "6.9.6",
+  "version": "6.9.7",
   "private": true,
   "description": "Evidence-informed exercise rankings with Strata+ personalization, community weekly plans, ratings, and 31-day planning.",
   "scripts": {
     "start": "node server.js",
     "test": "node --test",
-    "qa": "npm test && npm run qa:runtime",
+    "qa": "npm run release:check && npm test && npm run qa:runtime",
     "qa:runtime": "node qa/account-runtime-smoke.js && node qa/discover-runtime-smoke.js && node qa/planner-runtime-smoke.js && node qa/pwa-runtime-smoke.js",
-    "qa:ui": "node qa/ui-audit.js"
+    "qa:ui": "node qa/ui-audit.js",
+    "release:check": "node scripts/release-version.js --check",
+    "release:version": "node scripts/release-version.js"
   },
   "dependencies": {
     "@tursodatabase/serverless": "1.4.0"
