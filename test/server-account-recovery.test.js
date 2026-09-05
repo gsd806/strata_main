@@ -314,7 +314,7 @@ async function signedWebhook(event){
 }
 
 function database(options={}){
-  return new DatabaseSync(join(runtimeDir,"strata.sqlite"),options);
+  return new DatabaseSync(join(runtimeDir,"strata.sqlite"),{timeout:5000,...options});
 }
 
 function paddleTransactionFixture({id,userId,checkoutId,status="ready",priceId=PRICE_ID,productId=PRODUCT_ID,quantity=1}={}){
