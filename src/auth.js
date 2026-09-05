@@ -50,6 +50,11 @@ function configuredAdminEmail(value){
 function hashToken(token){return createHash("sha256").update(token).digest("hex");}
 function escapeHtml(value){return String(value??"").replace(/[&<>'"]/g,(char)=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[char]));}
 
+/**
+ * Typed dependency-injection boundary for the account and session domain.
+ * @param {import("./domain-types").AuthServiceDependencies} dependencies
+ * @returns {import("./domain-types").AuthService}
+ */
 function createAuthService({
   store,
   emailConfig,

@@ -10,6 +10,7 @@ const { getEmailVerificationConfig } = require("./email");
 const { createAuthService,configuredAdminEmail } = require("./auth");
 const { createAdminService } = require("./admin");
 const { createSupportService } = require("./support");
+const { composeServices } = require("./service-composition");
 const {
   getPaymentConfig,
   publicPaymentConfig,
@@ -63,7 +64,8 @@ const CHECKOUT_CREATION_CLAIM_MS = 60 * 1000;
 const MAX_DELETION_RECONCILIATIONS = 8;
 const DISCOVERY_TRIAL_MS = 10 * 24 * 60 * 60 * 1000;
 const DISCOVERY_DATA = JSON.parse(readFileSync(join(__dirname,"data","discovery-data.json"),"utf8"));
-const BUILD_NUMBER = JSON.parse(readFileSync(join(PROJECT_ROOT,"package.json"),"utf8")).version;
+const RELEASE_METADATA = JSON.parse(readFileSync(join(PROJECT_ROOT,"package.json"),"utf8"));
+const BUILD_NUMBER = RELEASE_METADATA.strataBuild || RELEASE_METADATA.version;
 const PAYMENT_CONFIG = getPaymentConfig(process.env);
 const EMAIL_CONFIG = getEmailVerificationConfig(process.env);
 const ADMIN_EMAIL = configuredAdminEmail(process.env.ADMIN_EMAIL);
@@ -1067,41 +1069,14 @@ async function start() {
     throw new Error("EMAIL_VERIFICATION_ENABLED must be set explicitly to true or false in production.");
   }
   store = await createStore(PROJECT_ROOT);
-  auth=createAuthService({
-    store,
-    emailConfig:EMAIL_CONFIG,
-    exerciseIds:EXERCISE_IDS,
-    isUniqueViolation,
-    trustedAuthOrigin,
-    rateAllowed,
-    http:{json,bodyJson,bodyForm,redirect},
-    getUserPayload:userPayload,
-    claimAdminForLogin:(user)=>admin?admin.maybeClaimAdminForLogin(user):user,
-    reconcileCheckoutCreationBeforeDeletion,
-    reconcileUnsettledPurchases
-  });
-  admin=createAdminService({
-    store,
-    adminEmail:ADMIN_EMAIL,
-    auth,
-    emailConfig:EMAIL_CONFIG,
-    paymentConfig:PAYMENT_CONFIG,
-    enforcePaddleIps:ENFORCE_PADDLE_IPS,
-    trustedAuthOrigin,
-    rateAllowed,
-    http:{json,bodyJson}
-  });
-  support=createSupportService({
-    store,
-    emailConfig:EMAIL_CONFIG,
-    auth,
-    admin,
-    requestAddress,
-    trustedAuthOrigin,
-    rateAllowed,
-    isUniqueViolation,
-    http:{json,bodyJson}
-  });
+  ({auth,admin,support}=composeServices({
+    store,emailConfig:EMAIL_CONFIG,paymentConfig:PAYMENT_CONFIG,
+    adminEmail:ADMIN_EMAIL,enforcePaddleIps:ENFORCE_PADDLE_IPS,
+    exerciseIds:EXERCISE_IDS,trustedAuthOrigin,rateAllowed,requestAddress,
+    http:{json,bodyJson,bodyForm,redirect},getUserPayload:userPayload,
+    reconcileCheckoutCreationBeforeDeletion,reconcileUnsettledPurchases,isUniqueViolation,
+    createAuthService,createAdminService,createSupportService
+  }));
   await admin.bootstrap();
   await store.deleteExpired(Date.now());
   await admin.cleanup();

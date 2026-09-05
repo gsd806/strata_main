@@ -8,7 +8,8 @@ const { join } = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
 
 const PROJECT_ROOT=join(__dirname,"..");
-const BUILD=require(join(PROJECT_ROOT,"package.json")).version;
+const RELEASE=require(join(PROJECT_ROOT,"package.json"));
+const BUILD=RELEASE.strataBuild||RELEASE.version;
 const BUILD_LABEL=new RegExp(`Build ${BUILD.replace(/\./g,"\\.")}`);
 
 let server;
@@ -65,7 +66,7 @@ test.before(startServer);
 test.after(stopServer);
 
 test("serves rankings and gates private account pages",async()=>{
-  assert.equal(BUILD,"6.9.9");
+  assert.equal(BUILD,"6.9.9.007");
   const home=await request("/");
   assert.equal(home.response.status,200);
   assert.equal(home.response.headers.get("cache-control"),"private, no-store");

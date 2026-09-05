@@ -1,3 +1,4 @@
+// @ts-check
 "use strict";
 
 const { gzipSync }=require("node:zlib");
@@ -16,11 +17,13 @@ function securityHeaders() {
   };
 }
 
+/** @param {import("./domain-types").HttpHeaders} headers @param {string} name */
 function headerKey(headers,name) {
   const lowered=name.toLowerCase();
   return Object.keys(headers).find((key)=>key.toLowerCase()===lowered);
 }
 
+/** @param {import("./domain-types").HttpHeaders} headers @param {string} value */
 function appendVary(headers,value) {
   const key=headerKey(headers,"Vary")||"Vary";
   const values=String(headers[key]||"").split(",").map((item)=>item.trim()).filter(Boolean);
@@ -28,19 +31,23 @@ function appendVary(headers,value) {
   headers[key]=values.join(", ");
 }
 
+/** @param {unknown} header */
 function gzipAccepted(header) {
+  /** @type {number|undefined} */
   let explicit;
+  /** @type {number|undefined} */
   let wildcard;
   for (const item of String(header||"").split(",")) {
-    const [rawCoding,...parameters]=item.trim().split(";");
+    const [rawCoding="",...parameters]=item.trim().split(";");
     const coding=rawCoding.trim().toLowerCase();
     if (!coding) continue;
     let quality=1;
     for (const parameter of parameters) {
       const match=parameter.trim().match(/^q\s*=\s*(.+)$/i);
       if (!match) continue;
-      const valid=/^(?:0(?:\.\d{0,3})?|1(?:\.0{0,3})?)$/.test(match[1]);
-      quality=valid?Number(match[1]):0;
+      const qualityText=match[1]||"";
+      const valid=/^(?:0(?:\.\d{0,3})?|1(?:\.0{0,3})?)$/.test(qualityText);
+      quality=valid?Number(qualityText):0;
       break;
     }
     if (coding==="gzip") explicit=explicit===undefined?quality:Math.max(explicit,quality);
@@ -49,10 +56,16 @@ function gzipAccepted(header) {
   return (explicit??wildcard??0)>0;
 }
 
+/** @param {string} contentType */
 function compressibleType(contentType) {
   return /^text\//i.test(contentType)||/^(?:application\/(?:json|javascript|manifest\+json)|image\/svg\+xml)(?:;|$)/i.test(contentType);
 }
 
+/**
+ * @param {import("./domain-types").HttpRequest} req
+ * @param {string|Buffer} body
+ * @param {import("./domain-types").HttpHeaders} headers
+ */
 function responseBody(req,body,headers) {
   const original=Buffer.isBuffer(body)?body:Buffer.from(String(body));
   const typeKey=headerKey(headers,"Content-Type");
@@ -75,6 +88,12 @@ function responseBody(req,body,headers) {
   return payload;
 }
 
+/**
+ * @param {import("./domain-types").HttpResponse} res
+ * @param {number} status
+ * @param {unknown} data
+ * @param {import("./domain-types").HttpHeaders} headers
+ */
 function json(res,status,data,headers={}) {
   const responseHeaders={...securityHeaders(),"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store",...headers};
   const body=responseBody(res.req,JSON.stringify(data),responseHeaders);
@@ -82,9 +101,12 @@ function json(res,status,data,headers={}) {
   if (res.req?.method==="HEAD") res.end(); else res.end(body);
 }
 
+/** @param {import("./domain-types").HttpRequest} req @param {number} maxBytes @returns {Promise<Buffer>} */
 function bodyBuffer(req,maxBytes=MAX_BODY_BYTES) {
   return new Promise((resolve,reject)=>{
-    let chunks=[],bytes=0,tooLarge=false;
+    /** @type {Buffer[]} */
+    let chunks=[];
+    let bytes=0,tooLarge=false;
     req.on("data",(chunk)=>{
       if (tooLarge) return;
       bytes+=chunk.length;
@@ -94,28 +116,36 @@ function bodyBuffer(req,maxBytes=MAX_BODY_BYTES) {
         reject(Object.assign(new Error("Request is too large."),{status:413}));
         return;
       }
-      chunks.push(chunk);
+      chunks.push(Buffer.isBuffer(chunk)?chunk:Buffer.from(chunk));
     });
     req.on("end",()=>{ if (!tooLarge) resolve(Buffer.concat(chunks,bytes)); });
     req.on("error",reject);
   });
 }
 
+/** @param {import("./domain-types").HttpRequest} req */
 async function bodyText(req) {
   return (await bodyBuffer(req)).toString("utf8");
 }
 
+/** @param {import("./domain-types").HttpRequest} req @returns {Promise<unknown>} */
 async function bodyJson(req) {
   const body=await bodyText(req);
   try { return body?JSON.parse(body):{}; }
   catch { throw Object.assign(new Error("Invalid JSON."),{status:400}); }
 }
 
+/** @param {import("./domain-types").HttpRequest} req @returns {Promise<Record<string,string>>} */
 async function bodyForm(req) {
   const body=await bodyText(req),params=new URLSearchParams(body);
   return Object.fromEntries(params.entries());
 }
 
+/**
+ * @param {import("./domain-types").HttpResponse} res
+ * @param {string} location
+ * @param {import("./domain-types").HttpHeaders} headers
+ */
 function redirect(res,location,headers={}) {
   res.writeHead(303,{...securityHeaders(),Location:location,"Cache-Control":"no-store",...headers});
   res.end();

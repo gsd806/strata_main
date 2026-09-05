@@ -26,7 +26,8 @@ The application is intentionally server-rendered and framework-light. Public HTM
 | Module | Responsibility |
 | --- | --- |
 | `server.js` | Stable process bootstrap used by npm and Render. |
-| `src/server.js` | Composition root, request dispatch, public route aliases, provider orchestration, static serving, startup, and shutdown. It injects store/config/HTTP dependencies into the domain services. |
+| `src/server.js` | HTTP composition root, request dispatch, public route aliases, provider orchestration, static serving, startup, and shutdown. |
+| `src/service-composition.js` | Strictly checked composition function for auth, admin, and support factories and their narrow capabilities. |
 | `src/auth.js` | Login, signup, email verification, recovery, reset, deletion, cookie/session/CSRF helpers, native auth forms and JSON routes, account-action delivery, and auth-data cleanup. |
 | `src/admin.js` | Primary-owner binding, admin identity and elevation, session rotation, permission gates, account actions, redacted admin payloads, and audit helpers/routes. |
 | `src/support.js` | Public support validation and durable rate reservations, acknowledgment/notification delivery, admin support workflow and responses, safe payload shaping, and retention cleanup. |
@@ -140,7 +141,7 @@ Private server responses also carry `no-store`. The service-worker exclusion is 
 
 ## Quality and change discipline
 
-`npm run check` is the default pre-commit command: release consistency, correctness-focused ESLint, the Node suite, and runtime QA. `npm run coverage` prints an informational application-code baseline without a percentage gate. Real-browser accessibility/layout checks remain available through `npm run qa:ui`.
+`npm run check` is the default pre-commit command: release consistency, module-architecture constraints, static boundary typing, correctness-focused ESLint, the coverage-gated Node suite, runtime QA, reproducible performance checks, and the high-risk browser E2E journeys. `docs/testing.md` defines the unit, integration, contract, and E2E layers. `docs/performance.md` records what the local performance evidence can and cannot prove. The broader real-browser accessibility/layout audit remains available through `npm run qa:ui`.
 
 When adding a module or route:
 
@@ -150,4 +151,4 @@ When adding a module or route:
 4. test denied, expired, replayed, concurrent, and provider-failure paths;
 5. verify SQLite/Turso observable parity;
 6. confirm private responses and PWA exclusions; and
-7. run `npm run check`, coverage, the UI audit when relevant, and the production dependency audit.
+7. run `npm run check`, the broader UI audit when relevant, and the production dependency audit.

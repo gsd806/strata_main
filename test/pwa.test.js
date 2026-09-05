@@ -10,7 +10,8 @@ const PROJECT_ROOT=path.join(__dirname,"..");
 const PUBLIC_ROOT=path.join(PROJECT_ROOT,"public");
 const read=(name)=>fs.readFileSync(path.join(PUBLIC_ROOT,name),"utf8");
 const readProject=(name)=>fs.readFileSync(path.join(PROJECT_ROOT,name),"utf8");
-const BUILD=JSON.parse(readProject("package.json")).version;
+const RELEASE=JSON.parse(readProject("package.json"));
+const BUILD=RELEASE.strataBuild||RELEASE.version;
 const escapeRegExp=(value)=>String(value).replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
 
 function pngDimensions(file) {
@@ -94,7 +95,7 @@ test("release version, cache keys, asset URLs, and catalog claims stay aligned",
   const serviceWorker=read("service-worker.js");
   const pages=["index.html","account.html","verify-email.html","forgot-password.html","reset-password.html","delete-account.html","admin.html","planner.html","discover.html","install.html","offline.html","pricing.html","contact.html","terms.html","privacy.html","refunds.html"];
 
-  assert.equal(version,"6.9.9");
+  assert.equal(version,"6.9.9.007");
   assert.match(serviceWorker,new RegExp(`const BUILD="${versionPattern}";`));
   assert.match(serviceWorker,/const CACHE_PREFIX="strata-static-";/);
   assert.match(serviceWorker,/const STATIC_CACHE=`\$\{CACHE_PREFIX\}\$\{BUILD\}`;/);

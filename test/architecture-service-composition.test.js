@@ -24,11 +24,13 @@ function authService(store,overrides={}){
   });
 }
 
-test("server composes bounded services instead of retaining auth and admin implementations",()=>{
+test("server composition keeps auth, admin, and support implementations behind module boundaries",()=>{
   const server=readFileSync(join(PROJECT_ROOT,"src","server.js"),"utf8");
-  assert.match(server,/createAuthService\(\{/);
-  assert.match(server,/createAdminService\(\{/);
-  assert.match(server,/createSupportService\(\{/);
+  const composition=readFileSync(join(PROJECT_ROOT,"src","service-composition.js"),"utf8");
+  assert.match(server,/composeServices\(\{/);
+  assert.match(composition,/createAuthService\(\{/);
+  assert.match(composition,/createAdminService\(\{/);
+  assert.match(composition,/createSupportService\(\{/);
   assert.match(server,/await auth\.handleApi\(req,res,url\)/);
   assert.match(server,/await admin\.handleApi\(req,res,url\)/);
   assert.match(server,/await support\.handleApi\(req,res,url\)/);

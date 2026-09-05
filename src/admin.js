@@ -5,6 +5,11 @@ const {cleanText,defaultPlan,sanitizePlan,planStats}=require("./plans");
 
 const ADMIN_ELEVATION_MS=30*60*1000;
 
+/**
+ * Typed dependency-injection boundary for privileged account operations.
+ * @param {import("./domain-types").AdminServiceDependencies} dependencies
+ * @returns {import("./domain-types").AdminService}
+ */
 function createAdminService({
   store,
   adminEmail,

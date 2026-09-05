@@ -7,7 +7,8 @@ const vm=require("node:vm");
 const path=require("node:path");
 
 const PROJECT_ROOT=path.join(__dirname,"..");
-const BUILD=require(path.join(PROJECT_ROOT,"package.json")).version;
+const RELEASE=require(path.join(PROJECT_ROOT,"package.json"));
+const BUILD=RELEASE.strataBuild||RELEASE.version;
 const html=fs.readFileSync(path.join(PROJECT_ROOT,"public","pages","index.html"),"utf8");
 const appSource=fs.readFileSync(path.join(PROJECT_ROOT,"public","scripts","app.js"),"utf8");
 const catalog=JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT,"public","data","exercises.json"),"utf8"));
