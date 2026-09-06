@@ -88,7 +88,7 @@ test("community plans preview a full week and require confirmation before replac
 });
 
 test("monthly workspace exposes private import, multi-muscle schedule, PDF, and sharing controls",()=>{
-  const html=read("pages","discover.html"),script=read("scripts","discover.js"),worker=read("service-worker.js");
+  const html=read("pages","discover.html"),script=read("scripts","discover.js"),worker=read("service-worker.js"),css=read("styles","discover.css");
   for(const id of ["monthlyPlanForm","monthlySourceAccount","monthlySourceGuest","monthlyFileInput","monthlySchedule","generateMonthlyPlan","monthlyResults","monthlyPdfButton","monthlyShareButton"]){
     assert.match(html,new RegExp(`\\bid="${id}"`),id);
   }
@@ -98,6 +98,7 @@ test("monthly workspace exposes private import, multi-muscle schedule, PDF, and 
   assert.match(script,/\/api\/monthly-plan/);
   assert.match(script,/navigator\.share/);
   assert.match(script,/print-monthly-plan/);
+  assert.match(css,/body\.print-monthly-plan > \.skip-link,[\s\S]*?display: none !important;/,"The exported plan must not print the keyboard skip link");
   assert.match(worker,/monthly-plan-core\.js\?v=/);
 });
 
@@ -127,8 +128,8 @@ test("Strata+ copy and visual polish remain resilient across content and breakpo
   assert.match(html,/id="featureHubTitle">CHOOSE YOUR <em>NEXT STEP\.<\/em>/);
   assert.match(html,/id="recommendationTitle"[^>]*>BEST EXERCISES <em>FOR YOU\.<\/em>/);
   assert.doesNotMatch(script,/recommendationTitle"\)\.innerHTML/,"A display name must not be interpolated into the recommendation heading");
-  assert.match(html,/>Exercise library<\/strong>/);
-  assert.match(html,/>Build a session<\/strong>/);
+  assert.match(html,/>Explore every movement<\/strong>/);
+  assert.match(html,/>Build today’s workout<\/strong>/);
   assert.doesNotMatch(html,/feature-block-session/);
   assert.doesNotMatch(css,/feature-block-session/);
   assert.match(css,/\.plus-studio \.profile-section,\.plus-studio \.recommendation-section\s*\{[^}]*color:var\(--ink\);[^}]*background:var\(--paper\)/);
@@ -175,4 +176,26 @@ test("Strata+ polish keeps filters legible and comparison details accessible",()
   assert.match(css,/@media \(max-width: 520px\)\s*\{\s*\.feature-grid \{ grid-template-columns: 1fr/);
   assert.match(css,/@media \(max-width: 680px\)[\s\S]*?\.studio-header \{[^}]*backdrop-filter:none/,
     "Mobile navigation must escape the sticky header's backdrop-filter containing block");
+});
+
+test("Strata+ offers a private, bounded decision board without changing server contracts",()=>{
+  const html=read("pages","discover.html"),script=read("scripts","discover.js"),core=read("scripts","discovery-core.js"),css=read("styles","discover.css");
+  for(const id of ["movementBoardTitle","movementBoardCapacity","movementBoardList","movementBoardStatus","clearMovementBoard","compareMovementBoard","savedCollectionLabel"]){
+    assert.match(html,new RegExp(`\\bid="${id}"`),id);
+  }
+  assert.match(html,/Private on this device/);
+  assert.match(html,/data-collection="saved"/);
+  assert.match(script,/MOVEMENT_BOARD_LIMIT=4/);
+  assert.match(script,/localStorage\?\.getItem\(movementBoardStorageKey\(\)\)/);
+  assert.match(script,/localStorage\?\.setItem\(movementBoardStorageKey\(\),JSON\.stringify\(state\.shortlist\)\)/);
+  assert.match(script,/Core\.normalizeShortlist\(state\.shortlist,state\.exercises,MOVEMENT_BOARD_LIMIT\)/);
+  assert.match(script,/data-toggle-shortlist/);
+  assert.match(script,/personal\.eligible\?`\$\{personal\.match\}% match`:"Excluded"/);
+  assert.match(script,/aria-label="Inspect \$\{escapeHtml\(exercise\.name\)\}, \$\{escapeHtml\(group\)\}, \$\{escapeHtml\(exercise\.equipment\)\}, \$\{escapeHtml\(fit\)\}"/);
+  assert.doesNotMatch(script,/containerId&&!el\("detailDialog"\)\?\.open/);
+  assert.match(css,/\.movement-board-open b\.is-excluded\s*\{/);
+  assert.doesNotMatch(script,/\/api\/(?:shortlist|saved|favorites)/,"The device-private board must not invent a new server contract");
+  assert.match(core,/function normalizeShortlist\(value,exercises,limit=4\)/);
+  assert.match(css,/\.movement-board-list\s*\{[^}]*grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
+  assert.match(css,/@media \(max-width: 680px\)[\s\S]*?\.movement-board-list\s*\{\s*grid-template-columns:1fr/);
 });

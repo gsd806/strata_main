@@ -166,6 +166,7 @@ function showRequestedPanel(){
 }
 
 function showAccess(sessionError=""){
+  document.body?.classList.remove("account-signed-in");
   currentCsrfToken="";
   el("accountLoading").hidden=true;
   el("signedInCard").hidden=true;
@@ -178,11 +179,21 @@ function showAccess(sessionError=""){
 }
 
 function showSignedIn(user,csrfToken=""){
+  document.body?.classList.add("account-signed-in");
   currentCsrfToken=String(csrfToken||"");
   el("accountLoading").hidden=true;
   el("accountAccess").hidden=true;
   el("signedInCard").hidden=false;
   el("signedInIdentity").textContent=`${user.name} · ${user.email}`;
+  const planCount=Math.max(0,Number(user?.planCount)||0);
+  const workoutDays=Math.max(0,Number(user?.workoutDays)||0);
+  el("accountPlanCount").textContent=String(planCount);
+  el("accountWorkoutDays").textContent=String(workoutDays);
+  const createdAt=Number(user?.createdAt);
+  const createdDate=Number.isFinite(createdAt)&&createdAt>0?new Date(createdAt):null;
+  el("accountMemberSince").textContent=createdDate&&!Number.isNaN(createdDate.getTime())
+    ?new Intl.DateTimeFormat(undefined,{month:"short",year:"numeric"}).format(createdDate)
+    :"Member";
   el("accountAdminAction").hidden=user?.isAdmin!==true;
   const discoveryActive=user?.discovery?.active===true;
   const discoveryPending=Number(user?.discovery?.pendingPurchaseCount||0)>0;
@@ -194,6 +205,16 @@ function showSignedIn(user,csrfToken=""){
     :discoveryPending
       ?"A Strata+ checkout is pending. Open Pricing to finish checkout or check confirmation."
       :"The exercise index and weekly planner are free. Strata+ is available as a $5.99 USD one-time purchase.";
+  const trialActive=discoveryActive&&user?.discovery?.accessType==="trial";
+  const trialExpiresAt=Number(user?.discovery?.trial?.expiresAt);
+  const trialDays=trialActive&&Number.isFinite(trialExpiresAt)?Math.max(1,Math.ceil((trialExpiresAt-Date.now())/86400000)):0;
+  el("accountAccessState").textContent=trialActive?"Trial":discoveryActive?"Unlocked":discoveryPending?"Pending":"Free";
+  el("accountAccessDetail").textContent=trialActive
+    ?`${trialDays} ${trialDays===1?"day":"days"} remaining`
+    :discoveryActive?"One-time access confirmed":discoveryPending?"Checkout needs attention":"Rankings and Plan included";
+  const primaryAction=el("accountPrimaryAction");
+  primaryAction.href=planCount>0?(discoveryActive?"/workout.html":"/planner.html"):discoveryActive?"/onboarding.html":"/planner.html";
+  el("accountPrimaryLabel").textContent=planCount>0?(discoveryActive?"Start training":"Open your week"):"Build your week";
   const deletionPending=user?.accountDeletion?.pending===true;
   el("accountDeleteCancel").hidden=!deletionPending;
   if(deletionPending)showSecurityStatus("An account-deletion confirmation is pending. You can use the emailed link or cancel the request here.");

@@ -320,6 +320,13 @@ function planMovementCount(plan=state.plan){
   return DAYS.reduce((total,day)=>total+(Array.isArray(plan?.days?.[day])?plan.days[day].length:0),0);
 }
 
+function nextScheduledDay(plan=state.plan,now=new Date()){
+  const todayIndex=(now.getDay()+6)%7;
+  const ordered=[...DAYS.slice(todayIndex),...DAYS.slice(0,todayIndex)];
+  const day=ordered.find((name)=>Array.isArray(plan?.days?.[name])&&plan.days[name].length>0);
+  return day?{day,movements:plan.days[day].length,isToday:day===DAYS[todayIndex]}:null;
+}
+
 function setShareStatus(message="",type=""){
   const status=el("sharePlanStatus");
   status.textContent=message;
@@ -500,7 +507,7 @@ function renderLibrary(){
   el("libraryList").innerHTML=items.length?visibleItems.map((exercise,index)=>{
     const id=escapeHtml(exercise.id),name=escapeHtml(exercise.name),sub=escapeHtml(exercise.sub),equipment=escapeHtml(exercise.equipment),youtube=escapeHtml(exercise.youtube);
     return `<article class="library-card" draggable="true" data-library-id="${id}" data-library-index="${index}"><div class="library-score"><span aria-hidden="true">${escapeHtml(exercise.score)}</span><span class="sr-only">STRATA score ${escapeHtml(exercise.score)}</span></div><div><h3>${name}</h3><p>${sub} · ${equipment}</p></div><div class="library-actions"><button data-quick-add="${id}" type="button" aria-label="Add ${name} to ${escapeHtml(state.selectedDay)}">Add</button><a class="yt-link" href="${youtube}" target="_blank" rel="noreferrer" aria-label="Find ${name} tutorials on YouTube">Video</a></div></article>`;
-  }).join("")+(!remaining?"":`<div class="library-load-more"><span>${visibleItems.length} of ${items.length}</span><button data-load-more-library type="button" aria-controls="libraryList">Load ${nextCount} more <span aria-hidden="true">↓</span></button></div>`):`<div class="loading">No matching movements.</div>`;
+  }).join("")+(!remaining?"":`<div class="library-load-more"><span>${visibleItems.length} of ${items.length}</span><button data-load-more-library type="button" aria-controls="libraryList">Load ${nextCount} more <span aria-hidden="true">↓</span></button></div>`):`<div class="library-empty"><strong>No matching movements</strong><span>Try another search or choose a different muscle group.</span></div>`;
 }
 
 function scheduledMarkup(item,day,index,count){
@@ -530,10 +537,21 @@ function renderSummary(){
   const trainingDays=DAYS.filter((day)=>state.plan.days[day].length).length;
   const totalSets=DAYS.reduce((sum,day)=>sum+state.plan.days[day].reduce((count,item)=>count+Number(item.sets||0),0),0);
   const restConflict=hasRestConflict();
-  el("weekSummary").innerHTML=`<div class="summary-stat"><span>Scheduled movements</span><strong>${total}</strong></div><div class="summary-stat"><span>Training days</span><strong>${trainingDays}</strong></div><div class="summary-stat"><span>Working sets</span><strong>${totalSets}</strong></div><div class="summary-stat ${restConflict?"summary-warning":""}"><span>Rest days</span><strong>${restDays().length}${restConflict?" · clear":""}</strong></div>`;
   const peak=Math.max(1,...DAYS.map((day)=>state.plan.days[day].length));
   const distribution=DAYS.map((day)=>`${day}: ${state.plan.days[day].length} exercises`).join(", ");
-  el("weekSummary").innerHTML+=`<div class="week-distribution" role="img" aria-label="Weekly exercise distribution. ${distribution}">${DAYS.map((day)=>`<div aria-hidden="true"><span>${state.plan.days[day].length}</span><div class="week-bar-track"><i style="height:${Math.max(3,state.plan.days[day].length/peak*100)}%" class="${isRestDay(day)?"is-rest":""}"></i></div><small>${day.slice(0,3)}</small></div>`).join("")}</div>`;
+  const next=nextScheduledDay();
+  let readiness;
+  if(restConflict)readiness={tone:"needs-attention",label:"Plan check",title:"Clear the recovery conflict.",detail:`Move exercises off ${restDays().filter((day)=>state.plan.days[day].length).join(", ")} before this week can save cleanly.`,action:"",href:""};
+  else if(!total)readiness={tone:"getting-started",label:"Next move",title:"Build your first training day.",detail:"Choose a destination day, then add one movement from the library. Sets and reps remain editable.",action:"Choose a movement",href:"#libraryPanel"};
+  else {
+    const noRecovery=restDays().length===0,guest=state.guest;
+    readiness={
+      tone:noRecovery?"review-recovery":"ready",label:noRecovery?"Recovery check":"Train-ready",title:noRecovery?"Your week is built. Recovery is unmarked.":"Your week is ready to train.",
+      detail:`${next?.isToday?"Today":`Next scheduled: ${next?.day||"your plan"}`} · ${next?.movements||total} movement${(next?.movements||total)===1?"":"s"}.${noRecovery?" Consider marking an open day for recovery.":" Changes save automatically."}`,
+      action:guest?"Explore Strata+":"Start working out",href:guest?"/pricing":`/workout.html?day=${encodeURIComponent(next?.day||DAYS.find((day)=>state.plan.days[day].length))}`
+    };
+  }
+  el("weekSummary").innerHTML=`<div class="summary-stat"><span>Scheduled movements</span><strong>${total}</strong></div><div class="summary-stat"><span>Training days</span><strong>${trainingDays}</strong></div><div class="summary-stat"><span>Working sets</span><strong>${totalSets}</strong></div><div class="summary-stat ${restConflict?"summary-warning":""}"><span>Rest days</span><strong>${restDays().length}${restConflict?" · clear":""}</strong></div><div class="week-distribution" role="img" aria-label="Weekly exercise distribution. ${distribution}">${DAYS.map((day)=>`<div aria-hidden="true"><span>${state.plan.days[day].length}</span><div class="week-bar-track"><i style="height:${Math.max(3,state.plan.days[day].length/peak*100)}%" class="${isRestDay(day)?"is-rest":""}"></i></div><small>${day.slice(0,3)}</small></div>`).join("")}</div><section class="week-readiness ${readiness.tone}" aria-label="Plan guidance"><div><span>${readiness.label}</span><strong>${readiness.title}</strong><p>${readiness.detail}</p></div>${readiness.href?`<a href="${readiness.href}">${readiness.action} <span aria-hidden="true">→</span></a>`:""}</section>`;
 }
 
 function hasRestConflict(){return restDays().some(day=>state.plan?.days?.[day]?.length);}
@@ -988,7 +1006,7 @@ async function init({guestOnly=false}={}){
   el("weekSummary").innerHTML="";
   el("weekBoard").innerHTML='<div class="planner-load-state">Loading your weekly plan…</div>';
   try{
-    const exercises=await api("/exercises.json?v=7.1.3");
+    const exercises=await api("/exercises.json?v=7.2.0");
     if(!Array.isArray(exercises))throw new Error("STRATA returned an incomplete exercise library.");
     state.exercises=exercises;
     let result;

@@ -16,9 +16,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/experience.css?v=7.1.3" />
-    <link rel="stylesheet" href="discover.css?v=7.1.3" />
-    <script src="/motion.js?v=7.1.3"></script>
+    <link rel="stylesheet" href="/experience.css?v=7.2.0" />
+    <link rel="stylesheet" href="discover.css?v=7.2.0" />
+    <script src="/motion.js?v=7.2.0"></script>
   </head>
   <body class="plus-studio">
     <a class="skip-link" href="#featureHub">Skip to Strata+ tools</a>
@@ -38,20 +38,25 @@
 
     <main>
       <section class="studio-hero">
-        
+        <div class="hero-signal" aria-hidden="true"><span></span><span></span><span></span><i></i></div>
         <div class="studio-container hero-layout">
-          <div>
-            <p class="eyebrow"><span></span> Your Strata+ workspace</p>
-            <h1>YOUR WEEK.<br /><em>YOUR PROGRESS.</em></h1>
-            <p>Set your week in motion. Start training, shape your routine, or find the right movement for your next session.</p>
-            <div class="hero-actions"><a class="button button-accent" id="plusStartWorkout" href="/workout.html">Start working out <span aria-hidden="true">↗</span></a></div>
+          <div class="hero-copy">
+            <p class="eyebrow"><span></span> Strata+ training studio</p>
+            <h1>TRAIN WITH A PLAN.<br /><em>CHOOSE WITH CLARITY.</em></h1>
+            <p>Your week, preferences, and the complete movement library—brought together so the next useful decision is always clear.</p>
+            <div class="hero-actions"><a class="button button-accent" id="plusStartWorkout" href="/workout.html">Start working out <span aria-hidden="true">↗</span></a><a class="button plus-secondary" href="#sessionBuilder" data-feature-target="session">Build a session <span aria-hidden="true">→</span></a></div>
             <a class="plus-history-link" href="/workout.html#historySection">Workout history &amp; progress <span aria-hidden="true">→</span></a>
           </div>
           <aside class="weekly-pulse" id="weeklyPulse" aria-labelledby="weeklyPulseTitle">
-            <div class="weekly-pulse-top"><p id="weeklyPulseEyebrow">Next in your week</p><span><i aria-hidden="true"></i> Plan pulse</span></div>
+            <div class="weekly-pulse-top"><p id="weeklyPulseEyebrow">Next in your week</p><span><i aria-hidden="true"></i> Training brief</span></div>
             <h2 id="weeklyPulseTitle">TODAY, AT A GLANCE.</h2>
             <p id="weeklyPulseDetail" role="status" aria-live="polite">Checking your saved week for the next workout…</p>
             <div class="weekly-pulse-progress" aria-hidden="true"><span id="weeklyPulseBar"></span></div>
+            <dl class="weekly-pulse-metrics" aria-label="Saved week summary">
+              <div><dt>Next session</dt><dd id="weeklyPulseMovements">—</dd></div>
+              <div><dt>Working sets</dt><dd id="weeklyPulseSets">—</dd></div>
+              <div><dt>Days planned</dt><dd id="weeklyPulseDays">—</dd></div>
+            </dl>
             <div class="weekly-pulse-footer"><span><strong id="catalogTotal">200</strong> movement library</span><a id="weeklyPulseAction" href="/planner.html">Edit weekly plan <span aria-hidden="true">→</span></a></div>
           </aside>
         </div>
@@ -59,15 +64,15 @@
 
       <section class="feature-hub" id="featureHub" aria-labelledby="featureHubTitle">
         <div class="studio-container">
-          <div class="feature-hub-heading"><div><p class="kicker">Your Strata+ tools</p><h2 id="featureHubTitle">CHOOSE YOUR <em>NEXT STEP.</em></h2></div><p>Open one focused tool at a time. Your saved preferences and plan stay available as you move between them.</p></div>
+          <div class="feature-hub-heading"><div><p class="kicker">One studio · seven focused tools</p><h2 id="featureHubTitle">CHOOSE YOUR <em>NEXT STEP.</em></h2></div><p>Move from deciding to planning without losing context. Each tool uses the same profile and saved week.</p></div>
           <nav class="feature-grid" aria-label="Strata+ features">
-            <a class="feature-block" href="#recommendations" data-feature-target="recommendations" aria-controls="recommendations" aria-expanded="false"><span>Recommendations</span><strong>Best exercises for you</strong><small>See movements ranked for your goals, experience, equipment, and constraints.</small><b aria-hidden="true">↘</b></a>
-            <a class="feature-block" href="#exerciseExplorer" data-feature-target="explorer" aria-controls="exerciseExplorer" aria-expanded="false"><span>Library</span><strong>Exercise library</strong><small>Search all 200 movements, review the details, and add your rating.</small><b aria-hidden="true">↘</b></a>
-            <a class="feature-block" href="#battle" data-feature-target="battle" aria-controls="battle" aria-expanded="false"><span>Compare</span><strong>Compare exercises</strong><small>Compare two to four movements across scores, setup, and personal fit.</small><b aria-hidden="true">↘</b></a>
-            <a class="feature-block" href="#profile" data-feature-target="profile" aria-controls="profile" aria-expanded="false"><span>Preferences</span><strong>Personalize recommendations</strong><small>Update the preferences that shape your personal matches.</small><b aria-hidden="true">↘</b></a>
-            <a class="feature-block" href="#communityPlans" data-feature-target="community" aria-controls="communityPlans" aria-expanded="false"><span>Community</span><strong>Browse community plans</strong><small>Preview a shared week before choosing whether to use it.</small><b aria-hidden="true">↘</b></a>
-            <a class="feature-block" href="#monthlyPlan" data-feature-target="monthly" aria-controls="monthlyPlan" aria-expanded="false"><span>31-day plan</span><strong>Build a 31-day plan</strong><small>Turn a weekly schedule into a dated, downloadable training block.</small><b aria-hidden="true">↘</b></a>
-            <a class="feature-block" href="#sessionBuilder" data-feature-target="session" aria-controls="sessionBuilder" aria-expanded="false"><span>Session</span><strong>Build a session</strong><small>Create one focused workout from your training focus and available time, then add it to your plan.</small><b aria-hidden="true">↘</b></a>
+            <a class="feature-block" href="#recommendations" data-feature-target="recommendations" aria-controls="recommendations" aria-expanded="false"><span>Recommendations</span><strong>Find your strongest fits</strong><small>Ranked for your goal, experience, equipment, and constraints.</small><b aria-hidden="true">↗</b></a>
+            <a class="feature-block" href="#sessionBuilder" data-feature-target="session" aria-controls="sessionBuilder" aria-expanded="false"><span>Session</span><strong>Build today’s workout</strong><small>Turn a focus and available time into a reviewable session.</small><b aria-hidden="true">↗</b></a>
+            <a class="feature-block" href="#exerciseExplorer" data-feature-target="explorer" aria-controls="exerciseExplorer" aria-expanded="false"><span>Library</span><strong>Explore every movement</strong><small>Search 200 exercises and inspect the trade-offs behind each score.</small><b aria-hidden="true">↗</b></a>
+            <a class="feature-block" href="#battle" data-feature-target="battle" aria-controls="battle" aria-expanded="false"><span>Compare</span><strong>Make a clear choice</strong><small>Put two to four movements side by side before committing.</small><b aria-hidden="true">↗</b></a>
+            <a class="feature-block" href="#profile" data-feature-target="profile" aria-controls="profile" aria-expanded="false"><span>Preferences</span><strong>Tune your ranking lens</strong><small>Control the rules behind every personal match.</small><b aria-hidden="true">↗</b></a>
+            <a class="feature-block" href="#monthlyPlan" data-feature-target="monthly" aria-controls="monthlyPlan" aria-expanded="false"><span>31-day plan</span><strong>Shape a training block</strong><small>Turn a weekly rhythm into 31 dated, downloadable days.</small><b aria-hidden="true">↗</b></a>
+            <a class="feature-block" href="#communityPlans" data-feature-target="community" aria-controls="communityPlans" aria-expanded="false"><span>Community</span><strong>Discover a shared week</strong><small>Preview a member’s full plan before replacing your own.</small><b aria-hidden="true">↗</b></a>
           </nav>
           <p class="sr-only" id="featureStatus" role="status" aria-live="polite"></p>
         </div>
@@ -109,6 +114,15 @@
         <div class="studio-container">
           <a class="tool-menu-link" href="#featureHub">All Strata+ tools ↑</a>
           <div class="section-heading"><div><p class="kicker">Personalized shortlist</p><h2 id="recommendationTitle" tabindex="-1">BEST EXERCISES <em>FOR YOU.</em></h2></div><div class="heading-action"><p id="recommendationSummary">Based on your saved selection rules.</p><button class="small-button" id="shareRanking" type="button">Share shortlist ↗</button></div></div>
+          <div class="ranking-lens" aria-label="Current recommendation profile">
+            <div><span>Your ranking lens</span><ul id="rankingLensItems"><li>Loading preferences…</li></ul></div>
+            <a href="#profile" data-feature-target="profile">Tune preferences <span aria-hidden="true">→</span></a>
+          </div>
+          <section class="movement-board" aria-labelledby="movementBoardTitle">
+            <div class="movement-board-heading"><div><p class="kicker">Private on this device</p><h3 id="movementBoardTitle" tabindex="-1">YOUR DECISION BOARD.</h3><p>Keep up to four movements in view, then compare them when the choice is close.</p></div><span class="board-capacity" id="movementBoardCapacity">0 / 4 saved</span></div>
+            <div class="movement-board-list" id="movementBoardList"><p class="movement-board-empty">Save an exercise from a recommendation, the library, or its detail view.</p></div>
+            <div class="movement-board-actions"><p id="movementBoardStatus" role="status" aria-live="polite">Nothing saved yet.</p><div><button class="plain-button" id="clearMovementBoard" type="button" hidden>Clear board</button><button class="button button-dark" id="compareMovementBoard" type="button" disabled>Compare saved <span aria-hidden="true">→</span></button></div></div>
+          </section>
           <div class="recommendation-grid" id="recommendationGrid"><div class="loading-card">Building your ranking…</div></div>
         </div>
       </section>
@@ -143,7 +157,7 @@
         <div class="studio-container">
           <a class="tool-menu-link" href="#featureHub">All Strata+ tools ↑</a>
           <div class="section-heading"><div><p class="kicker">Search, inspect, and rate</p><h2 id="explorerTitle" tabindex="-1">EXPLORE EVERY <em>TRADE-OFF.</em></h2></div><p>Search by exercise, muscle, equipment, pattern, or difficulty. Select up to four movements for a deeper comparison.</p></div>
-          <div class="collection-row" role="group" aria-label="Quick exercise collections"><button data-collection="all" class="active" type="button" aria-pressed="true">All exercises</button><button data-collection="top-chest" type="button" aria-pressed="false">Highest-rated chest</button><button data-collection="dumbbells" type="button" aria-pressed="false">Best with dumbbells</button><button data-collection="bodyweight" type="button" aria-pressed="false">Bodyweight only</button><button data-collection="beginner" type="button" aria-pressed="false">Beginner-friendly</button><button data-collection="community" type="button" aria-pressed="false">Community rated</button></div>
+          <div class="collection-row" role="group" aria-label="Quick exercise collections"><button data-collection="all" class="active" type="button" aria-pressed="true">All exercises</button><button data-collection="saved" type="button" aria-pressed="false"><span id="savedCollectionLabel">Saved · 0</span></button><button data-collection="top-chest" type="button" aria-pressed="false">Highest-rated chest</button><button data-collection="dumbbells" type="button" aria-pressed="false">Best with dumbbells</button><button data-collection="bodyweight" type="button" aria-pressed="false">Bodyweight only</button><button data-collection="beginner" type="button" aria-pressed="false">Beginner-friendly</button><button data-collection="community" type="button" aria-pressed="false">Community rated</button></div>
           <div class="explorer-toolbar" role="search" aria-label="Filter exercises">
             <label class="filter-control search-control"><span class="filter-label">Search exercises</span><span class="search-icon" aria-hidden="true">⌕</span><input id="searchInput" type="search" placeholder="Name, muscle, equipment, pattern…" autocomplete="off" /></label>
             <label class="filter-control"><span class="filter-label">Muscle group</span><select id="groupFilter"><option value="all">All muscles</option></select></label>
@@ -154,7 +168,7 @@
           </div>
           <div class="results-line"><p id="resultStatus" role="status" aria-live="polite" aria-atomic="true"><strong id="resultCount">0</strong> matching <span id="resultNoun">exercises</span></p><button class="plain-button" id="clearFilters" type="button">Clear all</button></div>
           <div class="exercise-grid" id="exerciseGrid"><div class="loading-card">Loading exercise intelligence…</div></div>
-          <div class="empty-state" id="emptyState" hidden><strong>No exercise matches every filter.</strong><p>Try clearing the search or one of the exercise filters.</p><button class="button button-dark" data-reset-filters type="button">Clear all filters</button></div>
+          <div class="empty-state" id="emptyState" hidden><strong id="emptyStateTitle">No exercise matches every filter.</strong><p id="emptyStateDetail">Try clearing the search or one of the exercise filters.</p><button class="button button-dark" data-reset-filters type="button">Clear all filters</button></div>
         </div>
       </section>
 
@@ -245,7 +259,7 @@
 
     </main>
 
-    <footer class="build-footer">STRATA · Build 7.1.3 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
+    <footer class="build-footer">STRATA · Build 7.2.0 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
 
     <aside class="compare-tray" id="compareTray" hidden aria-label="Exercise comparison tray">
       <div><span>EXERCISE BATTLE</span><p id="compareNames">Choose 2–4 exercises</p></div>
@@ -265,10 +279,11 @@
         <div class="community-confirm-actions"><button class="small-button" id="communityApplyCancel" data-close-dialog="communityApplyDialog" type="button">Keep my current plan</button><button class="button button-dark" id="communityApplyConfirm" type="button">Replace with this plan <span aria-hidden="true">→</span></button></div>
       </div>
     </dialog>
+    <noscript><div class="no-script-note" role="status"><strong>Strata+ needs JavaScript for personalized tools.</strong> The page content remains available, but saving, filtering, comparing, and plan building require JavaScript.</div></noscript>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=7.1.3"></script>
-    <script src="discovery-core.js?v=7.1.3"></script>
-    <script src="monthly-plan-core.js?v=7.1.3"></script>
-    <script src="discover.js?v=7.1.3"></script>
+    <script src="/pwa.js?v=7.2.0"></script>
+    <script src="discovery-core.js?v=7.2.0"></script>
+    <script src="monthly-plan-core.js?v=7.2.0"></script>
+    <script src="discover.js?v=7.2.0"></script>
   </body>
 </html>

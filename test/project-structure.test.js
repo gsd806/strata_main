@@ -28,23 +28,23 @@ test("keeps root, private server, and public browser files separated",()=>{
     "public/pages/reset-password.html","public/pages/delete-account.html",
     "public/pages/admin.html","public/scripts/admin.js","public/styles/admin.css",
     "public/scripts/app.js","public/scripts/account-recovery.js","public/styles/styles.css",
-    "public/data/exercises.json","public/service-worker.js","public/manifest.webmanifest"
+    "public/data/exercises.json","public/images/strata-layers.jpg","public/service-worker.js","public/manifest.webmanifest"
   ])assert.ok(existsSync(join(PROJECT_ROOT,required)),`${required} must exist`);
 
   assert.deepEqual(readdirSync(PUBLIC_ROOT).sort(),[
-    "data","icons","manifest.webmanifest","pages","scripts","service-worker.js","styles"
+    "data","icons","images","manifest.webmanifest","pages","scripts","service-worker.js","styles"
   ]);
   assert.deepEqual(readdirSync(SRC_ROOT).sort(),["admin.js","auth.js","data","database.js","domain-types.d.ts","email.js","http.js","payments.js","plans.d.ts","plans.js","schema.js","server.js","service-composition.js","setup.js","static-assets.js","store-contract.js","support.js","workouts.js"]);
 
   const rootFiles=readdirSync(PROJECT_ROOT,{withFileTypes:true}).filter((entry)=>entry.isFile()).map((entry)=>entry.name);
   assert.deepEqual(rootFiles.filter((name)=>name.endsWith(".js")).sort(),["server.js"]);
-  assert.deepEqual(rootFiles.filter((name)=>/\.(?:html|css|webmanifest|png|svg)$/.test(name)),[]);
-  assert.deepEqual(walk(SRC_ROOT).map((file)=>slash(relative(SRC_ROOT,file))).filter((name)=>/\.(?:html|css|webmanifest|png|svg)$/.test(name)),[]);
+  assert.deepEqual(rootFiles.filter((name)=>/\.(?:html|css|webmanifest|jpe?g|png|svg)$/.test(name)),[]);
+  assert.deepEqual(walk(SRC_ROOT).map((file)=>slash(relative(SRC_ROOT,file))).filter((name)=>/\.(?:html|css|webmanifest|jpe?g|png|svg)$/.test(name)),[]);
   assert.match(readFileSync(join(PROJECT_ROOT,"server.js"),"utf8"),/require\("\.\/src\/server"\);/);
 });
 
 test("keeps credentials, databases, and private modules out of public",()=>{
-  const allowedExtensions=new Set([".html",".css",".js",".json",".webmanifest",".svg",".png"]);
+  const allowedExtensions=new Set([".html",".css",".js",".json",".webmanifest",".svg",".png",".jpg",".jpeg"]);
   const forbiddenNames=new Set(["server.js","auth.js","database.js","email.js","http.js","payments.js","plans.js","schema.js","service-composition.js","store-contract.js","support.js","discovery-data.json","render.yaml","package.json","package-lock.json"]);
   const textExtensions=new Set([".html",".css",".js",".json",".webmanifest",".svg"]);
 

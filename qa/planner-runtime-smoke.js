@@ -142,6 +142,9 @@ function clickSelectDay(day){
   assert.equal((html.match(/class="planner-workflow"/g)||[]).length,1,"Planner onboarding should be a single compact workflow");
   assert.match(html,/Build a weekly plan in three steps/,"Planner workflow should describe its purpose to assistive technology");
   assert.match(plannerCss,/\.day-empty::before\s*\{[^}]*content:"\+"/,"Empty days should have a visible add cue");
+  assert.match(elements.get("weekSummary").innerHTML,/class="week-readiness ready"/,"A valid week should render clear train-ready guidance");
+  assert.match(elements.get("weekSummary").innerHTML,/>Start working out/,"A signed-in train-ready week should expose one clear next action");
+  assert.match(elements.get("weekSummary").innerHTML,/class="week-distribution"/,"The planner should render its weekly distribution as a deliberate summary graphic");
 
   clickSelectDay("Tuesday");
   assert.equal(vm.runInContext("state.selectedDay",context),"Tuesday","Day chips must update the quick-add target");

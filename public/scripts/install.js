@@ -17,11 +17,13 @@
 
   const platform=currentPlatform();
   const platformCard=document.querySelector(`[data-platform="${platform}"]`);
+  const platformLink=document.querySelector(`[data-platform-link="${platform}"]`);
   if (platformCard) {
     platformCard.classList.add("recommended");
     const badge=platformCard.querySelector(".device-match");
     if (badge) badge.hidden=false;
   }
+  if(platformLink)platformLink.setAttribute("aria-current","true");
 
   function fallbackMessage() {
     if (platform==="ios") return "On iPhone or iPad, use Safari’s Share menu and choose Add to Home Screen.";

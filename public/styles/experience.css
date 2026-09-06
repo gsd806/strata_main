@@ -18,6 +18,8 @@
 }
 ::selection { background: var(--accent); color: #10110f; }
 body { font-family: var(--body); font-size: 16px; text-rendering: optimizeLegibility; }
+.strata-scroll-progress { position:fixed; z-index:120; top:0; right:0; left:0; height:3px; pointer-events:none; background:var(--accent); opacity:0; transform:scaleX(0); transform-origin:left center; transition:opacity .2s ease; }
+.strata-scroll-progress[data-active="true"] { opacity:1; }
 button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 input, select, textarea { font-size: max(1rem, 16px); }
 button:disabled { cursor: not-allowed; opacity: .58; }
@@ -138,9 +140,11 @@ dialog::backdrop { background: #080b08a8; backdrop-filter: blur(5px); }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  .strata-scroll-progress { display:none; }
 }
 @media print {
   *, *::before, *::after { animation: none !important; transition: none !important; }
+  .strata-scroll-progress { display:none; }
   .motion-enter { opacity: 1; transform: none; }
 }
 
@@ -154,6 +158,10 @@ dialog::backdrop { background: #080b08a8; backdrop-filter: blur(5px); }
 @media (prefers-reduced-motion: no-preference) {
   .info-hero-grid.motion-enter,.account-intro.motion-enter,.install-hero .hero-grid.motion-enter,
   .offline-shell.motion-enter,.policy-founder.motion-enter { animation-duration: .72s; }
+}
+
+@media (max-width: 800px) {
+  html { scroll-padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 }
 
 @media (max-width: 760px) {

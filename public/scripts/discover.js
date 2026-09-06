@@ -12,6 +12,8 @@ const EXPLORER_MOBILE_PAGE_SIZE=12;
 const SEARCH_DEBOUNCE_MS=180;
 const RATINGS_REFRESH_MIN_INTERVAL_MS=15_000;
 const COMMUNITY_PAGE_SIZE=12;
+const MOVEMENT_BOARD_LIMIT=4;
+const MOVEMENT_BOARD_STORAGE_PREFIX="strata_plus_movement_board_v1";
 const FEATURE_DEFAULT="recommendations";
 const FEATURE_CONFIG=Object.freeze({
   recommendations:{panelId:"recommendations",headingId:"recommendationTitle",label:"Best exercises for you"},
@@ -22,7 +24,7 @@ const FEATURE_CONFIG=Object.freeze({
   monthly:{panelId:"monthlyPlan",headingId:"monthlyPlanTitle",label:"Build a 31-day plan"},
   session:{panelId:"sessionBuilder",headingId:"sessionBuilderTitle",label:"Build a session"}
 });
-const state={exercises:[],methodology:null,sources:[],limited:new Set(),preferences:null,user:null,csrfToken:"",aggregate:new Map(),userRatings:new Map(),ratingsRefreshedAt:0,ratingsRefreshPromise:null,ratingSaving:new Set(),compare:[],collection:"all",query:"",group:"all",equipment:"all",pattern:"all",level:"all",sort:"personal",recommendations:[],activeExercise:null,activeFeature:null,explorerLimit:EXPLORER_DESKTOP_PAGE_SIZE,weeklyPlan:null,weeklyPlanUpdatedAt:0,session:null,sessionSaving:false,sessionDayInitialized:false,monthlyPlan:null,monthlyPlanUpdatedAt:0,monthlySchedule:null,monthlySource:"muscle-schedule",communityPlans:[],communityLoaded:false,communityLoading:false,communityError:"",communityNextOffset:0,communityQuery:"",communityPendingId:null,communityAppliedId:null,communityAppliedUpdatedAt:0};
+const state={exercises:[],methodology:null,sources:[],limited:new Set(),preferences:null,user:null,csrfToken:"",aggregate:new Map(),userRatings:new Map(),ratingsRefreshedAt:0,ratingsRefreshPromise:null,ratingSaving:new Set(),compare:[],shortlist:[],collection:"all",query:"",group:"all",equipment:"all",pattern:"all",level:"all",sort:"personal",recommendations:[],activeExercise:null,activeFeature:null,explorerLimit:EXPLORER_DESKTOP_PAGE_SIZE,weeklyPlan:null,weeklyPlanUpdatedAt:0,session:null,sessionSaving:false,sessionDayInitialized:false,monthlyPlan:null,monthlyPlanUpdatedAt:0,monthlySchedule:null,monthlySource:"muscle-schedule",communityPlans:[],communityLoaded:false,communityLoading:false,communityError:"",communityNextOffset:0,communityQuery:"",communityPendingId:null,communityAppliedId:null,communityAppliedUpdatedAt:0};
 const el=(id)=>document.getElementById(id);
 
 async function api(path,options={}) {
@@ -58,6 +60,15 @@ function saveRetryMessage(error){return `Couldn't save — Retry. ${saveErrorDet
 function escapeHtml(value){return String(value??"").replace(/[&<>'"]/g,(char)=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[char]));}
 function exerciseById(id){return state.exercises.find((exercise)=>exercise.id===id);}
 function titleCase(value){return String(value).replace(/(^|[- /])\w/g,(match)=>match.toUpperCase());}
+function movementBoardStorageKey(){return `${MOVEMENT_BOARD_STORAGE_PREFIX}:${String(state.user?.id||"member")}`;}
+function loadMovementBoard(){
+  try{state.shortlist=Core.normalizeShortlist(JSON.parse(globalThis.localStorage?.getItem(movementBoardStorageKey())||"[]"),state.exercises,MOVEMENT_BOARD_LIMIT);}
+  catch{state.shortlist=[];}
+}
+function saveMovementBoard(){
+  try{globalThis.localStorage?.setItem(movementBoardStorageKey(),JSON.stringify(state.shortlist));return true;}
+  catch{return false;}
+}
 function featureName(value){
   const raw=String(value||"").replace(/^#/,"");
   if(Object.hasOwn(FEATURE_CONFIG,raw))return raw;
@@ -159,16 +170,59 @@ function renderProfile(){
   el("preferenceChoices").innerHTML=Object.entries(PREFERENCE_OPTIONS).map(([value,label])=>choiceMarkup("preferences",value,label,state.preferences.preferences.includes(value))).join("");
   el("limitationChoices").innerHTML=Object.entries(LIMITATION_OPTIONS).map(([value,label])=>choiceMarkup("limitations",value,label,state.preferences.limitations.includes(value))).join("");
   el("profileStatus").textContent="Saved";
+  renderRankingLens();
 }
 
 function scoreButton(exercise){return `<button class="score-button" data-open-detail="${exercise.id}" type="button" aria-label="Open transparent FitScore for ${escapeHtml(exercise.name)}"><strong>${exercise.score}</strong><span>FitScore</span></button>`;}
 function compareButton(exercise){const active=state.compare.includes(exercise.id);return `<button class="${active?"active":""}" data-toggle-compare="${exercise.id}" type="button" aria-pressed="${active}" aria-label="${active?"Remove":"Add"} ${escapeHtml(exercise.name)} ${active?"from":"to"} comparison">${active?"Selected ✓":"Compare +"}</button>`;}
+function movementBoardButton(exercise,{compact=false}={}){
+  const active=state.shortlist.includes(exercise.id),label=active?"Saved":"Save";
+  return `<button class="movement-save${active?" is-saved":""}${compact?" is-compact":""}" data-toggle-shortlist="${exercise.id}" type="button" aria-pressed="${active}" aria-label="${active?"Remove":"Save"} ${escapeHtml(exercise.name)} ${active?"from":"to"} your decision board"><span aria-hidden="true">${active?"✓":"+"}</span><b>${label}</b></button>`;
+}
+
+function renderRankingLens(){
+  if(!state.preferences||!el("rankingLensItems"))return;
+  const goal={hypertrophy:"Hypertrophy",strength:"Strength",balanced:"Balanced","time-efficient":"Time-efficient"}[state.preferences.goal]||titleCase(state.preferences.goal);
+  const constraints=state.preferences.limitations?.length?`${state.preferences.limitations.length} constraint${state.preferences.limitations.length===1?"":"s"}`:"No exclusions";
+  const items=[goal,state.preferences.level,`${state.preferences.days} days`,`${state.preferences.equipment.length} equipment types`,constraints];
+  el("rankingLensItems").innerHTML=items.map((item)=>`<li>${escapeHtml(item)}</li>`).join("");
+}
+
+function renderMovementBoard({message=""}={}){
+  if(!el("movementBoardList"))return;
+  state.shortlist=Core.normalizeShortlist(state.shortlist,state.exercises,MOVEMENT_BOARD_LIMIT);
+  const exercises=state.shortlist.map(exerciseById).filter(Boolean),count=exercises.length;
+  el("movementBoardCapacity").textContent=`${count} / ${MOVEMENT_BOARD_LIMIT} saved`;
+  el("savedCollectionLabel").textContent=`Saved · ${count}`;
+  el("clearMovementBoard").hidden=!count;
+  el("compareMovementBoard").disabled=count<2;
+  const filled=exercises.map((exercise,index)=>{
+    const personal=personalResult(exercise),group=GROUP_LABELS[exercise.group]||titleCase(exercise.group),fit=personal.eligible?`${personal.match}% match`:"Excluded";
+    return `<article class="movement-board-item"><button class="movement-board-open" data-open-detail="${exercise.id}" type="button" aria-label="Inspect ${escapeHtml(exercise.name)}, ${escapeHtml(group)}, ${escapeHtml(exercise.equipment)}, ${escapeHtml(fit)}"><span>${String(index+1).padStart(2,"0")}</span><span><strong>${escapeHtml(exercise.name)}</strong><small>${escapeHtml(group)} · ${escapeHtml(exercise.equipment)}</small></span><b class="${personal.eligible?"":"is-excluded"}">${escapeHtml(fit)}</b></button><button class="movement-board-remove" data-toggle-shortlist="${exercise.id}" type="button" aria-label="Remove ${escapeHtml(exercise.name)} from your decision board">×</button></article>`;
+  }).join("");
+  const openSlots=Array.from({length:MOVEMENT_BOARD_LIMIT-count},(_,index)=>`<div class="movement-board-slot" aria-hidden="true"><span>${String(count+index+1).padStart(2,"0")}</span><small>Open slot</small></div>`).join("");
+  el("movementBoardList").innerHTML=count?filled+openSlots:'<p class="movement-board-empty">Save an exercise from a recommendation, the library, or its detail view.</p>';
+  const status=message||(count===0?"Nothing saved yet.":count===1?"One movement saved. Add another to compare.":`${count} movements saved. Ready to compare.`);
+  el("movementBoardStatus").textContent=status;
+}
+
+function toggleMovementBoard(id){
+  const exercise=exerciseById(id);if(!exercise)return false;
+  const index=state.shortlist.indexOf(id),removing=index>=0;
+  if(removing)state.shortlist.splice(index,1);
+  else if(state.shortlist.length>=MOVEMENT_BOARD_LIMIT){showToast(`Your decision board holds ${MOVEMENT_BOARD_LIMIT} movements. Remove one before saving another.`);return false;}
+  else state.shortlist.push(id);
+  const persisted=saveMovementBoard(),message=removing?`${exercise.name} removed from your decision board.`:`${exercise.name} saved${persisted?" on this device":" for this visit"}.`;
+  renderMovementBoard({message});renderRecommendations();renderExplorer();
+  if(state.activeExercise===id&&el("detailDialog")?.open)openDetail(id);
+  showToast(message);return true;
+}
 
 function renderRecommendations(){
   buildRecommendations();
   const goal={hypertrophy:"Hypertrophy selection",strength:"Strength skill",balanced:"Balanced","time-efficient":"Time-efficient setup"}[state.preferences.goal]||titleCase(state.preferences.goal);
   el("recommendationSummary").textContent=`Rules-based ${goal.toLowerCase()} ranking · ${state.preferences.equipment.length} equipment types · ${state.preferences.days} days`;
-  el("recommendationGrid").innerHTML=state.recommendations.length?state.recommendations.map(({exercise,result},index)=>`<article class="recommend-card" data-rank="${String(index+1).padStart(2,"0")}"><div class="card-topline"><span class="match-pill">${result.match}% personal match</span>${scoreButton(exercise)}</div><h3>${escapeHtml(exercise.name)}</h3><span class="target">${escapeHtml(GROUP_LABELS[exercise.group])} / ${escapeHtml(exercise.sub)}</span><p>${escapeHtml(profileReason(result))}. ${escapeHtml(exercise.why)}</p><div class="mini-meta"><span>${escapeHtml(exercise.equipment)}</span><span>${escapeHtml(exercise.level)}</span></div><div class="community-line"><span>Community rating</span><strong>${escapeHtml(communityLabel(exercise.id))}</strong></div><div class="mini-actions"><button data-open-detail="${exercise.id}" type="button" aria-label="Why ${escapeHtml(exercise.name)} ranks here">Why it ranks</button>${compareButton(exercise)}<a href="/planner.html?add=${encodeURIComponent(exercise.id)}" aria-label="Add ${escapeHtml(exercise.name)} to weekly plan">Add to plan</a></div></article>`).join(""):`<div class="loading-card recommendation-empty"><p>No exercise matches all saved equipment and constraints.</p><a class="small-button" href="#profile" data-feature-target="profile">Tune my ranking →</a></div>`;
+  el("recommendationGrid").innerHTML=state.recommendations.length?state.recommendations.map(({exercise,result},index)=>`<article class="recommend-card" data-rank="${String(index+1).padStart(2,"0")}"><div class="card-topline"><span class="match-pill">${result.match}% personal match</span><div class="card-tools">${movementBoardButton(exercise,{compact:true})}${scoreButton(exercise)}</div></div><h3>${escapeHtml(exercise.name)}</h3><span class="target">${escapeHtml(GROUP_LABELS[exercise.group])} / ${escapeHtml(exercise.sub)}</span><p>${escapeHtml(profileReason(result))}. ${escapeHtml(exercise.why)}</p><div class="mini-meta"><span>${escapeHtml(exercise.equipment)}</span><span>${escapeHtml(exercise.level)}</span></div><div class="community-line"><span>Community rating</span><strong>${escapeHtml(communityLabel(exercise.id))}</strong></div><div class="mini-actions"><button data-open-detail="${exercise.id}" type="button" aria-label="Why ${escapeHtml(exercise.name)} ranks here">Why it ranks</button>${compareButton(exercise)}<a href="/planner.html?add=${encodeURIComponent(exercise.id)}" aria-label="Add ${escapeHtml(exercise.name)} to weekly plan">Add to plan</a></div></article>`).join(""):`<div class="loading-card recommendation-empty"><p>No exercise matches all saved equipment and constraints.</p><a class="small-button" href="#profile" data-feature-target="profile">Tune my ranking →</a></div>`;
 }
 
 function populateFilters(){
@@ -181,7 +235,7 @@ function populateFilters(){
 }
 
 function discoveryResults(){
-  return Core.filterExercises(state.exercises,{collection:state.collection,query:state.query,group:state.group,equipment:state.equipment,pattern:state.pattern,level:state.level,sort:state.sort},state.preferences,aggregateFor);
+  return Core.filterExercises(state.exercises,{collection:state.collection,saved:state.shortlist,query:state.query,group:state.group,equipment:state.equipment,pattern:state.pattern,level:state.level,sort:state.sort},state.preferences,aggregateFor);
 }
 
 function explorerPageSize(){return window.matchMedia?.("(max-width: 680px)")?.matches?EXPLORER_MOBILE_PAGE_SIZE:EXPLORER_DESKTOP_PAGE_SIZE;}
@@ -190,7 +244,10 @@ function resetExplorerWindow(){state.explorerLimit=explorerPageSize();}
 function renderExplorer(){
   const items=discoveryResults(),visibleItems=items.slice(0,state.explorerLimit),remaining=Math.max(0,items.length-visibleItems.length),nextCount=Math.min(explorerPageSize(),remaining);
   el("resultCount").textContent=items.length;el("resultNoun").textContent=items.length===1?"exercise":"exercises";el("exerciseGrid").hidden=!items.length;el("emptyState").hidden=Boolean(items.length);
-  el("exerciseGrid").innerHTML=visibleItems.map((exercise,index)=>{const personal=personalResult(exercise);return `<article class="exercise-card" data-result-index="${index}"><div class="card-topline"><span class="match-pill ${personal.eligible?"":"is-excluded"}">${escapeHtml(personalLabel(personal))}</span>${scoreButton(exercise)}</div><h3>${escapeHtml(exercise.name)}</h3><span class="target">${escapeHtml(GROUP_LABELS[exercise.group]||titleCase(exercise.group))} / ${escapeHtml(exercise.sub)}</span><p>${escapeHtml(exercise.why)}</p><div class="mini-meta"><span>${escapeHtml(exercise.equipment)}</span><span>${escapeHtml(exercise.pattern)}</span><span>${escapeHtml(exercise.level)}</span></div><div class="community-line"><span>Community rating</span><strong>${escapeHtml(communityLabel(exercise.id))}</strong></div><div class="mini-actions"><button data-open-detail="${exercise.id}" type="button" aria-label="Inspect ${escapeHtml(exercise.name)}">Inspect</button>${compareButton(exercise)}<a href="/planner.html?add=${encodeURIComponent(exercise.id)}" aria-label="Add ${escapeHtml(exercise.name)} to weekly plan">Add to plan</a></div></article>`;}).join("")+(!remaining?"":`<div class="explorer-load-more"><p>Showing ${visibleItems.length} of ${items.length} matching exercises</p><button data-load-more-exercises type="button" aria-controls="exerciseGrid">Load ${nextCount} more <span aria-hidden="true">↓</span></button></div>`);
+  const savedEmpty=!items.length&&state.collection==="saved"&&!state.shortlist.length;
+  el("emptyStateTitle").textContent=savedEmpty?"Your decision board is empty.":"No exercise matches every filter.";
+  el("emptyStateDetail").textContent=savedEmpty?"Save up to four movements from recommendations or the library, then return here to review them together.":"Try clearing the search or one of the exercise filters.";
+  el("exerciseGrid").innerHTML=visibleItems.map((exercise,index)=>{const personal=personalResult(exercise);return `<article class="exercise-card" data-result-index="${index}"><div class="card-topline"><span class="match-pill ${personal.eligible?"":"is-excluded"}">${escapeHtml(personalLabel(personal))}</span><div class="card-tools">${movementBoardButton(exercise,{compact:true})}${scoreButton(exercise)}</div></div><h3>${escapeHtml(exercise.name)}</h3><span class="target">${escapeHtml(GROUP_LABELS[exercise.group]||titleCase(exercise.group))} / ${escapeHtml(exercise.sub)}</span><p>${escapeHtml(exercise.why)}</p><div class="mini-meta"><span>${escapeHtml(exercise.equipment)}</span><span>${escapeHtml(exercise.pattern)}</span><span>${escapeHtml(exercise.level)}</span></div><div class="community-line"><span>Community rating</span><strong>${escapeHtml(communityLabel(exercise.id))}</strong></div><div class="mini-actions"><button data-open-detail="${exercise.id}" type="button" aria-label="Inspect ${escapeHtml(exercise.name)}">Inspect</button>${compareButton(exercise)}<a href="/planner.html?add=${encodeURIComponent(exercise.id)}" aria-label="Add ${escapeHtml(exercise.name)} to weekly plan">Add to plan</a></div></article>`;}).join("")+(!remaining?"":`<div class="explorer-load-more"><p>Showing ${visibleItems.length} of ${items.length} matching exercises</p><button data-load-more-exercises type="button" aria-controls="exerciseGrid">Load ${nextCount} more <span aria-hidden="true">↓</span></button></div>`);
 }
 
 function renderCommunityViews(){
@@ -291,7 +348,7 @@ function openDetail(id){
   const profileHeading=personal.eligible?"Why it fits you":"Why it does not match your profile";
   const profileSummary=personal.eligible?`<strong>${personal.match}% rules-based match.</strong> ${escapeHtml(profileReason(personal))}.`:`<strong>Excluded by your saved rules.</strong> ${escapeHtml(profileReason(personal))}.`;
   el("detailContent").innerHTML=`
-    <div class="detail-hero"><div class="dialog-head" style="position:static;padding:0 0 24px;background:transparent;border-color:rgba(255,255,255,.18)"><p class="kicker">Exercise intelligence / ${escapeHtml(GROUP_LABELS[exercise.group]||titleCase(exercise.group))}</p><button class="icon-button" data-close-dialog="detailDialog" type="button" aria-label="Close exercise details">×</button></div><div class="detail-hero-grid"><div><h2 class="detail-title" id="detailTitle">${escapeHtml(exercise.name)}</h2><p>${escapeHtml(exercise.why)}</p><span class="match-pill ${personal.eligible?"":"is-excluded"}">${escapeHtml(personalLabel(personal))}</span></div><div class="detail-score"><strong>${exercise.score}</strong><span>Official FitScore</span></div></div><div class="detail-quick-actions"><button data-toggle-compare="${exercise.id}" type="button" aria-pressed="${state.compare.includes(id)}">${state.compare.includes(id)?"Remove from battle":"Add to battle"}</button><button data-scroll-alternatives type="button" aria-controls="alternativeSection">Find alternative ↓</button><a href="/planner.html?add=${encodeURIComponent(id)}">Add to plan <span aria-hidden="true">→</span></a><a href="${exercise.youtube}" target="_blank" rel="noreferrer">YouTube search ↗</a><button data-share-exercise="${exercise.id}" type="button">Share card ↗</button></div></div>
+    <div class="detail-hero"><div class="dialog-head" style="position:static;padding:0 0 24px;background:transparent;border-color:rgba(255,255,255,.18)"><p class="kicker">Exercise intelligence / ${escapeHtml(GROUP_LABELS[exercise.group]||titleCase(exercise.group))}</p><button class="icon-button" data-close-dialog="detailDialog" type="button" aria-label="Close exercise details">×</button></div><div class="detail-hero-grid"><div><h2 class="detail-title" id="detailTitle">${escapeHtml(exercise.name)}</h2><p>${escapeHtml(exercise.why)}</p><span class="match-pill ${personal.eligible?"":"is-excluded"}">${escapeHtml(personalLabel(personal))}</span></div><div class="detail-score"><strong>${exercise.score}</strong><span>Official FitScore</span></div></div><div class="detail-quick-actions">${movementBoardButton(exercise)}<button data-toggle-compare="${exercise.id}" type="button" aria-pressed="${state.compare.includes(id)}">${state.compare.includes(id)?"Remove from battle":"Add to battle"}</button><button data-scroll-alternatives type="button" aria-controls="alternativeSection">Find alternative ↓</button><a href="/planner.html?add=${encodeURIComponent(id)}">Add to plan <span aria-hidden="true">→</span></a><a href="${exercise.youtube}" target="_blank" rel="noreferrer">YouTube search ↗</a><button data-share-exercise="${exercise.id}" type="button">Share card ↗</button></div></div>
     <div class="detail-body"><div class="detail-grid"><div>
       <section class="detail-section"><h3>${profileHeading}</h3><p>${profileSummary} This selection is an editorial rules engine, not an AI prediction or medical recommendation.</p><p><strong>Target:</strong> ${escapeHtml(exercise.sub)} · <strong>Pattern:</strong> ${escapeHtml(exercise.pattern)} · <strong>Equipment:</strong> ${escapeHtml(exercise.equipment)} · <strong>Level:</strong> ${escapeHtml(exercise.level)}</p></section>
       <section class="detail-section"><h3>FitScore audit</h3><div class="metric-list">${metricMarkup(exercise)}</div><div class="adjustment-row"><strong>Weighted baseline: ${round(baseline,1)}</strong> · Published score: ${exercise.score} · Editorial adjustment: ${adjustment>0?"+":""}${adjustment}.<br/>${escapeHtml(state.methodology.adjustment)}</div><p>${escapeHtml(state.methodology.evidenceNote)}</p></section>
@@ -467,13 +524,16 @@ function blankMonthlySchedule(){
 function copyMonthlyValue(value){return JSON.parse(JSON.stringify(value));}
 function weeklyPlanCount(plan){return Monthly.DAYS.reduce((total,day)=>total+(Array.isArray(plan?.days?.[day])?plan.days[day].length:0),0);}
 function renderWeeklyPulse(){
-  const pulseNodes=["weeklyPulse","weeklyPulseEyebrow","weeklyPulseTitle","weeklyPulseDetail","weeklyPulseBar","weeklyPulseAction"].map(el),pulseRoot=pulseNodes[0];
+  const pulseNodes=["weeklyPulse","weeklyPulseEyebrow","weeklyPulseTitle","weeklyPulseDetail","weeklyPulseBar","weeklyPulseAction","weeklyPulseMovements","weeklyPulseSets","weeklyPulseDays"].map(el),pulseRoot=pulseNodes[0];
   if(pulseNodes.some((node)=>!node)||!state.preferences)return;
   const pulse=Core.weeklyPulse(state.weeklyPlan,{profileDays:state.preferences.days});
   el("weeklyPulseEyebrow").textContent=pulse.eyebrow;
   el("weeklyPulseTitle").textContent=pulse.title;
   el("weeklyPulseDetail").textContent=pulse.detail;
   el("weeklyPulseBar").setAttribute("style",`width:${pulse.progressPercent}%`);
+  el("weeklyPulseMovements").textContent=pulse.movements||"0";
+  el("weeklyPulseSets").textContent=pulse.workingSets||"0";
+  el("weeklyPulseDays").textContent=`${pulse.scheduledDays} / ${pulse.targetDays}`;
   pulseRoot.dataset.sessionDay=pulse.day||"empty";
   const start=el("plusStartWorkout");
   if(pulse.day){
@@ -705,16 +765,21 @@ function cardLines(kind,id){
 
 function wrapCanvasText(ctx,text,x,y,maxWidth,lineHeight,maxLines=3){const words=String(text).split(/\s+/);let line="",lines=0;for(const word of words){const test=`${line}${line?" ":""}${word}`;if(ctx.measureText(test).width>maxWidth&&line){ctx.fillText(line,x,y);line=word;y+=lineHeight;lines+=1;if(lines>=maxLines-1)break;}else line=test;}if(line&&lines<maxLines){let final=line;if(ctx.measureText(final).width>maxWidth){while(final.length&&ctx.measureText(`${final}…`).width>maxWidth)final=final.slice(0,-1);final+="…";}ctx.fillText(final,x,y);}return y+lineHeight;}
 
+function drawCanvasBrand(ctx){
+  ctx.save();ctx.translate(70,60);ctx.transform(1,0,-.2,1,0,0);ctx.fillStyle="#d4f578";ctx.fillRect(0,14,10,24);ctx.fillRect(15,7,10,31);ctx.fillRect(30,0,10,38);ctx.restore();
+  ctx.fillStyle="#faf9f5";ctx.font="700 42px Manrope, sans-serif";ctx.fillText("STRATA",126,95);
+}
+
 async function shareCard(kind,id=null){
   try{
     const data=cardLines(kind,id),canvas=document.createElement("canvas");canvas.width=1080;canvas.height=1350;const ctx=canvas.getContext("2d");
     if(!ctx)throw new Error("Canvas is unavailable.");
     ctx.fillStyle="#10110f";ctx.fillRect(0,0,1080,1350);ctx.strokeStyle="rgba(212,245,120,.18)";ctx.lineWidth=2;ctx.beginPath();ctx.arc(960,110,360,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.arc(960,110,470,0,Math.PI*2);ctx.stroke();
-    ctx.fillStyle="#d4f578";ctx.font="700 42px Manrope, sans-serif";ctx.fillText("▰ STRATA",70,95);ctx.font="500 20px 'DM Mono', monospace";ctx.fillText(data.eyebrow.toUpperCase(),70,180);
+    drawCanvasBrand(ctx);ctx.fillStyle="#d4f578";ctx.font="500 20px 'DM Mono', monospace";ctx.fillText(data.eyebrow.toUpperCase(),70,180);
     ctx.fillStyle="#faf9f5";ctx.font="700 78px Manrope, sans-serif";let y=wrapCanvasText(ctx,data.title.toUpperCase(),70,285,900,86,3);
     y=Math.max(y+35,515);ctx.fillStyle="#d4f578";ctx.font="700 190px Manrope, sans-serif";ctx.fillText(data.score,70,y+150);ctx.fillStyle="#faf9f5";ctx.font="500 21px 'DM Mono', monospace";ctx.fillText(data.scoreLabel,310,y+130);
     let lineY=y+245;ctx.strokeStyle="rgba(255,255,255,.22)";for(const line of data.lines.slice(0,5)){ctx.beginPath();ctx.moveTo(70,lineY-34);ctx.lineTo(1010,lineY-34);ctx.stroke();ctx.fillStyle="#faf9f5";ctx.font="500 30px Manrope, sans-serif";lineY=wrapCanvasText(ctx,line,70,lineY,920,40,2)+25;}
-    ctx.strokeStyle="rgba(255,255,255,.22)";ctx.beginPath();ctx.moveTo(70,1240);ctx.lineTo(1010,1240);ctx.stroke();ctx.fillStyle="rgba(255,255,255,.55)";ctx.font="500 18px 'DM Mono', monospace";ctx.fillText(data.footer.toUpperCase(),70,1290);ctx.fillStyle="#ff5a36";ctx.fillText("STRATAFITNESS.ONLINE",755,1290);
+    ctx.strokeStyle="rgba(255,255,255,.22)";ctx.beginPath();ctx.moveTo(70,1240);ctx.lineTo(1010,1240);ctx.stroke();ctx.fillStyle="rgba(255,255,255,.55)";ctx.font="500 18px 'DM Mono', monospace";ctx.fillText(data.footer.toUpperCase(),70,1290);ctx.fillStyle="#d4f578";ctx.textAlign="right";ctx.fillText("STRATAFITNESS.ONLINE",1010,1290);ctx.textAlign="left";
     const blob=await new Promise((resolve)=>canvas.toBlob(resolve,"image/png"));if(!blob)throw new Error("Image export is unavailable.");
     const filename=`strata-${kind}-${Date.now()}.png`;
     if(typeof File==="function"&&navigator.share){const file=new File([blob],filename,{type:"image/png"});if(navigator.canShare?.({files:[file]})){try{await navigator.share({files:[file],title:`STRATA ${kind} card`,text:"Exercise intelligence from STRATA"});return;}catch(error){if(error.name==="AbortError")return;}}}
@@ -735,7 +800,7 @@ profileForm.addEventListener("submit",async(event)=>{
   const formElement=event.currentTarget,form=new FormData(formElement),preferences={goal:form.get("goal"),level:form.get("level"),days:Number(form.get("days")),equipment:form.getAll("equipment"),preferences:form.getAll("preferences"),limitations:form.getAll("limitations")};
   const controls=[...formElement.elements];profileForm.dataset.saving="true";controls.forEach((control)=>{control.disabled=true;});
   el("profileStatus").textContent="Saving…";
-  try{const result=await api("/api/preferences",{method:"PUT",body:JSON.stringify({preferences})});state.preferences=result.preferences;renderProfile();renderRecommendations();resetExplorerWindow();renderExplorer();renderWeeklyPulse();resetSessionPreview("Preferences saved. Build a new session when you're ready.");showToast("Saved. Your recommendations are updated.");}
+  try{const result=await api("/api/preferences",{method:"PUT",body:JSON.stringify({preferences})});state.preferences=result.preferences;renderProfile();renderMovementBoard();renderRecommendations();resetExplorerWindow();renderExplorer();renderWeeklyPulse();resetSessionPreview("Preferences saved. Build a new session when you're ready.");showToast("Saved. Your recommendations are updated.");}
   catch(error){const message=saveRetryMessage(error);el("profileStatus").textContent=message;showToast(message);}
   finally{profileForm.dataset.saving="false";controls.forEach((control)=>{control.disabled=false;});}
 });
@@ -831,8 +896,16 @@ document.addEventListener("submit",async(event)=>{
 });
 
 document.addEventListener("click",(event)=>{
-  const feature=event.target.closest("[data-feature-target]"),detail=event.target.closest("[data-open-detail]"),compare=event.target.closest("[data-toggle-compare]"),scrollAlternatives=event.target.closest("[data-scroll-alternatives]"),close=event.target.closest("[data-close-dialog]"),collection=event.target.closest("[data-collection]"),reset=event.target.closest("[data-reset-filters]"),loadMore=event.target.closest("[data-load-more-exercises]"),share=event.target.closest("[data-share-exercise]"),shareBattle=event.target.closest("[data-share-battle]");
+  const feature=event.target.closest("[data-feature-target]"),shortlist=event.target.closest("[data-toggle-shortlist]"),detail=event.target.closest("[data-open-detail]"),compare=event.target.closest("[data-toggle-compare]"),scrollAlternatives=event.target.closest("[data-scroll-alternatives]"),close=event.target.closest("[data-close-dialog]"),collection=event.target.closest("[data-collection]"),reset=event.target.closest("[data-reset-filters]"),loadMore=event.target.closest("[data-load-more-exercises]"),share=event.target.closest("[data-share-exercise]"),shareBattle=event.target.closest("[data-share-battle]");
   if(feature&&featureName(feature.dataset.featureTarget)){event.preventDefault();activateFeature(feature.dataset.featureTarget,{focus:true,scroll:true,smooth:true,announce:true,historyMode:"push"});}
+  else if(shortlist){
+    const id=shortlist.dataset.toggleShortlist,containerId=shortlist.closest("#recommendationGrid,#exerciseGrid,#detailContent,#movementBoardList")?.id;
+    if(toggleMovementBoard(id)&&containerId)requestAnimationFrame(()=>{
+      const same=[...el(containerId).querySelectorAll("[data-toggle-shortlist]")].find((button)=>button.dataset.toggleShortlist===id);
+      const fallback=containerId==="movementBoardList"?el("movementBoardList").querySelector("[data-toggle-shortlist],[data-open-detail]"):state.collection==="saved"?document.querySelector('[data-collection="saved"]'):null;
+      (same||fallback||el("movementBoardTitle"))?.focus?.({preventScroll:true});
+    });
+  }
   else if(detail)openDetail(detail.dataset.openDetail);
   else if(compare){
     const id=compare.dataset.toggleCompare,containerId=compare.closest("#recommendationGrid,#exerciseGrid,#detailContent")?.id;
@@ -872,6 +945,12 @@ el("battleSelects").addEventListener("change",()=>{readBattleBuilder();el("battl
 el("battleForm").addEventListener("submit",(event)=>{event.preventDefault();readBattleBuilder();renderCompareTray();renderRecommendations();renderExplorer();openComparison();});
 el("battleReset").addEventListener("click",()=>{state.compare=[];el("battleResults").hidden=true;renderCompareTray();renderRecommendations();renderExplorer();});
 el("shareRanking").addEventListener("click",()=>void shareCard("ranking"));
+el("compareMovementBoard").addEventListener("click",()=>{
+  state.compare=Core.normalizeShortlist(state.shortlist,state.exercises,MOVEMENT_BOARD_LIMIT);renderCompareTray();renderRecommendations();renderExplorer();activateFeature("battle",{focus:true,scroll:true,smooth:true,announce:true,historyMode:"push"});openComparison();
+});
+el("clearMovementBoard").addEventListener("click",()=>{
+  state.shortlist=[];saveMovementBoard();renderMovementBoard({message:"Decision board cleared."});renderRecommendations();renderExplorer();el("movementBoardTitle").focus?.({preventScroll:true});showToast("Decision board cleared.");
+});
 el("logoutButton").addEventListener("click",async(event)=>{
   const button=event.currentTarget;if(button.disabled)return;button.disabled=true;
   try{await api("/api/logout",{method:"POST"});window.location.replace("/");}
@@ -892,22 +971,25 @@ function showInitialLoadProgress(){
   el("discoveryLoadError").hidden=true;el("discoveryRetry").disabled=true;
   el("profileStatus").textContent="Loading profile…";el("battleStatus").textContent="Loading exercises…";el("monthlyPlanStatus").textContent="Loading planner…";el("communityPlanStatus").textContent="Loading shared plans…";if(el("sessionStatus"))el("sessionStatus").textContent="Loading your profile and weekly plan…";
   el("recommendationGrid").innerHTML='<div class="loading-card">Building your ranking…</div>';
+  if(el("rankingLensItems"))el("rankingLensItems").innerHTML="<li>Loading preferences…</li>";
+  if(el("movementBoardStatus"))el("movementBoardStatus").textContent="Loading your decision board…";
   el("exerciseGrid").hidden=false;el("exerciseGrid").innerHTML='<div class="loading-card">Loading exercise intelligence…</div>';el("emptyState").hidden=true;
 }
 function showInitialLoadError(error){
   const message=initialLoadMessage(error);
   el("profileStatus").textContent="Unable to load";el("battleStatus").textContent=message;el("monthlyPlanStatus").textContent=message;el("communityPlanStatus").textContent=message;if(el("sessionStatus"))el("sessionStatus").textContent=message;
   el("recommendationGrid").innerHTML=`<div class="loading-card load-error-card">${escapeHtml(message)}</div>`;el("exerciseGrid").innerHTML=`<div class="loading-card load-error-card">${escapeHtml(message)}</div>`;
+  if(el("movementBoardStatus"))el("movementBoardStatus").textContent="Decision board unavailable until Strata+ reconnects.";
   el("discoveryLoadErrorMessage").textContent=message;el("discoveryLoadError").hidden=false;showToast(message);
 }
 async function init(){
   if(discoveryLoading)return;
   discoveryLoading=true;showInitialLoadProgress();
   try{
-    const data=await api("/api/discovery");state.exercises=data.exercises;state.methodology=data.methodology;state.sources=data.sources;state.limited=new Set(data.limitedConfidenceExercises);state.preferences=data.preferences;state.user=data.user;state.weeklyPlan=data.weeklyPlan||null;state.weeklyPlanUpdatedAt=Number(data.weeklyPlanUpdatedAt)||0;state.monthlyPlanUpdatedAt=Number(data.monthlyPlanUpdatedAt)||0;state.monthlyPlan=data.monthlyPlan||null;
+    const data=await api("/api/discovery");state.exercises=data.exercises;state.methodology=data.methodology;state.sources=data.sources;state.limited=new Set(data.limitedConfidenceExercises);state.preferences=data.preferences;state.user=data.user;state.weeklyPlan=data.weeklyPlan||null;state.weeklyPlanUpdatedAt=Number(data.weeklyPlanUpdatedAt)||0;state.monthlyPlanUpdatedAt=Number(data.monthlyPlanUpdatedAt)||0;state.monthlyPlan=data.monthlyPlan||null;loadMovementBoard();
     state.csrfToken=String(data.csrfToken||"");state.aggregate=new Map((data.ratings.aggregates||[]).map((item)=>[item.exercise_id,item]));state.userRatings=new Map((data.ratings.user||[]).map((item)=>[item.exercise_id,item]));state.ratingsRefreshedAt=Date.now();
     el("userName").textContent=data.user.name;el("catalogTotal").textContent=state.exercises.length;
-    renderProfile();populateFilters();renderRecommendations();resetExplorerWindow();renderExplorer();renderCompareTray();populateMonthlyBuilder(state.monthlyPlan);initializeSessionBuilder();
+    renderProfile();renderMovementBoard();populateFilters();renderRecommendations();resetExplorerWindow();renderExplorer();renderCompareTray();populateMonthlyBuilder(state.monthlyPlan);initializeSessionBuilder();
     activateFeature(state.activeFeature||FEATURE_DEFAULT);
   }catch(error){if(!error?.redirecting)showInitialLoadError(error);}
   finally{discoveryLoading=false;el("discoveryRetry").disabled=false;}

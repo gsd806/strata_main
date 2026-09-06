@@ -51,3 +51,20 @@ test("saved profiles prefill real plan days and produce a valid recovery-day def
   assert.deepEqual(everyDay.availability,core.DAYS.slice(0,6),"a saved seven-day week must not preselect an invalid setup state");
   assert.equal(everyDay.recoveryAdjusted,true,"setup must disclose that it restored a recovery day");
 });
+
+test("training snapshots explain readiness and summarize only generated work",()=>{
+  assert.deepEqual(core.trainingSnapshot({...base,equipment:[]}),{
+    trainingDays:3,recoveryDays:4,minutes:35,weeklyMinutes:105,equipmentCount:0,movementCount:0,workingSets:0,ready:false,
+    message:"Choose the equipment you can reliably access."
+  });
+  const result=core.buildWeek(base,exercises,discovery);
+  const snapshot=core.trainingSnapshot(base,result);
+  assert.equal(snapshot.ready,true);
+  assert.equal(snapshot.trainingDays,3);
+  assert.equal(snapshot.recoveryDays,4);
+  assert.equal(snapshot.weeklyMinutes,105);
+  assert.equal(snapshot.movementCount,result.sessions.reduce((total,session)=>total+session.items.length,0));
+  assert.equal(snapshot.workingSets,result.sessions.flatMap((session)=>session.items).reduce((total,item)=>total+item.sets,0));
+  assert.match(snapshot.message,/3 training days, 4 recovery days, and 105 planned minutes/);
+  assert.match(core.trainingSnapshot({...base,availability:core.DAYS}).message,/at least one day open/);
+});

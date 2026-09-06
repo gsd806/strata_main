@@ -84,9 +84,11 @@ function browserHarness(scriptName,{userAgent="Mozilla/5.0",maxTouchPoints=0,pwa
 }
 
 class FakeElement {
-  constructor(){this.hidden=true;this.disabled=false;this.textContent="";this.innerHTML="";this.listeners={};this.classList={values:new Set(),add:(name)=>this.classList.values.add(name),contains:(name)=>this.classList.values.has(name)};}
+  constructor(){this.hidden=true;this.disabled=false;this.textContent="";this.innerHTML="";this.listeners={};this.attributes={};this.classList={values:new Set(),add:(name)=>this.classList.values.add(name),contains:(name)=>this.classList.values.has(name)};}
   addEventListener(type,handler){(this.listeners[type]||=[]).push(handler);}
   async emit(type){for(const handler of this.listeners[type]||[])await handler({type});}
+  setAttribute(name,value){this.attributes[name]=String(value);}
+  getAttribute(name){return this.attributes[name]??null;}
 }
 
 test("release version, cache keys, asset URLs, and catalog claims stay aligned",()=>{
@@ -95,7 +97,7 @@ test("release version, cache keys, asset URLs, and catalog claims stay aligned",
   const serviceWorker=read("service-worker.js");
   const pages=["index.html","account.html","verify-email.html","forgot-password.html","reset-password.html","delete-account.html","admin.html","planner.html","discover.html","install.html","offline.html","pricing.html","contact.html","policies.html","terms.html","privacy.html","refunds.html"];
 
-  assert.equal(version,"7.1.3");
+  assert.equal(version,"7.2.0");
   assert.match(serviceWorker,new RegExp(`const BUILD="${versionPattern}";`));
   assert.match(serviceWorker,/const CACHE_PREFIX="strata-static-";/);
   assert.match(serviceWorker,/const STATIC_CACHE=`\$\{CACHE_PREFIX\}\$\{BUILD\}`;/);
@@ -148,6 +150,12 @@ test("manifest has complete install metadata and correctly sized icons",()=>{
   assert.match(manifest.theme_color,/^#[0-9a-f]{6}$/i);
   assert.match(manifest.background_color,/^#[0-9a-f]{6}$/i);
   assert.equal(manifest.prefer_related_applications,false);
+  assert.deepEqual(manifest.shortcuts.map(({name,url})=>({name,url})),[
+    {name:"Strata+ Studio",url:"/discover.html"},
+    {name:"Weekly Planner",url:"/planner.html"},
+    {name:"Workout Room",url:"/workout.html"},
+    {name:"Exercise Rankings",url:"/#rankings"}
+  ]);
 
   const anyIcons=manifest.icons.filter((icon)=>String(icon.purpose||"any").split(/\s+/).includes("any"));
   const maskableIcons=manifest.icons.filter((icon)=>String(icon.purpose||"").split(/\s+/).includes("maskable"));
@@ -184,6 +192,8 @@ test("every ordinary app page exposes consistent PWA and mobile metadata",()=>{
   assert.match(offline,/href="\/manifest\.webmanifest"/);
   assert.match(offline,/Reconnect to sign in or sync account changes\./);
   assert.match(offline,/id="offlineRetry"[^>]*type="button"/);
+  assert.match(offline,/href="\/planner\.html"[^>]*>[\s\S]*?Offline planner[\s\S]*?week kept on this device/);
+  assert.match(offline,/href="\/policies"[^>]*>[\s\S]*?Cached reference/);
   assert.match(offline,new RegExp(`src="/offline\\.js\\?v=${escapeRegExp(BUILD)}"`));
 });
 
@@ -227,6 +237,7 @@ test("service worker precaches only public assets and never handles account APIs
   assert.ok(harness.precache.includes(`/pricing.js?v=${BUILD}`));
   assert.ok(harness.precache.includes(`/offline.js?v=${BUILD}`));
   assert.ok(harness.precache.some((url)=>url.includes("strata-512.png")));
+  assert.ok(!harness.precache.some((url)=>url.includes("strata-layers.jpg")),"The lazy homepage artwork must not become an eager PWA install download");
 
   const paths=harness.precache.map((entry)=>new URL(entry,"https://strata.test").pathname);
   const privateHtml=["/","/index.html","/account.html","/verify-email","/verify-email.html","/forgot-password","/forgot-password.html","/reset-password","/reset-password.html","/delete-account","/delete-account.html","/admin","/admin.html","/discover.html"];
@@ -315,17 +326,21 @@ test("PWA helper registers at full scope and owns the deferred install prompt",a
 });
 
 test("install guide is beginner-friendly, device-specific, and progressively enhanced",async()=>{
-  const html=read("pages/install.html");
+  const html=read("pages/install.html"),css=read("styles/install.css");
   assert.match(html,/<main\s+id="installGuide">/);
   assert.match(html,/id="installStatus"\s+role="status"\s+aria-live="polite"/);
   assert.match(html,/id="installButton"[^>]*type="button"[^>]*hidden/);
+  assert.match(css,/\.install-actions \[hidden\]\s*\{\s*display:none;/,"A browser without an install prompt must not render the inactive install button");
   assert.match(html,/no App Store download/i);
+  assert.match(html,/No app-store account/);
+  assert.match(html,/Updates automatically/);
   assert.match(html,/account still syncs across your devices/i);
   assert.match(html,/saved changes still need an internet connection/i);
   for(const platform of ["ios","android","desktop-chrome","desktop-edge"]) {
     const card=html.match(new RegExp(`<article[^>]+data-platform="${platform}"[\\s\\S]*?<\\/article>`));
     assert.ok(card,`missing ${platform} guide`);
     assert.equal((card[0].match(/<li>/g)||[]).length,4,`${platform} guide should have four steps`);
+    assert.match(html,new RegExp(`data-platform-link="${platform}"`),`missing ${platform} jump link`);
   }
   assert.match(html,/Safari[\s\S]*Share[\s\S]*Add to Home Screen/i);
   assert.match(html,/Chrome[\s\S]*Install app[\s\S]*Add to Home screen/i);
@@ -343,14 +358,22 @@ test("install guide is beginner-friendly, device-specific, and progressively enh
     card.querySelector=()=>badge;
     return [platform,{card,badge}];
   }));
+  const platformLinks=new Map(["ios","android","desktop-chrome","desktop-edge"].map((platform)=>[platform,new FakeElement()]));
   const harness=browserHarness("install.js",{userAgent:"Mozilla/5.0 (Linux; Android 15) AppleWebKit Chrome/140 Mobile",pwa});
   harness.context.document={
     getElementById(id){return id==="installButton"?button:id==="installStatus"?status:null;},
-    querySelector(selector){const match=selector.match(/^\[data-platform="([^"]+)"\]$/);return match?cards.get(match[1])?.card:null;}
+    querySelector(selector){
+      const cardMatch=selector.match(/^\[data-platform="([^"]+)"\]$/);
+      if(cardMatch)return cards.get(cardMatch[1])?.card||null;
+      const linkMatch=selector.match(/^\[data-platform-link="([^"]+)"\]$/);
+      return linkMatch?platformLinks.get(linkMatch[1])||null:null;
+    }
   };
   harness.run();
   assert.equal(cards.get("android").card.classList.contains("recommended"),true);
   assert.equal(cards.get("android").badge.hidden,false);
+  assert.equal(platformLinks.get("android").getAttribute("aria-current"),"true");
+  assert.equal([...platformLinks.entries()].filter(([platform])=>platform!=="android").every(([,link])=>link.getAttribute("aria-current")===null),true);
   assert.equal(button.hidden,true);
   assert.match(status.textContent,/Chrome.*Install app|Add to Home screen/i);
 

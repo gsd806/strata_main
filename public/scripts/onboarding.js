@@ -15,6 +15,13 @@
   function hasItems(plan){return core.DAYS.some(day=>plan?.days?.[day]?.length);}
   function values(name){return [...document.querySelectorAll(`input[name="${name}"]:checked`)].map(input=>input.value);}
   function profile(){return {version:1,goal:$("goal").value,level:$("level").value,minutes:Number($("minutes").value),equipment:values("equipment"),availability:values("days"),preferences:[...savedPreferenceTags],limitations:values("limitations")};}
+  function renderSnapshot(){
+    const snapshot=core.trainingSnapshot(profile());
+    $("setupDaysMetric").textContent=snapshot.trainingDays?`${snapshot.trainingDays} day${snapshot.trainingDays===1?"":"s"}`:"—";
+    $("setupRecoveryMetric").textContent=snapshot.trainingDays?`${snapshot.recoveryDays} day${snapshot.recoveryDays===1?"":"s"}`:"—";
+    $("setupMinutesMetric").textContent=snapshot.minutes?`${snapshot.minutes} min`:"—";
+    $("setupReadiness").textContent=snapshot.message;
+  }
   function rememberProfile(){try{localStorage.setItem(profileKey,JSON.stringify({version:1,minutes:Number($("minutes").value)}));}catch{status("Browser storage is unavailable. Keep this page open until your week is saved.");}}
   function restoreSessionLength(){
     let saved;try{saved=JSON.parse(localStorage.getItem(profileKey)||"null");}catch{return;}
@@ -38,7 +45,7 @@
     $("accountMode").textContent=(replacing
       ?`Strata+ · ${user.name||"Your account"}. You already have a saved week. Previewing is safe; saving a new week replaces it only after you confirm.`
       :`Strata+ · ${user.name||"Your account"}. Your profile and first saved week will sync across devices.`)+(saved.recoveryAdjusted?" Your saved setup used all seven training days, so this setup leaves Sunday open for recovery; review the selected days before previewing.":"");
-    $("retrySetup").hidden=true;status("");
+    $("retrySetup").hidden=true;renderSnapshot();status("");
   }
   function setPlannerAction({conflict=false,hidden=false}={}){
     const link=$("openPlanner");
@@ -57,10 +64,10 @@
     csrf=me.csrfToken;
   }
   async function init(){
-    ready=false;$("setupFields").disabled=true;$("retrySetup").hidden=true;status("Loading your starting point…");
+    ready=false;$("setupFields").disabled=true;$("retrySetup").hidden=true;$("previewSummary").hidden=true;status("Loading your starting point…");
     try{
       if(!exercises.length){
-        const response=await fetch("/exercises.json?v=7.1.3");if(!response.ok)throw new Error("The exercise library is unavailable. Reconnect and retry.");exercises=await response.json();
+        const response=await fetch("/exercises.json?v=7.2.0");if(!response.ok)throw new Error("The exercise library is unavailable. Reconnect and retry.");exercises=await response.json();
       }
       const account=await request("/api/setup",{cache:"no-store"});requirePlus(account);
       if(!account.csrfToken)throw new Error("Your account could not be verified. Retry before editing.");
@@ -69,6 +76,9 @@
   }
   function renderPreview(){
     $("previewTitle").textContent="Your next chapter.";
+    const snapshot=core.trainingSnapshot(profile(),preview);
+    $("previewSummary").innerHTML=`<div><strong>${snapshot.trainingDays}</strong><span>training day${snapshot.trainingDays===1?"":"s"}</span></div><div><strong>${snapshot.movementCount}</strong><span>movements</span></div><div><strong>${snapshot.workingSets}</strong><span>working sets</span></div>`;
+    $("previewSummary").hidden=false;
     $("weekPreview").innerHTML=core.DAYS.map(day=>{const session=preview.sessions.find(item=>item.day===day);return `<section class="preview-day"><h3>${day} ${session?`<small> / ${escape(session.focusLabel)}</small>`:""}</h3>${session?`<small>${escape(session.summary)}</small><details><summary>Review ${session.items.length} movements</summary><ul>${session.items.map(item=>`<li>${escape(item.exercise.name)} · ${item.sets} × ${escape(item.reps)}<br /><small>${escape(item.roleLabel)} · ${escape(item.exercise.equipment)}</small></li>`).join("")}</ul></details>`:"<small>Recovery / no planned session</small>"}</section>`;}).join("");
     $("replaceNotice").textContent=hasItems(original)?"You already have a saved week. Saving this preview replaces it; download a copy of your current week first.":"Your first week is ready. Save it, then adjust any movement, sets, or reps in the planner.";
     const oldLink=document.getElementById("previousWeek");if(oldLink)oldLink.remove();
@@ -81,16 +91,16 @@
   }
   $("setupForm").addEventListener("submit",async event=>{
     event.preventDefault();if(!ready||busy)return;
-    busy=true;$("setupFields").disabled=true;
+    busy=true;$("setupFields").disabled=true;$("generateWeekLabel").textContent="Building your preview…";
     try{await verifyAccess();preview=core.buildWeek(profile(),exercises,discovery,()=>globalThis.crypto?.randomUUID?.()||`setup-${Date.now()}-${Math.random().toString(16).slice(2)}`);rememberProfile();renderPreview();status("Preview ready. Exercises match the equipment and movement filters you selected. Review their notes in the planner; you can replace any selection.");}
-    catch(error){preview=null;$("saveControls").hidden=true;status(error.message);}
-    finally{busy=false;$("setupFields").disabled=!ready;}
+    catch(error){preview=null;$("previewSummary").hidden=true;$("saveControls").hidden=true;status(error.message);}
+    finally{busy=false;$("setupFields").disabled=!ready;$("generateWeekLabel").textContent=hasItems(original)?"Preview a replacement week":"Preview my first week";}
   });
-  $("setupForm").addEventListener("change",()=>{if(!ready)return;preview=null;$("saveControls").hidden=true;setPlannerAction({hidden:true});rememberProfile();status("Choices updated. Preview again to see your revised week.");});
+  $("setupForm").addEventListener("change",()=>{if(!ready)return;preview=null;$("previewSummary").hidden=true;$("saveControls").hidden=true;setPlannerAction({hidden:true});rememberProfile();renderSnapshot();status("Choices updated. Preview again to see your revised week.");});
   $("saveWeek").addEventListener("click",async()=>{
     if(!preview||busy||!ready)return;
     if(hasItems(original)&&!$("replaceWeek").checked){status("Review the preview and confirm replacing your current week first.");$("replaceWeek").focus();return;}
-    busy=true;$("saveWeek").disabled=true;$("setupFields").disabled=true;setPlannerAction({hidden:true});status("Saving your week…");
+    busy=true;$("saveWeek").disabled=true;$("saveWeek").textContent="Saving your week…";$("setupFields").disabled=true;setPlannerAction({hidden:true});status("Saving your week…");
     try{
       await verifyAccess();
       const saved=await request("/api/setup",{method:"PUT",body:JSON.stringify({plan:preview.plan,preferences:preview.preferences,expectedPlanUpdatedAt:revision,expectedPreferencesUpdatedAt:preferenceRevision,expectedUserId:user.id})});
@@ -100,7 +110,7 @@
       if(error.status===409){setPlannerAction({conflict:true});status("Your saved week changed in another tab or device. Your preview is safe here. Open the planner in a new tab to compare both before replacing anything.");$("openPlanner").focus();}
       else status(error.message);
     }
-    finally{busy=false;$("saveWeek").disabled=!ready;$("setupFields").disabled=!ready;}
+    finally{busy=false;$("saveWeek").textContent="Save this week and profile";$("saveWeek").disabled=!ready;$("setupFields").disabled=!ready;}
   });
   $("retrySetup").addEventListener("click",init);
   void init();

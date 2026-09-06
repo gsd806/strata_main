@@ -4,6 +4,7 @@ const test=require("node:test");
 const assert=require("node:assert/strict");
 const fs=require("node:fs");
 const path=require("node:path");
+const vm=require("node:vm");
 
 const PROJECT_ROOT=path.join(__dirname,"..");
 const read=(name)=>fs.readFileSync(path.join(PROJECT_ROOT,name),"utf8");
@@ -39,6 +40,7 @@ test("compact mobile navigation keeps account actions and every muscle group eas
   assert.match(homeCss,/\.group-tabs\s*\{[^}]*display:\s*flex;[^}]*overflow-x:\s*auto;[^}]*scroll-snap-type:\s*x proximity;/);
   assert.match(account,/class="account-choice-nav"[^>]*>[\s\S]*href="#signupPanel"[\s\S]*href="#loginPanel"/);
   assert.match(accountCss,/\.account-choice-nav\{display:grid;grid-template-columns:1fr 1fr;/);
+  assert.match(accountCss,/\.signed-actions \[hidden\],\.security-actions \[hidden\]\{display:none\}/,"Account CSS must not expose privileged or inactive hidden actions");
 });
 
 test("the support honeypot stays outside the accessibility tree",()=>{
@@ -114,4 +116,74 @@ test("workout empty days and planner mobile hand-offs expose useful 44px actions
   assert.match(plannerCss,/\.planner-mobile-switcher\{position:sticky;[^}]*display:grid/);
   assert.match(plannerCss,/\.planner-jump-link\{[^}]*min-height:44px/);
   assert.match(plannerCss,/\.build-footer a\{min-width:44px;color:inherit/);
+  assert.match(workoutCss,/\.skip-link\{[^}]*z-index:100;/,"The focused workout skip link must paint above its sticky header");
+});
+
+test("fixed mobile navigation reserves scroll space for keyboard focus",()=>{
+  const css=read("public/styles/experience.css");
+  assert.match(css,/@media \(max-width: 800px\)\s*\{\s*html \{ scroll-padding-bottom: calc\(76px \+ env\(safe-area-inset-bottom\)\); \}\s*\}/);
+});
+
+test("global motion progress tracks scroll and stays hidden for reduced motion and print",()=>{
+  const motion=read("public/scripts/motion.js"),listeners={},frames=new Map();
+  const rootClasses=new Set(),preference={matches:false,listener:null,addEventListener(type,handler){if(type==="change")this.listener=handler;}};
+  let progress=null,nextFrame=0,disconnects=0;
+  class FakeIntersectionObserver{
+    disconnect(){disconnects+=1;}
+    observe(){}
+    unobserve(){}
+  }
+  const documentElement={
+    scrollHeight:2200,
+    classList:{add:(name)=>rootClasses.add(name),remove:(name)=>rootClasses.delete(name),contains:(name)=>rootClasses.has(name)}
+  };
+  const document={
+    readyState:"complete",documentElement,
+    body:{append(node){progress=node;}},
+    querySelectorAll(){return[];},
+    createElement(){
+      return{className:"",dataset:{},style:{},attributes:{},setAttribute(name,value){this.attributes[name]=String(value);},getAttribute(name){return this.attributes[name]??null;}};
+    }
+  };
+  const window={
+    innerHeight:1000,scrollY:0,IntersectionObserver:FakeIntersectionObserver,
+    matchMedia:()=>preference,
+    addEventListener(type,handler){(listeners[type]||=[]).push(handler);}
+  };
+  const context={
+    window,document,IntersectionObserver:FakeIntersectionObserver,
+    requestAnimationFrame(handler){const id=++nextFrame;frames.set(id,handler);return id;},
+    cancelAnimationFrame(id){frames.delete(id);}
+  };
+  vm.createContext(context);
+  vm.runInContext(motion,context,{filename:"motion.js"});
+
+  assert.ok(progress,"motion.js must append the progress element");
+  assert.equal(progress.className,"strata-scroll-progress");
+  assert.equal(progress.getAttribute("aria-hidden"),"true");
+  assert.equal(progress.dataset.active,"true");
+  assert.equal(progress.style.transform,"scaleX(0)");
+  assert.equal(rootClasses.has("motion-ready"),true);
+
+  window.scrollY=600;
+  for(const handler of listeners.scroll||[])handler();
+  assert.equal(frames.size,1,"scroll updates should be coalesced into one frame");
+  const [[frameId,frame]]=frames.entries();frames.delete(frameId);frame();
+  assert.equal(progress.style.transform,"scaleX(0.5)");
+
+  documentElement.scrollHeight=900;
+  for(const handler of listeners.resize||[])handler();
+  const [[resizeFrameId,resizeFrame]]=frames.entries();frames.delete(resizeFrameId);resizeFrame();
+  assert.equal(progress.dataset.active,"false");
+  assert.equal(progress.style.transform,"scaleX(0)");
+
+  preference.matches=true;preference.listener();
+  assert.equal(rootClasses.has("motion-ready"),false,"reduced motion must disable reveal animation state");
+  assert.ok(disconnects>0,"reduced motion must disconnect reveal observers");
+
+  for(const file of ["public/styles/experience.css","public/styles/workout.css"]){
+    const css=read(file);
+    assert.match(css,/@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.strata-scroll-progress\s*\{[^}]*display:\s*none/i,`${file} reduced-motion progress`);
+    assert.match(css,/@media\s+print\s*\{[\s\S]*?\.strata-scroll-progress\s*\{[^}]*display:\s*none/i,`${file} print progress`);
+  }
 });

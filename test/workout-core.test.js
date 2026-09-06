@@ -33,6 +33,17 @@ test("workout starts from a snapshot, infers explicit formats and never invents 
   assert.throws(()=>W.createWorkout({days:{Monday:[{exerciseId:"unknown",sets:3}]}},"Monday",catalog),/unavailable/);
 });
 
+test("workout guidance summarizes a plan day and identifies the next unfinished set",()=>{
+  const workout=makeWorkout();
+  assert.deepEqual(W.planDaySummary({days:{Monday:[{sets:3},{sets:2}]}},"Monday"),{day:"Monday",movements:2,workingSets:5});
+  assert.deepEqual(W.planDaySummary({days:{Monday:[]}},"Funday"),{day:null,movements:0,workingSets:0});
+  assert.deepEqual(W.nextIncompleteSet(workout),{entryIndex:0,setIndex:0,entryId:workout.entries[0].id,exerciseId:"press",remaining:5});
+  workout.entries[0].sets.forEach((set)=>{set.completed=true;});
+  assert.deepEqual(W.nextIncompleteSet(workout),{entryIndex:1,setIndex:0,entryId:workout.entries[1].id,exerciseId:"push-up",remaining:3});
+  workout.entries.forEach((entry)=>entry.sets.forEach((set)=>{set.completed=true;}));
+  assert.equal(W.nextIncompleteSet(workout),null);
+});
+
 test("actual catalog timed prescriptions and compact seconds shorthand infer timed logging",()=>{
   const timedIds=["superman-hold","prone-cobra","planche-lean","wall-external-rotation-isometric","copenhagen-plank","calf-isometric-hold","seated-calf-isometric-machine","side-plank","front-plank","hollow-body-hold"];
   for(const exerciseId of timedIds){

@@ -12,8 +12,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/workout.css?v=7.1.3" />
-  <script src="/motion.js?v=7.1.3"></script>
+  <link rel="stylesheet" href="/workout.css?v=7.2.0" />
+  <script src="/motion.js?v=7.2.0"></script>
 </head>
 <body class="workout-page">
   <a class="skip-link" href="#workoutTitle">Skip to workout</a>
@@ -37,14 +37,15 @@
       <section class="panel start-panel" id="startPanel" aria-labelledby="startTitle">
         <div class="section-heading"><div><p class="eyebrow" id="todayLabel">Your next session</p><h2 id="startTitle">Turn your plan into progress.</h2></div><a class="text-link" href="/planner.html">Edit plan ↗</a></div>
         <label class="field day-field">Choose a plan day<select id="planDay"></select></label>
+        <div class="session-brief" id="planBrief" aria-label="Selected workout summary"></div>
         <div class="plan-preview" id="planPreview"></div>
         <div class="start-bottom"><p id="startHint" class="muted"></p><div class="start-actions"><button class="button secondary" type="button" id="chooseScheduledDay" hidden>Choose a scheduled day <span aria-hidden="true">→</span></button><a class="button secondary" id="openPlannerFromEmpty" href="/planner.html" hidden>Add exercises in Plan <span aria-hidden="true">↗</span></a><button class="button primary" type="button" id="startWorkout">Start working out <span aria-hidden="true">↗</span></button></div></div>
       </section>
       <section class="session" id="sessionPanel" aria-labelledby="sessionTitle" hidden>
         <div class="session-heading"><div><p class="eyebrow" id="sessionDate"></p><h2 id="sessionTitle" tabindex="-1"></h2><p class="muted">Log actual values. Planned reps are a guide, not a completed result.</p></div><div class="session-clock"><span>Time since start</span><strong id="sessionElapsed">0:00</strong></div></div>
         <div class="session-tools panel">
-          <div class="progress-summary"><svg class="progress-ring" viewBox="0 0 64 64" role="img" id="progressRing" aria-label="0 percent complete"><circle class="ring-track" cx="32" cy="32" r="26"/><circle class="ring-value" id="ringValue" cx="32" cy="32" r="26" pathLength="100"/></svg><div><strong id="progressCount">0 sets</strong><span id="progressLabel">Take it one set at a time.</span><progress id="sessionProgress" max="100" value="0" class="sr-only" aria-label="Completed sets"></progress></div></div>
-          <div class="rest-timer"><div class="timer-readout"><span>Rest timer</span><strong id="restClock" role="timer" aria-label="Rest timer">1:30</strong></div><label class="sr-only" for="restDuration">Rest duration in seconds</label><select id="restDuration"><option value="30">30 sec</option><option value="60">60 sec</option><option value="90" selected>90 sec</option><option value="120">2 min</option><option value="180">3 min</option><option value="300">5 min</option></select><button class="button secondary compact" id="timerToggle" type="button">Start rest</button><button class="button quiet compact" id="timerReset" type="button">Reset</button></div>
+          <div class="progress-summary"><svg class="progress-ring" viewBox="0 0 64 64" role="img" id="progressRing" aria-label="0 percent complete"><circle class="ring-track" cx="32" cy="32" r="26"/><circle class="ring-value" id="ringValue" cx="32" cy="32" r="26" pathLength="100"/></svg><div><strong id="progressCount">0 sets</strong><span id="progressLabel">Take it one set at a time.</span><progress id="sessionProgress" max="100" value="0" class="sr-only" aria-label="Completed sets"></progress></div><button class="button quiet compact next-set" id="nextSet" type="button">Next set <span aria-hidden="true">↓</span></button></div>
+          <div class="rest-control"><div class="rest-timer"><div class="timer-readout"><span>Rest timer</span><strong id="restClock" role="timer" aria-label="Rest timer">1:30</strong></div><label class="sr-only" for="restDuration">Rest duration in seconds</label><select id="restDuration"><option value="30">30 sec</option><option value="60">60 sec</option><option value="90" selected>90 sec</option><option value="120">2 min</option><option value="180">3 min</option><option value="300">5 min</option></select><button class="button secondary compact" id="timerToggle" type="button">Start rest</button><button class="button quiet compact" id="timerReset" type="button">Reset</button></div><label class="auto-rest"><input id="autoRest" type="checkbox" checked /> <span>Start rest automatically after a completed set</span></label></div>
         </div>
         <div class="save-strip"><span id="saveStatus" role="status" aria-live="polite">Ready</span><div class="actions"><button class="button quiet compact" type="button" id="saveNow">Save now</button><button class="button quiet compact" type="button" id="closeSession">Save &amp; close</button><button class="button quiet compact" type="button" id="exportDraft">Download draft</button></div></div>
         <p id="sessionError" class="inline-error" role="alert" hidden></p>
@@ -60,12 +61,12 @@
     </section>
     <noscript><div class="panel">Enable JavaScript to log sessions and load workout history. Your week remains available in <a href="/planner.html">Plan</a>.</div></noscript>
   </main>
-  <footer>STRATA · Build 7.1.3 <span>Plan with purpose. Train with intent.</span><a href="/policies">Policies</a></footer>
+  <footer>STRATA · Build 7.2.0 <span>Plan with purpose. Train with intent.</span><a href="/policies">Policies</a></footer>
   <dialog id="finishDialog" aria-labelledby="finishDialogTitle"><form method="dialog"><p class="eyebrow">Close out your session</p><h2 id="finishDialogTitle">Finish this workout?</h2><p id="finishDialogMessage"></p><p>Only checked sets count toward your history and progress. Unfinished sets stay in the session for reference.</p><div class="actions"><button class="button secondary" value="cancel">Keep training</button><button class="button primary" value="finish">Finish and save</button></div></form></dialog>
   <dialog id="detailDialog" aria-labelledby="detailTitle"><div class="section-heading"><h2 id="detailTitle"></h2><button class="button quiet compact" type="button" id="closeDetail" aria-label="Close session details">Close ×</button></div><div id="detailBody"></div></dialog>
   <div class="toast" id="workoutToast" role="status" aria-live="polite"></div>
-  <script src="/workout-core.js?v=7.1.3"></script>
-  <script src="/workout.js?v=7.1.3" defer></script>
-  <script src="/pwa.js?v=7.1.3" defer></script>
+  <script src="/workout-core.js?v=7.2.0"></script>
+  <script src="/workout.js?v=7.2.0" defer></script>
+  <script src="/pwa.js?v=7.2.0" defer></script>
 </body>
 </html>

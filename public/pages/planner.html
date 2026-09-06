@@ -16,9 +16,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="planner.css?v=7.1.3" />
-    <link rel="stylesheet" href="/experience.css?v=7.1.3" />
-    <script src="/motion.js?v=7.1.3"></script>
+    <link rel="stylesheet" href="planner.css?v=7.2.0" />
+    <link rel="stylesheet" href="/experience.css?v=7.2.0" />
+    <script src="/motion.js?v=7.2.0"></script>
   </head>
   <body>
     <a class="skip-link" href="#weekTitle">Skip to weekly plan</a>
@@ -70,11 +70,14 @@
           <div><p class="eyebrow">Weekly training architecture</p><h1 id="weekTitle" tabindex="-1">BUILD YOUR <em>WEEK.</em></h1><p class="week-intro">Shape a balanced seven-day plan, then fine-tune sets, reps, and recovery as you go.</p></div>
           <div class="toolbar-actions"><button class="outline-button" id="undoPlanRemoval" type="button" disabled>Undo removal <span aria-hidden="true">↶</span></button><button class="outline-button" id="manageWeekTemplates" type="button" disabled>Week templates <span aria-hidden="true">▧</span></button><button class="outline-button" id="exportWeeklyPlan" type="button" disabled>Export week <span aria-hidden="true">↓</span></button><button class="outline-button share-week-button" id="shareWeeklyPlan" type="button" aria-controls="shareWeeklyPanel" aria-expanded="false" disabled>Share week <span aria-hidden="true">↗</span></button></div>
         </div>
-        <ol class="planner-workflow" aria-label="Build a weekly plan in three steps">
-          <li><span>01</span><p><strong>Choose a day</strong><small>Set the destination in the library or on the board.</small></p></li>
-          <li><span>02</span><p><strong>Add movements</strong><small>Search, filter, then add the exercises that fit.</small></p></li>
-          <li><span>03</span><p><strong>Set your volume</strong><small>Adjust sets and reps; every change saves automatically.</small></p></li>
-        </ol>
+        <details class="planner-guide">
+          <summary><span>New to Plan?</span><strong>Build a weekly plan in three steps</strong><i aria-hidden="true">+</i></summary>
+          <ol class="planner-workflow" aria-label="Build a weekly plan in three steps">
+            <li><span>01</span><p><strong>Choose a day</strong><small>Set the destination in the library or on the board.</small></p></li>
+            <li><span>02</span><p><strong>Add movements</strong><small>Search, filter, then add the exercises that fit.</small></p></li>
+            <li><span>03</span><p><strong>Set your volume</strong><small>Adjust sets and reps; every change saves automatically.</small></p></li>
+          </ol>
+        </details>
         <section class="share-week-panel" id="shareWeeklyPanel" aria-labelledby="shareWeeklyTitle" hidden>
           <div class="share-week-heading">
             <div><p class="eyebrow">Community plans</p><h2 id="shareWeeklyTitle" tabindex="-1">SHARE YOUR <em>WEEK.</em></h2></div>
@@ -132,9 +135,9 @@
       </section>
     </dialog>
 
-    <footer class="build-footer">STRATA · Build 7.1.3 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
+    <footer class="build-footer">STRATA · Build 7.2.0 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
     <div class="planner-toast" id="plannerToast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=7.1.3"></script>
-    <script src="planner.js?v=7.1.3"></script>
+    <script src="/pwa.js?v=7.2.0"></script>
+    <script src="planner.js?v=7.2.0"></script>
   </body>
 </html>

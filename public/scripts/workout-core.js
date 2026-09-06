@@ -47,6 +47,24 @@
     const completed=sets.filter((set)=>set.completed===true).length;
     return{total:sets.length,completed,percent:sets.length?Math.round(completed/sets.length*100):0};
   }
+  function planDaySummary(plan,day){
+    const items=Array.isArray(plan?.days?.[day])?plan.days[day]:[];
+    return{
+      day:DAYS.includes(day)?day:null,
+      movements:items.length,
+      workingSets:items.reduce((total,item)=>total+(Number.isFinite(Number(item?.sets))?Math.max(0,Number(item.sets)):0),0)
+    };
+  }
+  function nextIncompleteSet(workout){
+    const entries=Array.isArray(workout?.entries)?workout.entries:[];
+    const counts=progress(workout);
+    for(let entryIndex=0;entryIndex<entries.length;entryIndex++){
+      const sets=Array.isArray(entries[entryIndex]?.sets)?entries[entryIndex].sets:[];
+      const setIndex=sets.findIndex((set)=>set?.completed!==true);
+      if(setIndex>=0)return{entryIndex,setIndex,entryId:entries[entryIndex].id,exerciseId:entries[entryIndex].exerciseId,remaining:counts.total-counts.completed};
+    }
+    return null;
+  }
   function remainingSeconds(deadline,now=Date.now()){
     return Number.isFinite(deadline)?Math.max(0,Math.ceil((deadline-now)/1000)):0;
   }
@@ -126,5 +144,5 @@
       return record;
     }catch{return null;}
   }
-  return{DAYS,copy,localDate,today,dayFromSearch,id,inferFormat,createWorkout,actualError,progress,remainingSeconds,duration,formatKey,summary,metrics,series,bestInWindow,payload,matches,draftPrefix,readDraft};
+  return{DAYS,copy,localDate,today,dayFromSearch,id,inferFormat,createWorkout,actualError,progress,planDaySummary,nextIncompleteSet,remainingSeconds,duration,formatKey,summary,metrics,series,bestInWindow,payload,matches,draftPrefix,readDraft};
 });

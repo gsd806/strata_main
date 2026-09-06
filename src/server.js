@@ -140,7 +140,8 @@ const STATIC_FILES = new Map([
   ["icons/strata-192.png","icons/strata-192.png"],
   ["icons/strata-512.png","icons/strata-512.png"],
   ["icons/strata-maskable-512.png","icons/strata-maskable-512.png"],
-  ["icons/apple-touch-icon.png","icons/apple-touch-icon.png"]
+  ["icons/apple-touch-icon.png","icons/apple-touch-icon.png"],
+  ["images/strata-layers.jpg","images/strata-layers.jpg"]
 ]);
 const PAGE_ALIASES = new Map([
   ["/install","install.html"],
@@ -165,7 +166,8 @@ const MIME = {
   ".json":"application/json; charset=utf-8",
   ".webmanifest":"application/manifest+json; charset=utf-8",
   ".svg":"image/svg+xml",
-  ".png":"image/png"
+  ".png":"image/png",
+  ".jpg":"image/jpeg"
 };
 let publicAssets=new Map();
 let store;

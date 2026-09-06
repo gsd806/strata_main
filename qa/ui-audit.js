@@ -120,6 +120,13 @@ let browser;
     assert.equal(new URL(snapshot.signupDestination).pathname,"/planner.html","A new unpaid account should land on the free planner");
     assert.match(snapshot.title,/STRATA/i);
 
+    await page.goto(`${BASE_URL}/account.html`,{waitUntil:"networkidle"});
+    await page.locator("#signedInCard").waitFor({state:"visible"});
+    assert.equal(await page.locator("#accountAdminAction").isHidden(),true,"A non-admin account must not render the administrator action");
+    assert.equal(await page.locator("#accountDeleteCancel").isHidden(),true,"An account without a pending deletion must not render its cancellation action");
+    assert.equal(new URL(await page.locator("#accountPrimaryAction").getAttribute("href"),BASE_URL).pathname,"/planner.html","A planless free account should return to the free planner");
+    await capture(page,"account-signed-in-desktop.png",{fullPage:true});
+
     await page.goto(`${BASE_URL}/planner.html`,{waitUntil:"networkidle"});
     await page.locator(".library-card").first().waitFor();
     snapshot.plannerCards=await page.locator(".library-card").count();
@@ -204,6 +211,21 @@ let browser;
     assert.equal(new URL(await pulseAction.getAttribute("href"),BASE_URL).pathname,"/planner.html","The pulse action must remain a planning action");
     const featureWidths=await page.locator(".feature-block").evaluateAll((nodes)=>nodes.map((node)=>node.getBoundingClientRect().width));
     assert.ok(Math.max(...featureWidths)-Math.min(...featureWidths)<=1,"All seven Strata+ tool cards must use equal widths");
+    await page.locator('#recommendationGrid [data-toggle-shortlist]').first().click();
+    await page.waitForFunction(()=>document.querySelector("#movementBoardCapacity")?.textContent?.trim()==="1 / 4 saved");
+    snapshot.decisionBoardStorageKey=await page.evaluate(()=>Object.keys(localStorage).find((key)=>key.startsWith("strata_plus_movement_board_v1:"))||"");
+    assert.match(snapshot.decisionBoardStorageKey,/^strata_plus_movement_board_v1:.+/,"The decision board must use an account-keyed browser-storage record");
+    await page.reload({waitUntil:"networkidle"});
+    await page.waitForFunction(()=>document.querySelector("#movementBoardCapacity")?.textContent?.trim()==="1 / 4 saved");
+    await page.locator('#recommendationGrid [data-toggle-shortlist]').nth(1).click();
+    await page.waitForFunction(()=>document.querySelector("#movementBoardCapacity")?.textContent?.trim()==="2 / 4 saved");
+    assert.equal(await page.locator("#compareMovementBoard").isEnabled(),true,"Two saved movements must enable the comparison handoff");
+    await page.locator("#compareMovementBoard").click();
+    await page.locator("#battleResults").waitFor({state:"visible"});
+    assert.equal(new URL(page.url()).hash,"#battle","The decision board must open the existing comparison workspace");
+    await page.goto(`${BASE_URL}/discover.html`,{waitUntil:"networkidle"});
+    await page.locator("#clearMovementBoard").click();
+    assert.equal(((await page.locator("#movementBoardCapacity").textContent())||"").trim(),"0 / 4 saved","Clearing the decision board must update its visible state");
     await capture(page,"strata-plus-home-desktop.png",{fullPage:false});
 
     await page.setViewportSize({width:390,height:844});
@@ -304,6 +326,10 @@ let browser;
     await sessionDetailTrigger.focus();await page.keyboard.press("Enter");await sessionDetailDialog.waitFor({state:"visible"});
     assert.equal(await sessionDetailDialog.getAttribute("aria-labelledby"),"detailTitle","Strata+ exercise details need an explicit dialog label");
     assert.equal(await sessionDetailDialog.evaluate((dialog)=>dialog.contains(document.activeElement)),true,"Opening Strata+ details must move keyboard focus into the dialog");
+    const detailSave=sessionDetailDialog.locator("[data-toggle-shortlist]");
+    await detailSave.focus();await page.keyboard.press("Enter");
+    await page.waitForFunction(()=>document.querySelector("#detailDialog [data-toggle-shortlist]")===document.activeElement);
+    assert.equal(await sessionDetailDialog.locator("[data-toggle-shortlist]").getAttribute("aria-pressed"),"true","Saving from exercise details must update the replacement control and restore its keyboard focus");
     await page.keyboard.press("Escape");await sessionDetailDialog.waitFor({state:"hidden"});
     assert.equal(await sessionDetailTrigger.evaluate((trigger)=>trigger===document.activeElement),true,"Closing Strata+ details must return focus to its trigger");
     snapshot.sessionDialogKeyboard=true;
@@ -382,6 +408,33 @@ let browser;
     }).map((node)=>node.textContent.trim()));
     assert.deepEqual(smallInstallTargets,[],`Install controls below 44px: ${smallInstallTargets.join(", ")}`);
     await capture(page,"install-mobile-320.png",{fullPage:true});
+
+    await page.goto(`${BASE_URL}/`,{waitUntil:"networkidle"});
+    let reachedSearch=false;
+    for(let stop=0;stop<30&&!reachedSearch;stop+=1){
+      await page.keyboard.press("Tab");
+      reachedSearch=await page.evaluate(()=>document.activeElement?.id==="searchInput");
+    }
+    assert.equal(reachedSearch,true,"The exercise search must remain in the mobile keyboard order");
+    await page.waitForFunction(()=>{
+      const control=document.querySelector("#searchInput")?.getBoundingClientRect(),nav=document.querySelector(".mobile-public-nav")?.getBoundingClientRect();
+      return Boolean(control&&nav&&control.bottom<=nav.top);
+    },undefined,{timeout:2000});
+    const focusNavOverlap=await page.evaluate(()=>{
+      const control=document.querySelector("#searchInput")?.getBoundingClientRect(),nav=document.querySelector(".mobile-public-nav")?.getBoundingClientRect();
+      return control&&nav?Math.max(0,control.bottom-nav.top):Infinity;
+    });
+    assert.equal(focusNavOverlap,0,"The fixed mobile navigation must not cover a keyboard-focused control");
+    snapshot.focusNavOverlap=focusNavOverlap;
+
+    await page.goto(`${BASE_URL}/workout.html?day=${encodeURIComponent(snapshot.sessionChoices.day.value)}`,{waitUntil:"networkidle"});
+    await page.keyboard.press("Tab");
+    const workoutSkipReachable=await page.locator(".skip-link").evaluate((link)=>{
+      const rect=link.getBoundingClientRect(),hit=document.elementFromPoint(rect.left+rect.width/2,rect.top+rect.height/2);
+      return document.activeElement===link&&(hit===link||link.contains(hit));
+    });
+    assert.equal(workoutSkipReachable,true,"The first workout Tab stop must be visible above the sticky header");
+    snapshot.workoutSkipReachable=workoutSkipReachable;
 
     snapshot.errors=errors;
     assert.deepEqual(errors,[],`Browser errors detected:\n${errors.join("\n")}`);

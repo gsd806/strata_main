@@ -232,9 +232,18 @@ test("search, collections, filters, and sorts return the expected library slices
   assert.ok(bodyweightResults.every((exercise)=>exercise.equipment==="Bodyweight"));
 
   assert.deepEqual(Core.filterExercises(exercises,{...base,collection:"community",sort:"community"},preferences,aggregateFor).map((exercise)=>exercise.id),["flat-dumbbell-press"]);
+  const saved=["flat-dumbbell-press","dead-bug"];
+  assert.deepEqual(Core.filterExercises(exercises,{...base,collection:"saved",saved},preferences,aggregateFor).map((exercise)=>exercise.id).sort(),["dead-bug","flat-dumbbell-press"]);
   const scores=Core.filterExercises(exercises,{...base,sort:"score"},preferences,aggregateFor).map((exercise)=>exercise.score);
   assert.equal(scores.length,exercises.length,"Score sort must retain the complete library");
   assert.deepEqual(scores,[...scores].sort((a,b)=>b-a));
+});
+
+test("decision board normalization is bounded, unique, and limited to real catalog IDs",()=>{
+  const requested=["flat-dumbbell-press","missing-exercise","dead-bug","flat-dumbbell-press","cable-fly","pullup","pressdown"];
+  assert.deepEqual(Core.normalizeShortlist(requested,exercises,4),["flat-dumbbell-press","dead-bug","cable-fly","pullup"]);
+  assert.deepEqual(Core.normalizeShortlist("flat-dumbbell-press",exercises,4),[]);
+  assert.deepEqual(Core.normalizeShortlist(requested,exercises,2),["flat-dumbbell-press","dead-bug"]);
 });
 
 test("all exercises retain complete YouTube, scoring, and instruction data",()=>{

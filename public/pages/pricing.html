@@ -16,11 +16,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/site-info.css?v=7.1.3" />
-    <link rel="stylesheet" href="/experience.css?v=7.1.3" />
-    <script src="/motion.js?v=7.1.3"></script>
+    <link rel="stylesheet" href="/site-info.css?v=7.2.0" />
+    <link rel="stylesheet" href="/experience.css?v=7.2.0" />
+    <script src="/motion.js?v=7.2.0"></script>
   </head>
-  <body>
+  <body class="pricing-page">
     <a class="skip-link" href="#main">Skip to pricing</a>
     <header class="info-header">
       <a class="brand" href="/" aria-label="STRATA home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>STRATA</span></a>
@@ -30,8 +30,11 @@
     <main id="main">
       <section class="info-hero" aria-labelledby="pageTitle">
         <div class="info-container info-hero-grid">
-          <div><p class="eyebrow">Strata+ access</p><h1 id="pageTitle">ONE PRICE.<br /><em>NO SUBSCRIPTION.</em></h1></div>
-          <p class="info-lede">Start with a one-time 10-day trial. Strata+ adds personalized rankings, a focused session builder, community plans, and a saved 31-day planner; keep it with one $5.99 USD purchase if you want. The exercise index, weekly planner, account sync, and installable app remain free.</p>
+          <div><p class="eyebrow">Strata+ access · No subscription</p><h1 id="pageTitle">TRY IT FREE.<br /><em>ONE PRICE TO KEEP.</em></h1></div>
+          <div>
+            <p class="info-lede">Start with one 10-day trial—no card, no renewal. Strata+ adds personalized rankings, a focused session builder, community plans, and a saved 31-day planner. Keep it with one $5.99 USD purchase if it earns a place in your training.</p>
+            <div class="hero-facts" aria-label="Strata+ purchase facts"><span><strong>10 days</strong>Free trial</span><span><strong>$5.99 USD</strong>One payment</span><span><strong>14 days</strong>Refund window</span></div>
+          </div>
         </div>
       </section>
 
@@ -42,6 +45,11 @@
             <h2 class="sr-only" id="discoveryPlanTitle">Strata+</h2>
             <div class="price" aria-label="$5.99 USD, one-time purchase"><strong>$5.99</strong><span>USD</span></div>
             <p class="price-subtitle">One-time purchase. No recurring subscription.</p>
+            <ol class="access-path" aria-label="How Strata+ access works">
+              <li><span>01</span><div><strong>Create an account</strong><small>Your free planner and account sync remain available either way.</small></div></li>
+              <li><span>02</span><div><strong>Try every Strata+ tool</strong><small>One 10-day trial, with no card and no automatic charge.</small></div></li>
+              <li><span>03</span><div><strong>Keep it only if it helps</strong><small>Pay $5.99 USD once. This is not a subscription.</small></div></li>
+            </ol>
             <ul class="feature-list">
               <li>Personalized rankings, search, comparisons, and recommendations tuned to your setup</li>
               <li>Weekly setup plus a personalized session builder for the time and focus you choose</li>
@@ -66,8 +74,8 @@
 
           <article class="free-card" aria-labelledby="freeTitle">
             <p class="card-kicker">STRATA core · Free</p>
-            <h2 id="freeTitle">KEEP THE BASICS.</h2>
-            <p>Build a weekly plan without creating an account. Guest plans stay on that device; signing in adds secure cross-device plan sync. Public rankings and the PWA installation guide also remain free.</p>
+            <h2 id="freeTitle">CORE STAYS FREE.</h2>
+            <p>STRATA should be useful before you pay. Build a weekly plan without creating an account. Guest plans stay on that device; signing in adds secure cross-device plan sync. Public rankings and the PWA installation guide also remain free.</p>
             <ul class="feature-list">
               <li>200 ranked exercises across 8 muscle groups</li>
               <li>Login-free weekly planner with optional account sync</li>
@@ -77,18 +85,24 @@
             <p class="plain-note">Questions before buying? <a class="contact-email" href="/contact">Contact STRATA</a> or review the <a class="contact-email" href="/terms">Terms of Service</a>.</p>
           </article>
         </div>
+
+        <div class="info-container decision-strip" aria-label="Purchase assurances" data-reveal>
+          <article><span>01 / Try first</span><strong>No card for the trial.</strong><p>The eligible 10-day trial starts only when you choose it and never converts into an automatic charge.</p></article>
+          <article><span>02 / See the total</span><strong>Checkout stays explicit.</strong><p>Paddle shows applicable tax and the final total before payment, then handles the receipt as merchant of record.</p></article>
+          <article><span>03 / Reconsider</span><strong>A clear refund window.</strong><p>A paid Strata+ purchase may be refunded within 14 calendar days after purchase. <a href="/refunds">Read the policy</a>.</p></article>
+        </div>
       </section>
     </main>
 
     <footer class="info-footer">
       <div class="info-container info-footer-grid">
-        <div><a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>STRATA</span></a><p class="footer-tagline">Move selection, made legible.</p></div>
+        <div><a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>STRATA</span></a><p class="footer-tagline">Make every working set intentional.</p></div>
         <nav class="footer-nav" aria-label="Footer navigation"><a href="/">Rankings</a><a href="/discover.html">Strata+</a><a href="/pricing">Pricing</a><a href="/contact">Contact</a><a href="/policies">Policies</a><a href="/install">Install</a></nav>
-        <p class="footer-meta">© 2026 Strata Index<br />Build 7.1.3</p>
+        <p class="footer-meta">© 2026 Strata Index<br />Build 7.2.0</p>
       </div>
     </footer>
     <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
-    <script src="/pwa.js?v=7.1.3"></script>
-    <script src="/pricing.js?v=7.1.3"></script>
+    <script src="/pwa.js?v=7.2.0"></script>
+    <script src="/pricing.js?v=7.2.0"></script>
   </body>
 </html>

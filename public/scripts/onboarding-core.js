@@ -25,6 +25,25 @@
       limitations:uniqueAllowed(preferences?.limitations,LIMITATION_OPTIONS),recoveryAdjusted
     };
   }
+  function trainingSnapshot(profile,week=null){
+    const availability=uniqueAllowed(profile?.availability,DAYS);
+    const equipment=[...new Set(Array.isArray(profile?.equipment)?profile.equipment:[])].filter(Boolean);
+    const minutes=[20,35,50].includes(Number(profile?.minutes))?Number(profile.minutes):0;
+    const sessions=Array.isArray(week?.sessions)?week.sessions:[];
+    const movementCount=sessions.reduce((total,session)=>total+(Array.isArray(session?.items)?session.items.length:0),0);
+    const workingSets=sessions.reduce((total,session)=>total+(Array.isArray(session?.items)?session.items.reduce((sets,item)=>sets+(Number.isFinite(Number(item?.sets))?Number(item.sets):0),0):0),0);
+    let message="Your preview will stay editable until you choose to save it.";
+    if(!availability.length)message="Choose at least one training day.";
+    else if(availability.length>6)message="Keep at least one day open for recovery.";
+    else if(!equipment.length)message="Choose the equipment you can reliably access.";
+    else if(!minutes)message="Choose a session length.";
+    else message=`${availability.length} training day${availability.length===1?"":"s"}, ${DAYS.length-availability.length} recovery day${DAYS.length-availability.length===1?"":"s"}, and ${availability.length*minutes} planned minutes each week.`;
+    return{
+      trainingDays:availability.length,recoveryDays:Math.max(0,DAYS.length-availability.length),minutes,
+      weeklyMinutes:availability.length*minutes,equipmentCount:equipment.length,movementCount,workingSets,
+      ready:availability.length>=1&&availability.length<=6&&equipment.length>0&&minutes>0,message
+    };
+  }
   function buildWeek(profile,exercises,discovery,makeId){
     const days=DAYS.filter(day=>profile?.availability?.includes(day));
     if(days.length<1||days.length>6)throw new Error("Choose one to six training days, leaving at least one recovery day.");
@@ -48,5 +67,5 @@
     }
     return {plan,sessions,preferences};
   }
-  return {DAYS,buildWeek,profileFromSaved};
+  return {DAYS,buildWeek,profileFromSaved,trainingSnapshot};
 });

@@ -171,6 +171,53 @@ test("failed storage probes are advisory and a login error stays scoped",async()
   assert.equal(elements.get("loginMessage").hidden,true);
 });
 
+test("signed-in dashboard distinguishes access and plan states with a useful next action",async()=>{
+  const cases=[
+    {
+      name:"paid account with a populated week",planCount:6,workoutDays:3,
+      discovery:{active:true,accessType:"paid",pendingPurchaseCount:0},
+      access:"Unlocked",detail:/one-time access confirmed/i,primary:"Start training",href:"/workout.html",discoveryAction:"Open Strata+ studio →"
+    },
+    {
+      name:"trial account without a week",planCount:0,workoutDays:0,
+      discovery:{active:true,accessType:"trial",pendingPurchaseCount:0,trial:{expiresAt:Date.now()+3*86400000}},
+      access:"Trial",detail:/3 days remaining/i,primary:"Build your week",href:"/onboarding.html",discoveryAction:"Open Strata+ studio →"
+    },
+    {
+      name:"pending purchase without a week",planCount:0,workoutDays:0,
+      discovery:{active:false,accessType:null,pendingPurchaseCount:1},
+      access:"Pending",detail:/checkout needs attention/i,primary:"Build your week",href:"/planner.html",discoveryAction:"Check Strata+ purchase →"
+    },
+    {
+      name:"free account with a populated week",planCount:2,workoutDays:2,
+      discovery:{active:false,accessType:null,pendingPurchaseCount:0},
+      access:"Free",detail:/rankings and plan included/i,primary:"Open your week",href:"/planner.html",discoveryAction:"Unlock Strata+ →"
+    }
+  ];
+  for(const [index,fixture] of cases.entries()){
+    const page=createPage({route:async(path)=>{
+      if(path==="/api/status")return jsonResponse(200,{persistent:true});
+      if(path==="/healthz")return jsonResponse(200,{ok:true});
+      if(path==="/api/me")return jsonResponse(200,{csrfToken:"csrf-test",user:{
+        id:`member-${index}`,name:"Ari",email:"ari@example.test",createdAt:1704067200000,
+        planCount:fixture.planCount,workoutDays:fixture.workoutDays,isAdmin:false,discovery:fixture.discovery,accountDeletion:{pending:false}
+      }});
+      throw new Error(`Unexpected route ${path}`);
+    }});
+    await settle();
+    assert.equal(page.elements.get("signedInCard").hidden,false,fixture.name);
+    assert.equal(page.elements.get("accountAccess").hidden,true,fixture.name);
+    assert.equal(page.elements.get("accountPlanCount").textContent,String(fixture.planCount),fixture.name);
+    assert.equal(page.elements.get("accountWorkoutDays").textContent,String(fixture.workoutDays),fixture.name);
+    assert.equal(page.elements.get("accountAccessState").textContent,fixture.access,fixture.name);
+    assert.match(page.elements.get("accountAccessDetail").textContent,fixture.detail,fixture.name);
+    assert.match(page.elements.get("accountMemberSince").textContent,/2024/,fixture.name);
+    assert.equal(page.elements.get("accountPrimaryLabel").textContent,fixture.primary,fixture.name);
+    assert.equal(page.elements.get("accountPrimaryAction").href,fixture.href,fixture.name);
+    assert.equal(page.elements.get("accountDiscoveryAction").textContent,fixture.discoveryAction,fixture.name);
+  }
+});
+
 test("enhanced signup reports an inline error, recovers, and retries",async()=>{
   let signupAttempts=0;
   const page=createPage({

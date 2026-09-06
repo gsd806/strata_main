@@ -4,6 +4,7 @@
   const $=(id)=>document.getElementById(id);
   const esc=(value)=>String(value??"").replace(/[&<>"']/g,(character)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[character]));
   const number=(value)=>Number(value||0).toLocaleString(undefined,{maximumFractionDigits:2});
+  const PREFERENCE_KEY="strata_workout_preferences_v1",REST_DURATIONS=[30,60,90,120,180,300];
   const state={mode:"",user:null,ownerId:"",contextId:W.id(),csrfToken:"",catalog:[],plan:null,day:W.dayFromSearch(location.search),workout:null,dirty:false,sequence:0,saving:null,saveTimer:null,blocked:false,conflict:null,pausedSeconds:null,timerAnnounced:false,draftKey:"",recoveries:[],history:[],offset:0,hasMore:false,historyBusy:false,detailBusy:false,loading:false,toastTimer:null};
   function toast(message){
     $("workoutToast").textContent=message;$("workoutToast").classList.add("is-visible");
@@ -13,6 +14,19 @@
   function errorMessage(message){$("sessionError").textContent=message;$("sessionError").hidden=!message;}
   function exercise(id){return state.catalog.find((item)=>item.id===id)||{name:id,equipment:"",caution:""};}
   function owner(){return `account:${state.user.id}`;}
+  function restorePreferences(){
+    try{
+      const saved=JSON.parse(localStorage.getItem(PREFERENCE_KEY)||"null");
+      if(saved&&saved.version===1){
+        if(typeof saved.autoRest==="boolean")$("autoRest").checked=saved.autoRest;
+        if(REST_DURATIONS.includes(Number(saved.restDuration)))$("restDuration").value=String(saved.restDuration);
+      }
+    }catch{/* Keep the visible defaults when browser preferences are unavailable. */}
+  }
+  function rememberPreferences(){
+    try{localStorage.setItem(PREFERENCE_KEY,JSON.stringify({version:1,autoRest:$("autoRest").checked,restDuration:Number($("restDuration").value)}));}
+    catch{/* Preferences are optional; workout recovery uses a separate guarded path. */}
+  }
   function saveError(error){
     if(error.status===401||error.code==="IDENTITY_CHANGED")return "Your account session changed. Your device draft has been kept. Reload and sign in to the original account to recover it.";
     if(error.status===403)return "Your secure session could not authorize the save. Reload, then review your recovered draft before saving again.";
@@ -139,17 +153,20 @@
     const currentIndex=Math.max(0,W.DAYS.indexOf(state.day));
     const upcomingDays=[...W.DAYS.slice(currentIndex+1),...W.DAYS.slice(0,currentIndex)];
     const scheduledDay=upcomingDays.find((day)=>(state.plan?.days?.[day]||[]).length);
-    const startButton=$("startWorkout"),chooseButton=$("chooseScheduledDay"),plannerLink=$("openPlannerFromEmpty");
+    const startButton=$("startWorkout"),chooseButton=$("chooseScheduledDay"),plannerLink=$("openPlannerFromEmpty"),brief=$("planBrief"),summary=W.planDaySummary(state.plan,state.day);
     $("todayLabel").textContent=`${W.localDate()} · ${state.day} plan`;
     startButton.hidden=!items.length;startButton.disabled=!state.plan||state.blocked;
     chooseButton.hidden=!!items.length||!scheduledDay;plannerLink.hidden=!!items.length||!!scheduledDay;
     if(!items.length){
+      brief.hidden=true;brief.innerHTML="";
       const recovery=(state.plan?.restDays||[state.plan?.restDay]).includes(state.day);
       $("planPreview").innerHTML=`<div class="empty-state"><strong>${recovery?"Recovery is part of the plan.":"Nothing is scheduled for this day yet."}</strong>${scheduledDay?`${esc(scheduledDay)} has a workout ready. Choose it below, or edit your week in Plan.`:"Add exercises in Plan to make your first workout available."}</div>`;
       if(scheduledDay){chooseButton.dataset.day=scheduledDay;chooseButton.innerHTML=`Choose ${esc(scheduledDay)} workout <span aria-hidden="true">→</span>`;}
       else delete chooseButton.dataset.day;
       $("startHint").textContent=scheduledDay?`Your next scheduled session is ${scheduledDay}.`:"Build a session in Plan, then return here to train.";return;
     }
+    brief.hidden=false;
+    brief.innerHTML=`<div><span>Movements</span><strong>${summary.movements}</strong></div><div><span>Working sets</span><strong>${summary.workingSets}</strong></div><div><span>Plan day</span><strong>${esc(summary.day)}</strong></div>`;
     $("planPreview").innerHTML=items.map((item,index)=>`<article class="preview-card"><span class="preview-number">${String(index+1).padStart(2,"0")}</span><strong>${esc(exercise(item.exerciseId).name)}</strong><small>${Number(item.sets)} sets · ${esc(item.reps)}</small></article>`).join("");
     $("startHint").textContent=`${items.length} exercises · ${items.reduce((count,item)=>count+Number(item.sets),0)} planned sets. This session will be dated today.`;
   }
@@ -162,9 +179,9 @@
   function option(value,label,current){return `<option value="${value}"${value===current?" selected":""}>${label}</option>`;}
   function hasActuals(entry){return entry.sets.some((set)=>set.completed||set.reps!==null||set.weight!==null||set.seconds!==null);}
   function renderEntry(entry,index){
-    const ex=exercise(entry.exerciseId),timed=entry.measurement==="timed",weighted=entry.loadType!=="bodyweight",locked=hasActuals(entry)||state.workout.status==="completed",disabled=locked?" disabled":"";
+    const ex=exercise(entry.exerciseId),timed=entry.measurement==="timed",weighted=entry.loadType!=="bodyweight",locked=hasActuals(entry)||state.workout.status==="completed",disabled=locked?" disabled":"",completedSets=entry.sets.filter((set)=>set.completed).length,next=W.nextIncompleteSet(state.workout);
     const measurement=timed?"seconds":"reps";
-    return `<article class="exercise-card" data-entry="${esc(entry.id)}"><div class="exercise-heading"><span class="exercise-index">${String(index+1).padStart(2,"0")}</span><div><h3>${esc(ex.name)}</h3><p>Planned: ${entry.sets.length} × ${esc(entry.prescribedReps)}${ex.equipment?` · ${esc(ex.equipment)}`:""}</p></div></div><div class="format-controls"><label class="field">Record<select data-format="measurement" aria-label="Measurement for ${esc(ex.name)}"${disabled}>${option("reps","Repetitions",entry.measurement)}${option("timed","Time in seconds",entry.measurement)}</select></label><label class="field">Load type<select data-format="loadType" aria-label="Load type for ${esc(ex.name)}"${disabled}>${option("external","External load",entry.loadType)}${option("bodyweight","Bodyweight",entry.loadType)}${option("assisted","Assistance",entry.loadType)}</select></label><label class="field">Unit<select data-format="unit" aria-label="Load unit for ${esc(ex.name)}"${disabled}${!weighted&&!locked?" disabled":""}>${option("kg","kg",entry.unit)}${option("lb","lb",entry.unit)}</select></label></div><p class="format-note">${locked?"Logging format is locked while actual values are present. Clear uncompleted values to change it.":"Check the logging format before your first set. Enter 0 explicitly if an external or assisted set has no added load."}${entry.loadType==="assisted"?" Assistance is not lifted weight; it does not create weight or volume records.":""}</p><table class="sets-table"><thead><tr><th scope="col">Set</th>${weighted?`<th scope="col">${entry.loadType==="assisted"?"Assist":"Load"} (${entry.unit})</th>`:""}<th scope="col">${timed?"Seconds":"Reps"}</th><th scope="col">Completed</th></tr></thead><tbody>${entry.sets.map((set,setIndex)=>`<tr data-set="${setIndex}" class="${set.completed?"set-complete":""}"><td class="set-number">${setIndex+1}</td>${weighted?`<td><input type="number" inputmode="decimal" min="0" max="1000" step="0.01" data-actual="weight" value="${set.weight??""}" placeholder="—" aria-label="${esc(ex.name)}, set ${setIndex+1}, ${entry.loadType==="assisted"?"assistance":"load"} in ${entry.unit}"${set.completed||state.workout.status==="completed"?" disabled":""}/></td>`:""}<td><input type="number" inputmode="numeric" min="1" max="${timed?3600:1000}" step="1" data-actual="${measurement}" value="${set[measurement]??""}" placeholder="—" aria-label="${esc(ex.name)}, set ${setIndex+1}, actual ${measurement}"${set.completed||state.workout.status==="completed"?" disabled":""}/></td><td><button type="button" class="button secondary set-check" data-complete="${setIndex}" aria-pressed="${set.completed}" aria-label="${set.completed?"Uncheck":"Complete"} ${esc(ex.name)}, set ${setIndex+1}"${state.workout.status==="completed"?" disabled":""}>${set.completed?"✓ Done":"Complete"}</button></td></tr>`).join("")}</tbody></table>${previous(entry)}</article>`;
+    return `<article class="exercise-card" data-entry="${esc(entry.id)}"><div class="exercise-heading"><span class="exercise-index">${String(index+1).padStart(2,"0")}</span><div><h3>${esc(ex.name)}</h3><p>Planned: ${entry.sets.length} × ${esc(entry.prescribedReps)}${ex.equipment?` · ${esc(ex.equipment)}`:""}</p></div><span class="exercise-progress">${completedSets}/${entry.sets.length} sets</span></div><div class="format-controls"><label class="field">Record<select data-format="measurement" aria-label="Measurement for ${esc(ex.name)}"${disabled}>${option("reps","Repetitions",entry.measurement)}${option("timed","Time in seconds",entry.measurement)}</select></label><label class="field">Load type<select data-format="loadType" aria-label="Load type for ${esc(ex.name)}"${disabled}>${option("external","External load",entry.loadType)}${option("bodyweight","Bodyweight",entry.loadType)}${option("assisted","Assistance",entry.loadType)}</select></label><label class="field">Unit<select data-format="unit" aria-label="Load unit for ${esc(ex.name)}"${disabled}${!weighted&&!locked?" disabled":""}>${option("kg","kg",entry.unit)}${option("lb","lb",entry.unit)}</select></label></div><p class="format-note">${locked?"Logging format is locked while actual values are present. Clear uncompleted values to change it.":"Check the logging format before your first set. Enter 0 explicitly if an external or assisted set has no added load."}${entry.loadType==="assisted"?" Assistance is not lifted weight; it does not create weight or volume records.":""}</p><table class="sets-table"><thead><tr><th scope="col">Set</th>${weighted?`<th scope="col">${entry.loadType==="assisted"?"Assist":"Load"} (${entry.unit})</th>`:""}<th scope="col">${timed?"Seconds":"Reps"}</th><th scope="col">Completed</th></tr></thead><tbody>${entry.sets.map((set,setIndex)=>`<tr data-set="${setIndex}" class="${set.completed?"set-complete":next?.entryId===entry.id&&next.setIndex===setIndex?"set-next":""}"><td class="set-number">${setIndex+1}</td>${weighted?`<td><input type="number" inputmode="decimal" min="0" max="1000" step="0.01" data-actual="weight" value="${set.weight??""}" placeholder="—" aria-label="${esc(ex.name)}, set ${setIndex+1}, ${entry.loadType==="assisted"?"assistance":"load"} in ${entry.unit}"${set.completed||state.workout.status==="completed"?" disabled":""}/></td>`:""}<td><input type="number" inputmode="numeric" min="1" max="${timed?3600:1000}" step="1" data-actual="${measurement}" value="${set[measurement]??""}" placeholder="—" aria-label="${esc(ex.name)}, set ${setIndex+1}, actual ${measurement}"${set.completed||state.workout.status==="completed"?" disabled":""}/></td><td><button type="button" class="button secondary set-check" data-complete="${setIndex}" aria-pressed="${set.completed}" aria-label="${set.completed?"Uncheck":"Mark complete"} ${esc(ex.name)}, set ${setIndex+1}"${state.workout.status==="completed"?" disabled":""}>${set.completed?"✓ Done":"Mark done"}</button></td></tr>`).join("")}</tbody></table>${previous(entry)}</article>`;
   }
   function renderSession(){
     const workout=state.workout;if(!workout)return;
@@ -176,15 +193,24 @@
     if(!state.workout)return;
     const counts=W.progress(state.workout);
     $("progressCount").textContent=`${counts.completed} / ${counts.total} sets`;
-    $("progressLabel").textContent=counts.percent===100?"Every planned set is logged.":counts.completed?`${counts.percent}% complete. Keep building.`:"Take it one set at a time.";
+    const next=W.nextIncompleteSet(state.workout),nextEntry=next?state.workout.entries[next.entryIndex]:null;
+    $("progressLabel").textContent=counts.percent===100?"Every planned set is logged.":next?`Next: ${exercise(nextEntry.exerciseId).name} · set ${next.setIndex+1} of ${nextEntry.sets.length}.`:"Take it one set at a time.";
     $("sessionProgress").value=counts.percent;$("progressRing").setAttribute("aria-label",`${counts.percent} percent complete`);
     $("ringValue").style.strokeDashoffset=String(100-counts.percent);
-    $("finishHint").textContent=`${counts.total-counts.completed} sets remain. You can finish early; only checked sets count.`;
+    $("finishHint").textContent=counts.total===counts.completed?"All planned sets are logged. Finish when you’re ready.":`${counts.total-counts.completed} sets remain. You can finish early; only checked sets count.`;
     $("finishWorkout").disabled=!counts.completed||state.workout.status==="completed"||!!state.conflict||state.blocked;
     $("saveNow").disabled=!!state.saving||!!state.conflict||state.blocked;
     $("closeSession").disabled=!!state.saving||!!state.conflict||state.blocked||state.workout.status!=="active";
     $("timerToggle").disabled=state.workout.status!=="active"||state.blocked;
     $("timerReset").disabled=state.workout.status!=="active"||state.blocked;
+    $("nextSet").disabled=!next||state.workout.status!=="active"||state.blocked;
+    $("nextSet").setAttribute("aria-label",next?`Go to ${exercise(nextEntry.exerciseId).name}, set ${next.setIndex+1}`:"All planned sets are logged");
+  }
+  function focusNextSet(){
+    const next=W.nextIncompleteSet(state.workout);if(!next)return;
+    const card=$("sessionEntries").querySelector(`[data-entry="${CSS.escape(next.entryId)}"]`),row=card?.querySelector(`[data-set="${next.setIndex}"]`);
+    row?.scrollIntoView({behavior:window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches?"auto":"smooth",block:"center"});
+    (row?.querySelector("input:not(:disabled)")||row?.querySelector("button:not(:disabled)"))?.focus();
   }
   function markDirty({save=true}={}){
     if(!state.workout||state.blocked)return;
@@ -359,7 +385,7 @@
   async function initialize(){
     if(state.loading)return;
     if(state.blocked){location.reload();return;}
-    state.loading=true;$("loadError").hidden=true;$("accessPanel").hidden=true;
+    state.loading=true;$("loadError").hidden=true;$("accessPanel").hidden=true;restorePreferences();
     try{
       const identity=await api("/api/me");
       if(!identity.user?.id)throw new Error("Sign in to Strata+ to open your workout room.");
@@ -435,7 +461,7 @@
     if(invalid){invalid.focus();errorMessage("Correct this set’s highlighted actual value before completing it.");return;}
     if(!set.completed){const error=W.actualError(entry,set);if(error){errorMessage(`${exercise(entry.exerciseId).name}, set ${index+1}: ${error}`);button.closest("tr").querySelector("input:not(:disabled)")?.focus();return;}}
     set.completed=!set.completed;errorMessage("");
-    if(set.completed)startRest();else markDirty();
+    if(set.completed&&$("autoRest").checked)startRest();else markDirty();
     renderSession();
     $("sessionEntries").querySelector(`[data-entry="${CSS.escape(entry.id)}"] [data-complete="${index}"]`)?.focus();
   });
@@ -446,7 +472,9 @@
     else startRest(state.pausedSeconds||Number($("restDuration").value));
   });
   $("timerReset").addEventListener("click",()=>{if(!state.workout||state.workout.status!=="active")return;state.workout.restEndsAt=null;state.pausedSeconds=null;state.timerAnnounced=false;markDirty();tick();});
-  $("restDuration").addEventListener("change",tick);
+  $("restDuration").addEventListener("change",()=>{rememberPreferences();tick();});
+  $("autoRest").addEventListener("change",rememberPreferences);
+  $("nextSet").addEventListener("click",focusNextSet);
   $("saveNow").addEventListener("click",()=>void flushSave());
   $("closeSession").addEventListener("click",async()=>{
     if(!state.workout||state.workout.status!=="active"||state.conflict||state.blocked)return;

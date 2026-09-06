@@ -145,9 +145,23 @@
     return {gain:gain?`+${gain.diff} ${gain.label.toLowerCase()}`:"similar factor profile",loss:loss?`${loss.diff} ${loss.label.toLowerCase()}`:"no major factor loss"};
   }
 
+  function normalizeShortlist(value,exercises,limit=4){
+    const catalogIds=new Set((Array.isArray(exercises)?exercises:[]).map((exercise)=>String(exercise?.id||"")).filter(Boolean));
+    const maximum=clamp(Math.round(Number(limit)||4),1,12),normalized=[];
+    for(const candidate of Array.isArray(value)?value:[]){
+      const id=String(candidate||"");
+      if(!catalogIds.has(id)||normalized.includes(id))continue;
+      normalized.push(id);
+      if(normalized.length===maximum)break;
+    }
+    return normalized;
+  }
+
   function filterExercises(exercises,filters,preferences,aggregateFor){
     const query=String(filters.query||"").trim().toLowerCase();
+    const savedIds=new Set(normalizeShortlist(filters.saved,exercises,12));
     const collection=(exercise)=>{
+      if(filters.collection==="saved")return savedIds.has(exercise.id);
       if(filters.collection==="top-chest")return exercise.group==="chest"&&exercise.score>=90;
       if(filters.collection==="dumbbells")return exercise.equipment==="Dumbbells"&&exercise.score>=84;
       if(filters.collection==="bodyweight")return exercise.equipment==="Bodyweight";
@@ -295,5 +309,5 @@
     return {day:selected.day,isToday,offset,movements,workingSets,scheduledDays,targetDays,progressPercent,eyebrow:isToday?"Today in your week":"Next in your week",title:`${when.toUpperCase()} · ${movements} MOVEMENT${movements===1?"":"S"}.`,detail:`${selected.day} · ${workingSets} working sets · ${scheduledDays} scheduled training day${scheduledDays===1?"":"s"} vs ${targetDays}-day profile target.`,actionLabel:"Open weekly plan"};
   }
 
-  return {FACTOR_KEYS,TRAIT_KEYS,ISOLATION,UNILATERAL,OVERHEAD,DEEP_KNEE,UNSUPPORTED_HINGE,FLOOR,WEEKDAYS,SESSION_LENGTHS,SESSION_FOCUSES,hasTrait,movementClass,round,clamp,levelNumber,averageMetric,setupScore,setupLabel,resistanceProfile,practicality,factorWeights,weightedBaseline,scoreAdjustment,excludedByLimitations,personalResult,similarity,targetsCompatible,alternativesFor,gainsAndLosses,filterExercises,comparisonRecommendation,sessionRoleMatches,sessionFocusMatches,buildSession,mergeSessionIntoPlan,weeklyPulse};
+  return {FACTOR_KEYS,TRAIT_KEYS,ISOLATION,UNILATERAL,OVERHEAD,DEEP_KNEE,UNSUPPORTED_HINGE,FLOOR,WEEKDAYS,SESSION_LENGTHS,SESSION_FOCUSES,hasTrait,movementClass,round,clamp,levelNumber,averageMetric,setupScore,setupLabel,resistanceProfile,practicality,factorWeights,weightedBaseline,scoreAdjustment,excludedByLimitations,personalResult,similarity,targetsCompatible,alternativesFor,gainsAndLosses,normalizeShortlist,filterExercises,comparisonRecommendation,sessionRoleMatches,sessionFocusMatches,buildSession,mergeSessionIntoPlan,weeklyPulse};
 });
