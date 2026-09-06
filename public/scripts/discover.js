@@ -22,7 +22,7 @@ const FEATURE_CONFIG=Object.freeze({
   monthly:{panelId:"monthlyPlan",headingId:"monthlyPlanTitle",label:"31-day plan"},
   session:{panelId:"sessionBuilder",headingId:"sessionBuilderTitle",label:"Session builder"}
 });
-const state={exercises:[],methodology:null,sources:[],limited:new Set(),preferences:null,user:null,csrfToken:"",aggregate:new Map(),userRatings:new Map(),ratingsRefreshedAt:0,ratingsRefreshPromise:null,compare:[],collection:"all",query:"",group:"all",equipment:"all",pattern:"all",level:"all",sort:"personal",recommendations:[],activeExercise:null,activeFeature:null,explorerLimit:EXPLORER_DESKTOP_PAGE_SIZE,weeklyPlan:null,weeklyPlanUpdatedAt:0,session:null,sessionSaving:false,monthlyPlan:null,monthlySchedule:null,monthlySource:"muscle-schedule",communityPlans:[],communityLoaded:false,communityLoading:false,communityError:"",communityNextOffset:0,communityQuery:"",communityPendingId:null,communityAppliedId:null,communityAppliedUpdatedAt:0};
+const state={exercises:[],methodology:null,sources:[],limited:new Set(),preferences:null,user:null,csrfToken:"",aggregate:new Map(),userRatings:new Map(),ratingsRefreshedAt:0,ratingsRefreshPromise:null,ratingSaving:new Set(),compare:[],collection:"all",query:"",group:"all",equipment:"all",pattern:"all",level:"all",sort:"personal",recommendations:[],activeExercise:null,activeFeature:null,explorerLimit:EXPLORER_DESKTOP_PAGE_SIZE,weeklyPlan:null,weeklyPlanUpdatedAt:0,session:null,sessionSaving:false,monthlyPlan:null,monthlyPlanUpdatedAt:0,monthlySchedule:null,monthlySource:"muscle-schedule",communityPlans:[],communityLoaded:false,communityLoading:false,communityError:"",communityNextOffset:0,communityQuery:"",communityPendingId:null,communityAppliedId:null,communityAppliedUpdatedAt:0};
 const el=(id)=>document.getElementById(id);
 
 async function api(path,options={}) {
@@ -195,7 +195,7 @@ function renderExplorer(){
 }
 
 function renderCommunityViews(){
-  if(!state.exercises.length||!state.preferences)return;
+  if(!state.exercises.length||!state.preferences||state.ratingSaving.size)return;
   renderRecommendations();renderExplorer();
   if(state.activeExercise&&el("detailDialog")?.open)openDetail(state.activeExercise);
   if(state.compare.length>=2&&!el("battleResults")?.hidden)openComparison();
@@ -284,6 +284,7 @@ function gainsAndLosses(reference,candidate){
 }
 
 function openDetail(id){
+  if(state.ratingSaving.has(id)){showToast("Your rating is still saving. Please wait.");return;}
   const exercise=exerciseById(id);if(!exercise)return;const ratingDraft=openRatingDraft(id);state.activeExercise=id;
   const dialog=el("detailDialog");
   const baseline=weightedBaseline(exercise),adjustment=scoreAdjustment(exercise),personal=personalResult(exercise),aggregate=aggregateFor(id),sources=sourceSelection(exercise),alternatives=alternativesFor(exercise),confidence=state.limited.has(id)?"Limited":"Moderate";
@@ -613,6 +614,7 @@ function readMonthlySchedule(){
   return Monthly.normalizeSchedule(schedule,state.exercises);
 }
 function setMonthlySource(plan,label,source="weekly"){
+  if(el("monthlyPlanForm").dataset.saving==="true"){showToast("Wait for the current plan to finish saving before importing another week.");return;}
   try{
     const normalized=Monthly.normalizeWeeklyPlan(plan,state.exercises),count=weeklyPlanCount(normalized);
     if(!count)throw new Error("That weekly plan is empty. Add exercises first or build the split manually.");
@@ -640,6 +642,7 @@ function monthlyExerciseMarkup(item){
 }
 function renderMonthlyPlan(plan,{announce=false}={}){
   state.monthlyPlan=plan||null;
+  if(plan)state.monthlyPlanUpdatedAt=Number(plan.updatedAt)||state.monthlyPlanUpdatedAt;
   if(!plan){el("monthlyResults").hidden=true;return;}
   const workoutDays=plan.days.filter((day)=>!day.rest).length,restDays=plan.days.length-workoutDays,totalExercises=plan.days.reduce((sum,day)=>sum+day.exercises.length,0);
   el("monthlyResultsTitle").textContent=plan.title;
@@ -727,6 +730,12 @@ profileForm.addEventListener("submit",async(event)=>{
   finally{profileForm.dataset.saving="false";controls.forEach((control)=>{control.disabled=false;});}
 });
 
+function lockFormControls(form){
+  const controls=[...form.querySelectorAll("button,input,select,textarea,fieldset")].map((control)=>({control,disabled:control.disabled}));
+  controls.forEach(({control})=>{control.disabled=true;});
+  return()=>controls.forEach(({control,disabled})=>{control.disabled=disabled;});
+}
+
 const monthlyPlanForm=el("monthlyPlanForm");
 el("sessionBuilderForm")?.addEventListener("submit",(event)=>{event.preventDefault();if(!state.sessionSaving)generateSession({announce:true});});
 el("sessionGroup")?.addEventListener("change",()=>{if(!state.sessionSaving)generateSession();});
@@ -735,14 +744,17 @@ el("sessionDay")?.addEventListener("change",()=>{if(!state.sessionSaving){const 
 el("sessionAddAll")?.addEventListener("click",()=>{void addSessionToWeek();});
 monthlyPlanForm.addEventListener("submit",async(event)=>{
   event.preventDefault();if(monthlyPlanForm.dataset.saving==="true")return;
-  const button=el("generateMonthlyPlan");setMonthlyValidation();
+  let unlockControls=()=>{};setMonthlyValidation();
   try{
     const schedule=readMonthlySchedule(),generated={...Monthly.generateMonthPlan({title:el("monthlyTitle").value,startDate:el("monthlyStartDate").value,exercisesPerTarget:Number(el("monthlyExercisesPerTarget").value),schedule,exercises:state.exercises,preferences:state.preferences}),source:state.monthlySource};
-    monthlyPlanForm.dataset.saving="true";monthlyPlanForm.setAttribute("aria-busy","true");button.disabled=true;el("monthlyPlanStatus").textContent="Saving…";
-    const result=await api("/api/monthly-plan",{method:"PUT",body:JSON.stringify({monthlyPlan:generated})});
+    monthlyPlanForm.dataset.saving="true";monthlyPlanForm.setAttribute("aria-busy","true");unlockControls=lockFormControls(monthlyPlanForm);el("monthlyPlanStatus").textContent="Saving…";
+    const result=await api("/api/monthly-plan",{method:"PUT",body:JSON.stringify({monthlyPlan:generated,expectedUpdatedAt:state.monthlyPlanUpdatedAt})});
     state.monthlySchedule=copyMonthlyValue(result.monthlyPlan.schedule);renderMonthlyPlan(result.monthlyPlan,{announce:true});showToast("Saved. Your 31-day plan is ready.");
-  }catch(error){setMonthlyValidation(error.message);const message=saveRetryMessage(error);el("monthlyPlanStatus").textContent=message;showToast(message);}
-  finally{monthlyPlanForm.dataset.saving="false";monthlyPlanForm.setAttribute("aria-busy","false");button.disabled=false;}
+  }catch(error){
+    const message=error.status===409?"A newer monthly plan was saved on another tab. Your setup is unchanged. Reload to review the saved plan before generating again.":saveRetryMessage(error);
+    setMonthlyValidation(message);el("monthlyPlanStatus").textContent=message;showToast(message);
+  }
+  finally{monthlyPlanForm.dataset.saving="false";monthlyPlanForm.setAttribute("aria-busy","false");unlockControls();}
 });
 el("monthlySchedule").addEventListener("change",(event)=>{
   const card=event.target.closest("[data-monthly-day]");if(!card)return;
@@ -787,16 +799,36 @@ el("communityApplyConfirm").addEventListener("click",()=>void applyCommunityPlan
 el("communityApplyDialog").addEventListener("close",()=>{if(el("communityApplyDialog").dataset.busy!=="true")state.communityPendingId=null;});
 
 document.addEventListener("submit",async(event)=>{
-  const form=event.target.closest("[data-rating-form]");if(!form)return;event.preventDefault();const id=form.dataset.ratingForm,data=Object.fromEntries(new FormData(form));const rating=Object.fromEntries(Object.entries(data).map(([key,value])=>[key,Number(value)]));const button=form.querySelector("button"),status=form.querySelector("[data-rating-status]"),originalHtml=button.innerHTML;button.disabled=true;button.textContent="Saving…";if(status)status.textContent="Saving…";
-  try{const result=await api(`/api/ratings/${encodeURIComponent(id)}`,{method:"PUT",body:JSON.stringify({rating})});state.userRatings.set(id,result.rating);if(result.aggregate)state.aggregate.set(id,result.aggregate);else state.aggregate.delete(id);state.ratingsRefreshedAt=Date.now();renderCommunityViews();const saved=el("detailContent")?.querySelector?.("[data-rating-status]");if(saved)saved.textContent="Saved";showToast("Saved. Your rating is on this account.");}
-  catch(error){const message=saveRetryMessage(error);button.innerHTML=originalHtml;if(status)status.textContent=message;showToast(message);}finally{button.disabled=false;}
+  const form=event.target.closest("[data-rating-form]");if(!form)return;event.preventDefault();
+  const id=form.dataset.ratingForm;if(state.ratingSaving.has(id))return;
+  const data=Object.fromEntries(new FormData(form)),rating=Object.fromEntries(Object.entries(data).map(([key,value])=>[key,Number(value)]));
+  const button=form.querySelector("button"),status=form.querySelector("[data-rating-status]"),originalHtml=button.innerHTML;
+  state.ratingSaving.add(id);form.setAttribute("aria-busy","true");const unlockControls=lockFormControls(form);let saved=false;
+  button.textContent="Saving…";if(status)status.textContent="Saving…";
+  try{
+    const result=await api(`/api/ratings/${encodeURIComponent(id)}`,{method:"PUT",body:JSON.stringify({rating})});
+    state.userRatings.set(id,result.rating);if(result.aggregate)state.aggregate.set(id,result.aggregate);else state.aggregate.delete(id);state.ratingsRefreshedAt=Date.now();saved=true;
+  }catch(error){const message=saveRetryMessage(error);if(status)status.textContent=message;showToast(message);}
+  finally{
+    state.ratingSaving.delete(id);form.setAttribute("aria-busy","false");unlockControls();button.innerHTML=originalHtml;
+    if(saved){
+      renderCommunityViews();
+      const activeForm=el("detailContent")?.querySelector?.("[data-rating-form]");
+      if(activeForm?.dataset.ratingForm===id){const savedStatus=activeForm.querySelector("[data-rating-status]");if(savedStatus)savedStatus.textContent="Saved";}
+      showToast("Saved. Your rating is on this account.");
+    }
+  }
 });
 
 document.addEventListener("click",(event)=>{
   const feature=event.target.closest("[data-feature-target]"),detail=event.target.closest("[data-open-detail]"),compare=event.target.closest("[data-toggle-compare]"),scrollAlternatives=event.target.closest("[data-scroll-alternatives]"),close=event.target.closest("[data-close-dialog]"),collection=event.target.closest("[data-collection]"),reset=event.target.closest("[data-reset-filters]"),loadMore=event.target.closest("[data-load-more-exercises]"),share=event.target.closest("[data-share-exercise]"),shareBattle=event.target.closest("[data-share-battle]");
   if(feature&&featureName(feature.dataset.featureTarget)){event.preventDefault();activateFeature(feature.dataset.featureTarget,{focus:true,scroll:true,smooth:true,announce:true,historyMode:"push"});}
   else if(detail)openDetail(detail.dataset.openDetail);
-  else if(compare){toggleCompare(compare.dataset.toggleCompare);if(el("detailDialog").open)openDetail(compare.dataset.toggleCompare);}
+  else if(compare){
+    const id=compare.dataset.toggleCompare,containerId=compare.closest("#recommendationGrid,#exerciseGrid,#detailContent")?.id;
+    toggleCompare(id);if(el("detailDialog").open)openDetail(id);
+    if(containerId)requestAnimationFrame(()=>[...el(containerId).querySelectorAll("[data-toggle-compare]")].find((button)=>button.dataset.toggleCompare===id)?.focus({preventScroll:true}));
+  }
   else if(scrollAlternatives){const section=el("alternativeSection"),heading=el("alternativeTitle"),reduceMotion=window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;section?.scrollIntoView?.({behavior:reduceMotion?"auto":"smooth",block:"start"});heading?.focus?.({preventScroll:true});}
   else if(close)closeDialog(close.dataset.closeDialog);
   else if(collection){state.collection=collection.dataset.collection;if(state.collection==="community"){state.sort="community";el("sortSelect").value="community";}setCollectionState(state.collection);resetExplorerWindow();renderExplorer();}
@@ -830,7 +862,14 @@ el("battleSelects").addEventListener("change",()=>{readBattleBuilder();el("battl
 el("battleForm").addEventListener("submit",(event)=>{event.preventDefault();readBattleBuilder();renderCompareTray();renderRecommendations();renderExplorer();openComparison();});
 el("battleReset").addEventListener("click",()=>{state.compare=[];el("battleResults").hidden=true;renderCompareTray();renderRecommendations();renderExplorer();});
 el("shareRanking").addEventListener("click",()=>void shareCard("ranking"));
-el("logoutButton").addEventListener("click",async()=>{try{await api("/api/logout",{method:"POST"});}finally{window.location.replace("/");}});
+el("logoutButton").addEventListener("click",async(event)=>{
+  const button=event.currentTarget;if(button.disabled)return;button.disabled=true;
+  try{await api("/api/logout",{method:"POST"});window.location.replace("/");}
+  catch(error){
+    if(error.status===401){window.location.replace("/");return;}
+    button.disabled=false;showToast("Could not sign out. Check your connection and try again.");
+  }
+});
 el("discoveryRetry").addEventListener("click",()=>{void init();});
 
 let discoveryLoading=false;
@@ -855,7 +894,7 @@ async function init(){
   if(discoveryLoading)return;
   discoveryLoading=true;showInitialLoadProgress();
   try{
-    const data=await api("/api/discovery");state.exercises=data.exercises;state.methodology=data.methodology;state.sources=data.sources;state.limited=new Set(data.limitedConfidenceExercises);state.preferences=data.preferences;state.user=data.user;state.weeklyPlan=data.weeklyPlan||null;state.weeklyPlanUpdatedAt=Number(data.weeklyPlanUpdatedAt)||0;state.monthlyPlan=data.monthlyPlan||null;
+    const data=await api("/api/discovery");state.exercises=data.exercises;state.methodology=data.methodology;state.sources=data.sources;state.limited=new Set(data.limitedConfidenceExercises);state.preferences=data.preferences;state.user=data.user;state.weeklyPlan=data.weeklyPlan||null;state.weeklyPlanUpdatedAt=Number(data.weeklyPlanUpdatedAt)||0;state.monthlyPlanUpdatedAt=Number(data.monthlyPlanUpdatedAt)||0;state.monthlyPlan=data.monthlyPlan||null;
     state.csrfToken=String(data.csrfToken||"");state.aggregate=new Map((data.ratings.aggregates||[]).map((item)=>[item.exercise_id,item]));state.userRatings=new Map((data.ratings.user||[]).map((item)=>[item.exercise_id,item]));state.ratingsRefreshedAt=Date.now();
     el("userName").textContent=data.user.name;el("catalogTotal").textContent=state.exercises.length;el("recommendationTitle").innerHTML=`BEST EXERCISES <em>FOR ${escapeHtml(data.user.name.split(/\s+/)[0].toUpperCase())}.</em>`;
     renderProfile();populateFilters();renderRecommendations();resetExplorerWindow();renderExplorer();renderCompareTray();populateMonthlyBuilder(state.monthlyPlan);initializeSessionBuilder();

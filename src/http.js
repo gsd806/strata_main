@@ -131,7 +131,11 @@ async function bodyText(req) {
 /** @param {import("./domain-types").HttpRequest} req @returns {Promise<unknown>} */
 async function bodyJson(req) {
   const body=await bodyText(req);
-  try { return body?JSON.parse(body):{}; }
+  try {
+    const input=body?JSON.parse(body):{};
+    if (!input||typeof input!=="object"||Array.isArray(input)) throw new Error("Invalid body shape");
+    return input;
+  }
   catch { throw Object.assign(new Error("Invalid JSON."),{status:400}); }
 }
 

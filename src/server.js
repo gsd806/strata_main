@@ -6,6 +6,7 @@ const { extname, join, normalize } = require("node:path");
 const { isIP } = require("node:net");
 const { randomUUID } = require("node:crypto");
 const { createStore,isUniqueViolation } = require("./database");
+const { loadPublicAssets,cachedResponseBody } = require("./static-assets");
 const { getEmailVerificationConfig } = require("./email");
 const { createAuthService,configuredAdminEmail } = require("./auth");
 const { createAdminService } = require("./admin");
@@ -98,6 +99,8 @@ const STATIC_FILES = new Map([
   ["privacy.html","pages/privacy.html"],
   ["refunds.html","pages/refunds.html"],
   ["styles.css","styles/styles.css"],
+  ["experience.css","styles/experience.css"],
+  ["motion.js","scripts/motion.js"],
   ["account.css","styles/account.css"],
   ["planner.css","styles/planner.css"],
   ["discover.css","styles/discover.css"],
@@ -151,6 +154,7 @@ const MIME = {
   ".svg":"image/svg+xml",
   ".png":"image/png"
 };
+let publicAssets=new Map();
 let store;
 let auth;
 let admin;
@@ -173,18 +177,18 @@ async function planFor(userId) {
   return (await planSnapshotFor(userId)).plan;
 }
 
-async function monthlyPlanFor(userId) {
+async function monthlyPlanSnapshotFor(userId) {
   const row=await store.monthlyPlan(userId);
-  if (!row) return null;
+  if (!row) return {plan:null,updatedAt:0};
   try {
     const stored=JSON.parse(row.plan_json);
     const storedGeneratedAt=Number(stored?.generatedAt);
-    return sanitizeMonthlyPlan(stored,{
+    return {plan:{...sanitizeMonthlyPlan(stored,{
       generatedAt:Number.isSafeInteger(storedGeneratedAt)&&storedGeneratedAt>0?storedGeneratedAt:Number(row.updated_at)
-    });
+    }),updatedAt:Number(row.updated_at)},updatedAt:Number(row.updated_at)};
   } catch {
-    // A corrupt or legacy row must not break the whole Strata+ workspace.
-    return null;
+    // Keep the revision of a corrupt row so an explicit replacement can recover it.
+    return {plan:null,updatedAt:Number(row.updated_at)};
   }
 }
 
@@ -304,7 +308,8 @@ function rateKeyAllowed(key,max=10,windowMs=15*60*1000) {
 }
 
 function rateAllowed(req,kind,max=10,windowMs=15*60*1000) {
-  return rateKeyAllowed(`${kind}:${requestAddress(req)}`,max,windowMs);
+  // Identity buckets apply across addresses; network buckets allow shared Wi-Fi.
+  return rateKeyAllowed(kind.startsWith("identity:")?kind:`${kind}:${requestAddress(req)}`,max,windowMs);
 }
 
 function checkoutReconciliationError(message,code="PURCHASE_RECONCILIATION_UNAVAILABLE") {
@@ -923,20 +928,24 @@ async function handleApi(req,res,url) {
   }
   if (url.pathname === "/api/monthly-plan" && req.method === "GET") {
     const session=await requireDiscoveryAccess(req,res); if (!session) return;
-    const [monthlyPlan,weeklyPlan]=await Promise.all([monthlyPlanFor(session.id),planFor(session.id)]);
-    json(res,200,{monthlyPlan,weeklyPlan,csrfToken:session.csrf_token}); return;
+    const [monthlyPlan,weeklyPlan]=await Promise.all([monthlyPlanSnapshotFor(session.id),planFor(session.id)]);
+    json(res,200,{monthlyPlan:monthlyPlan.plan,monthlyPlanUpdatedAt:monthlyPlan.updatedAt,weeklyPlan,csrfToken:session.csrf_token}); return;
   }
   if (url.pathname === "/api/monthly-plan" && req.method === "PUT") {
     const session=await requireDiscoveryAccess(req,res); if (!session) return;
     if (!auth.validCsrf(req,session)) { json(res,403,{error:"Security check failed. Refresh and try again.",code:"INVALID_CSRF"}); return; }
-    const input=await bodyJson(req), now=Date.now(), monthlyPlan=sanitizeMonthlyPlan(input.monthlyPlan,{generatedAt:now});
-    await store.upsertMonthlyPlan(session.id,JSON.stringify(monthlyPlan),now);
-    json(res,200,{ok:true,monthlyPlan}); return;
+    const input=await bodyJson(req), expected=expectedPlanRevision(input.expectedUpdatedAt);
+    const now=Math.max(Date.now(),expected+1),monthlyPlan=sanitizeMonthlyPlan(input.monthlyPlan,{generatedAt:now});
+    const saved=await store.upsertMonthlyPlan(session.id,JSON.stringify(monthlyPlan),now,expected);
+    if (!saved) {
+      json(res,409,{error:"A newer monthly plan was saved on another tab. Your setup is unchanged. Reload to review the saved plan before generating again.",code:"MONTHLY_PLAN_CONFLICT"}); return;
+    }
+    json(res,200,{ok:true,monthlyPlan:{...monthlyPlan,updatedAt:Number(saved.updated_at)}}); return;
   }
   if (url.pathname === "/api/discovery" && req.method === "GET") {
     const session=await requireDiscoveryAccess(req,res); if (!session) return;
-    const [preferences,aggregates,userRatings,monthlyPlan,weeklyPlan,user]=await Promise.all([preferencesFor(session.id),store.ratingAggregates(),store.ratingsForUser(session.id),monthlyPlanFor(session.id),planSnapshotFor(session.id),userPayload(session)]);
-    json(res,200,{user,csrfToken:session.csrf_token,exercises:EXERCISES,methodology:DISCOVERY_DATA.methodology,sources:DISCOVERY_DATA.sources,limitedConfidenceExercises:DISCOVERY_DATA.limitedConfidenceExercises,preferences,ratings:{aggregates,user:userRatings},monthlyPlan,weeklyPlan:weeklyPlan.plan,weeklyPlanUpdatedAt:weeklyPlan.updatedAt}); return;
+    const [preferences,aggregates,userRatings,monthlyPlan,weeklyPlan,user]=await Promise.all([preferencesFor(session.id),store.ratingAggregates(),store.ratingsForUser(session.id),monthlyPlanSnapshotFor(session.id),planSnapshotFor(session.id),userPayload(session)]);
+    json(res,200,{user,csrfToken:session.csrf_token,exercises:EXERCISES,methodology:DISCOVERY_DATA.methodology,sources:DISCOVERY_DATA.sources,limitedConfidenceExercises:DISCOVERY_DATA.limitedConfidenceExercises,preferences,ratings:{aggregates,user:userRatings},monthlyPlan:monthlyPlan.plan,monthlyPlanUpdatedAt:monthlyPlan.updatedAt,weeklyPlan:weeklyPlan.plan,weeklyPlanUpdatedAt:weeklyPlan.updatedAt}); return;
   }
   if (url.pathname === "/api/ratings/aggregates" && req.method === "GET") {
     const session=await requireDiscoveryAccess(req,res); if (!session) return;
@@ -1016,8 +1025,9 @@ async function serveStatic(req,res,url) {
   }
   const publicFile=STATIC_FILES.get(requested);
   const filePath=join(PUBLIC_ROOT,publicFile);
-  if (!existsSync(filePath)) { json(res,404,{error:"Page not found."}); return; }
-  let body=readFileSync(filePath);
+  const cached=publicAssets.get(requested);
+  if (!cached&&!existsSync(filePath)) { json(res,404,{error:"Page not found."}); return; }
+  let body=cached?cached.body:readFileSync(filePath);
   if (requested==="account.html") body=Buffer.from(auth.renderAccountFallbacks(body.toString("utf8"),url));
   if (requested==="verify-email.html") body=Buffer.from(auth.renderVerificationFallbacks(body.toString("utf8"),url));
   if (requested==="index.html") {
@@ -1041,11 +1051,11 @@ async function serveStatic(req,res,url) {
   if (requested==="service-worker.js") headers["Service-Worker-Allowed"]="/";
   if (requested==="admin.html") headers["X-Robots-Tag"]="noindex, nofollow, noarchive";
   if (privateHtml) headers.Vary="Cookie";
-  body=responseBody(req,body,headers);
+  body=cached?cachedResponseBody(req,cached,headers):responseBody(req,body,headers);
   res.writeHead(200,headers); if (req.method === "HEAD") res.end(); else res.end(body);
 }
 
-const server=http.createServer(async(req,res) => {
+const server=http.createServer({requestTimeout:30_000,headersTimeout:15_000,keepAliveTimeout:5_000},async(req,res) => {
   try {
     const url=new URL(req.url,`http://${req.headers.host || "localhost"}`);
     if (url.pathname==="/healthz") await handleHealth(req,res);
@@ -1063,11 +1073,14 @@ const server=http.createServer(async(req,res) => {
   }
 });
 
-let cleanup;
+server.setTimeout(60_000,(socket)=>socket.destroy());
+
+let cleanup,shuttingDown=false;
 async function start() {
   if (process.env.NODE_ENV==="production"&&!EMAIL_CONFIG.flagValid) {
     throw new Error("EMAIL_VERIFICATION_ENABLED must be set explicitly to true or false in production.");
   }
+  publicAssets=loadPublicAssets({root:PUBLIC_ROOT,files:STATIC_FILES,privateFiles:PRIVATE_HTML,mime:MIME});
   store = await createStore(PROJECT_ROOT);
   ({auth,admin,support}=composeServices({
     store,emailConfig:EMAIL_CONFIG,paymentConfig:PAYMENT_CONFIG,
@@ -1096,9 +1109,28 @@ async function start() {
     console.log(`Strata running at http://${HOST}:${listeningPort} using ${store.kind} storage`);
   });
 }
-async function shutdown() {
+function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown=true;
   if (cleanup) clearInterval(cleanup);
-  server.close(async() => { await store?.close(); process.exit(0); });
+  const deadline=setTimeout(()=>{
+    console.error("Shutdown deadline reached; closing remaining connections.");
+    server.closeAllConnections();
+    process.exit(1);
+  },10_000);
+  deadline.unref();
+  server.close(async(error)=>{
+    try {
+      if (error&&error.code!=="ERR_SERVER_NOT_RUNNING") throw error;
+      await store?.close();
+      clearTimeout(deadline);
+      process.exit(0);
+    } catch(error) {
+      console.error("Could not finish graceful shutdown:",error);
+      process.exit(1);
+    }
+  });
+  server.closeIdleConnections();
 }
 process.on("SIGINT",shutdown);
 process.on("SIGTERM",shutdown);

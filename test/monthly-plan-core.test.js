@@ -112,7 +112,7 @@ test("imported weekly exercises and prescriptions repeat exactly on matching wee
     exercisesPerTarget:1,
     schedule,
     exercises,
-    preferences:{...preferences,equipment:["Bodyweight"]}
+    preferences
   });
   const mondays=plan.days.filter((day)=>day.weekday==="Monday");
   assert.equal(mondays.length,5);
@@ -139,4 +139,22 @@ test("share text includes dates, rest days, targets, and exercise prescriptions"
   assert.match(text,/• .+ — \d+ × .+/);
   assert.match(text,/REST \/ RECOVERY/);
   assert.match(text,/Created with STRATA/);
+});
+
+
+test("imported exercises cannot bypass current movement constraints or equipment",()=>{
+  for(const [exerciseId,target,profile] of [
+    ["machine-shoulder-press","shoulders",{...preferences,limitations:["no-overhead"]}],
+    ["flat-dumbbell-press","chest",{...preferences,equipment:["Bodyweight"]}]
+  ]){
+    const schedule=scheduleWith({Monday:[target]});
+    schedule.Monday.sourceItems=[{exerciseId,sets:5,reps:"5–8"}];
+    assert.throws(()=>Monthly.generateMonthPlan({startDate:"2026-09-07",exercisesPerTarget:1,schedule,exercises,preferences:profile}),/Monday's imported .+ does not match your saved equipment or movement constraints/);
+    assert.deepEqual(schedule.Monday.sourceItems,[{exerciseId,sets:5,reps:"5–8"}],"rejected generation preserves the imported draft");
+  }
+});
+
+test("eligibility failures never silently admit unverified exercises",()=>{
+  const broken={...byId("machine-shoulder-press"),metrics:null};
+  assert.throws(()=>Monthly.generateMonthPlan({startDate:"2026-09-07",exercisesPerTarget:1,schedule:scheduleWith({Monday:["shoulders"]}),exercises:[broken],preferences}),/Could not verify the saved equipment and movement constraints/);
 });

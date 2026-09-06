@@ -65,6 +65,9 @@ test("JSON responses preserve HEAD semantics and no-store defaults",()=>{
 
 test("request body helpers parse supported formats and reject invalid or oversized input",async()=>{
   assert.deepEqual(await bodyJson(Readable.from([Buffer.from("{\"ok\":true}")])),{ok:true});
+  for (const body of ["null","[]","true","12",'"text"']) {
+    await assert.rejects(bodyJson(Readable.from([Buffer.from(body)])),(error)=>error.status===400);
+  }
   await assert.rejects(bodyJson(Readable.from([Buffer.from("not json")])),(error)=>error.status===400&&error.message==="Invalid JSON.");
   assert.deepEqual(await bodyForm(Readable.from([Buffer.from("name=STRATA&mode=fast")])),{name:"STRATA",mode:"fast"});
   await assert.rejects(bodyBuffer(Readable.from([Buffer.alloc(5)]),4),(error)=>error.status===413&&error.message==="Request is too large.");

@@ -114,6 +114,12 @@ test("keeps an unpaid Discovery denial small, uncompressed, and private",async()
   const signup=await request("/api/signup",{method:"POST",headers:{Origin:baseUrl.origin,"Content-Type":"application/json"},body:credentials});
   assert.equal(signup.status,201);
   const cookie=signup.headers["set-cookie"][0].split(";",1)[0];
+  const signedInHome=await request("/",{headers:{Cookie:cookie,"Accept-Encoding":"gzip"}});
+  assert.match(gunzipSync(signedInHome.body).toString(),/Compression profile/);
+  assert.equal(signedInHome.headers["cache-control"],"private, no-store");
+  const publicHome=await request("/",{headers:{"Accept-Encoding":"gzip"}});
+  assert.doesNotMatch(gunzipSync(publicHome.body).toString(),/Compression profile/);
+  assert.match(gunzipSync(publicHome.body).toString(),/id="accountButton"[^>]*>Log in/);
 
   const discovery=await request("/api/discovery",{headers:{Cookie:cookie,"Accept-Encoding":"gzip"}});
   assert.equal(discovery.status,402);
@@ -124,4 +130,24 @@ test("keeps an unpaid Discovery denial small, uncompressed, and private",async()
   const payload=JSON.parse(discovery.body.toString("utf8"));
   assert.equal(payload.code,"DISCOVERY_ACCESS_REQUIRED");
   assert.match(payload.error,/purchase required/i);
+});
+
+
+test("SIGTERM bounds draining an unfinished request",{timeout:15_000},async(t)=>{
+  const held=http.request({hostname:baseUrl.hostname,port:baseUrl.port,path:"/api/signup",method:"POST",headers:{Origin:baseUrl.origin,"Content-Type":"application/json","Content-Length":"64",Expect:"100-continue"}});
+  held.on("error",()=>{});
+  t.after(()=>held.destroy());
+  await new Promise((resolve,reject)=>{
+    const timer=setTimeout(()=>reject(new Error("Server did not accept the held request")),2000);
+    held.once("continue",()=>{clearTimeout(timer);resolve();});
+    held.once("error",(error)=>{clearTimeout(timer);reject(error);});
+    held.flushHeaders();
+  });
+  const started=Date.now();
+  const stopped=new Promise((resolve)=>server.once("exit",(code,signal)=>resolve({code,signal})));
+  server.kill("SIGTERM");
+  const result=await stopped;
+  assert.equal(result.code,1,"a forced drain must be visible to the process supervisor");
+  assert.equal(result.signal,null);
+  assert.ok(Date.now()-started<12_000,"unfinished clients must not block deployment indefinitely");
 });

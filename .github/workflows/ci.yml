@@ -40,3 +40,9 @@ jobs:
 
       - name: Run the complete release gate
         run: npm run check
+
+      - name: Check 100 concurrent accounts
+        run: npm run load:100
+
+      - name: Check 100 accounts sharing a network
+        run: npm run load:100:shared

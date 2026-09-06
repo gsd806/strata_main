@@ -7,6 +7,8 @@ const LIBRARY_DESKTOP_PAGE_SIZE=32;
 const LIBRARY_MOBILE_PAGE_SIZE=16;
 const SEARCH_DEBOUNCE_MS=180;
 const GUEST_PLAN_KEY="strata_guest_plan_v1";
+const MAX_DAY_ITEMS=30;
+const MAX_WEEK_ITEMS=140;
 const state={
   exercises:[],plan:null,user:null,query:"",group:"all",drag:null,selectedDay:"Monday",
   ready:false,guest:false,saveTimer:null,savePromise:null,lastSaveError:null,planUpdatedAt:0,revision:0,savedRevision:0,navigating:false,libraryLimit:LIBRARY_DESKTOP_PAGE_SIZE,
@@ -56,7 +58,8 @@ function guestPlan(){
   plan.restDay=DAYS.includes(input?.restDay)?input.restDay:"Sunday";
   for(const day of DAYS){
     const items=Array.isArray(input?.days?.[day])?input.days[day]:[];
-    plan.days[day]=items.slice(0,40).flatMap((item)=>{
+    // Keep earlier oversized drafts intact so people can remove/export items.
+    plan.days[day]=items.flatMap((item)=>{
       if(!item||!known.has(String(item.exerciseId||"")))return[];
       let instanceId=String(item.instanceId||makeId()).replace(/[^a-zA-Z0-9_-]/g,"").slice(0,100)||makeId();
       if(seen.has(instanceId))instanceId=makeId();
@@ -322,6 +325,9 @@ function renderSummary(){
   const totalSets=DAYS.reduce((sum,day)=>sum+state.plan.days[day].reduce((count,item)=>count+Number(item.sets||0),0),0);
   const restConflict=state.plan.days[state.plan.restDay].length>0;
   el("weekSummary").innerHTML=`<div class="summary-stat"><span>Scheduled movements</span><strong>${total}</strong></div><div class="summary-stat"><span>Training days</span><strong>${trainingDays}</strong></div><div class="summary-stat"><span>Working sets</span><strong>${totalSets}</strong></div><div class="summary-stat ${restConflict?"summary-warning":""}"><span>Recovery day</span><strong>${state.plan.restDay}${restConflict?" · clear":""}</strong></div>`;
+  const peak=Math.max(1,...DAYS.map((day)=>state.plan.days[day].length));
+  const distribution=DAYS.map((day)=>`${day}: ${state.plan.days[day].length} exercises`).join(", ");
+  el("weekSummary").innerHTML+=`<div class="week-distribution" role="img" aria-label="Weekly exercise distribution. ${distribution}">${DAYS.map((day)=>`<div aria-hidden="true"><span>${state.plan.days[day].length}</span><div class="week-bar-track"><i style="height:${Math.max(3,state.plan.days[day].length/peak*100)}%" class="${day===state.plan.restDay?"is-rest":""}"></i></div><small>${day.slice(0,3)}</small></div>`).join("")}</div>`;
 }
 
 function hasRestConflict(){return Boolean(state.plan?.days?.[state.plan.restDay]?.length);}
@@ -364,6 +370,8 @@ function addExercise(exerciseId,day){
   if(!state.ready||!DAYS.includes(day))return false;
   const exercise=exerciseById(exerciseId);
   if(!exercise)return false;
+  if(state.plan.days[day].length>=MAX_DAY_ITEMS){showToast(`${day} can hold up to ${MAX_DAY_ITEMS} exercises. Remove one before adding another.`);return false;}
+  if(DAYS.reduce((total,key)=>total+state.plan.days[key].length,0)>=MAX_WEEK_ITEMS){showToast(`Your week can hold up to ${MAX_WEEK_ITEMS} exercises. Remove one before adding another.`);return false;}
   const recovery=prepareRecoveryForTarget(day);
   if(!recovery.ok)return false;
   const setMatch=String(exercise.sets||"").match(/\d+/);
@@ -376,6 +384,8 @@ function addExercise(exerciseId,day){
 
 function moveItem(sourceDay,targetDay,instanceId,{focus=true}={}){
   if(!state.ready||!DAYS.includes(sourceDay)||!DAYS.includes(targetDay))return false;
+  if(sourceDay===targetDay)return false;
+  if(state.plan.days[targetDay].length>=MAX_DAY_ITEMS){showToast(`${targetDay} can hold up to ${MAX_DAY_ITEMS} exercises. Remove one before moving this exercise.`);renderWeek(focus?instanceSelector("data-item-day",instanceId):null);return false;}
   const source=state.plan.days[sourceDay],index=source.findIndex((item)=>item.instanceId===instanceId);
   if(index<0)return false;
   const [item]=source.splice(index,1);
@@ -597,7 +607,8 @@ function renderLoadError(error){
   el("plannerDayNav").innerHTML="";
   el("quickAddDayValue").textContent="Unavailable";
   el("weekSummary").innerHTML="";
-  el("weekBoard").innerHTML=`<div class="planner-load-state planner-error" role="alert"><strong>Plan unavailable</strong><p>${message}</p><button type="button" data-retry-init>Try again</button></div>`;
+  const localOption=error.code==="NETWORK_ERROR"&&state.exercises.length?'<p>You can open the separate guest plan stored on this device while offline. Account plans need a connection.</p><button type="button" data-open-guest>Open device guest plan</button>':"";
+  el("weekBoard").innerHTML=`<div class="planner-load-state planner-error" role="alert"><strong>Plan unavailable</strong><p>${message}</p><button type="button" data-retry-init>Try again</button>${localOption}</div>`;
   el("weekBoard").setAttribute("aria-busy","false");
 }
 
@@ -626,6 +637,7 @@ document.addEventListener("drop",(event)=>{
 document.addEventListener("dragend",()=>{state.drag=null;document.querySelectorAll(".drag-over").forEach((node)=>node.classList.remove("drag-over"));});
 
 document.addEventListener("click",(event)=>{
+  if(event.target.closest("[data-open-guest]")){void init({guestOnly:true});return;}
   const filter=event.target.closest("[data-library-group]"),quick=event.target.closest("[data-quick-add]"),select=event.target.closest("[data-select-day]"),remove=event.target.closest("[data-remove-item]"),rest=event.target.closest("[data-set-rest]"),move=event.target.closest("[data-move-item]"),loadMore=event.target.closest("[data-load-more-library]"),retry=event.target.closest("[data-retry-init]"),unpublish=event.target.closest("[data-unpublish-plan]");
   if(filter){state.group=filter.dataset.libraryGroup;resetLibraryWindow();renderFilters(state.group);renderLibrary();}
   else if(quick){addExercise(quick.dataset.quickAdd,state.selectedDay);}
@@ -749,18 +761,18 @@ document.addEventListener("visibilitychange",()=>{if(document.visibilityState===
 window.addEventListener("pagehide",sendKeepaliveSave);
 window.addEventListener("beforeunload",(event)=>{if(state.ready&&state.savedRevision<state.revision){sendKeepaliveSave();event.preventDefault();event.returnValue="";}});
 
-async function init(){
+async function init({guestOnly=false}={}){
   setReady(false);
   setSaveStatus("Loading plan…");
   el("libraryList").innerHTML='<div class="loading">Loading movements…</div>';
   el("weekSummary").innerHTML="";
   el("weekBoard").innerHTML='<div class="planner-load-state">Loading your weekly plan…</div>';
   try{
-    const exercises=await api("/exercises.json?v=6.9.9.007");
+    const exercises=await api("/exercises.json?v=7.0.0");
     if(!Array.isArray(exercises))throw new Error("STRATA returned an incomplete exercise library.");
     state.exercises=exercises;
     let result;
-    try{result=await api("/api/plan");}
+    try{result=guestOnly?{plan:guestPlan(),user:null}:await api("/api/plan");}
     catch(error){if(error.status!==401)throw error;result={plan:guestPlan(),user:null};}
     if(!result.plan?.days)throw new Error("STRATA returned an incomplete plan.");
     state.plan=result.plan;state.user=result.user;state.guest=!result.user?.id;state.csrfToken=String(result.csrfToken||"");state.planUpdatedAt=Number(result.planUpdatedAt)||0;state.sharedPlans=[];state.sharedPlansLoaded=false;state.sharedPlansRequest=0;state.shareBusy=false;state.pendingUnpublish="";
@@ -778,6 +790,8 @@ async function init(){
       : '<strong>Account plan.</strong> Changes sync securely across your signed-in devices.';
     setReady(true);
     resetLibraryWindow();renderFilters();renderLibrary();renderWeek();renderShareAccess();setSaveStatus("Saved");
+    const oversized=DAYS.some((day)=>state.plan.days[day].length>MAX_DAY_ITEMS)||DAYS.reduce((n,day)=>n+state.plan.days[day].length,0)>MAX_WEEK_ITEMS;
+    if(oversized)el("plannerModeNotice").innerHTML+='<p><strong>Large saved draft preserved.</strong> Export a copy, then reduce to 30 exercises per day and 140 per week before syncing or importing.</p>';
     if(!state.guest)void loadSharedPlans();
     if(repairedRest){queueSave();showToast(`Recovery moved to empty ${repairedRest} to keep it clear.`);}
     handlePendingAdd();

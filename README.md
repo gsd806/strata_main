@@ -1,8 +1,8 @@
 # STRATA — Exercise Rankings and Workout Planning
 
-STRATA is an evidence-informed workout index with server-backed, email-verified accounts, a private Strata+ studio, and weekly, community, and monthly workout planning. It includes 200 resistance-training exercises—25 per muscle group, including 50 bodyweight options—across 8 muscle groups and 26 sub-muscle targets. Build 6.9.9.007 is an installable Progressive Web App (PWA) with Resend-powered account email, Paddle-powered one-time Strata+ access, and a private owner dashboard.
+STRATA is an evidence-informed workout index with server-backed, email-verified accounts, a private Strata+ studio, and weekly, community, and monthly workout planning. It includes 200 resistance-training exercises—25 per muscle group, including 50 bodyweight options—across 8 muscle groups and 26 sub-muscle targets. Build 7.0.0 is an installable Progressive Web App (PWA) with Resend-powered account email, Paddle-powered one-time Strata+ access, and a private owner dashboard.
 
-**Build 6.9.9.007 is the release that makes quality boundaries enforceable.** CI now rejects architectural dependency or module-budget regressions, static errors in the checked domain-boundary slice, coverage below calibrated floors, performance budget regressions, and failures in real Chromium journeys for account recovery, plan conflicts, payment entitlement, and account deletion.
+**Build 7.0.0 is an update for a 100-person pilot.** It adds shared-network authentication limits, public asset precompression, monthly save conflict protection, safer plan handling, and a coordinated visual and motion layer. The included 100-user workloads check concurrent private saves, account isolation, restart persistence, and abuse protection. See [docs/release-readiness.md](docs/release-readiness.md) for measured results and the remaining launch checks.
 
 STRATA also includes a login-free local weekly planner, account-synced plans, structured community-plan sharing, a deterministic 31-day workspace, community ratings, printable exports, and a private administrator help desk. Strata+ is **$5.99 USD as a one-time purchase with no subscription**. Paddle is the merchant of record, and the server grants access only after verifying a signed matching webhook.
 
@@ -16,17 +16,17 @@ See [CHANGELOG.md](CHANGELOG.md) for the concise release history.
 ## Quick start
 
 ```bash
-npm install
+npm ci
 npm start
 ```
 
 Open `http://127.0.0.1:4173`. Local development creates `data/strata.sqlite`; a Turso account is not required.
 
-Copy `.env.example` into your preferred local environment loader when testing email, admin, proxy, or payment configuration. Keep database tokens, email secrets, Paddle API keys, webhook secrets, and private promotion codes out of Git, browser code, logs, screenshots, and chat.
+Copy `.env.example` to `.env` and fill in the required values when testing email, admin, proxy, or payment configuration. `npm start` loads `.env` if present; host-provided environment values take precedence. Keep database tokens, email secrets, Paddle API keys, webhook secrets, and private promotion codes out of Git, browser code, logs, screenshots, and chat.
 
 ## Project structure
 
-Build 6.9.9.007 separates browser files from private server code while preserving every public URL used by visitors, Paddle, Render, and installed PWAs:
+Build 7.0.0 separates browser files from private server code while preserving every public URL used by visitors, Paddle, Render, and installed PWAs:
 
 ```text
 server.js          Stable npm/Render bootstrap
@@ -62,6 +62,8 @@ npm run coverage    # Node suite with enforced coverage floors
 npm run performance # reproducible endpoint/storage regression evidence
 npm run qa:runtime  # browser-free runtime smoke checks
 npm run qa:ui       # optional Playwright accessibility/layout audit
+npm run load:100    # 100 simultaneous accounts, isolated Linux loopback
+npm run load:100:shared # same workload behind one shared IP
 ```
 
 Coverage is enforced at calibrated application-code floors, not chased to 100%. Performance budgets are conservative regression tripwires, not production capacity claims. See [docs/testing.md](docs/testing.md), [docs/performance.md](docs/performance.md), and [qa/README.md](qa/README.md) for exact scope and prerequisites.
@@ -88,7 +90,7 @@ Account APIs, authentication routes, health checks, personalized pages, the admi
 
 ## Public pricing, support, and policies
 
-Build 6.9.9.007 has public, mobile-friendly pages at `/pricing`, `/contact`, `/terms`, `/privacy`, and `/refunds`. The published refund window is 14 calendar days after purchase. Support is available through the Contact form and at `stratafitness.official@gmail.com`.
+Build 7.0.0 has public, mobile-friendly pages at `/pricing`, `/contact`, `/terms`, `/privacy`, and `/refunds`. The published refund window is 14 calendar days after purchase. Support is available through the Contact form and at `stratafitness.official@gmail.com`.
 
 Paddle receives payment information; STRATA does not receive or store full payment-card or bank-account details. Do not change the displayed price independently of the live Paddle catalog. Before accepting payments, make sure the public operator details match the identity required by Paddle and applicable law rather than inventing missing legal information.
 

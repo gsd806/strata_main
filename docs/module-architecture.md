@@ -25,25 +25,26 @@ The HTTP root supplies services and adapters to the checked service-composition 
 
 ## Resulting module sizes
 
-The command-generated table below is the Build 6.9.9.007 review snapshot. CI generates the same table on every architecture check, while the policy enforces budgets and edges against the live sources.
+The command-generated table below is the Build 7.0.0 review snapshot. CI generates the same table on every architecture check, while the policy enforces budgets and edges against the live sources.
 
 | Module | Responsibility | Lines | Nonblank | Size | Line budget | Local dependencies |
 | --- | --- | ---: | ---: | ---: | ---: | --- |
 | `server.js` | Process bootstrap | 4 | 3 | 113 B | 20 | `src/server.js` |
 | `src/admin.js` | Administrative authorization and actions | 249 | 234 | 15.8 KiB | 300 | `src/plans.js` |
-| `src/auth.js` | Authentication and account lifecycle | 783 | 741 | 51.4 KiB | 850 | `src/email.js`, `src/plans.js` |
-| `src/database.js` | SQLite and Turso store adapters | 1238 | 1204 | 65.0 KiB | 1300 | `src/schema.js`, `src/store-contract.js` |
+| `src/auth.js` | Authentication and account lifecycle | 795 | 752 | 52.0 KiB | 850 | `src/email.js`, `src/plans.js` |
+| `src/database.js` | SQLite and Turso store adapters | 1244 | 1210 | 65.4 KiB | 1300 | `src/schema.js`, `src/store-contract.js` |
 | `src/email.js` | Resend integration and email security | 373 | 342 | 19.6 KiB | 420 | — |
-| `src/http.js` | HTTP transport helpers | 166 | 151 | 5.8 KiB | 180 | — |
+| `src/http.js` | HTTP transport helpers | 170 | 155 | 6.0 KiB | 180 | — |
 | `src/payments.js` | Paddle integration boundary | 439 | 416 | 20.3 KiB | 480 | — |
 | `src/plans.js` | Plan domain validation | 354 | 320 | 18.0 KiB | 400 | — |
-| `src/schema.js` | Shared storage schema and statements | 369 | 366 | 44.6 KiB | 420 | — |
-| `src/server.js` | HTTP composition root | 1105 | 1068 | 55.9 KiB | 1200 | `src/admin.js`, `src/auth.js`, `src/database.js`, `src/email.js`, `src/http.js`, `src/payments.js`, `src/plans.js`, `src/service-composition.js`, `src/support.js` |
+| `src/schema.js` | Shared storage schema and statements | 370 | 367 | 45.0 KiB | 420 | — |
+| `src/server.js` | HTTP composition root | 1137 | 1099 | 57.7 KiB | 1200 | `src/admin.js`, `src/auth.js`, `src/database.js`, `src/email.js`, `src/http.js`, `src/payments.js`, `src/plans.js`, `src/service-composition.js`, `src/static-assets.js`, `src/support.js` |
 | `src/service-composition.js` | Typed auth/admin/support composition | 39 | 37 | 1.7 KiB | 80 | — |
+| `src/static-assets.js` | Bounded public asset representations | 46 | 41 | 1.9 KiB | 80 | `src/http.js` |
 | `src/store-contract.js` | Storage boundary contract | 131 | 128 | 3.5 KiB | 180 | — |
 | `src/support.js` | Public and administrative support workflow | 137 | 129 | 10.0 KiB | 180 | `src/email.js`, `src/plans.js` |
 
-Snapshot result: 13 modules, zero dependency cycles, and zero policy violations.
+Snapshot result: 14 modules, zero dependency cycles, and zero policy violations.
 
 ## Static boundary types
 

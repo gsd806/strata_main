@@ -5,6 +5,7 @@ const assert=require("node:assert/strict");
 const {spawn}=require("node:child_process");
 const {mkdirSync,mkdtempSync,rmSync}=require("node:fs");
 const {join}=require("node:path");
+const {DatabaseSync}=require("node:sqlite");
 
 const PROJECT_ROOT=join(__dirname,"..");
 let server;
@@ -130,14 +131,14 @@ test("Strata+ monthly plans are validated, isolated, stored, and returned with t
   invalid.days.pop();
   const rejected=await request("/api/monthly-plan",{
     method:"PUT",headers:{Cookie:owner.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":owner.csrfToken},
-    body:JSON.stringify({monthlyPlan:invalid})
+    body:JSON.stringify({monthlyPlan:invalid,expectedUpdatedAt:0})
   });
   assert.equal(rejected.response.status,400);
   assert.match(rejected.data.error,/exactly 31 days/i);
 
   const saved=await request("/api/monthly-plan",{
     method:"PUT",headers:{Cookie:owner.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":owner.csrfToken},
-    body:JSON.stringify({monthlyPlan,userId:"someone-else"})
+    body:JSON.stringify({monthlyPlan,userId:"someone-else",expectedUpdatedAt:0})
   });
   assert.equal(saved.response.status,200);
   assert.equal(saved.data.monthlyPlan.days.length,31);
@@ -151,4 +152,26 @@ test("Strata+ monthly plans are validated, isolated, stored, and returned with t
 
   const isolated=await request("/api/monthly-plan",{headers:{Cookie:other.cookie}});
   assert.equal(isolated.data.monthlyPlan,null,"another Strata+ account cannot read the owner's plan");
+
+  const changes=["Tab one","Tab two"].map((title)=>request("/api/monthly-plan",{
+    method:"PUT",headers:{Cookie:owner.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":owner.csrfToken},
+    body:JSON.stringify({monthlyPlan:{...monthlyPlan,title},expectedUpdatedAt:saved.data.monthlyPlan.updatedAt})
+  }));
+  const raced=await Promise.all(changes);
+  assert.deepEqual(raced.map((result)=>result.response.status).sort(),[200,409]);
+  const winner=raced.find((result)=>result.response.status===200);
+  assert.ok(winner.data.monthlyPlan.updatedAt>saved.data.monthlyPlan.updatedAt);
+  const final=await request("/api/monthly-plan",{headers:{Cookie:owner.cookie}});
+  assert.deepEqual(final.data.monthlyPlan,winner.data.monthlyPlan,"A stale tab must not overwrite the winner.");
+  const db=new DatabaseSync(join(runtimeDir,"strata.sqlite"));
+  db.prepare("UPDATE monthly_plans SET plan_json='invalid-json'").run();
+  db.close();
+  const damaged=await request("/api/monthly-plan",{headers:{Cookie:owner.cookie}});
+  assert.equal(damaged.data.monthlyPlan,null);
+  assert.equal(damaged.data.monthlyPlanUpdatedAt,winner.data.monthlyPlan.updatedAt);
+  const recovered=await request("/api/monthly-plan",{
+    method:"PUT",headers:{Cookie:owner.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":owner.csrfToken},
+    body:JSON.stringify({monthlyPlan,expectedUpdatedAt:damaged.data.monthlyPlanUpdatedAt})
+  });
+  assert.equal(recovered.response.status,200,"a corrupt legacy row remains replaceable with its revision");
 });
