@@ -773,3 +773,90 @@ html{overflow-x:clip}:where(a,button,input,select){touch-action:manipulation}.st
   body.print-monthly-plan .monthly-exercise-list li span { color: #333; font-size: 6.5pt; }
   body.print-monthly-plan .monthly-rest-copy { margin: 3mm 0; font-size: 8pt; }
 }
+
+/* Strata+ shares the quiet, focused training palette of week setup. */
+@media screen {
+  body.plus-studio { --accent:#d4f578; --studio-bg:#10110f; --studio-panel:#191b17; --studio-line:#393d32; --studio-text:#f2f3eb; --studio-muted:#b7bcae; background:var(--studio-bg); font-size:1rem; }
+  .plus-studio .studio-header { background:var(--studio-bg); color:var(--studio-text); border-bottom:1px solid var(--studio-line); gap:20px; padding:20px clamp(20px,4vw,64px); }
+  .plus-studio .studio-header a,.plus-studio .studio-user,.plus-studio .studio-user button { color:var(--studio-muted); }
+  .plus-studio .studio-header .brand,.plus-studio .studio-nav .active { color:var(--studio-text); }
+  .plus-studio .studio-nav a,.plus-studio .studio-user,.plus-studio .studio-account,.plus-studio .studio-user button { font-size:.875rem; }
+  .plus-studio .studio-nav a.active::after { background:var(--accent); }
+  .plus-studio .brand-mark i { background:var(--accent); }
+  .plus-studio .studio-container { width:min(1320px,calc(100% - 80px)); }
+  .plus-studio .studio-hero { padding:52px 0 40px; background:var(--studio-bg); }
+  .plus-studio .studio-hero::before,.plus-studio .studio-hero::after { display:none; }
+  .plus-studio .hero-layout { grid-template-columns:minmax(0,1.35fr) minmax(300px,1fr); gap:48px; align-items:center; }
+  .plus-studio .studio-hero h1 { font-family:Manrope,Arial,sans-serif; font-size:clamp(2.4rem,5.2vw,4.75rem); line-height:1.04; letter-spacing:-.04em; font-weight:700; }
+  .plus-studio .hero-layout > div:first-child > p:not(.eyebrow) { max-width:570px; margin:22px 0 0; color:var(--studio-muted); font-size:1rem; line-height:1.65; }
+  .plus-studio .eyebrow { color:var(--accent); font-size:.8125rem; margin-bottom:20px; }
+  .plus-studio .hero-actions { gap:12px; margin-top:28px; }
+  .plus-studio .button { min-height:48px; padding:14px 18px; border-radius:8px; font-size:.875rem; line-height:1.4; letter-spacing:0; text-transform:none; }
+  .plus-studio .plus-secondary { color:var(--studio-text); background:var(--studio-panel); border:1px solid var(--studio-line); }
+  .plus-studio .plus-secondary:hover { border-color:var(--accent); }
+  .plus-studio .plus-history-link { display:inline-flex; align-items:center; gap:16px; min-height:44px; margin-top:12px; color:var(--studio-muted); font-size:.875rem; text-underline-offset:5px; }
+  .plus-studio .plus-history-link:hover { color:var(--accent); }
+  .plus-studio .weekly-pulse { padding:28px; border-radius:14px; border-color:var(--studio-line); background:linear-gradient(150deg,#242c1d,var(--studio-panel) 55%); box-shadow:none; backdrop-filter:none; }
+  .plus-studio .weekly-pulse::before { display:none; }
+  .plus-studio .weekly-pulse-top { flex-wrap:wrap; }
+  .plus-studio .weekly-pulse-top p,.plus-studio .weekly-pulse-top > span { font-size:.75rem; }
+  .plus-studio .weekly-pulse-top > span,.plus-studio .weekly-pulse > p,.plus-studio .weekly-pulse-footer > span { color:var(--studio-muted); }
+  .plus-studio .weekly-pulse-top i { animation:none; box-shadow:none; }
+  .plus-studio .weekly-pulse h2 { font:700 clamp(1.7rem,3vw,2.5rem)/1.12 Manrope,Arial,sans-serif; letter-spacing:-.025em; max-width:none; margin-top:26px; }
+  .plus-studio .weekly-pulse > p { min-height:0; font-size:1rem; line-height:1.6; }
+  .plus-studio .weekly-pulse-footer { flex-wrap:wrap; gap:4px 18px; }
+  .plus-studio .weekly-pulse-footer > span,.plus-studio .weekly-pulse-footer strong { font-size:.75rem; }
+  .plus-studio .weekly-pulse-footer a { font-size:.875rem; text-transform:none; letter-spacing:0; }
+  .plus-studio .feature-hub { padding:30px 0 56px; color:var(--studio-text); background:var(--studio-bg); border-bottom:1px solid var(--studio-line); }
+  .plus-studio .feature-hub::before { display:none; }
+  .plus-studio .feature-hub-heading { border-top:1px solid var(--studio-line); padding-top:32px; gap:24px; grid-template-columns:minmax(0,1fr) minmax(0,340px); }
+  .plus-studio .feature-hub-heading .kicker { color:var(--studio-muted); font-size:.75rem; }
+  .plus-studio .feature-hub-heading h2 { font:700 clamp(1.6rem,3vw,2.3rem)/1.15 Manrope,Arial,sans-serif; letter-spacing:-.025em; }
+  .plus-studio .feature-hub-heading h2 em { color:var(--accent); }
+  .plus-studio .feature-hub-heading > p { color:var(--studio-muted); font-size:.875rem; }
+  .plus-studio .feature-grid { grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; }
+  .plus-studio .feature-block { color:var(--studio-text); background:var(--studio-panel); border:1px solid var(--studio-line); border-radius:12px; padding:22px; min-height:208px; box-shadow:none; }
+  .plus-studio .feature-block::before { display:none; }
+  .plus-studio .feature-block span { color:var(--studio-muted); font-size:.75rem; opacity:1; padding-right:20px; }
+  .plus-studio .feature-block strong { font:700 1.25rem/1.25 Manrope,Arial,sans-serif; text-transform:none; padding-top:26px; margin-top:0; letter-spacing:-.015em; }
+  .plus-studio .feature-block small { color:var(--studio-muted); font-size:.875rem; opacity:1; line-height:1.55; }
+  .plus-studio .feature-block b { color:var(--accent); }
+  .plus-studio .feature-block:hover,.plus-studio .feature-block:focus-visible { transform:translateY(-3px); background:#22291c; border-color:var(--accent); box-shadow:0 8px 24px #0003; }
+  .plus-studio .feature-block.active,.plus-studio .feature-block[aria-expanded="true"] { background:#25311b; border-color:var(--accent); box-shadow:inset 0 3px var(--accent); padding-bottom:40px; }
+  .plus-studio .feature-block.active::after,.plus-studio .feature-block[aria-expanded="true"]::after { font-size:.75rem; }
+  .plus-studio .feature-panel { padding-top:52px; padding-bottom:56px; }
+  .plus-studio .section-heading h2 { font-size:clamp(2rem,4.5vw,3.7rem); line-height:1.06; }
+  .plus-studio .section-heading > p,.plus-studio .heading-action > p { font-size:1rem; }
+  .plus-studio .profile-card,.plus-studio .community-plan-card,.plus-studio .recommendation-card,.plus-studio .monthly-builder,.plus-studio .session-brief,.plus-studio dialog { border-radius:14px; }
+  .plus-studio .small-button,.plus-studio .text-link,.plus-studio .tool-menu-link,.plus-studio label,.plus-studio legend,.plus-studio .choice span { font-size:.875rem; line-height:1.5; }
+  .plus-studio input,.plus-studio select,.plus-studio textarea { font-size:1rem; border-radius:6px; }
+  .plus-studio .small-button { border-radius:7px; padding:10px 14px; }
+  .plus-studio :focus-visible { outline:3px solid var(--accent); outline-offset:4px; }
+  .plus-studio .feature-panel :focus-visible { outline-color:#657a22; }
+  .plus-studio .build-footer { color:var(--studio-muted); font-size:.75rem; }
+  @media(max-width:1100px) {
+    .plus-studio .feature-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .plus-studio .feature-block-session { grid-column:span 2; }
+    .plus-studio .hero-layout { gap:28px; }
+  }
+  @media(max-width:800px) {
+    .plus-studio .studio-container { width:calc(100% - 40px); }
+    .plus-studio .hero-layout,.plus-studio .feature-hub-heading { grid-template-columns:minmax(0,1fr); }
+    .plus-studio .studio-hero { padding-top:32px; }
+    .plus-studio .studio-header { flex-wrap:wrap; }
+    .plus-studio .studio-nav { order:3; width:100%; justify-content:flex-start; flex-wrap:wrap; }
+    .plus-studio .weekly-pulse { padding:24px; }
+  }
+  @media(max-width:480px) {
+    .plus-studio .feature-grid { grid-template-columns:minmax(0,1fr); }
+    .plus-studio .feature-block-session { grid-column:auto; }
+    .plus-studio .feature-block { min-height:168px; padding:20px; }
+    .plus-studio .hero-actions { align-items:stretch; flex-direction:column; }
+    .plus-studio .studio-user { flex-wrap:wrap; gap:12px; }
+    .plus-studio .weekly-pulse-footer { flex-direction:column; align-items:flex-start; }
+  }
+  @media(prefers-reduced-motion:reduce) {
+    .plus-studio *,.plus-studio *::before,.plus-studio *::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; }
+    .plus-studio .feature-block:hover,.plus-studio .button:hover { transform:none; }
+  }
+}

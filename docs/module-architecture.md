@@ -31,14 +31,14 @@ The command-generated table below is the Build 7.1.0 review snapshot. CI generat
 | --- | --- | ---: | ---: | ---: | ---: | --- |
 | `server.js` | Process bootstrap | 4 | 3 | 113 B | 20 | `src/server.js` |
 | `src/admin.js` | Administrative authorization and actions | 251 | 236 | 16.1 KiB | 300 | `src/plans.js` |
-| `src/auth.js` | Authentication and account lifecycle | 806 | 763 | 52.7 KiB | 850 | `src/email.js`, `src/plans.js` |
+| `src/auth.js` | Authentication and account lifecycle | 807 | 764 | 52.9 KiB | 850 | `src/email.js`, `src/plans.js` |
 | `src/database.js` | SQLite and Turso store adapters | 1262 | 1228 | 67.0 KiB | 1300 | `src/schema.js`, `src/store-contract.js` |
 | `src/email.js` | Resend integration and email security | 373 | 342 | 19.6 KiB | 420 | — |
 | `src/http.js` | HTTP transport helpers | 170 | 155 | 6.0 KiB | 180 | — |
 | `src/payments.js` | Paddle integration boundary | 448 | 425 | 21.2 KiB | 480 | — |
-| `src/plans.js` | Plan domain validation | 354 | 320 | 18.0 KiB | 400 | — |
+| `src/plans.js` | Plan domain validation | 355 | 321 | 18.5 KiB | 400 | — |
 | `src/schema.js` | Shared storage schema and statements | 389 | 386 | 46.6 KiB | 420 | — |
-| `src/server.js` | HTTP composition root | 1150 | 1112 | 58.5 KiB | 1200 | `src/admin.js`, `src/auth.js`, `src/database.js`, `src/email.js`, `src/http.js`, `src/payments.js`, `src/plans.js`, `src/service-composition.js`, `src/static-assets.js`, `src/support.js`, `src/workouts.js` |
+| `src/server.js` | HTTP composition root | 1152 | 1114 | 58.7 KiB | 1200 | `src/admin.js`, `src/auth.js`, `src/database.js`, `src/email.js`, `src/http.js`, `src/payments.js`, `src/plans.js`, `src/service-composition.js`, `src/static-assets.js`, `src/support.js`, `src/workouts.js` |
 | `src/service-composition.js` | Typed auth/admin/support composition | 39 | 37 | 1.7 KiB | 80 | — |
 | `src/static-assets.js` | Bounded public asset representations | 46 | 41 | 1.9 KiB | 80 | `src/http.js` |
 | `src/store-contract.js` | Storage boundary contract | 137 | 134 | 3.6 KiB | 180 | — |

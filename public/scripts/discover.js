@@ -383,7 +383,7 @@ function communityDateLabel(value){
   return Number.isNaN(date.getTime())?"Shared plan":`Shared ${new Intl.DateTimeFormat(undefined,{month:"short",year:"numeric"}).format(date)}`;
 }
 function sharedPlanDayMarkup(day,plan){
-  const items=plan.days[day]||[],isRest=day===plan.restDay;
+  const items=plan.days[day]||[],isRest=(plan.restDays||[plan.restDay]).includes(day);
   const list=items.map((item)=>`<li><strong>${escapeHtml(communityExerciseName(item))}</strong><small>${Number(item.sets)} sets × ${escapeHtml(item.reps)}</small></li>`).join("");
   return `<section class="shared-plan-day ${isRest?"is-rest":""}" aria-label="${escapeHtml(day)}: ${isRest?"recovery day":`${items.length} exercise${items.length===1?"":"s"}`}"><h4>${escapeHtml(day.slice(0,3))}<span>${isRest?"Recovery":`${items.length} exercise${items.length===1?"":"s"}`}</span></h4>${isRest?"<p>REST / RECOVERY</p>":items.length?`<ul>${list}</ul>`:"<p>Open training day</p>"}</section>`;
 }
@@ -477,10 +477,15 @@ function renderWeeklyPulse(){
   el("weeklyPulseBar").setAttribute("style",`width:${pulse.progressPercent}%`);
   el("weeklyPulseAction").innerHTML=`${escapeHtml(pulse.actionLabel)} <span aria-hidden="true">→</span>`;
   pulseRoot.dataset.sessionDay=pulse.day||"empty";
+  const workoutDay=pulse.day||Core.WEEKDAYS[(new Date().getDay()+6)%7];
+  const start=el("plusStartWorkout");
+  if(start){start.href=`/workout.html?day=${encodeURIComponent(workoutDay)}`;start.textContent=`Start ${workoutDay} workout ↗`;}
+  el("weeklyPulseAction").href=pulse.day?`/workout.html?day=${encodeURIComponent(pulse.day)}`:"/onboarding.html";
+  el("weeklyPulseAction").textContent=pulse.day?"Open workout →":"Set up my week →";
 }
 function sessionBuilderAvailable(){return Boolean(el("sessionBuilder")&&el("sessionGroup")&&el("sessionLength")&&el("sessionDay")&&el("sessionGenerate")&&el("sessionResults")&&el("sessionStatus")&&el("sessionAddAll"));}
 function preferredSessionDay(current=""){
-  const available=Core.WEEKDAYS.filter((day)=>day!==state.weeklyPlan?.restDay);
+  const available=Core.WEEKDAYS.filter((day)=>!(state.weeklyPlan?.restDays||[state.weeklyPlan?.restDay]).includes(day));
   if(available.includes(current))return current;
   const today=Core.WEEKDAYS[(new Date().getDay()+6)%7];
   if(available.includes(today))return today;
@@ -490,7 +495,7 @@ function preferredSessionDay(current=""){
 function populateSessionDay(){
   if(!sessionBuilderAvailable())return;
   const select=el("sessionDay"),selected=preferredSessionDay(select.value);
-  select.innerHTML=Core.WEEKDAYS.filter((day)=>day!==state.weeklyPlan?.restDay).map((day)=>{
+  select.innerHTML=Core.WEEKDAYS.filter((day)=>!(state.weeklyPlan?.restDays||[state.weeklyPlan?.restDay]).includes(day)).map((day)=>{
     const count=Array.isArray(state.weeklyPlan?.days?.[day])?state.weeklyPlan.days[day].length:0;
     return `<option value="${day}" ${day===selected?"selected":""}>${day}${count?` · ${count} scheduled`:""}</option>`;
   }).join("");

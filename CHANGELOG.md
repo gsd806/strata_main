@@ -1,5 +1,16 @@
 # Changelog
 
+## 7.1.1 — Focused free planning and Strata+ training
+
+- Moved workout starts and Set up my week into Strata+. Logging, history and setup now require paid or active trial access; API reads/writes and direct training pages enforce the entitlement.
+- Kept manual planning, exercise editing, undo, templates, export and sharing available in the free planner.
+- Added independent rest-day toggles, including removing the last rest day. Removed rest recommendations and automatic rest relocation.
+- Preserved old plans and exports with an additive restDays field. Repair keeps every scheduled exercise, including weeks with training on all seven days.
+- Restyled the Strata+ workspace with setup-inspired dark panels, softer lime, readable controls, responsive layouts and reduced-motion support.
+- Preserved workout-day destinations through sign-in; closed private workout views on session expiry; retained stored sessions when Plus access ends.
+- Updated pricing, offline cache rules, regression tests and the 100-user harness for the new feature boundary.
+- See docs/release-7.1.1.md for migration and rollback limits, and docs/release-readiness.md for verified results.
+
 ## 7.1.0 — Training workflows and account safety
 
 - Added a free workout room with actual loads/reps/timed sets, completion controls, absolute rest timer, save/close, interrupted-session recovery and account synchronization.

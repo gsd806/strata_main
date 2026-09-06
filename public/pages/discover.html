@@ -16,10 +16,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="discover.css?v=7.1.0" />
-    <link rel="stylesheet" href="/experience.css?v=7.1.0" />
+    <link rel="stylesheet" href="/experience.css?v=7.1.1" />
+    <link rel="stylesheet" href="discover.css?v=7.1.1" />
   </head>
-  <body>
+  <body class="plus-studio">
     <a class="skip-link" href="#featureHub">Skip to Strata+ tools</a>
     <header class="studio-header">
       <a class="brand" href="/" aria-label="STRATA home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>STRATA</span></a>
@@ -36,14 +36,14 @@
 
     <main>
       <section class="studio-hero">
-        <div class="hero-orbit" aria-hidden="true"></div>
+        
         <div class="studio-container hero-layout">
           <div>
-            <p class="eyebrow"><span></span> Private Strata+ studio</p>
-            <h1>CHOOSE BETTER.<br /><em>KNOW WHY.</em></h1>
-            <p>Compare movements, build a focused session, find close alternatives, shape a full month, and discover weekly plans shared by the STRATA community.</p>
-            <div class="hero-actions"><a class="button button-accent" href="#recommendations" data-feature-target="recommendations">Best for you <span aria-hidden="true">↘</span></a><a class="text-link" href="#communityPlans" data-feature-target="community">Browse community plans <span aria-hidden="true">→</span></a></div>
-            <p class="hero-membership"><span aria-hidden="true">✓</span> One private workspace · seven focused tools</p>
+            <p class="eyebrow"><span></span> Your Strata+ workspace</p>
+            <h1>YOUR WEEK.<br /><em>YOUR PROGRESS.</em></h1>
+            <p>Set your week in motion. Log today’s training, build your routine, or find the right movement for your next session.</p>
+            <div class="hero-actions"><a class="button button-accent" id="plusStartWorkout" href="/workout.html">Start workout <span aria-hidden="true">↗</span></a><a class="button plus-secondary" href="/onboarding.html">Set up my week <span aria-hidden="true">→</span></a></div>
+            <a class="plus-history-link" href="/workout.html#historySection">Workout history &amp; progress <span aria-hidden="true">→</span></a>
           </div>
           <aside class="weekly-pulse" id="weeklyPulse" aria-labelledby="weeklyPulseTitle">
             <div class="weekly-pulse-top"><p id="weeklyPulseEyebrow">Next in your week</p><span><i aria-hidden="true"></i> Plan pulse</span></div>
@@ -57,7 +57,7 @@
 
       <section class="feature-hub" id="featureHub" aria-labelledby="featureHubTitle">
         <div class="studio-container">
-          <div class="feature-hub-heading"><div><p class="kicker">Choose a Strata+ tool</p><h2 id="featureHubTitle">WHAT DO YOU WANT TO <em>DO?</em></h2></div><p>Open one focused workspace at a time. Your profile, comparisons, ratings, and filters stay ready while you switch.</p></div>
+          <div class="feature-hub-heading"><div><p class="kicker">Build your routine</p><h2 id="featureHubTitle">MAKE IT <em>YOUR OWN.</em></h2></div><p>Choose a tool. Your saved preferences stay with you as you explore.</p></div>
           <nav class="feature-grid" aria-label="Strata+ features">
             <a class="feature-block" href="#recommendations" data-feature-target="recommendations" aria-controls="recommendations" aria-expanded="false"><span>01 / Personal</span><strong>Best for you</strong><small>Your ranked shortlist based on equipment, goals, and constraints.</small><b aria-hidden="true">↘</b></a>
             <a class="feature-block" href="#exerciseExplorer" data-feature-target="explorer" aria-controls="exerciseExplorer" aria-expanded="false"><span>02 / Community</span><strong>Explore &amp; rate</strong><small>Search 200 exercises, inspect evidence, and add your rating.</small><b aria-hidden="true">↘</b></a>
@@ -249,7 +249,7 @@
 
     </main>
 
-    <footer class="build-footer">STRATA · Build 7.1.0 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
+    <footer class="build-footer">STRATA · Build 7.1.1 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
 
     <aside class="compare-tray" id="compareTray" hidden aria-label="Exercise comparison tray">
       <div><span>EXERCISE BATTLE</span><p id="compareNames">Choose 2–4 exercises</p></div>
@@ -270,10 +270,10 @@
       </div>
     </dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=7.1.0"></script>
-    <script src="discovery-core.js?v=7.1.0"></script>
-    <script src="monthly-plan-core.js?v=7.1.0"></script>
-    <script src="discover.js?v=7.1.0"></script>
-    <script src="/motion.js?v=7.1.0" defer></script>
+    <script src="/pwa.js?v=7.1.1"></script>
+    <script src="discovery-core.js?v=7.1.1"></script>
+    <script src="monthly-plan-core.js?v=7.1.1"></script>
+    <script src="discover.js?v=7.1.1"></script>
+    <script src="/motion.js?v=7.1.1" defer></script>
   </body>
 </html>

@@ -261,9 +261,9 @@
     used.add(value);return value;
   }
   function mergeSessionIntoPlan(plan,day,session,{makeInstanceId,maxDayItems=30,maxPlanItems=140}={}){
-    if(!plan||typeof plan!=="object"||!WEEKDAYS.includes(plan.restDay)||!WEEKDAYS.every((name)=>Array.isArray(plan.days?.[name])))throw sessionPlanError("Your weekly plan is unavailable. Refresh Strata+ and try again.","INVALID_WEEKLY_PLAN");
+    if(!plan||typeof plan!=="object"||!(Array.isArray(plan.restDays)?plan.restDays.every(name=>WEEKDAYS.includes(name)):WEEKDAYS.includes(plan.restDay)||plan.restDay===null)||!WEEKDAYS.every((name)=>Array.isArray(plan.days?.[name])))throw sessionPlanError("Your weekly plan is unavailable. Refresh Strata+ and try again.","INVALID_WEEKLY_PLAN");
     if(!WEEKDAYS.includes(day))throw sessionPlanError("Choose a valid planner day.","INVALID_SESSION_DAY");
-    if(day===plan.restDay)throw sessionPlanError(`${day} is your recovery day. Choose another day or change it in My Plan first.`,"SESSION_REST_DAY");
+    if((plan.restDays||[plan.restDay]).includes(day))throw sessionPlanError(`${day} is your recovery day. Choose another day or change it in My Plan first.`,"SESSION_REST_DAY");
     const sourceItems=Array.isArray(session?.items)?session.items:[];
     if(!sourceItems.length)throw sessionPlanError("Build a session before adding it to your week.","EMPTY_SESSION");
     const output={...plan,days:Object.fromEntries(WEEKDAYS.map((name)=>[name,plan.days[name].map((item)=>({...item}))]))},existingIds=new Set(output.days[day].map((item)=>String(item.exerciseId))),pending=[],seen=new Set();

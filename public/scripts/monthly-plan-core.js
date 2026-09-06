@@ -117,9 +117,12 @@
       source=input.plan;
     }
     if(!isRecord(source)||Number(source.version)!==1||!isRecord(source.days))fail("That file does not contain a supported weekly plan.");
-    if(!DAYS.includes(source.restDay))fail("The weekly plan needs a valid recovery day.");
+    const rawRest=Object.hasOwn(source,"restDays")?source.restDays:source.restDay===null?[]:[source.restDay];
+    if(!Array.isArray(rawRest)||rawRest.length>7||rawRest.some(day=>!DAYS.includes(day))||new Set(rawRest).size!==rawRest.length)fail("The weekly plan needs valid, unique rest days.");
+    const restDays=DAYS.filter(day=>rawRest.includes(day));
+    if(Object.hasOwn(source,"restDays")&&Object.hasOwn(source,"restDay")&&source.restDay!==(restDays[0]??null))fail("The weekly plan's rest-day fields do not match.");
     const knownExercises=exerciseIndex(exercises),seenInstanceIds=new Set();
-    const output={version:1,restDay:source.restDay,days:{}};
+    const output={version:1,restDay:restDays[0]??null,restDays,days:{}};
     let total=0;
     for(const day of DAYS){
       const items=source.days[day];
@@ -129,7 +132,7 @@
       total+=output.days[day].length;
     }
     if(total>MAX_WEEKLY_ITEMS)fail("The weekly plan contains too many exercises.");
-    if(output.days[output.restDay].length)fail("The weekly plan's recovery day must not contain exercises.");
+    if(restDays.some(day=>output.days[day].length))fail("The weekly plan's recovery day must not contain exercises.");
     return output;
   }
 

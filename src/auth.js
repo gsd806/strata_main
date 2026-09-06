@@ -511,6 +511,7 @@ function createAuthService({
     if(next==="admin"||next==="/admin"||next==="/admin.html")return "/admin";
     if(next==="pricing"||next==="/pricing"||next==="/pricing.html")return "/pricing";
     if(next==="discover"||next==="/discover.html")return "/discover.html";
+    if(/^\/workout\.html\?day=(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)$/.test(next))return next;
     if(next==="workout"||next==="/workout.html")return "/workout.html";
     if(next==="onboarding"||next==="/onboarding.html")return "/onboarding.html";
     if(next==="/planner.html"||next==="/discover.html"||/^\/planner\.html\?add=[a-z0-9-]{2,80}$/.test(next))return next;
@@ -522,7 +523,7 @@ function createAuthService({
     else if(next==="/pricing")params.set("next","pricing");
     else if(next==="/discover.html")params.set("next","discover");
     else if(next==="/admin")params.set("next","admin");
-    else if(next==="/workout.html")params.set("next","workout");
+    else if(next.startsWith("/workout.html"))params.set("next",next==="/workout.html"?"workout":next);
     else if(next==="/onboarding.html")params.set("next","onboarding");
     return `/account.html?${params}`;
   }
@@ -532,7 +533,7 @@ function createAuthService({
     else if(next==="/pricing")params.set("next","pricing");
     else if(next==="/discover.html")params.set("next","discover");
     else if(next==="/admin")params.set("next","admin");
-    else if(next==="/workout.html")params.set("next","workout");
+    else if(next.startsWith("/workout.html"))params.set("next",next==="/workout.html"?"workout":next);
     else if(next==="/onboarding.html")params.set("next","onboarding");
     if(purpose==="login"||purpose==="signup")params.set("purpose",purpose);
     if(error)params.set("error",error);

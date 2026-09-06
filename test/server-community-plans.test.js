@@ -103,7 +103,7 @@ async function startTrial(account){
 function weeklyPlan(exerciseId="flat-dumbbell-press",instanceId="community-instance-001"){
   const days=Object.fromEntries(["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].map((day)=>[day,[]]));
   days.Monday=[{instanceId,exerciseId,sets:4,reps:"8–12"}];
-  return {version:1,restDay:"Sunday",days};
+  return {version:1,restDay:"Sunday",restDays:["Sunday"],days};
 }
 
 function write(account,path,body,{method="POST",csrf=account.csrfToken,origin=BASE}={}){

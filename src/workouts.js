@@ -108,8 +108,8 @@ function pagination(value,fallback,min,max) {
   return integer(Number(value),min,max,"History pagination");
 }
 
-function createWorkoutService({store,auth,rateAllowed,http}) {
-  if (!store||!auth||typeof rateAllowed!=="function"||!http) throw new TypeError("Workout service requires store, auth, request guards, and HTTP helpers.");
+function createWorkoutService({store,auth,requireAccess,rateAllowed,http}) {
+  if (!store||!auth||typeof requireAccess!=="function"||typeof rateAllowed!=="function"||!http) throw new TypeError("Workout service requires store, auth, request guards, and HTTP helpers.");
   const {json,bodyJson}=http;
   async function existingOrConflict(res,userId,id) {
     const current=workoutPayload(await store.workout(userId,id));
@@ -145,7 +145,7 @@ function createWorkoutService({store,auth,rateAllowed,http}) {
   }
   async function handleApi(req,res,url) {
     if (url.pathname!=="/api/workouts"&&!url.pathname.startsWith("/api/workouts/")) return false;
-    const session=await auth.requireSession(req,res);if (!session) return true;
+    const session=await requireAccess(req,res);if (!session) return true;
     try {
       const match=url.pathname.match(/^\/api\/workouts(?:\/([A-Za-z0-9_-]{1,100}))?$/);
       if (!match) throw workoutError("Workout not found.",404,"WORKOUT_NOT_FOUND");

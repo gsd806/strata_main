@@ -23,11 +23,13 @@ async function request(path,account,method="GET",body,extra={}) {
   const response=await fetch(`${base}${path}`,{method,headers:{Origin:base,"Content-Type":"application/json",...(account?{Cookie:account.cookie,"X-CSRF-Token":account.csrfToken}:{}),...extra},...(body===undefined?{}:{body:typeof body==="string"?body:JSON.stringify(body)})});
   return {status:response.status,data:await response.json(),cookie:response.headers.get("set-cookie")?.split(";")[0]||""};
 }
-async function account(suffix) {
+async function account(suffix,{plus=true}={}) {
   const result=await request("/api/signup",null,"POST",{name:`Workout ${suffix}`,email:`workout-${suffix}@example.test`,password:"strong-workout-password-123"});
   assert.equal(result.status,201);
   const me=await request("/api/me",{cookie:result.cookie,csrfToken:""});
-  return {cookie:result.cookie,csrfToken:me.data.csrfToken};
+  const member={cookie:result.cookie,csrfToken:me.data.csrfToken,id:me.data.user.id};
+  if(plus)assert.ok([200,201].includes((await request("/api/discovery/trial",member,"POST",{})).status));
+  return member;
 }
 test.before(startServer);test.after(stopServer);
 
@@ -45,7 +47,7 @@ test("workout API requires authentication, CSRF, valid bounded input, and JSON",
   assert.equal((await request("/api/workouts",member)).data.workouts.length,0);
 });
 
-test("free workout logging is idempotent, resumes saved state, and rejects stale edits and deletes",async()=>{
+test("Strata+ workout logging is idempotent, resumes saved state, and rejects stale edits and deletes",async()=>{
   const owner=await account("owner"),other=await account("other"),workout=workoutFixture("logged-session"),url=`/api/workouts/${workout.id}`;
   const initial=await request("/api/workouts",owner,"POST",{workout,userId:"untrusted-owner"});
   assert.equal(initial.status,201);assert.equal(initial.data.workout.revision,1);
@@ -85,4 +87,39 @@ test("workout history pages newest first across active and completed sessions an
   assert.deepEqual(second.data.workouts.map((w)=>w.id),["history-0"]);assert.equal(second.data.hasMore,false);
   assert.equal((await request("/api/logout",member,"POST",{})).status,200);
   assert.equal((await request("/api/workouts",member)).status,401);
+});
+
+
+test("free plans stay editable while every workout route and setup page requires Strata+",async()=>{
+  const member=await account("free-access",{plus:false}),workout=workoutFixture("paid-only");
+  for(const [path,method,body] of [["/api/workouts","GET"],["/api/workouts/paid-only","GET"],["/api/workouts","POST",{workout}],["/api/workouts/paid-only","PUT",{workout,expectedRevision:1}],["/api/workouts/paid-only","DELETE",{expectedRevision:1}]]){
+    const response=await request(path,member,method,body);assert.equal(response.status,402);assert.equal(response.data.code,"DISCOVERY_ACCESS_REQUIRED");
+  }
+  for(const page of ["workout.html","onboarding.html"]){
+    const anonymous=await fetch(`${base}/${page}?day=Monday&guest=1`,{redirect:"manual"});assert.equal(anonymous.status,302);assert.match(anonymous.headers.get("location"),/account.html/);assert.equal(anonymous.headers.get("cache-control"),"no-store");
+    if(page==="workout.html")assert.equal(new URL(anonymous.headers.get("location"),base).searchParams.get("next"),"/workout.html?day=Monday");
+    const denied=await fetch(`${base}/${page}?guest=1`,{headers:{Cookie:member.cookie},redirect:"manual"});assert.equal(denied.status,302);assert.match(denied.headers.get("location"),/^\/pricing/);
+  }
+  assert.equal((await fetch(`${base}/planner.html`)).status,200);
+  let current=(await request("/api/plan",member)).data;
+  for(const restDays of [["Wednesday","Sunday"],[],["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]]){
+    const plan={...current.plan,restDays,restDay:restDays[0]??null};
+    const saved=await request("/api/plan",member,"PUT",{plan,expectedPlanUpdatedAt:current.planUpdatedAt});assert.equal(saved.status,200);
+    current=(await request("/api/plan",member)).data;assert.deepEqual(current.plan.restDays,restDays);
+  }
+});
+
+test("trial expiry closes private pages and API access while retaining logged sessions",async()=>{
+  const member=await account("expiry"),workout=workoutFixture("retained-session");
+  assert.equal((await request("/api/workouts",member,"POST",{workout})).status,201);
+  for(const page of ["workout.html","onboarding.html"]){
+    const response=await fetch(`${base}/${page}`,{headers:{Cookie:member.cookie},redirect:"manual"});assert.equal(response.status,200);assert.match(response.headers.get("cache-control"),/no-store/);
+  }
+  const {DatabaseSync}=require("node:sqlite"),db=new DatabaseSync(join(directory,"strata.sqlite"));
+  try{db.prepare("UPDATE discovery_trials SET started_at=?,expires_at=? WHERE user_id=?").run(Date.now()-20000,Date.now()-1000,member.id);}finally{db.close();}
+  assert.equal((await request("/api/workouts",member)).status,402);
+  assert.equal((await fetch(`${base}/workout.html`,{headers:{Cookie:member.cookie},redirect:"manual"})).status,302);
+  const check=new DatabaseSync(join(directory,"strata.sqlite"),{readOnly:true});
+  try{assert.equal(check.prepare("SELECT count(*) AS count FROM workouts WHERE user_id=?").get(member.id).count,1);}finally{check.close();}
+  assert.equal((await request("/api/plan",member)).status,200);
 });

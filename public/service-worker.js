@@ -1,12 +1,12 @@
 "use strict";
 
-const BUILD="7.1.0";
+const BUILD="7.1.1";
 const CACHE_PREFIX="strata-static-";
 // Every release refreshes this complete versioned set before the worker takes control.
 const STATIC_CACHE=`${CACHE_PREFIX}${BUILD}`;
 const PRECACHE_URLS=[
-  "/experience.css?v=7.1.0",
-  "/motion.js?v=7.1.0",
+  "/experience.css?v=7.1.1",
+  "/motion.js?v=7.1.1",
   "/offline.html",
   "/install.html",
   "/pricing.html",
@@ -15,33 +15,31 @@ const PRECACHE_URLS=[
   "/privacy.html",
   "/refunds.html",
   "/planner.html",
-  "/workout.html",
-  "/onboarding.html",
-  "/workout.css?v=7.1.0",
-  "/workout.js?v=7.1.0",
-  "/workout-core.js?v=7.1.0",
-  "/onboarding.css?v=7.1.0",
-  "/onboarding.js?v=7.1.0",
-  "/onboarding-core.js?v=7.1.0",
-  "/install.css?v=7.1.0",
-  "/install.js?v=7.1.0",
-  "/offline.js?v=7.1.0",
-  "/site-info.css?v=7.1.0",
-  "/pricing.js?v=7.1.0",
-  "/contact.js?v=7.1.0",
-  "/pwa.js?v=7.1.0",
-  "/styles.css?v=7.1.0",
-  "/app.js?v=7.1.0",
-  "/account.css?v=7.1.0",
-  "/account.js?v=7.1.0",
-  "/account-recovery.js?v=7.1.0",
-  "/planner.css?v=7.1.0",
-  "/planner.js?v=7.1.0",
-  "/discover.css?v=7.1.0",
-  "/discovery-core.js?v=7.1.0",
-  "/monthly-plan-core.js?v=7.1.0",
-  "/discover.js?v=7.1.0",
-  "/exercises.json?v=7.1.0",
+  "/workout.css?v=7.1.1",
+  "/workout.js?v=7.1.1",
+  "/workout-core.js?v=7.1.1",
+  "/onboarding.css?v=7.1.1",
+  "/onboarding.js?v=7.1.1",
+  "/onboarding-core.js?v=7.1.1",
+  "/install.css?v=7.1.1",
+  "/install.js?v=7.1.1",
+  "/offline.js?v=7.1.1",
+  "/site-info.css?v=7.1.1",
+  "/pricing.js?v=7.1.1",
+  "/contact.js?v=7.1.1",
+  "/pwa.js?v=7.1.1",
+  "/styles.css?v=7.1.1",
+  "/app.js?v=7.1.1",
+  "/account.css?v=7.1.1",
+  "/account.js?v=7.1.1",
+  "/account-recovery.js?v=7.1.1",
+  "/planner.css?v=7.1.1",
+  "/planner.js?v=7.1.1",
+  "/discover.css?v=7.1.1",
+  "/discovery-core.js?v=7.1.1",
+  "/monthly-plan-core.js?v=7.1.1",
+  "/discover.js?v=7.1.1",
+  "/exercises.json?v=7.1.1",
   "/manifest.webmanifest",
   "/icons/strata-icon.svg",
   "/icons/strata-192.png",
@@ -50,7 +48,7 @@ const PRECACHE_URLS=[
   "/icons/apple-touch-icon.png"
 ];
 const PUBLIC_ASSET_URLS=new Set(PRECACHE_URLS.map((entry) => new URL(entry,self.location.origin).href));
-const PRIVATE_HTML_PATHS=new Set(["/","/index.html","/account.html","/verify-email","/verify-email.html","/forgot-password","/forgot-password.html","/reset-password","/reset-password.html","/delete-account","/delete-account.html","/discover.html","/admin","/admin.html"]);
+const PRIVATE_HTML_PATHS=new Set(["/","/index.html","/account.html","/verify-email","/verify-email.html","/forgot-password","/forgot-password.html","/reset-password","/reset-password.html","/delete-account","/delete-account.html","/discover.html","/workout.html","/onboarding.html","/admin","/admin.html"]);
 const PUBLIC_HTML_FALLBACKS=new Map([
   ["/install","/install.html"],
   ["/pricing","/pricing.html"],

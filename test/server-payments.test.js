@@ -401,6 +401,8 @@ test("live one-time checkout grants and revokes the Discovery entitlement secure
   assert.equal(unlocked.response.status,200);
   const unlockedPage=await request("/discover.html",{headers:{Cookie:account.cookie},redirect:"manual"});
   assert.equal(unlockedPage.response.status,200);
+  assert.equal((await request("/api/workouts",{headers:{Cookie:account.cookie}})).response.status,200);
+  for(const page of ["/workout.html","/onboarding.html"])assert.equal((await request(page,{headers:{Cookie:account.cookie},redirect:"manual"})).response.status,200);
 
   const secondDevice=await request("/api/login",{
     method:"POST",
@@ -484,6 +486,8 @@ test("live one-time checkout grants and revokes the Discovery entitlement secure
   const revokedSecondDevice=await request("/api/discovery",{headers:{Cookie:secondDevice.cookie}});
   assert.equal(revokedFirstDevice.response.status,402);
   assert.equal(revokedSecondDevice.response.status,402);
+  assert.equal((await request("/api/workouts",{headers:{Cookie:account.cookie}})).response.status,402);
+  for(const page of ["/workout.html","/onboarding.html"])assert.equal((await request(page,{headers:{Cookie:account.cookie},redirect:"manual"})).response.status,302);
 });
 
 test("completed webhook trust boundaries reject mismatches and keep an existing purchase identity immutable",async() => {
