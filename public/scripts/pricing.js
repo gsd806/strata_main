@@ -29,7 +29,7 @@
   };
 
   function setStatus(message,tone="",{focus=false}={}){
-    statusNode.textContent=message;
+    statusNode.textContent=state.config?.environment==="sandbox"?`TEST MODE · ${message}`:message;
     statusNode.classList.toggle("purchase-status-good",tone==="good");
     statusNode.classList.toggle("purchase-status-warn",tone==="warn");
     statusNode.classList.toggle("purchase-status-error",tone==="error");
@@ -72,16 +72,25 @@
 
   function validateConfig(config){
     if(!config.enabled)throw new Error("Secure checkout is temporarily unavailable.");
-    if(!config.clientToken.startsWith("live_"))throw new Error("Live checkout is not configured correctly.");
-    if(config.environment!=="live"&&config.environment!=="production")throw new Error("Checkout is not configured for the live Paddle environment.");
-    if(config.productId!==EXPECTED_PRODUCT_ID)throw new Error("The configured Strata+ product does not match this release.");
-    if(config.priceId!==EXPECTED_PRICE_ID)throw new Error("The configured Strata+ price does not match $5.99 live access.");
+    const sandbox=config.environment==="sandbox";
+    if(!["live","production","sandbox"].includes(config.environment))throw new Error("Checkout has an unsupported Paddle environment.");
+    if(!config.clientToken.startsWith(sandbox?"test_":"live_"))throw new Error("Checkout credentials do not match the Paddle environment.");
+    if(sandbox){
+      if(!/^pro_[a-z0-9]{20,}$/.test(config.productId)||!/^pri_[a-z0-9]{20,}$/.test(config.priceId)||config.productId===EXPECTED_PRODUCT_ID||config.priceId===EXPECTED_PRICE_ID)throw new Error("Sandbox checkout requires its own test product and price.");
+    }else{
+      if(config.productId!==EXPECTED_PRODUCT_ID)throw new Error("The configured Strata+ product does not match this release.");
+      if(config.priceId!==EXPECTED_PRICE_ID)throw new Error("The configured Strata+ price does not match $5.99 live access.");
+    }
   }
 
   function initializePaddle(){
     if(state.paddleReady)return;
     if(!globalThis.Paddle?.Initialize||!globalThis.Paddle?.Checkout?.open)throw new Error("Secure Paddle checkout could not load. Check your connection and try again.");
     validateConfig(state.config);
+    if(state.config.environment==="sandbox"){
+      if(!globalThis.Paddle.Environment?.set)throw new Error("Sandbox checkout could not initialize safely.");
+      globalThis.Paddle.Environment.set("sandbox");
+    }
     globalThis.Paddle.Initialize({
       token:state.config.clientToken,
       // STRATA does not know a Paddle customer ID before a first one-time

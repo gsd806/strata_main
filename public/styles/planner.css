@@ -229,3 +229,34 @@ button:disabled { cursor:not-allowed; opacity:.58; }
 @media(max-width:480px){.library-panel{height:clamp(340px,54svh,430px)}.planner-day-chips{grid-template-columns:repeat(4,minmax(44px,1fr))}.user-menu a,.user-menu button{font-size:9px;padding-inline:5px}.user-menu a[href="/install.html"]{display:none}.planner-mode-notice{padding-left:max(14px,env(safe-area-inset-left));padding-right:max(14px,env(safe-area-inset-right));font-size:10px}}
 @media(max-width:360px){.brand>span:last-child{display:none}}
 @media(prefers-reduced-motion:reduce){.library-card,.outline-button,.dark-button,.planner-toast,.day-column{transition:none}.library-card:hover,.outline-button:active:not(:disabled),.dark-button:active,.save-retry:active{transform:none}.loading::before,.planner-load-state::before{animation:none}}
+
+/* Forgiving editing tools follow the planner's existing palette and type. */
+.toolbar-actions a{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+.replace-exercise-button{width:100%;min-height:36px;margin-top:10px;border:1px solid var(--line);background:transparent;color:var(--ink);font:500 10px var(--mono);text-transform:uppercase}
+.replace-exercise-button:hover{border-color:var(--ink);background:var(--accent)}
+.draft-storage-notice{margin:16px 24px;padding:15px;border:1px solid var(--orange);background:var(--white);font-size:13px;line-height:1.6}
+.draft-recovery-label{display:grid;gap:8px;margin:18px 0;font-size:13px}
+.draft-recovery-label select{max-width:100%;padding:12px;background:var(--white);color:var(--ink);border:1px solid var(--ink)}
+.planner-dialog{width:min(620px,calc(100vw - 28px));max-height:calc(100dvh - 32px);padding:24px;overflow-y:auto;border:1px solid var(--ink);color:var(--ink);background:var(--paper,#f2f1eb);box-shadow:8px 8px 0 var(--ink)}
+.planner-dialog::backdrop{background:rgba(16,17,15,.72)}
+.planner-dialog-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.planner-dialog h2{margin:0;font:600 clamp(25px,5vw,36px)/1.1 var(--display)}
+.planner-dialog p{font-size:13px;line-height:1.6}
+.planner-dialog label{display:grid;gap:8px;margin-block:18px;font:500 12px/1.5 var(--mono)}
+.planner-dialog input:not([type=checkbox]),.planner-dialog select{width:100%;min-width:0;min-height:44px;padding:10px;border:1px solid var(--line);background:var(--white);color:var(--ink);font:400 16px var(--body, sans-serif)}
+.planner-dialog-status{min-height:21px;color:var(--muted)}
+.template-save-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:12px;margin-block:18px}
+.template-save-row label{margin:0}
+.template-preview{border-top:1px solid var(--line);padding-top:12px}
+.template-preview h3{overflow-wrap:anywhere;font:600 23px var(--display);margin:8px 0}
+.template-preview ul{list-style:none;padding:0;margin-block:12px;max-height:240px;overflow-y:auto;border:1px solid var(--line)}
+.template-preview li{padding:10px;border-bottom:1px solid var(--line);font-size:13px}
+.template-preview li p{margin:5px 0}
+.template-preview li span{white-space:nowrap;color:var(--muted)}
+.planner-dialog .template-replace-confirm{display:flex;align-items:flex-start;gap:12px;text-transform:none}
+.template-replace-confirm input{flex:none;width:20px;height:20px;accent-color:var(--ink)}
+.template-preview-actions{display:flex;flex-wrap:wrap;gap:12px}
+@media(max-width:600px){.planner-dialog{padding:18px}.template-save-row{grid-template-columns:1fr}.planner-dialog-heading{flex-wrap:wrap}.replace-exercise-button{min-height:44px}.draft-storage-notice{margin-inline:15px}}
+.planner-dialog [hidden],.draft-recovery-label[hidden],.draft-storage-notice[hidden]{display:none!important}
+.week-toolbar{align-items:flex-start;flex-direction:column}
+.toolbar-actions{flex-wrap:wrap;max-width:100%;justify-content:flex-start}

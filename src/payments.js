@@ -6,6 +6,7 @@ const { createHmac,timingSafeEqual } = require("node:crypto");
 const DEFAULT_PRODUCT_ID="pro_01m1ky8j916ybyacs836dxbz8x";
 const DEFAULT_PRICE_ID="pri_01m1kyc2zd313d7a3ssmg02424";
 const LIVE_API_BASE="https://api.paddle.com";
+const SANDBOX_API_BASE="https://sandbox-api.paddle.com";
 const TRANSACTION_STATUSES=new Set(["draft","ready","billed","paid","completed","canceled","past_due"]);
 const CREATED_TRANSACTION_STATUSES=new Set(["draft","ready"]);
 const CHECKOUT_RECOVERY_CLOCK_SKEW_MS=60_000;
@@ -29,41 +30,47 @@ function requestSignal(milliseconds) {
 
 /** @param {NodeJS.ProcessEnv} env @returns {import("./domain-types").PaymentConfig} */
 function getPaymentConfig(env=process.env) {
-  const productId=clean(env.PADDLE_PRODUCT_ID)||DEFAULT_PRODUCT_ID;
-  const priceId=clean(env.PADDLE_PRICE_ID)||DEFAULT_PRICE_ID;
+  const requestedEnvironment=clean(env.PADDLE_ENVIRONMENT).toLowerCase()||"live";
+  const sandbox=requestedEnvironment==="sandbox";
+  const environment=sandbox?"sandbox":"live";
+  // Sandbox entitlements must never be written to a production application.
+  const environmentAllowed=["live","sandbox"].includes(requestedEnvironment)&&!(sandbox&&env.NODE_ENV==="production");
+  const productId=clean(env.PADDLE_PRODUCT_ID)||(sandbox?"":DEFAULT_PRODUCT_ID);
+  const priceId=clean(env.PADDLE_PRICE_ID)||(sandbox?"":DEFAULT_PRICE_ID);
   const clientToken=clean(env.PADDLE_CLIENT_TOKEN);
   const apiKey=clean(env.PADDLE_API_KEY);
   const webhookSecret=clean(env.PADDLE_WEBHOOK_SECRET);
   const requestedEnabled=clean(env.PADDLE_CHECKOUT_ENABLED).toLowerCase()==="true";
-  const validClientToken=clientToken.startsWith("live_")&&clientToken.length>=20&&!/sandbox|sdbx/i.test(clientToken)&&!placeholderCredential(clientToken);
-  const validApiKey=apiKey.startsWith("pdl_live_apikey_")&&apiKey.length>=40&&!/sandbox|sdbx/i.test(apiKey)&&!placeholderCredential(apiKey);
+  const validClientToken=clientToken.startsWith(sandbox?"test_":"live_")&&clientToken.length>=20&&(sandbox||!/sandbox|sdbx/i.test(clientToken))&&!placeholderCredential(clientToken);
+  const validApiKey=apiKey.startsWith(sandbox?"pdl_sdbx_apikey_":"pdl_live_apikey_")&&apiKey.length>=40&&(sandbox||!/sandbox|sdbx/i.test(apiKey))&&!placeholderCredential(apiKey);
   const validWebhookSecret=webhookSecret.startsWith("pdl_ntfset_")&&webhookSecret.length>=20&&!placeholderCredential(webhookSecret);
-  const validCatalog=validId(productId,"pro")&&validId(priceId,"pri");
-  const configured=validClientToken&&validApiKey&&validWebhookSecret&&validCatalog;
+  const validCatalog=validId(productId,"pro")&&validId(priceId,"pri")&&(!sandbox||(productId!==DEFAULT_PRODUCT_ID&&priceId!==DEFAULT_PRICE_ID));
+  const configured=environmentAllowed&&validClientToken&&validApiKey&&validWebhookSecret&&validCatalog;
   /** @type {string[]} */
   const missing=[];
-  if (!validClientToken) missing.push("live client-side token");
-  if (!validApiKey) missing.push("live API key");
+  if (!environmentAllowed) missing.push("supported payment environment (sandbox is non-production only)");
+  if (!validClientToken) missing.push(`${environment} client-side token`);
+  if (!validApiKey) missing.push(`${environment} API key`);
   if (!validWebhookSecret) missing.push("webhook signing secret");
-  if (!validCatalog) missing.push("valid live catalog IDs");
+  if (!validCatalog) missing.push(`valid ${environment} catalog IDs`);
 
   // Deliberately contains browser-safe fields only. Server credentials live in
   // a private WeakMap so they cannot be serialized into a response by mistake.
   /** @type {import("./domain-types").PaymentConfig} */
   const config={
-    environment:"live",
+    environment,
     productId,
     priceId,
-    clientToken:validClientToken?clientToken:"",
+    clientToken:environmentAllowed&&validClientToken?clientToken:"",
     price:{amount:"5.99",currency:"USD"},
     requestedEnabled,
     configured,
     enabled:requestedEnabled&&configured,
     missing
   };
-  let apiBase=LIVE_API_BASE;
+  let apiBase=sandbox?SANDBOX_API_BASE:LIVE_API_BASE;
   if (env.NODE_ENV==="test"&&clean(env.PADDLE_API_BASE)) apiBase=clean(env.PADDLE_API_BASE);
-  secretsByConfig.set(config,{apiKey,webhookSecret,apiBase});
+  secretsByConfig.set(config,{apiKey:environmentAllowed&&validApiKey?apiKey:"",webhookSecret:environmentAllowed&&validWebhookSecret?webhookSecret:"",apiBase});
   return Object.freeze(config);
 }
 
@@ -73,6 +80,7 @@ function getPaymentConfig(env=process.env) {
  */
 function publicPaymentConfig(config) {
   return {
+    environment:config.environment,
     enabled:config.enabled,
     configured:config.configured,
     productId:config.productId,
@@ -423,6 +431,7 @@ module.exports={
   DEFAULT_PRODUCT_ID,
   DEFAULT_PRICE_ID,
   LIVE_API_BASE,
+  SANDBOX_API_BASE,
   getPaymentConfig,
   publicPaymentConfig,
   webhookSecretFor,

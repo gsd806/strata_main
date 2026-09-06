@@ -10,6 +10,7 @@ const { loadPublicAssets,cachedResponseBody } = require("./static-assets");
 const { getEmailVerificationConfig } = require("./email");
 const { createAuthService,configuredAdminEmail } = require("./auth");
 const { createAdminService } = require("./admin");
+const { createWorkoutService } = require("./workouts");
 const { createSupportService } = require("./support");
 const { composeServices } = require("./service-composition");
 const {
@@ -89,6 +90,14 @@ const STATIC_FILES = new Map([
   ["reset-password.html","pages/reset-password.html"],
   ["delete-account.html","pages/delete-account.html"],
   ["admin.html","pages/admin.html"],
+  ["workout.html","pages/workout.html"],
+  ["workout.css","styles/workout.css"],
+  ["workout.js","scripts/workout.js"],
+  ["workout-core.js","scripts/workout-core.js"],
+  ["onboarding.html","pages/onboarding.html"],
+  ["onboarding.css","styles/onboarding.css"],
+  ["onboarding.js","scripts/onboarding.js"],
+  ["onboarding-core.js","scripts/onboarding-core.js"],
   ["planner.html","pages/planner.html"],
   ["discover.html","pages/discover.html"],
   ["install.html","pages/install.html"],
@@ -159,6 +168,7 @@ let store;
 let auth;
 let admin;
 let support;
+let workouts;
 let paddleIpCache={cidrs:[],expiresAt:0,pending:null};
 
 function escapeHtml(value) { return String(value ?? "").replace(/[&<>'"]/g,(char) => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[char])); }
@@ -632,6 +642,7 @@ async function handleApi(req,res,url) {
   if (await support.handleApi(req,res,url)) return;
   if (await auth.handleApi(req,res,url)) return;
   if (await admin.handleApi(req,res,url)) return;
+  if (await workouts.handleApi(req,res,url)) return;
   if (url.pathname === "/api/status" && req.method === "GET") {
     json(res,200,{ok:true,build:BUILD_NUMBER,storage:store.kind,persistent:store.kind==="turso"||process.env.NODE_ENV!=="production",paymentsConfigured:PAYMENT_CONFIG.configured,checkoutEnabled:PAYMENT_CONFIG.enabled,webhookIpAllowlist:ENFORCE_PADDLE_IPS,emailVerificationEnabled:EMAIL_CONFIG.enabled,emailVerificationConfigured:EMAIL_CONFIG.configured,passwordResetEnabled:EMAIL_CONFIG.enabled,accountDeletionEnabled:EMAIL_CONFIG.enabled,adminConfigured:Boolean(ADMIN_EMAIL)}); return;
   }
@@ -793,6 +804,7 @@ async function handleApi(req,res,url) {
     const session=await auth.requireSession(req,res); if (!session) return;
     if (!auth.validCsrf(req,session)) { json(res,403,{error:"Security check failed. Refresh and try again.",code:"INVALID_CSRF"}); return; }
     const input=await bodyJson(req), expectedPlanUpdatedAt=expectedPlanRevision(input.expectedPlanUpdatedAt), plan=sanitizePlan(input.plan);
+    if (input.expectedUserId!==undefined && String(input.expectedUserId)!==String(session.id)) { json(res,409,{error:"The signed-in account changed. Reload before saving.",code:"ACCOUNT_CHANGED"}); return; }
     const saved=await store.upsertPlan(session.id,JSON.stringify(plan),Date.now(),expectedPlanUpdatedAt);
     if (!saved) {
       const current=await planSnapshotFor(session.id);
@@ -819,7 +831,7 @@ async function handleApi(req,res,url) {
     const plans=(await store.communityWeeklyPlansForUser(session.id))
       .map((row)=>communityPlanPayload(row,{owner:true}))
       .filter(Boolean);
-    json(res,200,{plans,csrfToken:session.csrf_token}); return;
+    json(res,200,{plans,userId:session.id,csrfToken:session.csrf_token}); return;
   }
   if (url.pathname === "/api/community-plans" && req.method === "POST") {
     const session=await auth.requireSession(req,res); if (!session) return;
@@ -1090,6 +1102,7 @@ async function start() {
     reconcileCheckoutCreationBeforeDeletion,reconcileUnsettledPurchases,isUniqueViolation,
     createAuthService,createAdminService,createSupportService
   }));
+  workouts=createWorkoutService({store,auth,rateAllowed,http:{json,bodyJson}});
   await admin.bootstrap();
   await store.deleteExpired(Date.now());
   await admin.cleanup();

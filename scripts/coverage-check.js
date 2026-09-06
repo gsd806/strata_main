@@ -22,7 +22,9 @@ const args=[
   "--test-coverage-include=server.js",
   "--test-coverage-include=src/**/*.js",
   "--test-coverage-include=public/scripts/discovery-core.js",
-  "--test-coverage-include=public/scripts/monthly-plan-core.js"
+  "--test-coverage-include=public/scripts/monthly-plan-core.js",
+  "--test-coverage-include=public/scripts/workout-core.js",
+  "--test-coverage-include=public/scripts/onboarding-core.js"
 ];
 
 function runCoverage() {

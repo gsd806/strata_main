@@ -53,7 +53,7 @@ export default [
     }
   },
   {
-    files:["public/scripts/discovery-core.js","public/scripts/monthly-plan-core.js"],
+    files:["public/scripts/discovery-core.js","public/scripts/monthly-plan-core.js","public/scripts/workout-core.js","public/scripts/onboarding-core.js"],
     languageOptions:{globals:{...globals.browser,...globals.node}}
   },
   {

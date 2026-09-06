@@ -1,0 +1,88 @@
+"use strict";
+const test=require("node:test"),assert=require("node:assert/strict");
+const {spawn}=require("node:child_process"),{mkdirSync,mkdtempSync,rmSync}=require("node:fs"),{join}=require("node:path");
+const {workoutFixture}=require("./support/workout-fixtures");
+
+const ROOT=join(__dirname,"..");let server,directory,base;
+async function startServer() {
+  mkdirSync(join(ROOT,"test-runtime"),{recursive:true});directory=mkdtempSync(join(ROOT,"test-runtime","workouts-"));
+  server=spawn(process.execPath,["server.js"],{cwd:ROOT,env:{...process.env,HOST:"127.0.0.1",PORT:"0",NODE_ENV:"test",ALLOW_UNVERIFIED_SIGNUP_FOR_TESTS:"true",STRATA_DATA_DIR:directory,TURSO_DATABASE_URL:"",TURSO_AUTH_TOKEN:"",EMAIL_VERIFICATION_ENABLED:"false",PADDLE_CHECKOUT_ENABLED:"false",PADDLE_CLIENT_TOKEN:"",PADDLE_API_KEY:"",PADDLE_WEBHOOK_SECRET:"",PADDLE_PRICE_ID:"",PADDLE_PRODUCT_ID:""},stdio:["ignore","pipe","pipe"]});
+  base=await new Promise((resolve,reject)=>{
+    let output="",errors="";
+    const timer=setTimeout(()=>reject(new Error(`Workout server startup timed out: ${errors}`)),5000);
+    server.stdout.on("data",(chunk)=>{output=(output+chunk).slice(-4096);const match=output.match(/Strata running at http:\/\/127\.0\.0\.1:(\d+)/);if (match) {clearTimeout(timer);resolve(`http://127.0.0.1:${match[1]}`);}});
+    server.stderr.on("data",(chunk)=>{errors=(errors+chunk).slice(-4096);});
+    server.once("error",(error)=>{clearTimeout(timer);reject(error);});server.once("exit",(code)=>{clearTimeout(timer);reject(new Error(`Workout server exited ${code}: ${errors}`));});
+  });
+}
+async function stopServer() {
+  if (server&&server.exitCode===null) await new Promise((resolve)=>{const timer=setTimeout(()=>server.kill("SIGKILL"),2000);server.once("exit",()=>{clearTimeout(timer);resolve();});server.kill("SIGTERM");});
+  if (directory) rmSync(directory,{recursive:true,force:true});
+}
+async function request(path,account,method="GET",body,extra={}) {
+  const response=await fetch(`${base}${path}`,{method,headers:{Origin:base,"Content-Type":"application/json",...(account?{Cookie:account.cookie,"X-CSRF-Token":account.csrfToken}:{}),...extra},...(body===undefined?{}:{body:typeof body==="string"?body:JSON.stringify(body)})});
+  return {status:response.status,data:await response.json(),cookie:response.headers.get("set-cookie")?.split(";")[0]||""};
+}
+async function account(suffix) {
+  const result=await request("/api/signup",null,"POST",{name:`Workout ${suffix}`,email:`workout-${suffix}@example.test`,password:"strong-workout-password-123"});
+  assert.equal(result.status,201);
+  const me=await request("/api/me",{cookie:result.cookie,csrfToken:""});
+  return {cookie:result.cookie,csrfToken:me.data.csrfToken};
+}
+test.before(startServer);test.after(stopServer);
+
+test("workout API requires authentication, CSRF, valid bounded input, and JSON",async()=>{
+  const member=await account("guards"),workout=workoutFixture("guarded-workout");
+  assert.equal((await request("/api/workouts")).status,401);
+  assert.equal((await request("/api/workouts",member,"POST",{workout},{"X-CSRF-Token":"wrong"})).status,403);
+  assert.equal((await request("/api/workouts",member,"POST",{workout},{"Content-Type":"text/plain"})).status,415);
+  assert.equal((await request("/api/workouts",member,"POST","{" )).status,400);
+  const invalid=structuredClone(workout);invalid.entries[0].exerciseId="not-an-exercise";
+  assert.equal((await request("/api/workouts",member,"POST",{workout:invalid})).status,400);
+  for (const query of ["limit=101","limit=-1","offset=-1","offset=10001","offset=abc"]) assert.equal((await request(`/api/workouts?${query}`,member)).status,400);
+  assert.equal((await request("/api/workouts",member,"PATCH",{})).status,405);
+  assert.equal((await request("/api/workouts/invalid/path",member)).status,404);
+  assert.equal((await request("/api/workouts",member)).data.workouts.length,0);
+});
+
+test("free workout logging is idempotent, resumes saved state, and rejects stale edits and deletes",async()=>{
+  const owner=await account("owner"),other=await account("other"),workout=workoutFixture("logged-session"),url=`/api/workouts/${workout.id}`;
+  const initial=await request("/api/workouts",owner,"POST",{workout,userId:"untrusted-owner"});
+  assert.equal(initial.status,201);assert.equal(initial.data.workout.revision,1);
+  const identical=await request("/api/workouts",owner,"POST",{workout});assert.equal(identical.status,200);assert.deepEqual(identical.data,initial.data);
+  const different=await request("/api/workouts",owner,"POST",{workout:{...workout,title:"Overwrite attempt"}});
+  assert.equal(different.status,409);assert.equal(different.data.code,"WORKOUT_CONFLICT");assert.equal(different.data.workout.title,workout.title);
+  assert.equal((await request(url,other)).status,404);assert.equal((await request("/api/workouts",other)).data.workouts.length,0);
+  assert.equal((await request(url,other,"PUT",{workout,expectedRevision:1})).status,404);
+  assert.equal((await request(url,other,"DELETE",{expectedRevision:1})).status,404);
+  assert.equal((await request(url,owner,"PUT",{workout})).status,400);
+  assert.equal((await request(url,owner,"PUT",{workout,expectedRevision:"1"})).status,400);
+  assert.equal((await request(url,owner,"PUT",{workout:{...workout,startedAt:workout.startedAt+1},expectedRevision:1})).status,400);
+  const logged=structuredClone(workout);logged.entries[0].sets[0].completed=true;logged.elapsedSeconds=60;logged.restEndsAt=Date.now()+60000;
+  const writes=await Promise.all([request(url,owner,"PUT",{workout:logged,expectedRevision:1}),request(url,owner,"PUT",{workout:{...logged,title:"Other tab"},expectedRevision:1})]);
+  assert.deepEqual(writes.map((r)=>r.status).sort(),[200,409]);
+  const winner=writes.find((r)=>r.status===200).data.workout;
+  assert.equal(winner.revision,2);assert.ok(winner.updatedAt>initial.data.workout.updatedAt);
+  const resumed=await request(url,owner);assert.deepEqual(resumed.data.workout,winner);assert.equal(resumed.data.csrfToken,owner.csrfToken);
+  const delayedCreate=await request("/api/workouts",owner,"POST",{workout});assert.equal(delayedCreate.status,200);assert.deepEqual(delayedCreate.data.workout,winner);
+  const completed={...winner,status:"completed",completedAt:Date.now(),elapsedSeconds:600,restEndsAt:null};
+  const finished=await request(url,owner,"PUT",{workout:completed,expectedRevision:2});assert.equal(finished.status,200);assert.equal(finished.data.workout.revision,3);
+  const history=await request("/api/workouts",owner);assert.equal(history.data.workouts.length,1);assert.equal(history.data.hasMore,false);
+  const summary=history.data.workouts[0];assert.equal(summary.completedSets,1);assert.equal(summary.totalSets,2);assert.equal(summary.entries,undefined);assert.equal(summary.exerciseSummaries[0].volume,200);
+  assert.equal((await request(url,owner,"DELETE",{expectedRevision:2})).status,409);
+  assert.equal((await request(url,owner,"DELETE",{expectedRevision:3})).status,200);assert.equal((await request(url,owner)).status,404);
+});
+
+test("workout history pages newest first across active and completed sessions and logout revokes access",async()=>{
+  const member=await account("history");
+  for (let i=0;i<3;i++) {
+    const workout=workoutFixture(`history-${i}`);workout.startedAt+=i;
+    if (i===1) {workout.status="completed";workout.completedAt=workout.startedAt+1000;workout.entries[0].sets[0].completed=true;}
+    assert.equal((await request("/api/workouts",member,"POST",{workout})).status,201);
+  }
+  const first=await request("/api/workouts?limit=2",member),second=await request("/api/workouts?limit=2&offset=2",member);
+  assert.deepEqual(first.data.workouts.map((w)=>w.id),["history-2","history-1"]);assert.equal(first.data.hasMore,true);
+  assert.deepEqual(second.data.workouts.map((w)=>w.id),["history-0"]);assert.equal(second.data.hasMore,false);
+  assert.equal((await request("/api/logout",member,"POST",{})).status,200);
+  assert.equal((await request("/api/workouts",member)).status,401);
+});

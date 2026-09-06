@@ -3,7 +3,9 @@
     "server.js": {
       "role": "Process bootstrap",
       "maxLines": 20,
-      "allowedDependencies": ["src/server.js"]
+      "allowedDependencies": [
+        "src/server.js"
+      ]
     },
     "src/server.js": {
       "role": "HTTP composition root",
@@ -18,7 +20,8 @@
         "src/plans.js",
         "src/service-composition.js",
         "src/static-assets.js",
-        "src/support.js"
+        "src/support.js",
+        "src/workouts.js"
       ]
     },
     "src/service-composition.js": {
@@ -29,22 +32,33 @@
     "src/auth.js": {
       "role": "Authentication and account lifecycle",
       "maxLines": 850,
-      "allowedDependencies": ["src/email.js", "src/plans.js"]
+      "allowedDependencies": [
+        "src/email.js",
+        "src/plans.js"
+      ]
     },
     "src/admin.js": {
       "role": "Administrative authorization and actions",
       "maxLines": 300,
-      "allowedDependencies": ["src/plans.js"]
+      "allowedDependencies": [
+        "src/plans.js"
+      ]
     },
     "src/support.js": {
       "role": "Public and administrative support workflow",
       "maxLines": 180,
-      "allowedDependencies": ["src/email.js", "src/plans.js"]
+      "allowedDependencies": [
+        "src/email.js",
+        "src/plans.js"
+      ]
     },
     "src/database.js": {
       "role": "SQLite and Turso store adapters",
       "maxLines": 1300,
-      "allowedDependencies": ["src/schema.js", "src/store-contract.js"]
+      "allowedDependencies": [
+        "src/schema.js",
+        "src/store-contract.js"
+      ]
     },
     "src/store-contract.js": {
       "role": "Storage boundary contract",
@@ -74,12 +88,21 @@
     "src/static-assets.js": {
       "role": "Bounded public asset representations",
       "maxLines": 80,
-      "allowedDependencies": ["src/http.js"]
+      "allowedDependencies": [
+        "src/http.js"
+      ]
     },
     "src/http.js": {
       "role": "HTTP transport helpers",
       "maxLines": 180,
       "allowedDependencies": []
+    },
+    "src/workouts.js": {
+      "role": "Workout validation, history summaries, and authenticated lifecycle",
+      "maxLines": 240,
+      "allowedDependencies": [
+        "src/plans.js"
+      ]
     }
   }
 }

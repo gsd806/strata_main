@@ -12,7 +12,7 @@ export interface PaymentPrice {
 }
 
 export interface PaymentConfig {
-  readonly environment:"live";
+  readonly environment:"live"|"sandbox";
   readonly productId:string;
   readonly priceId:string;
   readonly clientToken:string;
@@ -24,6 +24,7 @@ export interface PaymentConfig {
 }
 
 export interface PublicPaymentConfig {
+  environment:"live"|"sandbox";
   enabled:boolean;
   configured:boolean;
   productId:string;

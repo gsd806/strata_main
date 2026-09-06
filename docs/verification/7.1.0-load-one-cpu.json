@@ -1,0 +1,583 @@
+{
+  "workloadCompleted": true,
+  "runtime": {
+    "node": "v24.19.0",
+    "platform": "linux",
+    "architecture": "x64",
+    "logicalCpusAvailable": 1,
+    "hostMemoryMiB": 22039
+  },
+  "resources": {
+    "measurement": "Application child process /proc status and CPU ticks; ready-to-stop intervals; memory high-water mark includes startup",
+    "sampleIntervalMs": 100,
+    "cpuTimeMs": 12620,
+    "peakResidentMemoryMiB": 146.73,
+    "segments": [
+      {
+        "label": "initial server",
+        "pid": 15,
+        "samples": 139,
+        "elapsedMs": 14686.2,
+        "userCpuMs": 11470,
+        "systemCpuMs": 550,
+        "averageCpuPercentOneCore": 81.8,
+        "peakSampledCpuPercentOneCore": 109.5,
+        "peakResidentMemoryMiB": 146.73
+      },
+      {
+        "label": "restarted server",
+        "pid": 27,
+        "samples": 11,
+        "elapsedMs": 978.7,
+        "userCpuMs": 440,
+        "systemCpuMs": 160,
+        "averageCpuPercentOneCore": 61.3,
+        "peakSampledCpuPercentOneCore": 69.8,
+        "peakResidentMemoryMiB": 63
+      }
+    ]
+  },
+  "users": 100,
+  "rounds": 5,
+  "sourceMode": "one shared source IP",
+  "storage": "isolated local SQLite",
+  "requestCount": 5723,
+  "unexpectedHttpErrors": 0,
+  "expectedConflictResponses": 300,
+  "phases": [
+    {
+      "name": "100 simultaneous signups",
+      "requests": 100,
+      "durationMs": 4851,
+      "requestsPerSecond": 20.6,
+      "peakInFlight": 100
+    },
+    {
+      "name": "100 simultaneous logins",
+      "requests": 100,
+      "durationMs": 4612.9,
+      "requestsPerSecond": 21.7,
+      "peakInFlight": 100
+    },
+    {
+      "name": "Session and compressed catalog reads",
+      "requests": 200,
+      "durationMs": 769.8,
+      "requestsPerSecond": 259.8,
+      "peakInFlight": 100
+    },
+    {
+      "name": "100 concurrent private planning workflows",
+      "requests": 1500,
+      "durationMs": 1425,
+      "requestsPerSecond": 1052.6,
+      "peakInFlight": 100
+    },
+    {
+      "name": "100 pairs of competing tab saves",
+      "requests": 300,
+      "durationMs": 321.2,
+      "requestsPerSecond": 934.1,
+      "peakInFlight": 200
+    },
+    {
+      "name": "100 concurrent workout starts and safe retries",
+      "requests": 200,
+      "durationMs": 203.8,
+      "requestsPerSecond": 981.1,
+      "peakInFlight": 100
+    },
+    {
+      "name": "100 concurrent interrupted workout logging workflows",
+      "requests": 1000,
+      "durationMs": 982.5,
+      "requestsPerSecond": 1017.8,
+      "peakInFlight": 100
+    },
+    {
+      "name": "100 pairs of competing workout saves",
+      "requests": 300,
+      "durationMs": 299.9,
+      "requestsPerSecond": 1000.2,
+      "peakInFlight": 200
+    },
+    {
+      "name": "100 reliable completions and accurate private histories",
+      "requests": 300,
+      "durationMs": 265.5,
+      "requestsPerSecond": 1129.8,
+      "peakInFlight": 100
+    },
+    {
+      "name": "CSRF and private account isolation",
+      "requests": 700,
+      "durationMs": 425.1,
+      "requestsPerSecond": 1646.6,
+      "peakInFlight": 100
+    },
+    {
+      "name": "Malformed JSON value rejection",
+      "requests": 9,
+      "durationMs": 10.9,
+      "requestsPerSecond": 828.3,
+      "peakInFlight": 1
+    },
+    {
+      "name": "Identity auth limit persists across source changes",
+      "requests": 11,
+      "durationMs": 474.7,
+      "requestsPerSecond": 23.2,
+      "peakInFlight": 1
+    },
+    {
+      "name": "Restart durability across all 100 accounts",
+      "requests": 300,
+      "durationMs": 507.4,
+      "requestsPerSecond": 591.2,
+      "peakInFlight": 100
+    },
+    {
+      "name": "100 stale deletion guards and intentional deletions",
+      "requests": 400,
+      "durationMs": 356.9,
+      "requestsPerSecond": 1120.8,
+      "peakInFlight": 100
+    },
+    {
+      "name": "Logout revokes all 100 tested sessions",
+      "requests": 300,
+      "durationMs": 113.7,
+      "requestsPerSecond": 2639.1,
+      "peakInFlight": 100
+    }
+  ],
+  "results": [
+    {
+      "metric": "status",
+      "requests": 1,
+      "medianMs": 33.7,
+      "p95Ms": 33.7,
+      "maxMs": 33.7,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "auth.signup",
+      "requests": 100,
+      "medianMs": 2832.66,
+      "p95Ms": 4671.28,
+      "maxMs": 4817.25,
+      "budgetP95Ms": 15000,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "auth.login",
+      "requests": 100,
+      "medianMs": 2346.32,
+      "p95Ms": 4467.37,
+      "maxMs": 4601.99,
+      "budgetP95Ms": 15000,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "plan.initial",
+      "requests": 100,
+      "medianMs": 66.26,
+      "p95Ms": 383.53,
+      "maxMs": 383.9,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "catalog.read",
+      "requests": 100,
+      "medianMs": 209.3,
+      "p95Ms": 633.17,
+      "maxMs": 691.66,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "plan.read",
+      "requests": 1000,
+      "medianMs": 80.86,
+      "p95Ms": 143.13,
+      "maxMs": 244.25,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "plan.save",
+      "requests": 500,
+      "medianMs": 89.31,
+      "p95Ms": 192.64,
+      "maxMs": 233.14,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "plan.race",
+      "requests": 200,
+      "medianMs": 81.71,
+      "p95Ms": 239.55,
+      "maxMs": 280.94,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "plan.retry",
+      "requests": 100,
+      "medianMs": 4.76,
+      "p95Ms": 17.66,
+      "maxMs": 23.49,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "workout.create",
+      "requests": 100,
+      "medianMs": 68.3,
+      "p95Ms": 100.71,
+      "maxMs": 103.6,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "workout.createRetry",
+      "requests": 100,
+      "medianMs": 87.52,
+      "p95Ms": 94.73,
+      "maxMs": 96.82,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "workout.resume",
+      "requests": 500,
+      "medianMs": 91.89,
+      "p95Ms": 133.12,
+      "maxMs": 206.52,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "workout.save",
+      "requests": 500,
+      "medianMs": 89.42,
+      "p95Ms": 167.22,
+      "maxMs": 201.8,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "workout.race",
+      "requests": 200,
+      "medianMs": 116.71,
+      "p95Ms": 197.65,
+      "maxMs": 253.85,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "workout.afterConflict",
+      "requests": 100,
+      "medianMs": 121.47,
+      "p95Ms": 157.84,
+      "maxMs": 172.26,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "workout.complete",
+      "requests": 100,
+      "medianMs": 52.65,
+      "p95Ms": 79.66,
+      "maxMs": 82.96,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "workout.history",
+      "requests": 100,
+      "medianMs": 101.4,
+      "p95Ms": 109.53,
+      "maxMs": 112.37,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "workout.lateCreateRetry",
+      "requests": 100,
+      "medianMs": 76.96,
+      "p95Ms": 87.4,
+      "maxMs": 99.73,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "security.csrf",
+      "requests": 100,
+      "medianMs": 29.66,
+      "p95Ms": 40.01,
+      "maxMs": 40.26,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "plan.isolation",
+      "requests": 100,
+      "medianMs": 54.02,
+      "p95Ms": 73.72,
+      "maxMs": 162.1,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "workout.isolation.get",
+      "requests": 100,
+      "medianMs": 84.84,
+      "p95Ms": 163.11,
+      "maxMs": 167.53,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "workout.isolation.put",
+      "requests": 100,
+      "medianMs": 60.73,
+      "p95Ms": 71.94,
+      "maxMs": 116.3,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "workout.isolation.delete",
+      "requests": 100,
+      "medianMs": 66.93,
+      "p95Ms": 69.55,
+      "maxMs": 70.15,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "workout.csrf",
+      "requests": 100,
+      "medianMs": 57.19,
+      "p95Ms": 64.7,
+      "maxMs": 69.02,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "workout.afterIsolation",
+      "requests": 100,
+      "medianMs": 39.17,
+      "p95Ms": 47.39,
+      "maxMs": 48.64,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "security.anonymous",
+      "requests": 1,
+      "medianMs": 0.54,
+      "p95Ms": 0.54,
+      "maxMs": 0.54,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "security.anonymousWorkout",
+      "requests": 1,
+      "medianMs": 0.39,
+      "p95Ms": 0.39,
+      "maxMs": 0.39,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "security.malformedBody",
+      "requests": 8,
+      "medianMs": 0.45,
+      "p95Ms": 3.05,
+      "maxMs": 3.05,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "plan.afterMalformedInput",
+      "requests": 1,
+      "medianMs": 3.8,
+      "p95Ms": 3.8,
+      "maxMs": 3.8,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "auth.rateGuard",
+      "requests": 9,
+      "medianMs": 46.53,
+      "p95Ms": 94.83,
+      "maxMs": 94.83,
+      "budgetP95Ms": 15000,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "auth.rateGuardCrossIp",
+      "requests": 1,
+      "medianMs": 0.99,
+      "p95Ms": 0.99,
+      "maxMs": 0.99,
+      "budgetP95Ms": 15000,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "auth.unrelatedIdentity",
+      "requests": 1,
+      "medianMs": 42.85,
+      "p95Ms": 42.85,
+      "maxMs": 42.85,
+      "budgetP95Ms": 15000,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "plan.afterRestart",
+      "requests": 100,
+      "medianMs": 270.22,
+      "p95Ms": 474.74,
+      "maxMs": 484.61,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "workout.afterRestart",
+      "requests": 100,
+      "medianMs": 7.61,
+      "p95Ms": 22.2,
+      "maxMs": 38.25,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "workout.historyAfterRestart",
+      "requests": 100,
+      "medianMs": 7.09,
+      "p95Ms": 17.36,
+      "maxMs": 22.54,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "workout.staleDelete",
+      "requests": 100,
+      "medianMs": 95.21,
+      "p95Ms": 147.98,
+      "maxMs": 153.45,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "workout.delete",
+      "requests": 100,
+      "medianMs": 95.88,
+      "p95Ms": 147.11,
+      "maxMs": 152.29,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "workout.afterDelete",
+      "requests": 100,
+      "medianMs": 92.16,
+      "p95Ms": 106.02,
+      "maxMs": 132.16,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "workout.emptyHistory",
+      "requests": 100,
+      "medianMs": 34.63,
+      "p95Ms": 65.14,
+      "maxMs": 77.79,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "auth.logout",
+      "requests": 100,
+      "medianMs": 30.12,
+      "p95Ms": 40.51,
+      "maxMs": 41.57,
+      "budgetP95Ms": 15000,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "security.revokedSession",
+      "requests": 100,
+      "medianMs": 47,
+      "p95Ms": 53.97,
+      "maxMs": 54.11,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    },
+    {
+      "metric": "security.revokedWorkoutSession",
+      "requests": 100,
+      "medianMs": 29.23,
+      "p95Ms": 47.8,
+      "maxMs": 49.83,
+      "budgetP95Ms": 2500,
+      "errors": 0,
+      "passed": true
+    }
+  ],
+  "scope": "100 real signup/login sessions; compressed catalog reads; 100 concurrent plan and workout workflows; competing plan and workout tab saves; workout create retries, set logging, completion and history summaries; CSRF and cross-account read/write/delete isolation; malformed-input rejection; identity auth limits across real and spoofed addresses; restart persistence; stale and successful workout deletion; logout revocation. All production network and identity rate limits remain enabled.",
+  "limitations": [
+    "Local regression evidence only: does not certify hosted capacity, Turso latency/quotas, email delivery, billing, browser rendering, or internet traffic.",
+    "All 100 signups/logins share one real source IP. The separate 10-attempt identity guard is also checked after the main workload.",
+    "Signup uses the existing explicit test-only verification bypass; no email provider or payment service is contacted.",
+    "CPU and memory are measured for the local application process only, excluding the load generator and any production database, proxy, or platform overhead. Local latency budgets are regression limits, not production SLOs."
+  ]
+}
