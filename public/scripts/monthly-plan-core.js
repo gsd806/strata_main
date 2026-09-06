@@ -201,14 +201,21 @@
     return Math.max(1,Math.min(10,Number(match?.[0]||3)));
   }
 
+  function checkedPersonalResult(exercise,preferences){
+    if(!preferences)return{eligible:true,match:Number(exercise.score)||0};
+    try{
+      if(typeof Discovery?.personalResult!=="function")throw new Error("Eligibility engine unavailable.");
+      const result=Discovery.personalResult(exercise,preferences);
+      if(typeof result?.eligible!=="boolean"||!Number.isFinite(result.match))throw new Error("Invalid eligibility result.");
+      return result;
+    }catch{fail(`Could not verify the saved equipment and movement constraints for ${exercise.name||exercise.id}. Review your profile and try again.`);}
+  }
+
   function candidatePool(exercises,target,preferences){
     return exercises.filter((exercise)=>matchesTarget(exercise,target)).map((exercise)=>{
-      let personal={eligible:true,match:Number(exercise.score)||0};
-      if(preferences&&Discovery?.personalResult){
-        try{personal=Discovery.personalResult(exercise,preferences);}catch{personal={eligible:true,match:Number(exercise.score)||0};}
-      }
+      const personal=checkedPersonalResult(exercise,preferences);
       return{exercise,personal};
-    }).filter(({personal})=>personal.eligible!==false).sort((a,b)=>Number(b.personal.match||0)-Number(a.personal.match||0)||Number(b.exercise.score||0)-Number(a.exercise.score||0)||String(a.exercise.id).localeCompare(String(b.exercise.id))).map(({exercise})=>exercise);
+    }).filter(({personal})=>personal.eligible===true).sort((a,b)=>Number(b.personal.match||0)-Number(a.personal.match||0)||Number(b.exercise.score||0)-Number(a.exercise.score||0)||String(a.exercise.id).localeCompare(String(b.exercise.id))).map(({exercise})=>exercise);
   }
 
   function generateMonthPlan(input){
@@ -233,6 +240,7 @@
         if(selected.length>=MAX_EXERCISES_PER_DAY)break;
         const exercise=knownExercises.get(item.exerciseId),target=inferTarget(exercise);
         if(!exercise||!target||!entry.targets.includes(target)||used.has(item.exerciseId))continue;
+        if(!checkedPersonalResult(exercise,input.preferences).eligible)fail(`${weekday}'s imported ${exercise.name||exercise.id} does not match your saved equipment or movement constraints. Edit the imported day or update your profile before generating the month.`);
         used.add(item.exerciseId);
         selected.push({exerciseId:item.exerciseId,sets:item.sets,reps:item.reps});
       }

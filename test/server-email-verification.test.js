@@ -304,8 +304,8 @@ test("parallel guesses atomically consume only five attempts and lock out the co
   const db=new DatabaseSync(join(runtimeDir,"strata.sqlite"));
   assert.equal(db.prepare("SELECT attempts_used FROM signup_verifications WHERE email=?").get(email).attempts_used,5);
   const correctAfterLimit=await postJson("/api/verify-email",{code:correctCode},pendingCookie);
-  assert.equal(correctAfterLimit.response.status,400);
-  assert.equal(correctAfterLimit.data.attemptsRemaining,0);
+  assert.equal(correctAfterLimit.response.status,429,"the challenge limiter rejects further guesses across addresses");
+  assert.equal(correctAfterLimit.data.code,"VERIFICATION_RATE_LIMIT");
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM users WHERE email=?").get(email).count,0);
   db.close();
 });
@@ -345,7 +345,7 @@ test("parallel signup reserves no more than five durable email send slots",async
     postJson("/api/signup",{name:`Parallel Signup ${index}`,email,password:`parallel-signup-password-${index}-123`})
   ));
   assert.equal(signups.filter(({response})=>response.status===202).length,5);
-  assert.equal(signups.filter(({response,data})=>response.status===429&&data.code==="VERIFICATION_EMAIL_LIMIT").length,7);
+  assert.equal(signups.filter(({response,data})=>response.status===429&&["VERIFICATION_EMAIL_LIMIT","AUTH_RATE_LIMIT"].includes(data.code)).length,7);
   assert.equal(deliveries.length-before,5);
 
   const db=new DatabaseSync(join(runtimeDir,"strata.sqlite"));

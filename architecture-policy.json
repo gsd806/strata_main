@@ -17,6 +17,7 @@
         "src/payments.js",
         "src/plans.js",
         "src/service-composition.js",
+        "src/static-assets.js",
         "src/support.js"
       ]
     },
@@ -69,6 +70,11 @@
       "role": "Plan domain validation",
       "maxLines": 400,
       "allowedDependencies": []
+    },
+    "src/static-assets.js": {
+      "role": "Bounded public asset representations",
+      "maxLines": 80,
+      "allowedDependencies": ["src/http.js"]
     },
     "src/http.js": {
       "role": "HTTP transport helpers",

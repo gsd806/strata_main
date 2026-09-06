@@ -531,7 +531,10 @@ function localStore(root) {
       ));
     },
     async monthlyPlan(userId) { return plainRow(statements.monthlyPlan.get(userId)); },
-    async upsertMonthlyPlan(userId,planJson,updatedAt) { statements.upsertMonthlyPlan.run(userId,planJson,updatedAt); },
+    async upsertMonthlyPlan(userId,planJson,updatedAt,expectedUpdatedAt) {
+      if (expectedUpdatedAt===undefined) { statements.upsertMonthlyPlan.run(userId,planJson,updatedAt); return; }
+      return plainRow(statements.compareAndSwapMonthlyPlan.get(userId,planJson,updatedAt,userId,expectedUpdatedAt,expectedUpdatedAt));
+    },
     async preferences(userId) { return plainRow(statements.preferences.get(userId)); },
     async upsertPreferences(userId,preferencesJson,updatedAt) { statements.upsertPreferences.run(userId,preferencesJson,updatedAt); },
     async ratingsForUser(userId) { return plainRows(statements.ratingsForUser.all(userId)); },
@@ -1036,7 +1039,10 @@ async function tursoStore(url,authToken,tursoClientFactory) {
       return plainRow(result.rows?.[0],result.columns);
     },
     monthlyPlan:(userId) => first(SQL.monthlyPlan,[userId]),
-    async upsertMonthlyPlan(userId,planJson,updatedAt) { await run(SQL.upsertMonthlyPlan,[userId,planJson,updatedAt]); },
+    async upsertMonthlyPlan(userId,planJson,updatedAt,expectedUpdatedAt) {
+      if (expectedUpdatedAt===undefined) { await run(SQL.upsertMonthlyPlan,[userId,planJson,updatedAt]); return; }
+      return first(SQL.compareAndSwapMonthlyPlan,[userId,planJson,updatedAt,userId,expectedUpdatedAt,expectedUpdatedAt]);
+    },
     preferences:(userId) => first(SQL.preferences,[userId]),
     async upsertPreferences(userId,preferencesJson,updatedAt) { await run(SQL.upsertPreferences,[userId,preferencesJson,updatedAt]); },
     ratingsForUser:(userId) => all(SQL.ratingsForUser,[userId]),

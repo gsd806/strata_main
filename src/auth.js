@@ -75,6 +75,17 @@ function createAuthService({
   }
   const {json,bodyJson,bodyForm,redirect}=http;
 
+  function accountRateAllowed(req,input) {
+    return rateAllowed(req,"auth-network",400)&&
+      rateAllowed(req,`identity:auth:${hashToken(normalizeEmail(input.email))}`,10);
+  }
+  function verificationRateAllowed(req,kind) {
+    const token=cookieMap(req.headers.cookie||"")[SIGNUP_COOKIE]||"missing";
+    const maximum=kind==="verify-email"?12:6;
+    return rateAllowed(req,`${kind}-network`,kind==="verify-email"?600:300)&&
+      rateAllowed(req,`identity:${kind}:${hashToken(token)}`,maximum);
+  }
+
   async function passwordHash(password,salt){
     const key=await scryptAsync(password,Buffer.from(salt,"base64"),64,{N:16384,r:8,p:1,maxmem:64*1024*1024});
     return Buffer.from(key).toString("base64");
@@ -621,8 +632,7 @@ function createAuthService({
     const rejectedLocation=(message)=>verificationAction?verificationLocation(input.next,{error:message,purpose:input.purpose}):accountErrorLocation(url.pathname==="/auth/login"?"login":"signup",message,input.next);
     if(!trustedAuthOrigin(req)){redirect(res,rejectedLocation("Cross-origin request rejected."));return;}
     const rateKind=url.pathname==="/auth/verify-email"?"verify-email":url.pathname==="/auth/resend-verification"?"resend-verification":"auth";
-    const rateMaximum=rateKind==="verify-email"?12:rateKind==="resend-verification"?6:10;
-    if(!rateAllowed(req,rateKind,rateMaximum)){redirect(res,rejectedLocation("Too many attempts. Try again later."));return;}
+    if(!(rateKind==="auth"?accountRateAllowed(req,input):verificationRateAllowed(req,rateKind))){redirect(res,rejectedLocation("Too many attempts. Try again later."));return;}
     try{
       if(url.pathname==="/auth/signup"||url.pathname==="/auth/login"){
         const result=url.pathname==="/auth/signup"?await beginAccountRegistration(input):await authenticateAccount(input);
@@ -653,9 +663,10 @@ function createAuthService({
     if(!API_ROUTES.has(url.pathname))return false;
     if(url.pathname==="/api/signup"&&req.method==="POST"){
       if(!trustedAuthOrigin(req)){json(res,403,{error:"Cross-origin request rejected."});return true;}
-      if(!rateAllowed(req,"auth")){json(res,429,{error:"Too many attempts. Try again later."});return true;}
       try{
-        const result=await beginAccountRegistration(await bodyJson(req));
+        const input=await bodyJson(req);
+        if(!accountRateAllowed(req,input)){json(res,429,{error:"Too many attempts. Try again later.",code:"AUTH_RATE_LIMIT"},{"Retry-After":"900"});return true;}
+        const result=await beginAccountRegistration(input);
         if(result.verification)json(res,202,result.verification,{"Set-Cookie":signupCookie(result.signupToken)});
         else json(res,201,{user:await getUserPayload(result.user)},{"Set-Cookie":sessionCookie(result.session.token)});
       }catch(error){if(!error.status)throw error;sendVerificationApiError(res,error);}
@@ -663,9 +674,10 @@ function createAuthService({
     }
     if(url.pathname==="/api/login"&&req.method==="POST"){
       if(!trustedAuthOrigin(req)){json(res,403,{error:"Cross-origin request rejected."});return true;}
-      if(!rateAllowed(req,"auth")){json(res,429,{error:"Too many attempts. Try again later."});return true;}
       try{
-        const result=await authenticateAccount(await bodyJson(req));
+        const input=await bodyJson(req);
+        if(!accountRateAllowed(req,input)){json(res,429,{error:"Too many attempts. Try again later.",code:"AUTH_RATE_LIMIT"},{"Retry-After":"900"});return true;}
+        const result=await authenticateAccount(input);
         if(result.verification)json(res,202,result.verification,{"Set-Cookie":signupCookie(result.signupToken)});
         else json(res,200,{user:await getUserPayload(result.user)},{"Set-Cookie":sessionCookie(result.session.token)});
       }catch(error){
@@ -683,7 +695,7 @@ function createAuthService({
     }
     if(url.pathname==="/api/verify-email"&&req.method==="POST"){
       if(!trustedAuthOrigin(req)){json(res,403,{error:"Cross-origin request rejected."});return true;}
-      if(!rateAllowed(req,"verify-email",12)){json(res,429,{error:"Too many attempts. Try again later.",code:"VERIFICATION_RATE_LIMIT"});return true;}
+      if(!verificationRateAllowed(req,"verify-email")){json(res,429,{error:"Too many attempts. Try again later.",code:"VERIFICATION_RATE_LIMIT"},{"Retry-After":"900"});return true;}
       try{
         const result=await verifyAccountEmail(req,await bodyJson(req));
         json(res,result.purpose==="login"?200:201,{user:await getUserPayload(result.user)},{"Set-Cookie":[sessionCookie(result.session.token),signupCookie("",0)]});
@@ -692,7 +704,7 @@ function createAuthService({
     }
     if(url.pathname==="/api/resend-verification"&&req.method==="POST"){
       if(!trustedAuthOrigin(req)){json(res,403,{error:"Cross-origin request rejected."});return true;}
-      if(!rateAllowed(req,"resend-verification",6)){json(res,429,{error:"Too many attempts. Try again later.",code:"VERIFICATION_RATE_LIMIT"});return true;}
+      if(!verificationRateAllowed(req,"resend-verification")){json(res,429,{error:"Too many attempts. Try again later.",code:"VERIFICATION_RATE_LIMIT"},{"Retry-After":"900"});return true;}
       try{json(res,202,await resendAccountVerification(req));}
       catch(error){if(!error.status)throw error;sendVerificationApiError(res,error);}
       return true;

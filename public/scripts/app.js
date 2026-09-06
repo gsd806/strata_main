@@ -205,7 +205,7 @@ function renderExercises() {
     <div class="exercise-title"><button type="button" data-detail="${exercise.id}"><h3>${exercise.name}</h3><p>${exercise.pattern} · ${exercise.level}</p><p class="mobile-exercise-meta">${exercise.sub} · ${exercise.equipment}</p><span class="details-cue">View details <span aria-hidden="true">↘</span></span></button></div>
     <div><span class="target-pill">${exercise.sub}</span></div>
     <div class="exercise-cell"><small>Equipment</small><strong>${exercise.equipment}</strong></div>
-    <div class="score-badge ${exercise.score >= 94 ? "top" : ""}" role="img" aria-label="FitScore ${exercise.score} out of 100"><strong>${exercise.score}</strong><span aria-hidden="true">/100</span></div>
+    <div class="score-badge ${exercise.score >= 94 ? "top" : ""}" role="img" aria-label="FitScore ${exercise.score} out of 100" style="--score:${exercise.score}%"><strong>${exercise.score}</strong><span aria-hidden="true">/100</span></div>
     <div class="row-actions">
       <a class="action-icon youtube-action" href="${exercise.youtube}" target="_blank" rel="noreferrer" title="Watch tutorials" aria-label="Find ${exercise.name} tutorials on YouTube"><span aria-hidden="true">▶</span></a>
       <button class="action-icon ${compared ? "active" : ""}" data-compare="${exercise.id}" type="button" title="${compared ? "Remove from comparison" : "Add to comparison"}" aria-pressed="${compared}" aria-label="${compared ? "Remove" : "Add"} ${exercise.name} ${compared ? "from" : "to"} comparison"><span aria-hidden="true">⇄</span></button>
@@ -365,7 +365,7 @@ async function initializeCatalog() {
   state.catalogStatus = "loading";
   renderAll();
   try {
-    exercises = normalizeCatalog(await api("/exercises.json?v=6.9.9.007"));
+    exercises = normalizeCatalog(await api("/exercises.json?v=7.0.0"));
     state.catalogStatus = "ready";
     el("catalogTotal").textContent = exercises.length;
   } catch {

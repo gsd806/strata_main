@@ -9,12 +9,24 @@ STRATA must run as a Node web service. A static host can display files but canno
 The checked-in `render.yaml` defines the supported Render service shape:
 
 - Node 24 selected by `.node-version`;
-- `npm install --omit=dev --no-audit --no-fund` for production dependencies;
+- `npm ci --omit=dev --no-audit --no-fund` for production dependencies;
 - `npm start` as the process command;
 - `/healthz` as the storage-aware health check; and
 - secret values entered in the host rather than committed to the repository.
 
 Local development uses SQLite. Production refuses to start without Turso, because Render's local filesystem is ephemeral and must not become the durable account store.
+
+## 100-person pilot
+
+The blueprint selects `1c-2g` (1 CPU, 2 GB RAM), an always-on paid web-service baseline. This is a starting configuration to validate against the real workload, not a certified capacity guarantee. No service has been purchased or changed by editing this file. See [Render compute plans](https://render.com/docs/compute-plans) and [Blueprint reference](https://render.com/docs/blueprint-spec).
+
+Use one application instance initially: request/identity throttles are process-local. Before adding replicas, move those counters to a shared store or enforce equivalent limits at a trusted ingress. Persistent email-send and challenge-attempt controls remain in the database. Keep `TRUST_PROXY=true` only behind the configured trusted proxy; direct Node deployments should leave it false.
+
+The auth network allowance is 400 signup/login attempts per IP per 15 minutes, with ten attempts per hashed email across addresses. Verification permits 600 requests per IP and twelve per challenge; resend permits 300 per IP and six per challenge. Existing five-attempt code and durable email-send limits still apply. API rate-limit responses include retry guidance.
+
+Run `npm run load:100` and `npm run load:100:shared` on Linux to reproduce the isolated checks. These scripts accept no live target and intentionally disable email/payment providers. Configure the production Turso/Resend/Paddle values, verify delivery and signed webhook handling, confirm database backups/restoration, and measure real hosted latency before inviting the pilot. See [release readiness](release-readiness.md) for this build's validation status.
+
+Public asset representations are cached for a process lifetime with a 16 MiB cap; restart after editing assets. Request headers have a 15-second deadline, complete request bodies 30 seconds, idle sockets 60 seconds, and keep-alive idle sockets 5 seconds. Graceful shutdown drains for up to ten seconds, then exits visibly with failure if connections remain. [Node HTTP documentation](https://nodejs.org/docs/latest-v24.x/api/http.html) describes these controls.
 
 ## Local setup
 

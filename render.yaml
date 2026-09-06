@@ -2,8 +2,9 @@ services:
   - type: web
     name: strata-workout-index
     runtime: node
-    plan: free
-    buildCommand: npm install --omit=dev --no-audit --no-fund
+    # Always-on baseline; verify capacity against the real Turso region before launch.
+    plan: 1c-2g
+    buildCommand: npm ci --omit=dev --no-audit --no-fund
     startCommand: npm start
     healthCheckPath: /healthz
     envVars:
