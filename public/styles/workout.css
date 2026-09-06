@@ -31,3 +31,81 @@
   .start-actions{display:grid;width:100%}
   .toast{bottom:calc(72px + env(safe-area-inset-bottom))}
 }
+
+/* Strata+ visual system: calm dark surfaces, readable type and purposeful motion. */
+.workout-page{
+  --bg:#10110f;--panel:#191b17;--panel-raised:#22271e;--line:#393d32;
+  --text:#f2f3eb;--muted:#b7bcae;--lime:#d4f578;--display:"Manrope",Arial,sans-serif;
+  --body:"Manrope",Arial,sans-serif;--mono:"DM Mono",ui-monospace,monospace;
+  --ease-out:cubic-bezier(.22,1,.36,1);--radius:14px;
+  background-color:var(--bg);
+  background-image:linear-gradient(rgba(255,255,255,.022) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.022) 1px,transparent 1px);
+  background-size:42px 42px;
+  font-family:var(--body);
+}
+.workout-page :where(h1,h2,h3,h4,.brand,.visual-core strong,.session-clock strong,.timer-readout strong,.history-stats strong,.chart-best strong){font-family:var(--display)}
+.workout-page :where(.eyebrow,.mode-notice,.workout-nav a,.header-account,.field,.visual-core>span,.visual-label,.preview-number,.status-chip,footer){font-family:var(--mono)}
+.workout-page .site-header{position:sticky;z-index:30;top:0;max-width:none;min-height:72px;margin:0;padding:14px max(clamp(20px,4vw,64px),env(safe-area-inset-right)) 14px max(clamp(20px,4vw,64px),env(safe-area-inset-left));background:rgba(16,17,15,.96);border-bottom:1px solid var(--line);box-shadow:0 10px 30px rgba(0,0,0,.14);backdrop-filter:blur(14px) saturate(1.08)}
+.workout-page .brand{font-size:22px;font-weight:700;letter-spacing:.055em}
+.workout-page .brand-mark{gap:2px;width:22px;height:24px;transform:skew(-8deg)}
+.workout-page .brand-mark i{width:6px;background:var(--lime)}
+.workout-page .brand-mark i:nth-child(1){height:12px}.workout-page .brand-mark i:nth-child(2){height:18px}.workout-page .brand-mark i:nth-child(3){height:24px}
+.workout-page .site-header nav{gap:26px}
+.workout-page .site-header nav a{position:relative;min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;padding:0 4px;border-radius:0;color:var(--muted);background:transparent;text-transform:uppercase;font-size:.75rem;letter-spacing:.07em}
+.workout-page .site-header nav a::after{content:"";position:absolute;right:50%;bottom:0;left:50%;height:3px;background:var(--lime);transition:right .22s var(--ease-out),left .22s var(--ease-out)}
+.workout-page .site-header nav a:hover,.workout-page .site-header nav a[aria-current="page"]{color:var(--text);background:transparent}
+.workout-page .site-header nav a:hover::after,.workout-page .site-header nav a:focus-visible::after,.workout-page .site-header nav a[aria-current="page"]::after{right:0;left:0}
+.workout-page .header-account{border-radius:8px;font-size:.75rem;letter-spacing:.02em}
+.workout-page .shell{width:min(1320px,calc(100% - 80px));max-width:none;padding:28px 0 82px}
+.workout-page .mode-notice{min-height:44px;display:flex;align-items:center;padding:8px 0;color:var(--muted);font-size:.75rem}
+.workout-page .hero{grid-template-columns:minmax(0,1.35fr) minmax(300px,1fr);gap:48px;padding:44px 0 52px}
+.workout-page .hero h1{max-width:800px;margin-bottom:22px;font-size:clamp(2.6rem,5.2vw,4.75rem);font-weight:700;line-height:1.04;letter-spacing:-.04em}
+.workout-page .hero-copy{max-width:570px;color:var(--muted);font-size:1rem;line-height:1.65}
+.workout-page .eyebrow{margin-bottom:18px;color:var(--lime);font-size:.8125rem;font-weight:500;letter-spacing:.08em}
+.workout-page .hero-visual{height:300px;border:1px solid var(--line);border-radius:14px;background:linear-gradient(150deg,#242c1d,var(--panel) 55%);overflow:hidden}
+.workout-page .orbital{border-color:rgba(212,245,120,.18);animation:workout-orbit 10s ease-in-out infinite alternate}
+.workout-page .orbital-two{border-color:rgba(255,255,255,.09);animation-name:workout-orbit-cross;animation-direction:alternate-reverse}
+.workout-page .visual-core{width:180px;height:210px;padding:22px;border:1px solid rgba(255,255,255,.18);border-radius:14px;color:var(--text);background:rgba(16,17,15,.78);box-shadow:none;transform:none;animation:workout-rise .62s var(--ease-out) both}
+.workout-page .visual-core>span:first-child,.workout-page .visual-label{color:var(--muted);font-size:.75rem;letter-spacing:.08em}
+.workout-page .visual-core strong{margin-top:18px;color:var(--lime);font-size:2.25rem;letter-spacing:-.035em}
+.workout-page .visual-arrow{color:var(--lime)}
+.workout-page :where(.panel,.exercise-card){border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:none}
+.workout-page :where(.panel,.exercise-card,.preview-card,.comparison>div){transition:transform .2s var(--ease-out),border-color .18s ease,background-color .18s ease,box-shadow .2s ease}
+.workout-page :where(.panel h2,.session-heading h2,.celebration h2,.history-section h2){font-weight:700;line-height:1.08;letter-spacing:-.035em}
+.workout-page .section-heading{align-items:flex-end}
+.workout-page :where(.button,input,select,.preview-card,.comparison>div,.exercise-index,.set-check,dialog,.toast){border-radius:8px}
+.workout-page .button{min-height:48px;padding:13px 18px;font-family:var(--body);font-size:.875rem;font-weight:700;letter-spacing:0}
+.workout-page .primary{background:var(--lime);color:#18200f}
+.workout-page .secondary{border-color:var(--line)}
+.workout-page :where(input,select){background:#11140f;border-color:#59604e}
+.workout-page .preview-card{border-color:var(--line);background:var(--panel-raised)}
+.workout-page .preview-card strong,.workout-page .exercise-heading h3,.workout-page .history-row h4{font-weight:700}
+.workout-page .completion-badge{border-radius:50%}
+.workout-page dialog{border-color:var(--line);background:var(--panel);box-shadow:0 28px 80px rgba(0,0,0,.36)}
+.workout-page .toast{font-family:var(--body);font-size:.875rem}
+@media(hover:hover) and (pointer:fine){
+  .workout-page :where(.panel:not(.error-panel):not(.conflict-panel),.exercise-card,.preview-card):hover{border-color:#56623f}
+  .workout-page :where(.button,.header-account):hover{transform:translateY(-2px)}
+  .workout-page .exercise-card:hover{box-shadow:0 12px 30px rgba(0,0,0,.18)}
+}
+@media(prefers-reduced-motion:no-preference){
+  .motion-ready .workout-page :where(.start-panel,.history-section):not(.motion-enter){opacity:.2;transform:translateY(16px)}
+  .workout-page .hero>div:first-child,.workout-page .motion-enter{animation:workout-rise .62s var(--ease-out) both}
+  .workout-page .panel.motion-enter:nth-of-type(2){animation-delay:.05s}
+  .workout-page .panel.motion-enter:nth-of-type(3){animation-delay:.1s}
+}
+@keyframes workout-rise{from{opacity:.2;transform:translateY(16px)}to{opacity:1;transform:none}}
+@keyframes workout-orbit{from{transform:rotate(-35deg) scaleX(1.45)}to{transform:rotate(-30deg) scaleX(1.52) translateX(-8px)}}
+@keyframes workout-orbit-cross{from{transform:rotate(35deg) scaleX(1.45)}to{transform:rotate(30deg) scaleX(1.52) translateX(8px)}}
+@media(max-width:760px){
+  .workout-page .site-header{min-height:64px;padding:10px max(14px,env(safe-area-inset-right)) 10px max(14px,env(safe-area-inset-left));backdrop-filter:none}
+  .workout-page .shell{width:calc(100% - 36px);padding-top:12px}
+  .workout-page .hero{grid-template-columns:1fr;gap:26px;padding:28px 0 36px}
+  .workout-page .hero-visual{display:none}
+  .workout-page .site-header nav{gap:0}
+  .workout-page .site-header nav a{font-size:.6875rem}
+  .workout-page .site-header nav a::after{display:none}
+  .workout-page .site-header nav a[aria-current="page"]{color:var(--lime);box-shadow:inset 0 3px 0 var(--lime)}
+  .workout-page :where(.panel,.exercise-card){border-radius:12px}
+}
+@media(max-width:420px){.workout-page .shell{width:calc(100% - 28px)}.workout-page .hero h1{font-size:clamp(2.55rem,13vw,3.65rem)}}

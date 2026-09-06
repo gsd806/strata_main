@@ -709,10 +709,10 @@ async function shareCard(kind,id=null){
   try{
     const data=cardLines(kind,id),canvas=document.createElement("canvas");canvas.width=1080;canvas.height=1350;const ctx=canvas.getContext("2d");
     if(!ctx)throw new Error("Canvas is unavailable.");
-    ctx.fillStyle="#10110f";ctx.fillRect(0,0,1080,1350);ctx.strokeStyle="rgba(217,255,67,.18)";ctx.lineWidth=2;ctx.beginPath();ctx.arc(960,110,360,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.arc(960,110,470,0,Math.PI*2);ctx.stroke();
-    ctx.fillStyle="#d9ff43";ctx.font="600 42px Oswald, sans-serif";ctx.fillText("▰ STRATA",70,95);ctx.font="500 20px 'DM Mono', monospace";ctx.fillText(data.eyebrow.toUpperCase(),70,180);
-    ctx.fillStyle="#faf9f5";ctx.font="600 78px Oswald, sans-serif";let y=wrapCanvasText(ctx,data.title.toUpperCase(),70,285,900,86,3);
-    y=Math.max(y+35,515);ctx.fillStyle="#d9ff43";ctx.font="600 190px Oswald, sans-serif";ctx.fillText(data.score,70,y+150);ctx.fillStyle="#faf9f5";ctx.font="500 21px 'DM Mono', monospace";ctx.fillText(data.scoreLabel,310,y+130);
+    ctx.fillStyle="#10110f";ctx.fillRect(0,0,1080,1350);ctx.strokeStyle="rgba(212,245,120,.18)";ctx.lineWidth=2;ctx.beginPath();ctx.arc(960,110,360,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.arc(960,110,470,0,Math.PI*2);ctx.stroke();
+    ctx.fillStyle="#d4f578";ctx.font="700 42px Manrope, sans-serif";ctx.fillText("▰ STRATA",70,95);ctx.font="500 20px 'DM Mono', monospace";ctx.fillText(data.eyebrow.toUpperCase(),70,180);
+    ctx.fillStyle="#faf9f5";ctx.font="700 78px Manrope, sans-serif";let y=wrapCanvasText(ctx,data.title.toUpperCase(),70,285,900,86,3);
+    y=Math.max(y+35,515);ctx.fillStyle="#d4f578";ctx.font="700 190px Manrope, sans-serif";ctx.fillText(data.score,70,y+150);ctx.fillStyle="#faf9f5";ctx.font="500 21px 'DM Mono', monospace";ctx.fillText(data.scoreLabel,310,y+130);
     let lineY=y+245;ctx.strokeStyle="rgba(255,255,255,.22)";for(const line of data.lines.slice(0,5)){ctx.beginPath();ctx.moveTo(70,lineY-34);ctx.lineTo(1010,lineY-34);ctx.stroke();ctx.fillStyle="#faf9f5";ctx.font="500 30px Manrope, sans-serif";lineY=wrapCanvasText(ctx,line,70,lineY,920,40,2)+25;}
     ctx.strokeStyle="rgba(255,255,255,.22)";ctx.beginPath();ctx.moveTo(70,1240);ctx.lineTo(1010,1240);ctx.stroke();ctx.fillStyle="rgba(255,255,255,.55)";ctx.font="500 18px 'DM Mono', monospace";ctx.fillText(data.footer.toUpperCase(),70,1290);ctx.fillStyle="#ff5a36";ctx.fillText("STRATAFITNESS.ONLINE",755,1290);
     const blob=await new Promise((resolve)=>canvas.toBlob(resolve,"image/png"));if(!blob)throw new Error("Image export is unavailable.");

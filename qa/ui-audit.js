@@ -99,13 +99,10 @@ let browser;
     page.on("requestfailed",request=>{if(isFirstParty(request.url()))errors.push(`request: ${request.url()} ${request.failure()?.errorText||"failed"}`);});
 
     await page.goto(`${BASE_URL}/`,{waitUntil:"networkidle"});
-    const publicHeaderLinks={
-      pricing:await page.locator('.desktop-nav a[href="/pricing"]').isVisible(),
-      contact:await page.locator('.desktop-nav a[href="/contact"]').isVisible()
-    };
-    assert.deepEqual(publicHeaderLinks,{pricing:true,contact:true},"Homepage must expose Pricing and Contact in the desktop header");
-    assert.match((await page.locator(".discovery-offer").textContent())||"",/\$5\.99 USD[\s\S]*one-time purchase/i);
-    for(const [label,control] of [["homepage promotion",page.locator(".free-access-bar a").first()],["homepage primary action",page.locator(".hero .button-accent").first()]]){
+    const publicHeaderLinks=await page.locator(".desktop-nav a").evaluateAll((nodes)=>nodes.map((node)=>[node.getAttribute("href"),node.textContent.trim()]));
+    assert.deepEqual(publicHeaderLinks,[["#rankings","Rankings"],["/discover.html","Strata+"],["/workout.html","Train"],["/pricing","Pricing"]],"Homepage desktop navigation must expose its four primary destinations");
+    assert.match((await page.locator(".discovery-offer").textContent())||"",/\$5\.99 USD[\s\S]*never a subscription/i);
+    for(const [label,control] of [["homepage primary action",page.locator(".hero .button-accent").first()]]){
       const ratio=await contrastRatio(control);assert.ok(ratio>=4.5,`${label} text contrast is ${ratio.toFixed(2)}:1; expected at least 4.5:1`);
     }
     const publicDetailTrigger=page.locator("[data-detail]").first(),publicDetailDialog=page.locator("#detailDialog");
@@ -158,13 +155,15 @@ let browser;
 
     await page.setViewportSize({width:390,height:844});
     await page.goto(`${BASE_URL}/`,{waitUntil:"networkidle"});
-    assert.equal(await page.locator('.mobile-public-nav a[href="/pricing"]').isVisible(),true,"Mobile homepage must expose Pricing");
-    assert.equal(await page.locator('.mobile-public-nav a[href="/contact"]').isVisible(),true,"Mobile homepage must expose Contact");
-    assert.equal(await page.locator('.mobile-public-nav a[href="#founder"]').isVisible(),true,"Mobile homepage must expose the founder section");
-    assert.equal(await page.locator('.footer-links a[href="/refunds"]').isVisible(),true,"Mobile homepage policies must remain visible");
+    const mobilePublicLinks=await page.locator(".mobile-public-nav a").evaluateAll((nodes)=>nodes.map((node)=>[node.getAttribute("href"),node.textContent.trim()]));
+    assert.deepEqual(mobilePublicLinks,[["#rankings","Rankings"],["/discover.html","Strata+"],["/planner.html","Plan"],["/workout.html","Train"]],"Mobile homepage navigation must keep the four primary product destinations");
+    assert.equal(await page.locator('.footer-links a[href="/policies"]').count(),1,"Mobile homepage footer must expose one Policies destination");
+    assert.equal(await page.locator('.footer-links a:is([href="/terms"],[href="/privacy"],[href="/refunds"])').count(),0,"Homepage footer must not duplicate policy-directory links");
     const smallPublicTargets=await page.locator(".mobile-public-nav a").evaluateAll((nodes)=>nodes.filter((node)=>{const rect=node.getBoundingClientRect();return rect.width<44||rect.height<44;}).map((node)=>node.textContent.trim()));
     assert.deepEqual(smallPublicTargets,[],`Homepage public links below 44px: ${smallPublicTargets.join(", ")}`);
-    assert.equal(await page.locator("#founder").isVisible(),true,"Founder section must render on mobile");
+    assert.equal(await page.locator("#founder").count(),0,"Founder biography must not clutter the homepage");
+    await page.goto(`${BASE_URL}/policies#founder`,{waitUntil:"networkidle"});
+    assert.equal(await page.locator("#founder").isVisible(),true,"Founder section must render on the public policies page");
     await page.locator("#founder").scrollIntoViewIfNeeded();
     await capture(page,"founder-mobile.png",{fullPage:false});
     await page.goto(`${BASE_URL}/discover.html`,{waitUntil:"networkidle"});
@@ -366,12 +365,13 @@ let browser;
 
     await page.setViewportSize({width:320,height:700});
     snapshot.narrowOverflow={};
-    for(const route of ["/","/account.html","/verify-email.html","/forgot-password","/reset-password","/delete-account","/planner.html","/discover.html","/pricing","/contact","/terms","/privacy","/refunds","/install.html"]){
+    for(const route of ["/","/account.html","/verify-email.html","/forgot-password","/reset-password","/delete-account","/planner.html","/discover.html","/pricing","/contact","/policies","/terms","/privacy","/refunds","/install.html"]){
       await page.goto(`${BASE_URL}${route}`,{waitUntil:"networkidle"});
       const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth);
       snapshot.narrowOverflow[route]=overflow;
       assert.ok(overflow<=1,`${route} overflows a 320px viewport by ${overflow}px`);
       if(route==="/pricing")await capture(page,"pricing-mobile-320.png",{fullPage:true});
+      if(route==="/policies")await capture(page,"policies-mobile-320.png",{fullPage:true});
       if(route==="/terms")await capture(page,"terms-mobile-320.png",{fullPage:true});
     }
     assert.equal(await page.locator(".device-card").count(),4,"Install guide should cover four device paths");

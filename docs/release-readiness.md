@@ -1,25 +1,25 @@
-# STRATA 7.1.2 readiness
+# STRATA 7.1.3 readiness
 
 Status: reviewable source candidate; not deployed.
 
-This patch repairs the Strata+ recommendation, setup, planner, and workout journeys without changing production credentials or provider configuration. See the [release guide](release-7.1.2.md) and [changelog](../CHANGELOG.md).
+This release unifies the site's visual system, responsive navigation, motion, public information architecture, and user-facing copy without changing production credentials, provider configuration, authorization, payment behavior, or database records. See the [release guide](release-7.1.3.md) and [changelog](../CHANGELOG.md).
 
 | Check | Result |
 | --- | --- |
-| Node regression tests | 402 passed, zero failed |
-| Coverage | 92.44% lines; 81.38% branches; 87.91% functions; enforced floors passed |
+| Node regression tests | 403 passed, zero failed |
+| Coverage | 92.45% lines; 81.38% branches; 87.91% functions; enforced floors passed |
 | Release, architecture, type, and lint checks | Passed; 16 server modules, zero cycles, zero policy violations |
 | Runtime QA | Account, Strata+, planner, and PWA checks passed |
 | Endpoint and storage performance | Passed 40 measured samples after 8 warmups per operation |
-| Security and entitlement regressions | Passed auth/session revocation, setup revisions, active-workout isolation, signed fake-Paddle events, and free/trial/paid boundaries |
-| Automated Chromium E2E | 15 passed, zero failed across auth recovery, plan conflicts, payment entitlement, account deletion, responsive navigation, and training journeys |
-| Authenticated visual matrix | Passed at desktop and 700/390/320 px mobile widths; zero first-party browser errors and zero horizontal overflow on every audited route |
-| 100-account Linux load checks | Kept as CI gates; the local macOS runner correctly refused the Linux loopback-only harness before sending requests |
+| Security and entitlement regressions | Passed auth recovery/session revocation, plan conflicts, signed Paddle entitlement, account deletion, and free/trial/paid boundaries |
+| Automated Chromium E2E | 15 passed, zero failed across high-risk and training journeys |
+| Authenticated visual matrix | Passed at 1440, 700, 390, and 320 px widths; zero first-party browser errors and zero horizontal overflow on every audited route |
+| Manual visual/cascade review | Passed headline/email wrapping, mobile bar placement, focus treatments, equal Strata+ cards, pre-paint motion, and reduced-motion behavior |
 
-The complete `npm run check` gate passes on Node 24. The authenticated UI audit creates an isolated test account, verifies the trial/free boundary, checks contrast and keyboard behavior, exercises explicit session creation and plan saving, and captures the Strata+, Plan, and Train layouts. It also verifies that a long member name cannot replace or obscure `BEST EXERCISES FOR YOU.` and that the mobile product header remains visible and unobscured while using a tool.
+The complete `npm run check` gate passes on Node 24. The authenticated `npm run qa:ui` pass creates an isolated test account, verifies the trial/free boundary, checks contrast and dialog focus, exercises explicit session creation and plan saving, and audits every main route at 320 px. Rankings, Strata+, Plan, Train, Account, public information, and Install bottom bars remain pinned to the viewport with touch-sized controls.
 
-Local endpoint p95 latency was 2.23 ms for health, 2.18 ms for status, 2.75 ms for authenticated plan reads, and 2.78 ms for authenticated plan saves. Storage p95 latency was 0.008 ms for session lookup, 0.004 ms for plan lookup, and 0.055 ms for plan compare-and-swap. These are local SQLite regression measurements, not production service-level objectives.
+The new `/policies` route is covered by server, public-copy, PWA cache, offline fallback, narrow-layout, and release-version checks. Founder information appears there and no longer appears on the homepage. Core footers expose one Policies destination rather than repeating Terms, Privacy, and Refunds links.
 
-The workout database tests verify the partial unique active-session index with `EXPLAIN`, concurrent starts through two independent SQLite connections, and equivalent mocked-Turso behavior. Legacy duplicate active rows are reconciled without deleting their workout history.
+Local endpoint p95 latency was 0.698 ms for health, 0.397 ms for status, 0.413 ms for authenticated plan reads, and 0.908 ms for authenticated plan saves. Storage p95 latency was 0.014 ms for session lookup, 0.007 ms for plan lookup, and 0.055 ms for plan compare-and-swap. These are local SQLite regression measurements, not production service-level objectives.
 
 Hosted Turso capacity, real Resend delivery, real Paddle sandbox/live transactions, production deployment, and production account migration were not exercised. The CI load jobs and authorized deployment/provider checks remain required before promoting this candidate.

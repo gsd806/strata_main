@@ -31,7 +31,8 @@ To collect the local endpoint/storage performance evidence separately, run `npm 
 Start STRATA in a separate terminal. Use an isolated data directory so QA accounts do not enter the development database:
 
 ```bash
-STRATA_DATA_DIR="$(mktemp -d)" npm start
+NODE_ENV=test ALLOW_UNVERIFIED_SIGNUP_FOR_TESTS=true EMAIL_VERIFICATION_ENABLED=false \
+  STRATA_DATA_DIR="$(mktemp -d)" npm start
 ```
 
 Then run:
@@ -39,6 +40,8 @@ Then run:
 ```bash
 npm run qa:ui
 ```
+
+The signup override is intentionally paired with `NODE_ENV=test`; the application rejects it in production.
 
 The audit expects `http://127.0.0.1:4173` by default. It creates a temporary account through the UI, exercises the inline battle, detail and rating views, search and equipment filters, planner autosave, every main route at a 320px viewport, and the device-aware install guide. It exits nonzero on assertion failures, first-party browser errors, failed first-party requests, undersized primary install controls, or horizontal mobile overflow.
 

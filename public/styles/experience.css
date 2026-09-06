@@ -1,19 +1,30 @@
 /* Shared STRATA finish. Content remains visible when JavaScript is unavailable. */
 :root {
-  --motion-ease: cubic-bezier(.2,.8,.2,1);
+  --motion-ease: cubic-bezier(.22,1,.36,1);
   --paper: #f3f4ef;
   --white: #ffffff;
   --line: #d2d6cc;
+  --ink: #10110f;
+  --panel: #191b17;
+  --text: #f2f3eb;
+  --muted: #62675e;
+  --accent: #d4f578;
+  --lime: #d4f578;
+  --display: "Manrope", Arial, sans-serif;
+  --body: "Manrope", Arial, sans-serif;
+  --mono: "DM Mono", ui-monospace, monospace;
+  --surface-radius: 14px;
+  --control-radius: 8px;
 }
-::selection { background: #d9ff43; color: #10110f; }
-body { font-size: 16px; }
+::selection { background: var(--accent); color: #10110f; }
+body { font-family: var(--body); font-size: 16px; text-rendering: optimizeLegibility; }
 button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 input, select, textarea { font-size: max(1rem, 16px); }
 button:disabled { cursor: not-allowed; opacity: .58; }
 button[aria-busy="true"] { cursor: progress; }
 :where(.button,.dark-button,.outline-button,.account-button,.session-button) {
   min-height: 46px;
-  border-radius: 5px;
+  border-radius: var(--control-radius);
 }
 :where(.desktop-nav a,.account-button,.session-button,.button,.dark-button,.outline-button,.filter-chip,.group-tab) {
   font-size: .875rem;
@@ -51,7 +62,7 @@ button[aria-busy="true"] { cursor: progress; }
 .exercise-title h3 { line-height: 1.25; }
 .score-badge { position: relative; border-radius: 7px; font-variant-numeric: tabular-nums; }
 .score-badge::after { content: ""; position: absolute; height: 3px; left: 0; bottom: -7px; width: var(--score,0%); background: #567019; border-radius: 4px; }
-.score-badge.top { box-shadow: 0 0 0 1px #d9ff4333; }
+.score-badge.top { box-shadow: 0 0 0 1px rgba(212,245,120,.2); }
 :where(.filter-chip,.action-icon) { border-radius: 5px; }
 :where(.detail-dialog,.compare-dialog,.account-card,.weekly-pulse) { border-radius: 12px; }
 dialog { max-width: calc(100vw - 24px); }
@@ -61,7 +72,7 @@ dialog::backdrop { background: #080b08a8; backdrop-filter: blur(5px); }
 .week-distribution > div { display: grid; gap: 9px; text-align: center; font: 500 .875rem var(--mono); }
 .week-distribution small { font-size: .75rem; color: #d3d9cd; }
 .week-bar-track { height: 42px; display: flex; align-items: flex-end; background: #ffffff0a; border-radius: 3px; overflow: hidden; }
-.week-bar-track i { display: block; width: 100%; background: #d9ff43; border-radius: 3px; transition: height .3s var(--motion-ease); }
+.week-bar-track i { display: block; width: 100%; background: var(--accent); border-radius: 3px; transition: height .3s var(--motion-ease); }
 .week-bar-track i.is-rest { background: #899481; }
 @media (hover: hover) and (pointer: fine) {
   :where(.button,.dark-button,.outline-button,.action-icon) { transition: transform .2s var(--motion-ease),box-shadow .2s,color .2s,background-color .2s; }
@@ -69,6 +80,13 @@ dialog::backdrop { background: #080b08a8; backdrop-filter: blur(5px); }
   .exercise-row:hover { background: #fff; box-shadow: 0 5px 22px #10110f0b,inset 3px 0 #7b971a; }
 }
 @media (prefers-reduced-motion: no-preference) {
+  .motion-ready :where(
+    [data-reveal],.home-page .section-heading,.method-intro,.score-model,.editorial-grid,
+    .source-grid,.week-toolbar,.plus-studio .feature-hub-heading,.plus-studio .feature-grid,
+    .account-intro,.account-access,.info-hero-grid,.pricing-grid,.contact-grid,
+    .policy-card-grid,.policy-founder,.device-grid,.help-grid,.offline-shell,
+    .workout-page .start-panel,.workout-page .history-section,.admin-hero,.admin-section
+  ):not(.motion-enter) { opacity: .15; transform: translateY(16px); }
   .hero-copy { animation: strata-enter .75s var(--motion-ease) both; }
   .hero-data { animation: strata-enter .85s .12s var(--motion-ease) both; }
   .hero-media { animation: strata-image 1.2s var(--motion-ease) both; }
@@ -92,15 +110,17 @@ dialog::backdrop { background: #080b08a8; backdrop-filter: blur(5px); }
   .header-actions { gap: 5px; }
 }
 @media (max-width: 900px) {
-  .site-header { grid-template-columns: auto 1fr; }
-  .desktop-nav { display: none; }
   .rankings-shell { gap: 20px; }
   .hero { min-height: 700px; height: auto; }
   .hero-grid { min-height: 700px; }
 }
+@media (max-width: 800px) {
+  .site-header { grid-template-columns: auto 1fr; }
+  .desktop-nav { display: none; }
+}
 @media (max-width: 600px) {
   .hero { min-height: 0; max-height: none; }
-  .hero-grid { min-height: 0; padding-top: 220px; padding-bottom: 62px; gap: 30px; }
+  .hero-grid { min-height: 0; padding-top: calc(var(--site-header-height,70px) + 48px + env(safe-area-inset-top)); padding-bottom: 62px; gap: 30px; }
   .hero h1 { font-size: clamp(52px,13vw,76px); line-height: 1.03; }
   .hero-data { padding: 12px; gap: 12px; }
   .hero-data div { padding: 4px 0; }
@@ -122,4 +142,36 @@ dialog::backdrop { background: #080b08a8; backdrop-filter: blur(5px); }
 @media print {
   *, *::before, *::after { animation: none !important; transition: none !important; }
   .motion-enter { opacity: 1; transform: none; }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :where(.brand,.brand-mark,.info-nav a,.product-nav a,.footer-nav a,.footer-links a) {
+    transition: color .18s ease, transform .2s var(--motion-ease);
+  }
+  .brand:hover .brand-mark,.brand:focus-visible .brand-mark { transform: skew(-8deg) translateY(-2px); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .info-hero-grid.motion-enter,.account-intro.motion-enter,.install-hero .hero-grid.motion-enter,
+  .offline-shell.motion-enter,.policy-founder.motion-enter { animation-duration: .72s; }
+}
+
+@media (max-width: 760px) {
+  :where(.info-header,.account-header,.planner-header,.admin-header,.install-header) { backdrop-filter: none; }
+  .account-page-shell { padding-bottom: calc(56px + env(safe-area-inset-bottom)); }
+  .account-page-shell .account-header { backdrop-filter: none; }
+  .account-page-shell .account-header { min-height: calc(64px + env(safe-area-inset-top)); flex-wrap: nowrap; }
+  .account-page-shell .account-header.product-header .product-nav {
+    position: fixed; z-index: 40; right: 0; bottom: 0; left: 0;
+    display: grid; grid-template-columns: repeat(5,minmax(0,1fr));
+    width: 100%; min-height: calc(56px + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom); gap: 0;
+    color: var(--text); background: var(--ink); border-top: 1px solid rgba(255,255,255,.14);
+    box-shadow: 0 -8px 28px rgba(0,0,0,.2);
+  }
+  .account-page-shell .account-header.product-header .product-nav a {
+    min-width: 0; min-height: 56px; padding: 0 3px; border-right: 1px solid rgba(255,255,255,.1);
+    font-size: .6875rem;
+  }
+  .account-page-shell .account-header.product-header .product-nav a:last-child { border-right: 0; }
 }

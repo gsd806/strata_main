@@ -10,32 +10,53 @@ const PUBLIC_ROOT=path.join(PROJECT_ROOT,"public");
 const RELEASE=require(path.join(PROJECT_ROOT,"package.json"));
 const BUILD=RELEASE.strataBuild||RELEASE.version;
 const read=(name)=>fs.readFileSync(path.join(PUBLIC_ROOT,"pages",name),"utf8");
-const text=(name)=>read(name).replace(/<script[\s\S]*?<\/script>/gi," ").replace(/<style[\s\S]*?<\/style>/gi," ").replace(/<[^>]+>/g," ").replace(/&nbsp;/g," ").replace(/\s+/g," ").trim();
+const visibleText=(html)=>html.replace(/<script[\s\S]*?<\/script>/gi," ").replace(/<style[\s\S]*?<\/style>/gi," ").replace(/<wbr\s*\/?>/gi,"").replace(/<[^>]+>/g," ").replace(/&nbsp;/g," ").replace(/\s+/g," ").trim();
+const text=(name)=>visibleText(read(name));
 
-test("homepage exposes pricing, contact, and every public policy without JavaScript",()=>{
-  const home=read("index.html");
-  for(const route of ["/pricing","/contact","/terms","/privacy","/refunds"])assert.match(home,new RegExp(`href="${route}"`),`${route} homepage link`);
+test("homepage exposes pricing, contact, and the public policy directory without JavaScript",()=>{
+  const home=read("index.html"),policies=read("policies.html");
+  const mobileNav=home.match(/<nav class="mobile-public-nav"[\s\S]*?<\/nav>/)?.[0]||"";
+  const mobileLinks=[...mobileNav.matchAll(/<a href="([^"]+)"(?: [^>]*)?>([^<]+)<\/a>/g)].map((match)=>[match[1],match[2]]);
+  const footer=home.match(/<nav class="footer-links"[\s\S]*?<\/nav>/)?.[0]||"";
+  for(const route of ["/pricing","/contact","/policies"])assert.match(home,new RegExp(`href="${route}"`),`${route} homepage link`);
+  for(const route of ["/terms","/privacy","/refunds"])assert.match(policies,new RegExp(`href="${route}"`),`${route} policy-directory link`);
+  assert.deepEqual(mobileLinks,[["#rankings","Rankings"],["/discover.html","Strata+"],["/planner.html","Plan"],["/workout.html","Train"]]);
+  assert.equal((footer.match(/href="\/policies"/g)||[]).length,1,"homepage footer must expose one Policies destination");
+  assert.doesNotMatch(footer,/href="\/(?:terms|privacy|refunds)"/,"the policy hub replaces redundant legal links in the homepage footer");
   assert.match(home,/mailto:stratafitness\.official@gmail\.com/i);
   assert.match(text("index.html"),/\$5\.99 USD/i);
-  assert.match(text("index.html"),/one-time purchase/i);
+  assert.match(text("index.html"),/never a subscription/i);
 });
 
-test("homepage publishes the founder story without exposing a residential address",()=>{
-  const home=read("index.html"),copy=text("index.html");
-  assert.match(home,/id="founder"/);
-  assert.match(home,/href="#founder"/);
+test("the public policies page publishes the founder story without cluttering the homepage",()=>{
+  const home=read("index.html"),policies=read("policies.html");
+  const founder=policies.match(/<section class="info-container policy-founder"[\s\S]*?<\/section>/)?.[0]||"";
+  const copy=visibleText(founder);
+  assert.doesNotMatch(home,/class="founder-section"/);
+  assert.doesNotMatch(home,/href="#founder"/);
+  assert.match(home,/href="\/policies"/);
+  assert.match(policies,/id="founder"/);
+  assert.match(policies,/href="#founder"/);
   assert.match(copy,/Saeed Abdalla Alketbi/);
   assert.match(copy,/founded by Saeed Abdalla Alketbi at 22/i);
   assert.match(copy,/third-year chemical engineering student at United Arab Emirates University \(UAEU\)/i);
   assert.match(copy,/Born and raised in the UAE and based in Al Ain/i);
   assert.match(copy,/Chemical Engineering · UAEU/i);
-  assert.match(home,/<div class="founder-mark"[^>]*>[\s\S]*?<span>SK<\/span>/);
-  assert.doesNotMatch(home,/<div class="founder-mark"[^>]*>[\s\S]*?<span>SA<\/span>/);
+  assert.match(policies,/<div class="policy-founder-mark"[^>]*>[\s\S]*?<span>SK<\/span>/);
+  assert.doesNotMatch(policies,/<div class="policy-founder-mark"[^>]*>[\s\S]*?<span>SA<\/span>/);
   assert.doesNotMatch(copy,/Zahkir|Malad|street 13|st\.?\s*13/i);
 });
 
+test("core footers use the policy directory instead of repeating every legal page",()=>{
+  for(const page of ["account.html","discover.html","planner.html","install.html","delete-account.html","forgot-password.html","reset-password.html","verify-email.html","workout.html","admin.html"]){
+    const footer=read(page).match(/<footer\b[\s\S]*?<\/footer>/)?.[0]||"";
+    assert.match(footer,/href="\/policies"/,`${page} policy-directory link`);
+    assert.doesNotMatch(footer,/href="\/(?:terms|privacy|refunds)"/,`${page} redundant policy link`);
+  }
+});
+
 test("published Strata+ price and refund promise are exact and consistent",()=>{
-  assert.equal(BUILD,"7.1.2");
+  assert.equal(BUILD,"7.1.3");
   const pricingHtml=read("pricing.html"),pricing=text("pricing.html"),refunds=text("refunds.html"),terms=text("terms.html");
   assert.match(pricing,/Strata\+/);
   assert.match(pricing,/\$5\.99 USD/i);
@@ -59,7 +80,7 @@ test("published Strata+ price and refund promise are exact and consistent",()=>{
 });
 
 test("customer-facing product branding is Strata+ while compatibility identifiers stay stable",()=>{
-  const pages=["index.html","pricing.html","account.html","discover.html","planner.html","contact.html","terms.html","privacy.html","refunds.html","delete-account.html","admin.html"];
+  const pages=["index.html","pricing.html","account.html","discover.html","planner.html","contact.html","policies.html","terms.html","privacy.html","refunds.html","delete-account.html","admin.html"];
   const visibleCopy=pages.map(text).join(" ");
   const manifest=fs.readFileSync(path.join(PUBLIC_ROOT,"manifest.webmanifest"),"utf8");
   assert.match(visibleCopy,/Strata\+/);
@@ -74,13 +95,13 @@ test("contact and policy pages publish the official support address and cross-li
   const contact=read("contact.html");
   assert.match(contact,new RegExp(`mailto:${email.replace(".","\\.")}`,"i"));
   assert.match(text("contact.html"),new RegExp(email.replace(".","\\."),"i"));
-  for(const page of ["pricing.html","contact.html","terms.html","privacy.html","refunds.html"]){
-    assert.match(read(page),/class="info-nav"[^>]*>[\s\S]*href="\/planner\.html">Planner<\/a>/,`${page} free planner navigation`);
+  for(const page of ["pricing.html","contact.html","policies.html","terms.html","privacy.html","refunds.html"]){
+    assert.match(read(page),/class="info-nav"[^>]*>[\s\S]*href="\/planner\.html">Plan<\/a>/,`${page} Plan navigation`);
   }
-  for(const page of ["terms.html","privacy.html","refunds.html"]) {
+  for(const page of ["policies.html","terms.html","privacy.html","refunds.html"]) {
     const html=read(page);
     assert.match(text(page),new RegExp(email.replace(".","\\."),"i"),`${page} support email`);
-    for(const route of ["/terms","/privacy","/refunds"])assert.match(html,new RegExp(`href="${route}"`),`${page} ${route} link`);
+    for(const route of ["/policies","/terms","/privacy","/refunds"])assert.match(html,new RegExp(`href="${route}"`),`${page} ${route} link`);
   }
   assert.match(text("privacy.html"),/does not receive or store full payment-card or bank-account details/i);
 });

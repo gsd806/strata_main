@@ -5,12 +5,14 @@
   <meta name="theme-color" content="#10110f" /><meta name="description" content="Build or rebuild an editable training week around your saved goals, equipment, experience, and availability." />
   <title>Weekly setup — STRATA</title>
   <link rel="icon" href="/icons/strata-icon.svg" type="image/svg+xml" /><link rel="manifest" href="/manifest.webmanifest" />
-  <link rel="stylesheet" href="/onboarding.css?v=7.1.2" /><link rel="stylesheet" href="/product-nav.css?v=7.1.2" /><link rel="stylesheet" href="/experience.css?v=7.1.2" />
-  <script src="/discovery-core.js?v=7.1.2" defer></script><script src="/onboarding-core.js?v=7.1.2" defer></script><script src="/onboarding.js?v=7.1.2" defer></script><script src="/pwa.js?v=7.1.2" defer></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" /><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/onboarding.css?v=7.1.3" /><link rel="stylesheet" href="/product-nav.css?v=7.1.3" /><link rel="stylesheet" href="/experience.css?v=7.1.3" />
+  <script src="/motion.js?v=7.1.3"></script><script src="/discovery-core.js?v=7.1.3" defer></script><script src="/onboarding-core.js?v=7.1.3" defer></script><script src="/onboarding.js?v=7.1.3" defer></script><script src="/pwa.js?v=7.1.3" defer></script>
 </head>
-<body>
+<body class="setup-page">
   <a class="skip-link" href="#setupTitle">Skip to setup</a>
-  <header><a class="brand" href="/">STRATA<span aria-hidden="true"> / </span></a><nav class="product-nav" aria-label="Primary"><a href="/">Rankings</a><a href="/discover.html">Strata+</a><a href="/planner.html">Plan</a><a href="/workout.html">Train</a><a href="/account.html">Account</a></nav></header>
+  <header class="setup-header"><a class="brand" href="/" aria-label="STRATA home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>STRATA</span></a><nav class="product-nav" aria-label="Primary navigation"><a href="/">Rankings</a><a href="/discover.html">Strata+</a><a href="/planner.html">Plan</a><a href="/workout.html">Train</a><a class="setup-account" href="/account.html">Account</a></nav></header>
   <main>
     <section class="intro"><p class="eyebrow" id="setupKicker">01 / WEEKLY SETUP</p><h1 id="setupTitle">A WEEK THAT<br />FITS <em>YOUR LIFE.</em></h1><p>Start from your saved profile, then preview a week before deciding whether to save it. Every movement stays editable in your planner.</p><p id="accountMode" class="mode" role="status">Checking your saved plan and profile…</p></section>
     <div class="setup-grid">
@@ -26,6 +28,6 @@
       </form>
       <aside class="week-preview" aria-labelledby="previewTitle"><div class="preview-heading"><p class="eyebrow">YOUR WEEK / PREVIEW</p><span class="preview-dot" aria-hidden="true"></span></div><h2 id="previewTitle" tabindex="-1">Small steps.<br />A stronger routine.</h2><div id="weekPreview"><div class="week-illustration" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><p>Your training days will appear here. Previewing never changes your saved week.</p></div><div id="saveControls" hidden><p id="replaceNotice"></p><label class="replace-check" id="replaceLabel" hidden><input id="replaceWeek" type="checkbox" /> I reviewed the preview and want to replace my current week.</label><button class="primary" id="saveWeek" type="button">Save this week and profile</button><p class="fine-print">Your session length is remembered in this browser. Your generated week and matching profile are saved together to your Strata+ account.</p></div><a id="openPlanner" class="primary" href="/planner.html" hidden>Edit my week →</a></aside>
     </div>
-  </main><footer><span>STRATA / BUILD 7.1.2</span><a href="/planner.html">Open your weekly planner →</a></footer>
+  </main><footer><span>STRATA / BUILD 7.1.3</span><a href="/planner.html">Open your weekly planner →</a></footer>
 </body>
 </html>

@@ -66,7 +66,7 @@ test.before(startServer);
 test.after(stopServer);
 
 test("serves rankings and gates private account pages",async()=>{
-  assert.equal(BUILD,"7.1.2");
+  assert.equal(BUILD,"7.1.3");
   const home=await request("/");
   assert.equal(home.response.status,200);
   assert.equal(home.response.headers.get("cache-control"),"private, no-store");
@@ -114,7 +114,7 @@ test("serves rankings and gates private account pages",async()=>{
 });
 
 test("serves public pricing, contact, and policy pages at friendly routes",async()=>{
-  const pages={pricing:/ONE PRICE/,contact:/TALK TO/,terms:/TERMS OF/,privacy:/PRIVACY/,refunds:/14-DAY/};
+  const pages={pricing:/ONE PRICE/,contact:/TALK TO/,policies:/PUBLIC POLICIES/,terms:/TERMS OF/,privacy:/PRIVACY/,refunds:/14-DAY/};
   for(const [slug,marker] of Object.entries(pages)) {
     for(const path of [`/${slug}`,`/${slug}/`,`/${slug}.html`]) {
       const page=await request(path);
