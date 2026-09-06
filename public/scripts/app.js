@@ -241,9 +241,9 @@ function updateAccountUI() {
   button.href = state.user ? "/account.html" : "/account.html?mode=login";
   button.classList.toggle("signed-in", Boolean(state.user));
   signup.hidden = Boolean(state.user);
-  discoveryButton.hidden = false;
+  discoveryButton.hidden = !state.user;
   discoveryButton.href = discoveryActive ? "/discover.html" : "/pricing";
-  discoveryButton.textContent = "Strata+";
+  discoveryButton.textContent = discoveryActive ? "Strata+" : "Unlock Strata+";
   const planCount = state.user ? (Number(state.user.planCount) || 0) : guestPlanCount();
   el("planCount").textContent = planCount;
   el("planButton").href = "/planner.html";
@@ -365,7 +365,7 @@ async function initializeCatalog() {
   state.catalogStatus = "loading";
   renderAll();
   try {
-    exercises = normalizeCatalog(await api("/exercises.json?v=7.1.3"));
+    exercises = normalizeCatalog(await api("/exercises.json?v=7.1.2"));
     state.catalogStatus = "ready";
     el("catalogTotal").textContent = exercises.length;
   } catch {

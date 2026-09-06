@@ -26,7 +26,7 @@ The HTTP root supplies services and adapters to the checked service-composition 
 
 ## Resulting module sizes
 
-The command-generated table below is the Build 7.1.3 review snapshot. CI generates the same table on every architecture check, while the policy enforces budgets and edges against the live sources.
+The command-generated table below is the Build 7.1.2 review snapshot. CI generates the same table on every architecture check, while the policy enforces budgets and edges against the live sources.
 
 | Module | Responsibility | Lines | Nonblank | Size | Line budget | Local dependencies |
 | --- | --- | ---: | ---: | ---: | ---: | --- |
@@ -39,7 +39,7 @@ The command-generated table below is the Build 7.1.3 review snapshot. CI generat
 | `src/payments.js` | Paddle integration boundary | 448 | 425 | 21.2 KiB | 480 | — |
 | `src/plans.js` | Plan domain validation | 355 | 321 | 18.5 KiB | 400 | — |
 | `src/schema.js` | Shared storage schema and statements | 413 | 409 | 49.2 KiB | 420 | — |
-| `src/server.js` | HTTP composition root | 1170 | 1131 | 59.6 KiB | 1200 | `src/admin.js`, `src/auth.js`, `src/database.js`, `src/email.js`, `src/http.js`, `src/payments.js`, `src/plans.js`, `src/service-composition.js`, `src/setup.js`, `src/static-assets.js`, `src/support.js`, `src/workouts.js` |
+| `src/server.js` | HTTP composition root | 1168 | 1129 | 59.5 KiB | 1200 | `src/admin.js`, `src/auth.js`, `src/database.js`, `src/email.js`, `src/http.js`, `src/payments.js`, `src/plans.js`, `src/service-composition.js`, `src/setup.js`, `src/static-assets.js`, `src/support.js`, `src/workouts.js` |
 | `src/service-composition.js` | Typed auth/admin/support composition | 39 | 37 | 1.7 KiB | 80 | — |
 | `src/setup.js` | Atomic weekly-plan and preference setup | 84 | 77 | 4.9 KiB | 120 | `src/plans.js` |
 | `src/static-assets.js` | Bounded public asset representations | 46 | 41 | 1.9 KiB | 80 | `src/http.js` |

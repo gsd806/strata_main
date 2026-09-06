@@ -9,7 +9,7 @@ const {chromium}=require("playwright");
 
 const ROOT=join(__dirname,"..","..");
 const read=(path)=>readFileSync(join(ROOT,path),"utf8");
-const sharedCss=`${read("public/styles/product-nav.css")}\n${read("public/styles/experience.css")}`;
+const sharedCss=read("public/styles/product-nav.css");
 
 function headerFrom(path){
   const match=read(path).match(/<header\b[\s\S]*?<\/header>/i);

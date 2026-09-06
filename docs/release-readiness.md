@@ -1,28 +1,25 @@
-# STRATA 7.1.3 readiness
+# STRATA 7.1.2 readiness
 
-Status: reviewable source candidate based on GitHub v7.1.2; **not deployed**. The complete release gate is not green because this workspace has no Playwright Chromium executable.
+Status: reviewable source candidate; not deployed.
+
+This patch repairs the Strata+ recommendation, setup, planner, and workout journeys without changing production credentials or provider configuration. See the [release guide](release-7.1.2.md) and [changelog](../CHANGELOG.md).
 
 | Check | Result |
 | --- | --- |
-| Node regression tests | 403 passed, zero failed; 35 affected account/public-page/CSS tests also passed after the final copy and layout adjustments |
-| Coverage | 92.45% lines, 81.38% branches, 87.91% functions; all enforced floors passed |
-| Release, architecture, type, lint | Passed; 16 server modules, zero dependency cycles or policy violations |
-| Runtime QA | Account, Strata+, planner, and PWA smoke checks passed |
-| Endpoint/storage performance | All seven local operation budgets passed; 40 samples after 8 warmups each |
-| 100 users, distinct source addresses | Passed: 5,823 requests, zero unexpected HTTP errors, 300 expected conflict responses |
-| 100 users sharing one source address | Passed: 5,823 requests, zero unexpected HTTP errors, 300 expected conflict responses |
-| Public browser review | Desktop homepage/rankings, policies, account, pricing, and planner inspected; zero document-width overflow on those inspected pages. Pricing text flow and the 118 px weekly chart were checked after fixes. |
-| Rest-day browser behavior | Added Saturday rest, refreshed and confirmed persistence, removed rest; button returned to Add rest day |
-| Automated Chromium E2E | Blocked before journeys start: all four suite entries fail to launch the missing `chromium_headless_shell-1234` executable |
-| Authenticated visual/mobile matrix | Not run in this workspace; required with Chromium before deployment |
-| Hosted Turso / real email / real payment | Not exercised |
+| Node regression tests | 402 passed, zero failed |
+| Coverage | 92.44% lines; 81.38% branches; 87.91% functions; enforced floors passed |
+| Release, architecture, type, and lint checks | Passed; 16 server modules, zero cycles, zero policy violations |
+| Runtime QA | Account, Strata+, planner, and PWA checks passed |
+| Endpoint and storage performance | Passed 40 measured samples after 8 warmups per operation |
+| Security and entitlement regressions | Passed auth/session revocation, setup revisions, active-workout isolation, signed fake-Paddle events, and free/trial/paid boundaries |
+| Automated Chromium E2E | 15 passed, zero failed across auth recovery, plan conflicts, payment entitlement, account deletion, responsive navigation, and training journeys |
+| Authenticated visual matrix | Passed at desktop and 700/390/320 px mobile widths; zero first-party browser errors and zero horizontal overflow on every audited route |
+| 100-account Linux load checks | Kept as CI gates; the local macOS runner correctly refused the Linux loopback-only harness before sending requests |
 
-Evidence is in `docs/verification/`: `coverage-7.1.3.log`, `runtime-7.1.3-final.log`, `performance-7.1.3.log`, `e2e-7.1.3.log`, and both `load-7.1.3-*.json` files. Source provenance is `7.1.2-source.json`. Older evidence files describe earlier builds and must not be treated as verification of 7.1.3.
+The complete `npm run check` gate passes on Node 24. The authenticated UI audit creates an isolated test account, verifies the trial/free boundary, checks contrast and keyboard behavior, exercises explicit session creation and plan saving, and captures the Strata+, Plan, and Train layouts. It also verifies that a long member name cannot replace or obscure `BEST EXERCISES FOR YOU.` and that the mobile product header remains visible and unobscured while using a tool.
 
-Local performance p95 was 3.401 ms for health, 3.397 ms for status, 5.321 ms for authenticated plan reads, and 2.798 ms for plan saves. Session lookup, plan lookup, and plan compare-and-swap storage p95 values were 0.023, 0.008, and 0.023 ms respectively. These measurements are regression evidence, not production latency promises.
+Local endpoint p95 latency was 2.23 ms for health, 2.18 ms for status, 2.75 ms for authenticated plan reads, and 2.78 ms for authenticated plan saves. Storage p95 latency was 0.008 ms for session lookup, 0.004 ms for plan lookup, and 0.055 ms for plan compare-and-swap. These are local SQLite regression measurements, not production service-level objectives.
 
-The Linux load harness used isolated local SQLite and the existing explicit test-only signup verification bypass. It retained network and identity rate limits, exercised real authenticated plan/workout workflows, checked cross-account isolation, competing saves, restart durability, deletion guards, and logout. It contacted no real email or payment provider. Its measured application memory excludes database/proxy/platform infrastructure outside that process.
+The workout database tests verify the partial unique active-session index with `EXPLAIN`, concurrent starts through two independent SQLite connections, and equivalent mocked-Turso behavior. Legacy duplicate active rows are reconciled without deleting their workout history.
 
-## Remaining promotion checks
-
-Use Node 24, install the matching Playwright Chromium browser in an isolated test environment, and run `npm run check` plus `npm run qa:ui`. The UI audit creates accounts and modifies plans; never point it at production. Confirm 320/390/700 px layouts, enlarged text, keyboard order, reduced motion, paid/trial workspaces, and PWA refresh/offline behavior. Then complete production-like hosted database capacity, provider sandbox, and backup restoration checks, and obtain deployment approval. See `release-7.1.3.md` and `deployment.md`.
+Hosted Turso capacity, real Resend delivery, real Paddle sandbox/live transactions, production deployment, and production account migration were not exercised. The CI load jobs and authorized deployment/provider checks remain required before promoting this candidate.

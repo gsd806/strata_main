@@ -163,7 +163,7 @@ test("failed storage probes are advisory and a login error stays scoped",async()
   assert.equal(elements.get("signupSubmit").disabled,false);
   assert.equal(elements.get("storageState").dataset.persistence,"persistent");
   assert.equal(elements.get("storageState").dataset.health,"unavailable");
-  assert.match(elements.get("storageState").statusText.textContent,/try again|retry/i);
+  assert.match(elements.get("storageState").statusText.textContent,/retry/i);
   assert.equal(elements.get("loginMessage").hidden,false);
   assert.equal(elements.get("loginMessage").textContent,"Email or password is incorrect.");
   assert.equal(elements.get("signupMessage").hidden,true);

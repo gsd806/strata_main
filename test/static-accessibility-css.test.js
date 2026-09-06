@@ -94,7 +94,7 @@ test("planner and workout share clear Plan and Train navigation at mobile widths
   assert.match(discoverCss,/\.studio-nav-mobile \{ display:none; \}/);
   assert.match(discoverCss,/@media\(max-width:800px\)[\s\S]*?\.plus-studio \.studio-nav-desktop \{ display:none; \}[\s\S]*?\.plus-studio \.studio-nav-mobile \{ display:flex; \}/);
   assert.match(plannerCss,/\.planner-primary-nav\{position:fixed;[^}]*grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
-  assert.match(plannerCss,/\.planner-primary-nav a\{[^}]*font-size:12px/);
+  assert.match(plannerCss,/\.planner-primary-nav a\{[^}]*font-size:11px/);
   assert.match(plannerCss,/@media\(max-width:760px\)\{[\s\S]*?\.planner-header\{backdrop-filter:none\}/);
   assert.match(workoutCss,/@media\(max-width:760px\)\{[\s\S]*?\.site-header nav\{position:fixed/);
   assert.match(discoverCss,/@media\(max-width:760px\)\s*\{[\s\S]*?\.plus-studio \.studio-nav\s*\{[^}]*position:fixed/);

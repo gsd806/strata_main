@@ -100,10 +100,10 @@ let browser;
 
     await page.goto(`${BASE_URL}/`,{waitUntil:"networkidle"});
     const publicHeaderLinks={
-      policies:await page.locator('.desktop-nav a[href="/policies"]').isVisible(),
-      training:await page.locator('.desktop-nav a[href="/workout.html"]').isVisible()
+      pricing:await page.locator('.desktop-nav a[href="/pricing"]').isVisible(),
+      contact:await page.locator('.desktop-nav a[href="/contact"]').isVisible()
     };
-    assert.deepEqual(publicHeaderLinks,{policies:true,training:true},"Homepage must expose Policies and Train in the desktop header");
+    assert.deepEqual(publicHeaderLinks,{pricing:true,contact:true},"Homepage must expose Pricing and Contact in the desktop header");
     assert.match((await page.locator(".discovery-offer").textContent())||"",/\$5\.99 USD[\s\S]*one-time purchase/i);
     for(const [label,control] of [["homepage promotion",page.locator(".free-access-bar a").first()],["homepage primary action",page.locator(".hero .button-accent").first()]]){
       const ratio=await contrastRatio(control);assert.ok(ratio>=4.5,`${label} text contrast is ${ratio.toFixed(2)}:1; expected at least 4.5:1`);
@@ -160,16 +160,13 @@ let browser;
     await page.goto(`${BASE_URL}/`,{waitUntil:"networkidle"});
     assert.equal(await page.locator('.mobile-public-nav a[href="/pricing"]').isVisible(),true,"Mobile homepage must expose Pricing");
     assert.equal(await page.locator('.mobile-public-nav a[href="/contact"]').isVisible(),true,"Mobile homepage must expose Contact");
-    assert.equal(await page.locator('.mobile-public-nav a[href="/policies"]').isVisible(),true,"Mobile homepage must expose public policies");
+    assert.equal(await page.locator('.mobile-public-nav a[href="#founder"]').isVisible(),true,"Mobile homepage must expose the founder section");
     assert.equal(await page.locator('.footer-links a[href="/refunds"]').isVisible(),true,"Mobile homepage policies must remain visible");
     const smallPublicTargets=await page.locator(".mobile-public-nav a").evaluateAll((nodes)=>nodes.filter((node)=>{const rect=node.getBoundingClientRect();return rect.width<44||rect.height<44;}).map((node)=>node.textContent.trim()));
     assert.deepEqual(smallPublicTargets,[],`Homepage public links below 44px: ${smallPublicTargets.join(", ")}`);
-    assert.equal(await page.locator("#founder").count(),0,"The founder section must no longer interrupt the homepage");
-    await Promise.all([page.waitForURL(url=>url.pathname==="/policies"),page.locator('.mobile-public-nav a[href="/policies"]').click()]);
-    assert.equal(await page.locator("#founder").isVisible(),true,"Public policies must retain the founder section on mobile");
-    for(const route of ["/terms","/privacy","/refunds"])assert.equal(await page.locator(`a[href="${route}"]`).first().isVisible(),true,`Public policies must expose ${route}`);
+    assert.equal(await page.locator("#founder").isVisible(),true,"Founder section must render on mobile");
     await page.locator("#founder").scrollIntoViewIfNeeded();
-    await capture(page,"policies-founder-mobile.png",{fullPage:false});
+    await capture(page,"founder-mobile.png",{fullPage:false});
     await page.goto(`${BASE_URL}/discover.html`,{waitUntil:"networkidle"});
     assert.equal(new URL(page.url()).pathname,"/pricing","Unpaid mobile users must remain behind the Strata+ paywall");
     snapshot.mobileOverflow=await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth);

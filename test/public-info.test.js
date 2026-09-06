@@ -14,30 +14,28 @@ const text=(name)=>read(name).replace(/<script[\s\S]*?<\/script>/gi," ").replace
 
 test("homepage exposes pricing, contact, and every public policy without JavaScript",()=>{
   const home=read("index.html");
-  for(const route of ["/pricing","/contact","/policies","/terms","/privacy","/refunds"])assert.match(home,new RegExp(`href="${route}"`),`${route} homepage link`);
+  for(const route of ["/pricing","/contact","/terms","/privacy","/refunds"])assert.match(home,new RegExp(`href="${route}"`),`${route} homepage link`);
   assert.match(home,/mailto:stratafitness\.official@gmail\.com/i);
   assert.match(text("index.html"),/\$5\.99 USD/i);
   assert.match(text("index.html"),/one-time purchase/i);
 });
 
-test("public policies contain the founder story while the homepage stays focused on training",()=>{
-  const home=read("index.html"),policies=read("policies.html"),copy=text("policies.html");
-  assert.doesNotMatch(home,/id="founder"|href="#founder"/);
-  assert.doesNotMatch(text("index.html"),/Saeed Abdalla Alketbi/);
-  assert.match(home,/href="\/policies"/);
-  assert.match(policies,/id="founder"/);
-  assert.match(policies,/aria-labelledby="founderTitle"/);
-  for(const route of ["/terms","/privacy","/refunds"])assert.match(policies,new RegExp(`href="${route}"`),`${route} policy link`);
+test("homepage publishes the founder story without exposing a residential address",()=>{
+  const home=read("index.html"),copy=text("index.html");
+  assert.match(home,/id="founder"/);
+  assert.match(home,/href="#founder"/);
   assert.match(copy,/Saeed Abdalla Alketbi/);
   assert.match(copy,/founded by Saeed Abdalla Alketbi at 22/i);
   assert.match(copy,/third-year chemical engineering student at United Arab Emirates University \(UAEU\)/i);
   assert.match(copy,/Born and raised in the UAE and based in Al Ain/i);
   assert.match(copy,/Chemical Engineering · UAEU/i);
+  assert.match(home,/<div class="founder-mark"[^>]*>[\s\S]*?<span>SK<\/span>/);
+  assert.doesNotMatch(home,/<div class="founder-mark"[^>]*>[\s\S]*?<span>SA<\/span>/);
   assert.doesNotMatch(copy,/Zahkir|Malad|street 13|st\.?\s*13/i);
 });
 
 test("published Strata+ price and refund promise are exact and consistent",()=>{
-  assert.equal(BUILD,"7.1.3");
+  assert.equal(BUILD,"7.1.2");
   const pricingHtml=read("pricing.html"),pricing=text("pricing.html"),refunds=text("refunds.html"),terms=text("terms.html");
   assert.match(pricing,/Strata\+/);
   assert.match(pricing,/\$5\.99 USD/i);
@@ -61,7 +59,7 @@ test("published Strata+ price and refund promise are exact and consistent",()=>{
 });
 
 test("customer-facing product branding is Strata+ while compatibility identifiers stay stable",()=>{
-  const pages=["index.html","pricing.html","account.html","discover.html","planner.html","contact.html","policies.html","terms.html","privacy.html","refunds.html","delete-account.html","admin.html"];
+  const pages=["index.html","pricing.html","account.html","discover.html","planner.html","contact.html","terms.html","privacy.html","refunds.html","delete-account.html","admin.html"];
   const visibleCopy=pages.map(text).join(" ");
   const manifest=fs.readFileSync(path.join(PUBLIC_ROOT,"manifest.webmanifest"),"utf8");
   assert.match(visibleCopy,/Strata\+/);
@@ -77,9 +75,9 @@ test("contact and policy pages publish the official support address and cross-li
   assert.match(contact,new RegExp(`mailto:${email.replace(".","\\.")}`,"i"));
   assert.match(text("contact.html"),new RegExp(email.replace(".","\\."),"i"));
   for(const page of ["pricing.html","contact.html","terms.html","privacy.html","refunds.html"]){
-    assert.match(read(page),/class="info-nav"[^>]*>[\s\S]*href="\/planner\.html">Plan<\/a>/,`${page} free planner navigation`);
+    assert.match(read(page),/class="info-nav"[^>]*>[\s\S]*href="\/planner\.html">Planner<\/a>/,`${page} free planner navigation`);
   }
-  for(const page of ["policies.html","terms.html","privacy.html","refunds.html"]) {
+  for(const page of ["terms.html","privacy.html","refunds.html"]) {
     const html=read(page);
     assert.match(text(page),new RegExp(email.replace(".","\\."),"i"),`${page} support email`);
     for(const route of ["/terms","/privacy","/refunds"])assert.match(html,new RegExp(`href="${route}"`),`${page} ${route} link`);
