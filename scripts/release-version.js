@@ -38,6 +38,7 @@ const DEFAULT_MANIFEST=Object.freeze({
     "public/pages/onboarding.html",
     "public/pages/pricing.html",
     "public/pages/privacy.html",
+    "public/pages/policies.html",
     "public/pages/refunds.html",
     "public/pages/reset-password.html",
     "public/pages/terms.html",

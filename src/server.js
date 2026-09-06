@@ -107,6 +107,7 @@ const STATIC_FILES = new Map([
   ["pricing.html","pages/pricing.html"],
   ["contact.html","pages/contact.html"],
   ["terms.html","pages/terms.html"],
+  ["policies.html","pages/policies.html"],
   ["privacy.html","pages/privacy.html"],
   ["refunds.html","pages/refunds.html"],
   ["styles.css","styles/styles.css"],
@@ -146,6 +147,7 @@ const PAGE_ALIASES = new Map([
   ["/pricing","pricing.html"],
   ["/contact","contact.html"],
   ["/terms","terms.html"],
+  ["/policies","policies.html"],
   ["/privacy","privacy.html"],
   ["/refunds","refunds.html"],
   ["/verify-email","verify-email.html"],
@@ -1058,8 +1060,8 @@ async function serveStatic(req,res,url) {
   if (requested==="index.html") {
     const user=activeSession?await userPayload(activeSession):null;
     const actions=user
-      ? `<a class="account-button discover-button" id="discoverButton" href="${user.discovery.active?"/discover.html":"/pricing"}">${user.discovery.active?"Strata+":"Unlock Strata+"}</a>\n        <a class="account-button account-create" id="signupButton" href="/account.html?mode=signup" hidden>Sign up</a>\n        <a class="account-button account-link signed-in" id="accountButton" href="/account.html">${escapeHtml(user.name.split(/\s+/)[0])} profile</a>\n        <a class="session-button" id="planButton" href="/planner.html">Plan <span id="planCount">${user.planCount}</span></a>`
-      : `<a class="account-button discover-button" id="discoverButton" href="/discover.html" hidden>Strata+</a>\n        <a class="account-button account-create" id="signupButton" href="/account.html?mode=signup">Sign up</a>\n        <a class="account-button account-link" id="accountButton" href="/account.html?mode=login">Log in</a>\n        <a class="session-button" id="planButton" href="/planner.html">Plan <span id="planCount">0</span></a>`;
+      ? `<a class="account-button discover-button" id="discoverButton" href="${user.discovery.active?"/discover.html":"/pricing"}">Strata+</a>\n        <a class="account-button account-create" id="signupButton" href="/account.html?mode=signup" hidden>Sign up</a>\n        <a class="account-button account-link signed-in" id="accountButton" href="/account.html">${escapeHtml(user.name.split(/\s+/)[0])} profile</a>\n        <a class="session-button" id="planButton" href="/planner.html">Plan <span id="planCount">${user.planCount}</span></a>`
+      : `<a class="account-button discover-button" id="discoverButton" href="/pricing">Strata+</a>\n        <a class="account-button account-create" id="signupButton" href="/account.html?mode=signup">Sign up</a>\n        <a class="account-button account-link" id="accountButton" href="/account.html?mode=login">Log in</a>\n        <a class="session-button" id="planButton" href="/planner.html">Plan <span id="planCount">0</span></a>`;
     body=Buffer.from(body.toString("utf8").replace(/<!-- ACCOUNT_ACTIONS_START -->[\s\S]*?<!-- ACCOUNT_ACTIONS_END -->/,`<!-- ACCOUNT_ACTIONS_START -->\n        ${actions}\n        <!-- ACCOUNT_ACTIONS_END -->`));
   }
   const privateHtml=PRIVATE_HTML.has(requested);

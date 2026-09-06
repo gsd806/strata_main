@@ -3,7 +3,7 @@
   "use strict";
   if (!window.matchMedia || !("IntersectionObserver" in window)) return;
   const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
-  const targets = document.querySelectorAll(".section-heading,.method-intro,.score-model,.editorial-grid,.week-toolbar,.weekly-pulse,.studio-intro,.account-card");
+  const targets = document.querySelectorAll(".section-heading,.method-intro,.score-model,.info-hero-grid,.policy-card-grid,.price-card,.contact-card,.week-toolbar,.weekly-pulse,.studio-intro,.account-card");
   let observer;
   function syncMotion() {
     observer?.disconnect();

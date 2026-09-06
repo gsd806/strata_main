@@ -65,6 +65,14 @@ test("weekly pulse uses saved-plan counts without implying workout completion or
   assert.doesNotMatch(script,/weeklyPulse[^\n]*(?:recovered|readiness|completed)/i);
 });
 
+test("weekly setup stays reachable after an account already has a training week",()=>{
+  const html=read("pages","discover.html");
+  const setupLinks=[...html.matchAll(/<a\b([^>]*\bhref="\/onboarding\.html"[^>]*)>([\s\S]*?)<\/a>/g)];
+  const persistent=setupLinks.filter((match)=>!/\bid="plusStartWorkout"/.test(match[1]));
+  assert.ok(persistent.length>0,"Existing members need a setup link separate from the state-aware workout action");
+  assert.ok(persistent.some((match)=>/set up my week/i.test(match[2].replace(/<[^>]+>/g," "))),"The persistent setup link must clearly describe its destination");
+});
+
 test("community plans preview a full week and require confirmation before replacing My Plan",()=>{
   const html=read("pages","discover.html"),script=read("scripts","discover.js");
   for(const id of ["communityPlans","communityPlanSearch","communityPlanGrid","communityPlanStatus","communityLoadMore","communityApplyDialog","communityApplyCancel","communityApplyConfirm","communityApplyWarning","communityOpenPlan"]){
@@ -131,7 +139,7 @@ test("Strata+ copy and visual polish remain resilient across content and breakpo
   assert.match(html,/>Build a session<\/strong>/);
   assert.doesNotMatch(html,/feature-block-session/);
   assert.doesNotMatch(css,/feature-block-session/);
-  assert.match(css,/\.plus-studio \.profile-section,\.plus-studio \.recommendation-section\s*\{[^}]*color:var\(--ink\);[^}]*background:var\(--paper\)/);
+  assert.match(css,/\.plus-studio \.profile-section,\.plus-studio \.recommendation-section\s*\{[^}]*color:var\(--text\);[^}]*background:var\(--bg\)/);
   assert.match(css,/\.plus-studio \.profile-card,[^\n]*\.plus-studio \.recommend-card,[^\n]*\.plus-studio \.session-builder/);
   assert.doesNotMatch(css,/\.recommendation-card|\.session-brief|\.choice span/);
   assert.match(css,/@media\(max-width:800px\)[\s\S]*?\.plus-studio \.studio-header\s*\{[^}]*grid-template-columns:auto minmax\(0,1fr\);[^}]*grid-template-rows:auto auto/);

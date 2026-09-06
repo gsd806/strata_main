@@ -1,8 +1,8 @@
 # STRATA — Exercise Rankings and Workout Planning
 
-STRATA is an evidence-informed workout index with server-backed, email-verified accounts, a private Strata+ studio, and weekly, community, and monthly workout planning. It includes 200 resistance-training exercises—25 per muscle group, including 50 bodyweight options—across 8 muscle groups and 26 sub-muscle targets. Build 7.1.2 is an installable Progressive Web App (PWA) with Resend-powered account email, Paddle-powered one-time Strata+ access, and a private owner dashboard.
+STRATA is an evidence-informed workout index with server-backed, email-verified accounts, a private Strata+ studio, and weekly, community, and monthly workout planning. It includes 200 resistance-training exercises—25 per muscle group, including 50 bodyweight options—across 8 muscle groups and 26 sub-muscle targets. Build 7.1.3 is an installable Progressive Web App (PWA) with Resend-powered account email, Paddle-powered one-time Strata+ access, and a private owner dashboard.
 
-**Build 7.1.2 is a coherence and responsive-quality update.** Strata+ now presents one clear workout action, one weekly-plan action, stable recommendation headings, focused tools, and consistent mobile navigation. Empty-day, recovery, repeated-start, and weekly-setup states now lead to an explicit next step without duplicating or silently replacing work. This archive has not been deployed. See [release readiness](docs/release-readiness.md) and [migration and rollback instructions](docs/release-7.1.2.md).
+**Build 7.1.3 is a shared-design and decluttering update based on GitHub v7.1.2.** The Strata+ charcoal, lime, Manrope, and DM Mono style now spans every page. Public policies have a dedicated hub containing the founder biography; the homepage and planner are simpler, and weekly setup is always reachable in Strata+. Existing data and integration boundaries are preserved. This archive has not been deployed. See [release readiness](docs/release-readiness.md) and [migration and rollback instructions](docs/release-7.1.3.md).
 
 STRATA also includes a login-free local weekly planner, account-synced plans, structured community-plan sharing, a deterministic 31-day workspace, community ratings, printable exports, and a private administrator help desk. Strata+ is **$5.99 USD as a one-time purchase with no subscription**. Paddle is the merchant of record, and the server grants access only after verifying a signed matching webhook.
 
@@ -28,7 +28,7 @@ Copy `.env.example` to `.env` and fill in the required values when testing email
 
 ## Project structure
 
-Build 7.1.2 separates browser files from private server code while preserving every public URL used by visitors, Paddle, Render, and installed PWAs:
+Build 7.1.3 separates browser files from private server code while preserving every public URL used by visitors, Paddle, Render, and installed PWAs:
 
 ```text
 server.js          Stable npm/Render bootstrap
@@ -92,7 +92,7 @@ Account APIs, authentication routes, health checks, personalized pages, the admi
 
 ## Public pricing, support, and policies
 
-Build 7.1.2 has public, mobile-friendly pages at `/pricing`, `/contact`, `/terms`, `/privacy`, and `/refunds`. The published refund window is 14 calendar days after purchase. Support is available through the Contact form and at `stratafitness.official@gmail.com`.
+Build 7.1.3 has public, mobile-friendly pages at `/pricing`, `/contact`, `/terms`, `/privacy`, and `/refunds`. The published refund window is 14 calendar days after purchase. Support is available through the Contact form and at `stratafitness.official@gmail.com`.
 
 Paddle receives payment information; STRATA does not receive or store full payment-card or bank-account details. Do not change the displayed price independently of the live Paddle catalog. Before accepting payments, make sure the public operator details match the identity required by Paddle and applicable law rather than inventing missing legal information.
 

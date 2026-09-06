@@ -217,10 +217,10 @@ async function updateStorageStatus(){
   node.dataset.persistence=persistence;
   node.dataset.health=health;
 
-  if(persistence==="persistent"&&health==="healthy")renderStorageState(node,"good","Permanent account storage is active");
+  if(persistence==="persistent"&&health==="healthy")renderStorageState(node,"good","Account sync is ready");
   else if(health==="healthy"&&persistence==="temporary")renderStorageState(node,"warn","Account storage is temporary; accounts may be lost when the server restarts");
-  else if(health==="healthy")renderStorageState(node,"warn","Account storage is reachable, but permanent storage could not be verified");
-  else if(persistence==="persistent")renderStorageState(node,"bad","Permanent storage is configured but temporarily unreachable; you can still retry");
+  else if(health==="healthy")renderStorageState(node,"warn","Connected. We could not confirm that account data will persist.");
+  else if(persistence==="persistent")renderStorageState(node,"bad","Account sync is temporarily unavailable. Please try again.");
   else if(persistence==="unavailable"&&health==="unavailable")renderStorageState(node,"warn","Could not verify account storage; you can still try creating an account");
   else renderStorageState(node,"bad","Could not verify account storage; you can still try creating an account");
 }

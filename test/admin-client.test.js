@@ -91,5 +91,5 @@ test("authenticated admin layout keeps dense desktop rows and readable controls"
   assert.match(css,/body\.admin-ready \.record-card>button \{ min-height:72px;/);
   assert.match(css,/body\.admin-ready \.record-primary \{ display:grid; grid-template-columns:/);
   assert.match(css,/\.pagination button \{ min-height:44px;/);
-  assert.match(css,/\.field label \{[^}]*font:500 10px\/1\.5 var\(--mono\)/);
+  assert.match(css,/\.field label \{[^}]*font:500 12px\/1\.5 var\(--mono\)/);
 });

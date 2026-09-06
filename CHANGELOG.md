@@ -1,5 +1,15 @@
 # Changelog
 
+## 7.1.3 — Shared visual design and focused pages
+
+- Built on GitHub v7.1.2 and preserved its atomic weekly setup, save conflicts, and single-active-workout safeguards.
+- Unified all pages around charcoal surfaces, lime actions, Manrope/DM Mono typography, rounded controls, and reduced-motion-aware transitions.
+- Simplified the homepage and free planner; moved founder content into the new public `/policies` hub with offline support.
+- Restored permanent weekly setup access in Strata+ and retained free planner templates, exports, sharing, and rest-day toggles.
+- Grouped pricing features, clarified account/support copy, and aligned public navigation.
+- Repaired theme contrast states and retained the functional weekly distribution chart.
+- See `docs/release-7.1.3.md` and `docs/release-readiness.md` for review, migration, rollback, and validation limits.
+
 ## 7.1.2 — Coherent Strata+ journeys and responsive UI
 
 - Replaced display-name-driven recommendation headings with stable, readable copy and kept long member names contained in account chrome.

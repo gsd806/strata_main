@@ -24,7 +24,7 @@ function pngDimensions(file) {
 function serviceWorkerHarness({cacheKeys=[]}={}) {
   const listeners={},precache=[],deletedCaches=[],cachePuts=[],lifecycle={claimed:false,skipped:false},offlineResponse={kind:"offline"};
   const networkResponse={kind:"network",ok:true,type:"basic",clone(){return this;}};
-  const pageResponses=new Map(["install","pricing","contact","terms","privacy","refunds","planner"].map((name)=>[`/${name}.html`,{kind:name}]));
+  const pageResponses=new Map(["install","pricing","contact","policies","terms","privacy","refunds","planner"].map((name)=>[`/${name}.html`,{kind:name}]));
   let networkFails=false;
   const cache={
     async addAll(urls){precache.push(...urls);},
@@ -93,9 +93,9 @@ test("release version, cache keys, asset URLs, and catalog claims stay aligned",
   const exercises=JSON.parse(read("data/exercises.json"));
   const version=BUILD,versionPattern=escapeRegExp(version);
   const serviceWorker=read("service-worker.js");
-  const pages=["index.html","account.html","verify-email.html","forgot-password.html","reset-password.html","delete-account.html","admin.html","planner.html","discover.html","install.html","offline.html","pricing.html","contact.html","terms.html","privacy.html","refunds.html"];
+  const pages=["index.html","account.html","verify-email.html","forgot-password.html","reset-password.html","delete-account.html","admin.html","planner.html","discover.html","install.html","offline.html","pricing.html","contact.html","policies.html","terms.html","privacy.html","refunds.html"];
 
-  assert.equal(version,"7.1.2");
+  assert.equal(version,"7.1.3");
   assert.match(serviceWorker,new RegExp(`const BUILD="${versionPattern}";`));
   assert.match(serviceWorker,/const CACHE_PREFIX="strata-static-";/);
   assert.match(serviceWorker,/const STATIC_CACHE=`\$\{CACHE_PREFIX\}\$\{BUILD\}`;/);
@@ -169,7 +169,7 @@ test("manifest has complete install metadata and correctly sized icons",()=>{
 });
 
 test("every ordinary app page exposes consistent PWA and mobile metadata",()=>{
-  const appPages=["index.html","account.html","verify-email.html","forgot-password.html","planner.html","discover.html","install.html","pricing.html","contact.html","terms.html","privacy.html","refunds.html"];
+  const appPages=["index.html","account.html","verify-email.html","forgot-password.html","planner.html","discover.html","install.html","pricing.html","contact.html","policies.html","terms.html","privacy.html","refunds.html"];
   for(const page of appPages) {
     const html=read(`pages/${page}`);
     assert.match(html,/<meta\s+name="viewport"\s+content="[^"]*width=device-width[^"]*viewport-fit=cover[^"]*"\s*\/>/i,`${page} viewport`);
@@ -221,7 +221,7 @@ test("service worker precaches only public assets and never handles account APIs
   assert.ok(harness.precache.includes("/install.html"));
   assert.ok(harness.precache.includes("/manifest.webmanifest"));
   assert.ok(harness.precache.includes(`/exercises.json?v=${BUILD}`));
-  for(const page of ["pricing","contact","terms","privacy","refunds","planner"])assert.ok(harness.precache.includes(`/${page}.html`),`${page} must be precached`);
+  for(const page of ["pricing","contact","policies","terms","privacy","refunds","planner"])assert.ok(harness.precache.includes(`/${page}.html`),`${page} must be precached`);
   assert.ok(harness.precache.includes(`/site-info.css?v=${BUILD}`));
   assert.ok(harness.precache.includes(`/product-nav.css?v=${BUILD}`));
   assert.ok(harness.precache.includes(`/pricing.js?v=${BUILD}`));
@@ -275,7 +275,7 @@ test("private navigations are network-first and fall back to the non-sensitive o
 test("public information pages use their cached page when offline",async()=>{
   const harness=serviceWorkerHarness();
   harness.setOffline(true);
-  for(const page of ["pricing","contact","terms","privacy","refunds","planner"]) {
+  for(const page of ["pricing","contact","policies","terms","privacy","refunds","planner"]) {
     for(const pathName of [`/${page}`,`/${page}/`,`/${page}.html`]) {
       const response=dispatchServiceWorkerFetch(harness.listeners.fetch,pathName,{mode:"navigate"});
       assert.equal(await response,harness.pageResponses.get(`/${page}.html`),`${pathName} offline fallback`);

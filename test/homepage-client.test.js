@@ -125,7 +125,8 @@ test("homepage treats a confirmed 401 as signed out and counts the saved guest p
   assert.equal(elements.get("accountButton").textContent,"Log in");
   assert.equal(elements.get("accountButton").href,"/account.html?mode=login");
   assert.equal(elements.get("signupButton").hidden,false);
-  assert.equal(elements.get("discoverButton").hidden,true);
+  assert.equal(elements.get("discoverButton").hidden,false);
+  assert.equal(elements.get("discoverButton").href,"/pricing");
   assert.equal(elements.get("planCount").textContent,3);
   assert.equal(elements.get("planButton").getAttribute("aria-label"),"Open weekly planner, 3 exercises");
 });
