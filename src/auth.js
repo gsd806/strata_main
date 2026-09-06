@@ -169,7 +169,10 @@ function createAuthService({
     const right=Buffer.from(String(expected||""));
     return left.length===right.length&&left.length>0&&timingSafeEqual(left,right);
   }
-  function validCsrf(req,session){return safeTokenEqual(req.headers["x-csrf-token"],session?.csrf_token);}
+  function validCsrf(req,session){
+    const expectedUser=req.headers["x-strata-user"];
+    return (expectedUser===undefined||expectedUser===String(session?.id))&&safeTokenEqual(req.headers["x-csrf-token"],session?.csrf_token);
+  }
 
   function validateRegistration(input){
     const name=cleanText(input.name,40),email=normalizeEmail(input.email),password=String(input.password||"");
@@ -507,6 +510,9 @@ function createAuthService({
     const next=String(value||"");
     if(next==="admin"||next==="/admin"||next==="/admin.html")return "/admin";
     if(next==="pricing"||next==="/pricing"||next==="/pricing.html")return "/pricing";
+    if(next==="discover"||next==="/discover.html")return "/discover.html";
+    if(next==="workout"||next==="/workout.html")return "/workout.html";
+    if(next==="onboarding"||next==="/onboarding.html")return "/onboarding.html";
     if(next==="/planner.html"||next==="/discover.html"||/^\/planner\.html\?add=[a-z0-9-]{2,80}$/.test(next))return next;
     return "/planner.html";
   }
@@ -514,7 +520,10 @@ function createAuthService({
     const params=new URLSearchParams({mode,error:message}),next=safeAccountNext(requestedNext);
     if(next.startsWith("/planner.html")){params.set("next","planner");const add=new URL(next,"http://strata.local").searchParams.get("add");if(add)params.set("add",add);}
     else if(next==="/pricing")params.set("next","pricing");
+    else if(next==="/discover.html")params.set("next","discover");
     else if(next==="/admin")params.set("next","admin");
+    else if(next==="/workout.html")params.set("next","workout");
+    else if(next==="/onboarding.html")params.set("next","onboarding");
     return `/account.html?${params}`;
   }
   function verificationLocation(requestedNext,{error="",sent=false,purpose=""}={}){
@@ -523,6 +532,8 @@ function createAuthService({
     else if(next==="/pricing")params.set("next","pricing");
     else if(next==="/discover.html")params.set("next","discover");
     else if(next==="/admin")params.set("next","admin");
+    else if(next==="/workout.html")params.set("next","workout");
+    else if(next==="/onboarding.html")params.set("next","onboarding");
     if(purpose==="login"||purpose==="signup")params.set("purpose",purpose);
     if(error)params.set("error",error);
     if(sent)params.set("sent","1");

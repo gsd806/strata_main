@@ -1,0 +1,10 @@
+{
+  "release": "https://github.com/gsd806/strata_main/releases/tag/v7.0.0",
+  "sourceArchiveSha256": "2efbd7ede27f1cfe09b06809eb5347a7812f91993a89e747e8c3ebd7ef793a42",
+  "retrievedOn": "2026-09-06",
+  "baseline": "actual GitHub tag, not the earlier uploaded ZIP",
+  "tagCommitMetadataAtRecheck": "893c13eb256bad2579a4a46ba0f260c72db029ee",
+  "archiveRoot": "gsd806-strata_main-306e0a7",
+  "archiveCommitPrefix": "306e0a7",
+  "verificationNote": "A second download of the v7.0.0 zipball had the same archive root and identical file contents. The commits endpoint returned different SHA metadata; the audited input is pinned by the archive identifier and SHA-256, not that metadata response."
+}

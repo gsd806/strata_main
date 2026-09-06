@@ -34,6 +34,8 @@ services:
         value: stratafitness.official@gmail.com
       - key: EMAIL_VERIFICATION_SECRET
         sync: false
+      - key: PADDLE_ENVIRONMENT
+        value: live
       - key: PADDLE_PRODUCT_ID
         value: pro_01m1ky8j916ybyacs836dxbz8x
       - key: PADDLE_PRICE_ID

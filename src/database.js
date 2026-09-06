@@ -480,6 +480,7 @@ function localStore(root) {
         // Keep deletion complete even if a future database connection loses
         // its per-session foreign-key PRAGMA state.
         statements.deleteCommunityPlanForDeletedUser.get(user.id,user.id);
+        statements.deleteWorkoutsForDeletedUser.run(user.id,user.id);
         statements.deleteCheckoutClaimsForDeletedUser.all(user.id,user.id);
         statements.deleteVerificationSendsForDeletedUser.run(user.id,user.email,user.id);
         statements.deleteVerificationsForDeletedUser.run(user.id,user.email,user.id);
@@ -501,6 +502,16 @@ function localStore(root) {
       const sends=affectedRows(statements.deleteOldAccountActionSends.run(sendBefore));
       return {actions:actions+staged,sends};
     },
+    async workout(userId,id) { return plainRow(statements.workout.get(userId,id)); },
+    async workouts(userId,limit,offset) { return plainRows(statements.workouts.all(userId,limit,offset)); },
+    async workoutCount(userId) { return Number(statements.workoutCount.get(userId).count); },
+    async insertWorkout(record) {
+      return plainRow(statements.insertWorkout.get(record.id,record.workoutJson,record.summaryJson,record.createHash,record.startedAt,record.updatedAt,record.userId));
+    },
+    async updateWorkout(record,expectedRevision) {
+      return plainRow(statements.updateWorkout.get(record.workoutJson,record.summaryJson,record.updatedAt,record.userId,record.id,expectedRevision));
+    },
+    async deleteWorkout(userId,id,expectedRevision) { return Boolean(statements.deleteWorkout.get(userId,id,expectedRevision)); },
     async plan(userId) { return plainRow(statements.plan.get(userId)); },
     async upsertPlan(userId,planJson,updatedAt,expectedUpdatedAt) {
       return plainRow(statements.upsertPlan.get(planJson,updatedAt,userId,expectedUpdatedAt,expectedUpdatedAt,expectedUpdatedAt,expectedUpdatedAt));
@@ -981,6 +992,7 @@ async function tursoStore(url,authToken,tursoClientFactory) {
         // state is connection-scoped, so account privacy must not depend only
         // on ON DELETE CASCADE surviving a renewed serverless session.
         {sql:SQL.deleteCommunityPlanForDeletedUser,args:[action.user_id,action.user_id]},
+        {sql:SQL.deleteWorkoutsForDeletedUser,args:[action.user_id,action.user_id]},
         {sql:SQL.deleteCheckoutClaimsForDeletedUser,args:[action.user_id,action.user_id]},
         {sql:SQL.deleteVerificationSendsForDeletedUser,args:[action.user_id,action.email,action.user_id]},
         {sql:SQL.deleteVerificationsForDeletedUser,args:[action.user_id,action.email,action.user_id]},
@@ -1001,6 +1013,12 @@ async function tursoStore(url,authToken,tursoClientFactory) {
       ],"write");
       return {actions:affectedRows(results[0])+affectedRows(results[1]),sends:affectedRows(results[2])};
     },
+    workout:(userId,id) => first(SQL.workout,[userId,id]),
+    workouts:(userId,limit,offset) => all(SQL.workouts,[userId,limit,offset]),
+    async workoutCount(userId) { return Number((await first(SQL.workoutCount,[userId])).count); },
+    insertWorkout:(record) => first(SQL.insertWorkout,[record.id,record.workoutJson,record.summaryJson,record.createHash,record.startedAt,record.updatedAt,record.userId]),
+    updateWorkout:(record,expectedRevision) => first(SQL.updateWorkout,[record.workoutJson,record.summaryJson,record.updatedAt,record.userId,record.id,expectedRevision]),
+    async deleteWorkout(userId,id,expectedRevision) { return Boolean(await first(SQL.deleteWorkout,[userId,id,expectedRevision])); },
     plan:(userId) => first(SQL.plan,[userId]),
     async upsertPlan(userId,planJson,updatedAt,expectedUpdatedAt) {
       const result=await run(SQL.upsertPlan,[planJson,updatedAt,userId,expectedUpdatedAt,expectedUpdatedAt,expectedUpdatedAt,expectedUpdatedAt]);

@@ -317,6 +317,7 @@ test("live one-time checkout grants and revokes the Discovery entitlement secure
   const config=await request("/api/billing/config");
   assert.equal(config.response.status,200);
   assert.deepEqual(config.data,{
+    environment:"live",
     enabled:true,
     configured:true,
     productId:PRODUCT_ID,

@@ -16,8 +16,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="planner.css?v=7.0.0" />
-    <link rel="stylesheet" href="/experience.css?v=7.0.0" />
+    <link rel="stylesheet" href="planner.css?v=7.1.0" />
+    <link rel="stylesheet" href="/experience.css?v=7.1.0" />
   </head>
   <body>
     <a class="skip-link" href="#weekTitle">Skip to weekly plan</a>
@@ -32,8 +32,9 @@
     <section class="plan-conflict-panel" id="planConflictPanel" aria-labelledby="planConflictTitle" hidden>
       <div class="plan-conflict-heading">
         <div><p class="eyebrow">Save conflict</p><h2 id="planConflictTitle" tabindex="-1">CHOOSE WHICH <em>WEEK TO KEEP.</em></h2></div>
-        <p>Your account changed in another tab or device. Nothing has been overwritten. Compare both copies, then keep the account version or review your unsaved changes before explicitly saving them.</p>
+        <p id="planConflictMessage">Your account changed in another tab or device. Nothing has been overwritten. Compare both copies, then keep the account version or review your unsaved changes before explicitly saving them.</p>
       </div>
+      <label class="draft-recovery-label" id="draftRecoveryLabel" hidden>Other recoverable drafts on this device<select id="draftRecoverySelect"></select></label>
       <div class="plan-conflict-choices">
         <article><h3>Latest account plan</h3><div id="latestPlanSummary"></div></article>
         <article><h3>Your unsaved changes</h3><div id="localPlanSummary"></div></article>
@@ -43,6 +44,9 @@
         <button class="dark-button" id="reviewLocalPlan" type="button">Review my unsaved changes <span aria-hidden="true">↗</span></button>
       </div>
     </section>
+
+    <section class="draft-storage-notice" id="accountChangedNotice" role="alert" hidden><strong>The signed-in account changed.</strong><p id="accountChangedDetails"></p><button class="outline-button" id="exportAccountDraft" type="button">Export this week</button> <button class="dark-button" id="reloadPlannerAccount" type="button">Reload account</button></section>
+    <p class="draft-storage-notice" id="draftStorageNotice" role="alert" hidden>This browser cannot keep a recovery draft. Keep this page open until your changes show Saved, or export your week before leaving.</p>
 
     <main class="planner-shell" id="plannerShell" aria-busy="true">
       <aside class="library-panel" id="libraryPanel" aria-label="Exercise library" aria-busy="true">
@@ -61,7 +65,7 @@
       <section class="week-section" aria-labelledby="weekTitle">
         <div class="week-toolbar">
           <div><p class="eyebrow">Weekly training architecture</p><h1 id="weekTitle" tabindex="-1">BUILD YOUR <em>WEEK.</em></h1><p class="week-intro">Shape a balanced seven-day plan, then fine-tune sets, reps, and recovery as you go.</p></div>
-          <div class="toolbar-actions"><button class="outline-button" id="recommendRest" type="button" disabled>Recommend rest day <span aria-hidden="true">↻</span></button><button class="outline-button" id="exportWeeklyPlan" type="button" disabled>Export week <span aria-hidden="true">↓</span></button><button class="outline-button share-week-button" id="shareWeeklyPlan" type="button" aria-controls="shareWeeklyPanel" aria-expanded="false" disabled>Share week <span aria-hidden="true">↗</span></button></div>
+          <div class="toolbar-actions"><a class="dark-button" id="startPlannedWorkout" href="/workout.html">Start workout</a><a class="outline-button" href="/onboarding.html">Set up my week</a><button class="outline-button" id="undoPlanRemoval" type="button" disabled>Undo removal <span aria-hidden="true">↶</span></button><button class="outline-button" id="manageWeekTemplates" type="button" disabled>Week templates <span aria-hidden="true">▧</span></button><button class="outline-button" id="recommendRest" type="button" disabled>Recommend rest day <span aria-hidden="true">↻</span></button><button class="outline-button" id="exportWeeklyPlan" type="button" disabled>Export week <span aria-hidden="true">↓</span></button><button class="outline-button share-week-button" id="shareWeeklyPlan" type="button" aria-controls="shareWeeklyPanel" aria-expanded="false" disabled>Share week <span aria-hidden="true">↗</span></button></div>
         </div>
         <ol class="planner-workflow" aria-label="Build a weekly plan in three steps">
           <li><span>01</span><p><strong>Choose a day</strong><small>Set the destination in the library or on the board.</small></p></li>
@@ -102,10 +106,33 @@
       </section>
     </main>
 
-    <footer class="build-footer">STRATA · Build 7.0.0 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
+    <dialog class="planner-dialog" id="replaceExerciseDialog" aria-labelledby="replaceExerciseTitle" aria-describedby="replaceExerciseDescription">
+      <div class="planner-dialog-heading"><h2 id="replaceExerciseTitle">REPLACE EXERCISE.</h2><button class="outline-button" id="closeReplaceExercise" type="button">Cancel</button></div>
+      <p id="replaceExerciseDescription"></p>
+      <label>Search movements<input id="replaceExerciseSearch" type="search" autocomplete="off" placeholder="Name, muscle or equipment" /></label>
+      <label>Replacement exercise<select id="replaceExerciseSelect" aria-describedby="replaceExerciseStatus"></select></label>
+      <p class="planner-dialog-status" id="replaceExerciseStatus" role="status" aria-live="polite"></p>
+      <button class="dark-button" id="confirmReplaceExercise" type="button" disabled>Confirm replacement</button>
+    </dialog>
+
+    <dialog class="planner-dialog week-templates-dialog" id="weekTemplatesDialog" aria-labelledby="weekTemplatesTitle" aria-describedby="weekTemplatesDescription">
+      <div class="planner-dialog-heading"><h2 id="weekTemplatesTitle">WEEK TEMPLATES.</h2><button class="outline-button" id="closeWeekTemplates" type="button">Close</button></div>
+      <p id="weekTemplatesDescription">Save reusable copies of your current week. Templates stay on this device, separately for each account and the guest plan. Export your week for a portable backup; import it here on another device.</p>
+      <div class="template-save-row"><label>Name this week<input id="weekTemplateName" type="text" maxlength="60" autocomplete="off" placeholder="My strength week" /></label><button class="outline-button" id="saveWeekTemplate" type="button">Save week template</button></div>
+      <div class="template-save-row"><label>Saved weeks<select id="weekTemplateSelect"></select></label><button class="outline-button" id="previewWeekTemplate" type="button" disabled>Preview week</button></div>
+      <label class="template-file-label">Import a STRATA week<input id="templateFile" type="file" accept=".json,application/json" /></label>
+      <p class="planner-dialog-status" id="templateStatus" role="status" aria-live="polite"></p>
+      <section class="template-preview" id="templatePreview" aria-labelledby="templatePreviewTitle" hidden>
+        <h3 id="templatePreviewTitle"></h3><div id="templatePreviewSummary"></div>
+        <label class="template-replace-confirm"><input id="confirmUseTemplate" type="checkbox" /> <span>I understand this replaces my current editable week, including unsaved edits. I have exported any week I want to keep.</span></label>
+        <div class="template-preview-actions"><button class="dark-button" id="applyWeekTemplate" type="button" disabled>Use this week</button><button class="outline-button" id="deleteWeekTemplate" type="button" hidden>Delete saved template</button></div>
+      </section>
+    </dialog>
+
+    <footer class="build-footer">STRATA · Build 7.1.0 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
     <div class="planner-toast" id="plannerToast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=7.0.0"></script>
-    <script src="planner.js?v=7.0.0"></script>
-    <script src="/motion.js?v=7.0.0" defer></script>
+    <script src="/pwa.js?v=7.1.0"></script>
+    <script src="planner.js?v=7.1.0"></script>
+    <script src="/motion.js?v=7.1.0" defer></script>
   </body>
 </html>

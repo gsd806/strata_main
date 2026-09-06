@@ -286,6 +286,29 @@ test("an ended login verification offers sign-in recovery instead of signup copy
   assert.match(page.elements.get("verificationStatus").textContent,/start sign-in again/i);
 });
 
+test("verification keeps safe new destinations in completion and account recovery links",async()=>{
+  for(const [requested,destination] of [["workout","/workout.html"],["/workout.html","/workout.html"],["onboarding","/onboarding.html"],["/onboarding.html","/onboarding.html"],["//outside.test/workout.html","/planner.html"],["/onboarding.html?url=//outside.test","/planner.html"]]){
+    for(const active of [false,true]){
+      const page=verificationPage(async(path)=>{
+        if(path==="/api/verification-status")return response(200,{active,expiresAt:Date.now()+600000,resendAfter:0});
+        if(path==="/api/verify-email")return response(200,{user:{id:"verified-user"}});
+        throw new Error(`Unexpected path ${path}`);
+      },{search:`?next=${encodeURIComponent(requested)}`});
+      await settle();
+      assert.equal(page.elements.get("verificationNext").value,destination);
+      assert.equal(page.elements.get("resendNext").value,destination);
+      if(active){
+        page.elements.get("verificationCode").value="123456";
+        await page.elements.get("verificationForm").emit("submit",{preventDefault(){}});
+        assert.deepEqual(page.navigations,[destination]);
+      }else{
+        assert.equal(page.elements.get("verificationRestart").href,`/account.html?mode=signup&next=${destination.slice(1,-5)}`);
+        assert.equal(page.elements.get("verificationSignIn").href,`/account.html?mode=login&next=${destination.slice(1,-5)}`);
+      }
+    }
+  }
+});
+
 test("an expired code disables verification but keeps resend available",async()=>{
   const page=verificationPage(async(path)=>{
     if(path==="/api/verification-status")return response(200,{active:true,expiresAt:Date.now()-1000,resendAfter:Date.now()+60000});

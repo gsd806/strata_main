@@ -50,8 +50,10 @@ function createAdminService({
 
   async function maybeClaimAdminForLogin(user){
     if(!adminEmail||!user||auth.normalizeEmail(user.email)!==adminEmail||!Number(user.email_verified_at)||user.suspended_at)return user;
-    await store.claimAdminPrincipal(user.id,adminEmail,Date.now());
-    return store.userById(user.id);
+    const {boundNow}=await store.claimAdminPrincipal(user.id,adminEmail,Date.now());
+    // Keep the verified credential snapshot; only our own first claim may advance it.
+    // Session insertion rejects any additional reset or revocation via its version check.
+    return boundNow?{...user,auth_version:Number(user.auth_version)+1}:user;
   }
 
   async function requireAdmin(req,res,{elevated=true,allowBootstrap=false}={}){

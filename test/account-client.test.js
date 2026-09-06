@@ -231,3 +231,26 @@ test("enhanced login uses its own endpoint and keeps failures retryable",async()
   assert.equal(form.getAttribute("aria-busy"),null);
   assert.deepEqual(page.navigations,[]);
 });
+
+test("enhanced login and verification preserve only exact workout and onboarding destinations",async()=>{
+  const destinations=[
+    ["workout","/workout.html"],["/workout.html","/workout.html"],
+    ["onboarding","/onboarding.html"],["/onboarding.html","/onboarding.html"],
+    ["https://outside.test/workout.html","/planner.html"],["//outside.test/onboarding.html","/planner.html"],
+    ["/workout.html?next=https://outside.test","/planner.html"],["/onboarding.html/../../outside","/planner.html"]
+  ];
+  for(const [requested,destination] of destinations)for(const verify of [false,true]){
+    const page=createPage({search:`?mode=login&next=${encodeURIComponent(requested)}`,route:async(path)=>{
+      if(path==="/api/status")return jsonResponse(200,{persistent:true});
+      if(path==="/healthz")return jsonResponse(200,{ok:true});
+      if(path==="/api/me")return jsonResponse(401,{error:"Not signed in."});
+      if(path==="/api/login")return verify?jsonResponse(202,{verificationRequired:true,purpose:"login",maskedEmail:"r***@example.test"}):jsonResponse(200,{user:{id:"returning"}});
+      throw new Error(`Unexpected route ${path}`);
+    }});
+    await settle();
+    assert.equal(page.elements.get("loginNext").value,destination);
+    const form=page.elements.get("loginForm");form.values={email:"returning@example.test",password:"existing-password"};
+    await form.emit("submit",{preventDefault(){}});
+    assert.deepEqual(page.navigations,[verify?`/verify-email.html?next=${destination.slice(1,-5)}&purpose=login`:destination]);
+  }
+});

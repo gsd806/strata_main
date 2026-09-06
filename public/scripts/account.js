@@ -23,6 +23,8 @@ function safeNext(raw,exerciseId){
   if(raw==="pricing"||raw==="/pricing"||raw==="/pricing.html")return "/pricing";
   if(raw==="discover"||raw==="/discover.html")return "/discover.html";
   if(raw==="admin"||raw==="/admin"||raw==="/admin.html")return "/admin";
+  if(raw==="workout"||raw==="/workout.html")return "/workout.html";
+  if(raw==="onboarding"||raw==="/onboarding.html")return "/onboarding.html";
   return "/planner.html";
 }
 
@@ -31,6 +33,8 @@ function verificationLocation(destination,{deliveryState="",purpose="signup"}={}
   if(destination==="/pricing")query.set("next","pricing");
   else if(destination==="/discover.html")query.set("next","discover");
   else if(destination==="/admin")query.set("next","admin");
+  else if(destination==="/workout.html")query.set("next","workout");
+  else if(destination==="/onboarding.html")query.set("next","onboarding");
   else{
     query.set("next","planner");
     const add=new URL(destination,"https://strata.local").searchParams.get("add");

@@ -36,3 +36,7 @@ Coverage includes the process entry point, `src/**/*.js`, and the pure browser-d
 3. Contract tests compare observable values and failure semantics, not adapter internals.
 4. E2E tests assert what a user can see or do; lower layers cover exhaustive input combinations.
 5. Tests use isolated temporary data and local fakes. No release check depends on a live Paddle, Resend, or Turso account.
+
+## Build 7.1.0 additions
+
+Workout validation and browser-core tests use real catalog data. Storage tests cover both adapters through the existing SQLite-backed transport fixture, additive migration, owner isolation, caps, CAS and online backup restoration. The Turso fixture does not exercise a hosted service. Onboarding and planner runtime checks cover failed writes, stale tabs, account switches and recovery. `qa/e2e/training-flows.js` adds real browser training journeys; retain it in `npm run check` even when the local browser binary is unavailable. Current results and limitations live in [release readiness](release-readiness.md).

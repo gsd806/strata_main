@@ -32,6 +32,8 @@ class Element{
   addEventListener(type,handler){(this.listeners[type]||=[]).push(handler);}
   setAttribute(name,value){this.attributes[name]=String(value);}
   removeAttribute(name){delete this.attributes[name];}
+  showModal(){this.open=true;}
+  close(){this.open=false;}
   focus(){focusedSelector=`#${this.id}`;}
   querySelector(selector){
     if(this.id!=="libraryList")return null;
@@ -54,6 +56,7 @@ plan.days.Monday.push({instanceId:"runtime-plan-item",exerciseId:exercises[0].id
 const fetches=[];
 const requests=[];
 const guestStorageWrites=[];
+const storedValues=new Map();
 const windowListeners={};
 const context={
   console,document,history:{replaceState(){}},location:{search:"",href:"http://strata.test/planner.html",origin:"http://strata.test",assign(){}},
@@ -62,8 +65,9 @@ const context={
     matchMedia:()=>({matches:false}),
     addEventListener(type,handler){(windowListeners[type]||=[]).push(handler);}
   },
-  localStorage:{getItem(){return null;},setItem(key,value){guestStorageWrites.push({key,value});}},
+  localStorage:{get length(){return storedValues.size;},key(index){return [...storedValues.keys()][index]||null;},getItem(key){return storedValues.get(key)||null;},setItem(key,value){storedValues.set(key,value);guestStorageWrites.push({key,value});},removeItem(key){storedValues.delete(key);}},
   fetch:async(path,options={})=>{
+    if(path==="/api/me")return {ok:true,json:async()=>({user:{id:"u1"},csrfToken:"planner-csrf"})};
     fetches.push(path);
     requests.push({path,options});
     if(path===CATALOG_URL)return {ok:true,json:async()=>exercises};
@@ -194,6 +198,7 @@ function clickSelectDay(day){
 
   let retrySaveAttempts=0;
   context.fetch=async(path,options={})=>{
+    if(path==="/api/me")return {ok:true,json:async()=>({user:{id:"u1"},csrfToken:"planner-csrf"})};
     if(path==="/api/plan"&&options.method==="PUT"){
       retrySaveAttempts+=1;
       if(retrySaveAttempts===1)return {ok:false,status:503,json:async()=>({error:"Temporary save failure"})};
@@ -216,6 +221,7 @@ function clickSelectDay(day){
   let conflictSaveAttempts=0;
   const conflictSaveBodies=[];
   context.fetch=async(path,options={})=>{
+    if(path==="/api/me")return {ok:true,json:async()=>({user:{id:"u1"},csrfToken:"planner-csrf"})};
     if(path==="/api/plan"&&options.method==="PUT"){
       conflictSaveAttempts+=1;
       conflictSaveBodies.push(JSON.parse(options.body));
@@ -258,6 +264,7 @@ function clickSelectDay(day){
   const nextAuthoritativePlan=JSON.parse(JSON.stringify(authoritativePlan));
   nextAuthoritativePlan.days.Monday[0].reps="3–5";
   context.fetch=async(path,options={})=>{
+    if(path==="/api/me")return {ok:true,json:async()=>({user:{id:"u1"},csrfToken:"planner-csrf"})};
     if(path==="/api/plan"&&options.method==="PUT"){
       keepLatestAttempts+=1;
       return {ok:false,status:409,json:async()=>({error:"Your weekly plan changed in another tab or device.",code:"PLAN_CHANGED",plan:nextAuthoritativePlan,planUpdatedAt:1_700_000_000_500})};
@@ -354,5 +361,218 @@ function clickSelectDay(day){
   await vm.runInContext("init({guestOnly:true})",context);
   assert.equal(vm.runInContext("state.ready&&state.guest&&!state.user",context),true);
   assert.equal(offlineApiReads,0,"explicit offline guest mode must not depend on an account request");
-  console.log(JSON.stringify({...result,plannerCapacityGuards:true,legacyDraftPreserved:true,offlineGuestMode:true},null,2));
+  // 7.1.0 regression checks exercise real mutation/recovery paths in this VM.
+  const run=(source)=>vm.runInContext(source,context);
+  const snapshot=()=>JSON.parse(run("JSON.stringify(state.plan)"));
+  const fixture=()=>({version:1,restDay:"Sunday",days:Object.fromEntries(DAYS.map((day)=>[day,day==="Monday"?[{instanceId:"editing-item",exerciseId:exercises[0].id,sets:4,reps:"6–8"}]:[]]))});
+  const reset=({guest=true,userId="u1",plan=fixture(),stamp=100}={})=>{
+    context.fixturePlan=plan;context.fixtureUserId=userId;context.fixtureGuest=guest;context.fixtureStamp=stamp;
+    run("clearTimeout(state.saveTimer);clearPlanConflict();state.ready=true;state.accountChanged=false;state.guest=fixtureGuest;state.guestRaw=localStorage.getItem(GUEST_PLAN_KEY);state.user=fixtureGuest?null:{id:fixtureUserId,name:'Runtime user'};state.plan=copyPlan(fixturePlan);state.revision=0;state.savedRevision=0;state.planUpdatedAt=fixtureStamp;state.lastSaveError=null;state.savePromise=null;state.undoRemoval=null;state.draftKey='';state.draftValue='';state.recoverySource=null;state.recoveredDrafts=[];state.csrfToken='planner-csrf';renderWeek();");
+  };
+  context.localStorage.getItem=(key)=>storedValues.get(key)||null;
+  storedValues.clear();reset();
+  assert.match(html,/id="manageWeekTemplates"/);
+  assert.match(html,/<dialog[^>]+id="replaceExerciseDialog"[^>]+aria-labelledby=/,"Replacement must use an accessible modal dialog");
+  assert.match(elements.get("weekBoard").innerHTML,/data-replace-item="editing-item"/);
+  assert.match(elements.get("startPlannedWorkout").href,/^\/workout\.html\?day=/);
+  assert.equal(run("removeItem('Monday','editing-item')"),true);
+  run("state.plan.days.Tuesday.push({instanceId:'newer-edit',exerciseId:state.exercises[1].id,sets:2,reps:'12'});queueSave();");
+  assert.equal(run("undoLastRemoval()"),true,"Undo must restore only the removed item, preserving later edits");
+  assert.equal(snapshot().days.Monday[0].sets,4);
+  assert.equal(snapshot().days.Tuesday[0].instanceId,"newer-edit");
+  assert.equal(await run("flushSave()"),true);
+  run("removeItem('Monday','editing-item')");await run("flushSave()");
+  assert.equal(run("undoLastRemoval()"),true,"Undo must work after autosave has completed");
+  await run("flushSave()");
+  assert.equal(JSON.parse(storedValues.get("strata_guest_plan_v1")).days.Monday[0].reps,"6–8");
+  run("removeItem('Monday','editing-item');state.plan.days.Monday=Array.from({length:30},(_,i)=>({instanceId:'full-'+i,exerciseId:state.exercises[0].id,sets:3,reps:'8'}));");
+  assert.equal(run("undoLastRemoval()"),false,"Undo must respect daily capacity without losing its recoverable item");
+  assert.equal(run("Boolean(state.undoRemoval)"),true);
+  assert.equal(snapshot().days.Monday.length,30);
+  reset();run("removeItem('Monday','editing-item');for(const day of DAYS.slice(0,5))state.plan.days[day]=Array.from({length:28},(_,i)=>({instanceId:day+i,exerciseId:state.exercises[0].id,sets:3,reps:'8'}));");
+  assert.equal(run("undoLastRemoval()"),false,"Undo must respect weekly capacity");
+  reset();run("removeItem('Monday','editing-item');state.plan.restDay='Monday'");
+  assert.equal(run("undoLastRemoval()"),true);
+  assert.equal(snapshot().days[snapshot().restDay].length,0,"Undo must keep the recovery day empty");
+
+  reset();assert.equal(run("openReplacement('Monday','editing-item')"),true);
+  assert.equal(elements.get("replaceExerciseDialog").open,true);
+  elements.get("replaceExerciseSearch").value=exercises[1].name;
+  run("renderReplacementOptions()");
+  assert.match(elements.get("replaceExerciseSelect").innerHTML,new RegExp(exercises[1].id));
+  elements.get("replaceExerciseSelect").value=exercises[1].id;
+  assert.equal(run("confirmReplacement()"),true);
+  assert.equal(snapshot().days.Monday[0].exerciseId,exercises[1].id);
+  assert.equal(snapshot().days.Monday[0].sets,4);
+  assert.equal(snapshot().days.Monday[0].reps,"6–8");
+  run("openReplacement('Monday','editing-item');state.revision+=1;");
+  elements.get("replaceExerciseSelect").value=exercises[2].id;
+  assert.equal(run("confirmReplacement()"),false,"Stale replacement dialogs must not mutate a changed week");
+  assert.equal(snapshot().days.Monday[0].exerciseId,exercises[1].id);
+  assert.match(elements.get("replaceExerciseStatus").textContent,/changed/);
+
+  reset();storedValues.clear();elements.get("weekTemplateName").value="My strength week";
+  assert.equal(run("saveWeekTemplate()"),true);
+  assert.equal(run("weekTemplates().length"),1);
+  assert.equal(run("saveWeekTemplate()"),false,"Duplicate template names must not silently overwrite an earlier template");
+  const guestTemplate=run("weekTemplates()[0]");
+  reset({guest:false,userId:"different-user"});
+  assert.equal(run("weekTemplates().length"),0,"Account templates must be isolated from guest templates");
+  elements.get("weekTemplateName").value="Private week";assert.equal(run("saveWeekTemplate()"),true);
+  reset({guest:false,userId:"u1"});assert.equal(run("weekTemplates().length"),0,"Templates must be scoped to their account");
+  reset();context.guestTemplate=guestTemplate;
+  assert.equal(run("previewTemplate(guestTemplate.data.plan,guestTemplate.data.name,guestTemplate.key)"),true);
+  assert.equal(run("useWeekTemplate()"),false,"Using a template requires explicit replace-current confirmation");
+  elements.get("confirmUseTemplate").checked=true;
+  run("state.revision+=1");
+  assert.equal(run("useWeekTemplate()"),false,"A stale template preview must not replace a changed local week");
+  run("previewTemplate(guestTemplate.data.plan,guestTemplate.data.name,guestTemplate.key)");elements.get("confirmUseTemplate").checked=true;
+  assert.equal(run("useWeekTemplate()"),true);
+  assert.notEqual(snapshot().days.Monday[0].instanceId,"editing-item","Duplicating a week must create fresh scheduled-entry IDs");
+  assert.equal(snapshot().days.Monday[0].sets,4);
+  assert.equal(run("state.savedRevision<state.revision"),true,"A copied template must enter the usual save path");
+  const portable={format:"strata-weekly-plan",version:1,plan:fixture()};
+  context.portableFile={name:"portable-week.json",size:JSON.stringify(portable).length,text:async()=>JSON.stringify(portable)};
+  assert.equal(await run("importWeekTemplate(portableFile)"),true,"Existing weekly exports must import into a reusable preview");
+  const beforeBadImport=JSON.stringify(snapshot());
+  context.portableFile={name:"broken.json",size:5,text:async()=>"oops"};
+  assert.equal(await run("importWeekTemplate(portableFile)"),false);
+  assert.equal(JSON.stringify(snapshot()),beforeBadImport,"Invalid imports must preserve the editable week");
+  assert.equal(run("state.templatePreview"),null,"A failed import must clear an older preview");
+  const unavailable=fixture();unavailable.days.Monday[0].exerciseId="missing-catalog-item";context.unavailable=unavailable;
+  assert.equal(run("previewTemplate(unavailable,'Unknown exercise')"),false,"Unknown imported exercises must be rejected visibly, never silently dropped");
+
+  // Guest weeks compare the exact loaded copy before writing. A stale tab
+  // keeps its editable/exportable draft and cannot bypass the guard on Retry.
+  storedValues.clear();const guestBase=JSON.stringify(fixture());storedValues.set("strata_guest_plan_v1",guestBase);reset();
+  const tabOne=fixture();tabOne.days.Monday[0].reps="5";context.tabOne=tabOne;
+  await run("saveGuestPlan(tabOne,state.guestRaw)");
+  run("state.plan.days.Monday[0].reps='15';queueSave()");
+  assert.equal(await run("flushSave()"),false,"A stale guest tab must not overwrite another tab's week");
+  assert.equal(JSON.parse(storedValues.get("strata_guest_plan_v1")).days.Monday[0].reps,"5");
+  assert.equal(snapshot().days.Monday[0].reps,"15","The rejected guest draft must remain available to export");
+  assert.equal(run("state.guestRaw"),guestBase,"Conflict handling must not adopt the newer comparison value");
+  assert.equal(await run("flushSave()"),false,"Retry must not silently turn a stale guest write into an overwrite");
+  assert.equal(run("state.savedRevision<state.revision"),true);
+  assert.match(elements.get("plannerModeNotice").innerHTML,/Guest save conflict[\s\S]*Export[\s\S]*reload/i);
+
+  // Both simultaneous writers enter the same Web Lock, and comparison occurs
+  // inside it. This deterministic mutex models cooperating browser tabs.
+  storedValues.set("strata_guest_plan_v1",guestBase);reset();let lockTail=Promise.resolve();const lockNames=[];
+  context.navigator={locks:{request:async(name,write)=>{
+    lockNames.push(name);const previous=lockTail;let unlock;
+    lockTail=new Promise(resolve=>{unlock=resolve;});await previous;
+    try{return write();}finally{unlock();}
+  }}};
+  const tabTwo=fixture();tabTwo.days.Monday[0].reps="9";context.tabTwo=tabTwo;
+  const parallelGuestSaves=await Promise.allSettled([run("saveGuestPlan(tabOne,state.guestRaw)"),run("saveGuestPlan(tabTwo,state.guestRaw)")]);
+  assert.equal(parallelGuestSaves.filter(result=>result.status==="fulfilled").length,1,"Only one competing writer may save the shared base revision");
+  assert.equal(parallelGuestSaves.find(result=>result.status==="rejected").reason.code,"GUEST_PLAN_CHANGED");
+  assert.deepEqual(lockNames,["strata-guest-week-save","strata-guest-week-save"]);
+
+  // A queued lock must save its captured revision, not live edits made while
+  // it waited. The later revision stays dirty and is saved by the next flush.
+  storedValues.set("strata_guest_plan_v1",guestBase);reset();let releaseGuestLock;
+  context.navigator.locks.request=(name,write)=>new Promise((resolve,reject)=>{releaseGuestLock=()=>{try{resolve(write());}catch(error){reject(error);}};});
+  run("state.plan.days.Monday[0].reps='7';state.revision=1");
+  const lockedSave=run("performSave()");await new Promise(setImmediate);
+  run("state.plan.days.Monday[0].reps='11';state.revision=2");releaseGuestLock();assert.equal(await lockedSave,true);
+  assert.equal(JSON.parse(storedValues.get("strata_guest_plan_v1")).days.Monday[0].reps,"7","The lock writes the captured plan only");
+  assert.equal(snapshot().days.Monday[0].reps,"11","An old save completion must not replace newer in-memory edits");
+  assert.equal(run("state.savedRevision"),1);assert.equal(run("state.revision"),2);
+  context.navigator.locks.request=async(name,write)=>write();assert.equal(await run("flushSave()"),true);
+  assert.equal(JSON.parse(storedValues.get("strata_guest_plan_v1")).days.Monday[0].reps,"11");
+
+  reset();const previousGuestRaw=run("state.guestRaw"),normalStorageWrite=context.localStorage.setItem;
+  context.localStorage.setItem=()=>{throw new Error("Storage full");};run("state.plan.days.Monday[0].reps='13';queueSave()");
+  assert.equal(await run("flushSave()"),false,"Storage failure must keep a guest revision unsaved");
+  assert.equal(run("state.guestRaw"),previousGuestRaw,"A failed storage write must not advance the expected copy");
+  assert.equal(run("state.savedRevision<state.revision"),true);
+  context.localStorage.setItem=normalStorageWrite;assert.equal(await run("flushSave()"),true,"A storage failure should allow a safe retry against the original base");
+  assert.equal(JSON.parse(storedValues.get("strata_guest_plan_v1")).days.Monday[0].reps,"13");
+  delete context.navigator;
+
+  // A network failure survives reload under only the original account ID.
+  storedValues.clear();reset({guest:false});
+  let planWrites=0;
+  context.fetch=async(path,options={})=>{
+    if(path==="/api/me")return {ok:true,json:async()=>({user:{id:"u1"},csrfToken:"planner-csrf"})};
+    if(path===CATALOG_URL)return {ok:true,json:async()=>exercises};
+    if(path==="/api/plan"&&options.method==="PUT"){planWrites+=1;throw new Error("Offline");}
+    if(path==="/api/plan")return {ok:true,json:async()=>({plan:fixture(),user:{id:"u1",name:"Runtime"},csrfToken:"planner-csrf",planUpdatedAt:110})};
+    if(path==="/api/community-plans/mine")return {ok:true,json:async()=>({plans:[],userId:"u1"})};
+    return {ok:false,status:404,json:async()=>({error:"Not found"})};
+  };
+  run("state.plan.days.Monday[0].reps='10–12';queueSave()");
+  const offlineKey=run("state.draftKey");
+  assert.match(offlineKey,/^strata_plan_draft_v1:user-u1:/);
+  assert.equal(JSON.parse(storedValues.get(offlineKey)).baseUpdatedAt,100);
+  assert.equal(await run("flushSave()"),false);
+  assert.equal(planWrites,1);
+  assert.equal(JSON.parse(storedValues.get(offlineKey)).plan.days.Monday[0].reps,"10–12");
+  await run("init()");
+  assert.equal(planWrites,1,"Reloading a draft must not save or silently overwrite the server week");
+  assert.equal(snapshot().days.Monday[0].reps,"6–8","The server copy remains displayed until the user chooses recovery");
+  assert.equal(run("state.conflictDraft.days.Monday[0].reps"),"10–12");
+  assert.equal(elements.get("plannerShell").inert,true);
+  assert.equal(await run("flushSave()"),false);
+  assert.equal(run("reviewConflictDraft()"),true);
+  assert.equal(await run("flushSave()"),false,"Draft recovery needs explicit Save reviewed changes");
+  const recoverySourceValue=storedValues.get(offlineKey);
+  // Simulate the original tab continuing to edit its own draft. A successful
+  // recovery must not delete that tab's newer local snapshot.
+  const newerOtherTab=JSON.parse(recoverySourceValue);newerOtherTab.plan.days.Monday[0].reps="15";
+  storedValues.set(offlineKey,JSON.stringify(newerOtherTab));
+  let recoveryBody;
+  context.fetch=async(path,options={})=>{
+    if(path==="/api/me")return {ok:true,json:async()=>({user:{id:"u1"},csrfToken:"planner-csrf"})};
+    if(path==="/api/plan"&&options.method==="PUT"){
+      recoveryBody=JSON.parse(options.body);
+      assert.equal(options.headers["X-Strata-User"],"u1");
+      return {ok:true,json:async()=>({plan:recoveryBody.plan,planUpdatedAt:120})};
+    }
+    return {ok:false,status:404,json:async()=>({error:"Not found"})};
+  };
+  assert.equal(await run("flushSave({confirmConflict:true})"),true);
+  assert.equal(recoveryBody.expectedPlanUpdatedAt,110,"Recovered saves must use the latest reviewed server revision");
+  assert.equal(recoveryBody.expectedUserId,"u1","Plan writes must also bind the original account ID");
+  assert.equal(JSON.parse(storedValues.get(offlineKey)).plan.days.Monday[0].reps,"15","Saving must not delete another tab's newer draft");
+  reset({guest:false,userId:"u2"});assert.equal(run("offerRecoveredDraft()"),false,"Another account's drafts must never be offered");
+  reset({guest:false});assert.equal(run("offerRecoveredDraft()"),true);
+  assert.equal(run("keepLatestPlan()"),true);
+  assert.equal(storedValues.has(offlineKey),false,"An explicitly discarded unchanged snapshot should be removed");
+
+  // Draft writes use separate keys per tab; conflicts clear stale undo state.
+  storedValues.clear();reset({guest:false});run("removeItem('Monday','editing-item')");
+  const firstTabKey=run("state.draftKey");
+  reset({guest:false});run("state.plan.days.Monday[0].reps='14';queueSave()");
+  assert.notEqual(run("state.draftKey"),firstTabKey,"Two tabs must not overwrite the same draft storage key");
+  assert.equal([...storedValues.keys()].filter((key)=>key.startsWith("strata_plan_draft_v1:user-u1:")).length,2);
+  const newerPlan=fixture();newerPlan.days.Monday[0].reps="2–4";context.newerPlan=newerPlan;
+  await run("recoverPlanConflict({status:409,code:'PLAN_CHANGED',data:{plan:newerPlan,planUpdatedAt:200}},{silent:true})");
+  assert.equal(run("state.undoRemoval"),null,"Undo history must not be replayed onto an unrelated newer account week");
+  assert.equal(run("undoLastRemoval()"),false);
+  assert.equal(snapshot().days.Monday[0].reps,"2–4");
+  run("clearTimeout(state.saveTimer)");
+
+  // A userless shared-plan response cannot supply a replacement account's CSRF.
+  storedValues.clear();reset({guest:false});
+  let identity="u1",unexpectedWrites=0;
+  context.fetch=async(path,options={})=>{
+    if(path==="/api/me")return {ok:true,json:async()=>({user:{id:identity},csrfToken:`csrf-${identity}`})};
+    if(path==="/api/community-plans/mine")return {ok:true,json:async()=>({plans:[],csrfToken:"unbound-csrf",userId:"u1"})};
+    if(options.method==="PUT"||options.method==="POST"){unexpectedWrites+=1;return {ok:true,json:async()=>({})};}
+    return {ok:false,status:404,json:async()=>({error:"Not found"})};
+  };
+  assert.equal(await run("loadSharedPlans()"),true);
+  assert.equal(run("state.csrfToken"),"csrf-u1","Only an identity-bound response can refresh the CSRF token");
+  run("state.plan.days.Monday[0].reps='7';queueSave()");identity="u2";
+  assert.equal(await run("flushSave()"),false);
+  assert.equal(unexpectedWrites,0,"An old account tab must not send its plan under the new account session");
+  assert.equal(run("state.user.id"),"u1");
+  assert.equal(run("state.accountChanged"),true);
+  assert.equal(elements.get("accountChangedNotice").hidden,false);
+  assert.equal(elements.get("plannerShell").inert,true);
+  assert.match(run("state.draftKey"),/user-u1:/,"Account-change recovery stays scoped to the original owner");
+  console.log(JSON.stringify({...result,plannerCapacityGuards:true,legacyDraftPreserved:true,offlineGuestMode:true,removalUndo:true,exerciseReplacement:true,scopedWeekTemplates:true,portableWeekImport:true,accountDraftRecovery:true,multipleDraftIsolation:true,accountSwitchGuard:true,guestStaleWriteGuard:true,guestLockSnapshots:true,guestStorageRetry:true},null,2));
 })().catch((error)=>{console.error(error);process.exitCode=1;});
