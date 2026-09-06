@@ -4,7 +4,6 @@
   const $=(id)=>document.getElementById(id);
   const esc=(value)=>String(value??"").replace(/[&<>"']/g,(character)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[character]));
   const number=(value)=>Number(value||0).toLocaleString(undefined,{maximumFractionDigits:2});
-  const GUEST_KEY="strata_guest_workouts_v1";
   const state={mode:"",user:null,ownerId:"",contextId:W.id(),csrfToken:"",catalog:[],plan:null,day:W.dayFromSearch(location.search),workout:null,dirty:false,sequence:0,saving:null,saveTimer:null,blocked:false,conflict:null,pausedSeconds:null,timerAnnounced:false,draftKey:"",recoveries:[],history:[],offset:0,hasMore:false,historyBusy:false,detailBusy:false,loading:false,toastTimer:null};
   function toast(message){
     $("workoutToast").textContent=message;$("workoutToast").classList.add("is-visible");
@@ -13,7 +12,7 @@
   function status(message,kind=""){ $("saveStatus").textContent=message;$("saveStatus").dataset.state=kind; }
   function errorMessage(message){$("sessionError").textContent=message;$("sessionError").hidden=!message;}
   function exercise(id){return state.catalog.find((item)=>item.id===id)||{name:id,equipment:"",caution:""};}
-  function owner(){return state.mode==="guest"?"guest":`account:${state.user.id}`;}
+  function owner(){return `account:${state.user.id}`;}
   function saveError(error){
     if(error.status===401||error.code==="IDENTITY_CHANGED")return "Your account session changed. Your device draft has been kept. Reload and sign in to the original account to recover it.";
     if(error.status===403)return "Your secure session could not authorize the save. Reload, then review your recovered draft before saving again.";
@@ -27,6 +26,8 @@
     try{
       response=await fetch(path,{...options,signal:controller.signal,credentials:"same-origin",cache:"no-store",headers:{Accept:"application/json",...(options.body?{"Content-Type":"application/json"}:{}),...(method!=="GET"?{"X-CSRF-Token":state.csrfToken,"X-Strata-User":String(state.user?.id||"")}:{}),...(options.headers||{})}});
       const data=await response.json().catch(()=>({}));
+      if(response.status===401)blockSession();
+      if(response.status===402)blockAccess();
       if(!response.ok)throw Object.assign(new Error(data.error||"STRATA could not complete this request."),{status:response.status,code:data.code,data});
       return data;
     }catch(error){
@@ -43,6 +44,12 @@
     if($("detailDialog").open)$("detailDialog").close();
     if($("finishDialog").open)$("finishDialog").close();
   }
+  function blockAccess(){
+    state.blocked=true;clearTimeout(state.saveTimer);persistDraft();
+    $("trainingRoom").hidden=true;$("historySection").hidden=true;$("recoveryPanel").hidden=true;$("conflictPanel").hidden=true;$("accessPanel").hidden=false;
+    $("modeNotice").textContent="Your Strata+ access ended. Saved sessions and device drafts are kept for when access resumes.";
+    if($("detailDialog").open)$("detailDialog").close();if($("finishDialog").open)$("finishDialog").close();
+  }
   async function assertIdentity(){
     if(state.mode!=="account")return;
     let current;
@@ -50,6 +57,7 @@
     if(String(current.user?.id)!==String(state.user.id)){
       blockSession();throw Object.assign(new Error("The signed-in account changed."),{code:"IDENTITY_CHANGED"});
     }
+    if(current.user.discovery?.active!==true){blockAccess();throw Object.assign(new Error("Strata+ access is required. Your device draft has been kept."),{status:402});}
     state.csrfToken=String(current.csrfToken||"");
     if(!state.csrfToken)throw new Error("Your secure account session is not ready. Reload before saving.");
   }
@@ -57,12 +65,6 @@
     const data=await api(path);
     await assertIdentity();
     return data;
-  }
-  function guestWorkouts(){
-    let parsed;
-    try{parsed=JSON.parse(localStorage.getItem(GUEST_KEY)||"[]");}catch{throw new Error("Guest storage is unavailable or unreadable. Your existing browser data has not been replaced.");}
-    if(!Array.isArray(parsed)||parsed.some((workout)=>!W.readDraft(JSON.stringify({ownerId:"guest",workout}),"guest")))throw new Error("The guest log could not be read safely. Existing browser data has not been replaced.");
-    return parsed;
   }
   function persistDraft(){
     if(!state.workout||!state.ownerId)return true;
@@ -102,11 +104,10 @@
     $("conflictPanel").hidden=true;$("celebration").hidden=true;$("recoveryPanel").hidden=true;
     $("startPanel").hidden=true;$("sessionPanel").hidden=false;
     errorMessage("");renderSession();persistDraft();
-    status(dirty?"Recovered device draft. Review it, then choose Save now.":state.mode==="guest"?"Saved on this device only":"Saved to your account",dirty?"error":"saved");
+    status(dirty?"Recovered device draft. Review it, then choose Save now.":"Saved to your account",dirty?"error":"saved");
     $("sessionTitle").focus();
   }
   async function fetchWorkout(id){
-    if(state.mode==="guest")return guestWorkouts().find((workout)=>workout.id===id)||null;
     try{return(await accountRead(`/api/workouts/${encodeURIComponent(id)}`)).workout;}
     catch(error){if(error.status===404)return null;throw error;}
   }
@@ -135,7 +136,7 @@
     $("todayLabel").textContent=`${W.localDate()} · ${state.day} plan`;
     $("startWorkout").disabled=!items.length||!state.plan||state.blocked;
     if(!items.length){
-      $("planPreview").innerHTML=`<div class="empty-state"><strong>${state.plan?.restDay===state.day?"Recovery is part of the plan.":"A fresh page for this day."}</strong>${state.plan?.restDay===state.day?"There are no exercises scheduled for your recovery day. Choose another plan day when you’re ready to train.":"Add exercises in Plan Studio, or choose a day that already has a session."}</div>`;
+      $("planPreview").innerHTML=`<div class="empty-state"><strong>${(state.plan?.restDays||[state.plan?.restDay]).includes(state.day)?"Recovery is part of the plan.":"A fresh page for this day."}</strong>${(state.plan?.restDays||[state.plan?.restDay]).includes(state.day)?"There are no exercises scheduled for your recovery day. Choose another plan day when you’re ready to train.":"Add exercises in Plan Studio, or choose a day that already has a session."}</div>`;
       $("startHint").textContent="Your plan remains editable in Plan Studio.";return;
     }
     $("planPreview").innerHTML=items.map((item,index)=>`<article class="preview-card"><span class="preview-number">${String(index+1).padStart(2,"0")}</span><strong>${esc(exercise(item.exerciseId).name)}</strong><small>${Number(item.sets)} sets · ${esc(item.reps)}</small></article>`).join("");
@@ -179,7 +180,7 @@
     state.dirty=true;state.sequence++;
     if(state.workout.status==="active")state.workout.elapsedSeconds=Math.min(604800,Math.max(0,Math.floor((Date.now()-state.workout.startedAt)/1000)));
     const stored=persistDraft();
-    status(stored?state.mode==="guest"?"Saving on this device…":"Device draft kept · account save pending":"Device recovery unavailable. Keep this tab open until saved.",stored?"":"error");
+    status(stored?"Device draft kept · account save pending":"Device recovery unavailable. Keep this tab open until saved.",stored?"":"error");
     clearTimeout(state.saveTimer);
     if(save&&!state.conflict)state.saveTimer=setTimeout(()=>void flushSave(),900);
   }
@@ -192,18 +193,6 @@
     $("conflictComparison").innerHTML=`<div><strong>Latest saved version</strong><span>${latest?`${esc(latest.title)} · ${saved.completed}/${saved.total} sets · revision ${Number(latest.revision)}`:"This session is no longer in saved history."}</span></div><div><strong>Your device draft</strong><span>${esc(state.workout.title)} · ${mine.completed}/${mine.total} sets · ${esc(state.workout.status)}</span></div>`;
     $("useLatest").disabled=!latest;status("Save conflict. Review both versions above.","error");updateSessionMeta();$("conflictTitle").focus();
   }
-  async function saveGuest(snapshot){
-    const save=()=>{
-      const rows=guestWorkouts(),index=rows.findIndex((item)=>item.id===snapshot.id),existing=rows[index];
-      if(existing&&existing.revision!==snapshot.revision)throw Object.assign(new Error("The guest session changed in another tab."),{status:409,data:{workout:existing}});
-      if(!existing&&snapshot.revision)throw Object.assign(new Error("This guest session was removed in another tab."),{status:409,data:{workout:null}});
-      const saved={...W.payload(snapshot),revision:(existing?.revision||0)+1,updatedAt:Date.now()};
-      if(index<0)rows.push(saved);else rows[index]=saved;
-      try{localStorage.setItem(GUEST_KEY,JSON.stringify(rows));}catch{throw new Error("Guest history could not be saved. Device storage may be full or disabled. Download your draft before closing this tab.");}
-      return saved;
-    };
-    return navigator.locks?.request?await navigator.locks.request("strata-guest-workouts-save",save):save();
-  }
   async function flushSave(){
     clearTimeout(state.saveTimer);
     if(!state.workout||!state.dirty||state.blocked||state.conflict)return false;
@@ -213,8 +202,7 @@
     const save=(async()=>{
       try{
         let saved;
-        if(state.mode==="guest")saved=await saveGuest(snapshot);
-        else{
+        {
           await assertIdentity();
           const body=snapshot.revision?{workout:W.payload(snapshot),expectedRevision:snapshot.revision}:{workout:W.payload(snapshot)};
           const result=await api(snapshot.revision?`/api/workouts/${encodeURIComponent(snapshot.id)}`:"/api/workouts",{method:snapshot.revision?"PUT":"POST",body:JSON.stringify(body)});
@@ -317,10 +305,7 @@
     state.historyBusy=true;$("refreshHistory").disabled=true;$("loadMore").disabled=true;$("historyError").hidden=true;
     try{
       let result;
-      if(state.mode==="guest"){
-        const rows=guestWorkouts().sort((a,b)=>b.startedAt-a.startedAt);const offset=more?state.offset:0;
-        result={workouts:rows.slice(offset,offset+20).map(W.summary),hasMore:rows.length>offset+20};
-      }else result=await accountRead(`/api/workouts?limit=20&offset=${more?state.offset:0}`);
+      result=await accountRead(`/api/workouts?limit=20&offset=${more?state.offset:0}`);
       if(!Array.isArray(result.workouts)||typeof result.hasMore!=="boolean")throw new Error("Workout history returned an incomplete response. Try again.");
       state.offset=(more?state.offset:0)+result.workouts.length;
       const combined=more?[...state.history,...result.workouts]:result.workouts;
@@ -348,43 +333,31 @@
     }catch(error){toast(saveError(error));}
     finally{state.detailBusy=false;}
   }
-  async function initialize({guest=false}={}){
+  async function initialize(){
     if(state.loading)return;
     if(state.blocked){location.reload();return;}
     state.loading=true;$("loadError").hidden=true;$("accessPanel").hidden=true;
     try{
-      const catalogPromise=fetch("/exercises.json",{credentials:"same-origin"}).then((response)=>{if(!response.ok)throw new Error("The exercise library could not be loaded.");return response.json();});
-      const results=await Promise.allSettled([catalogPromise,guest?Promise.resolve(null):api("/api/me")]);
-      if(results[0].status==="rejected")throw results[0].reason;
-      if(!Array.isArray(results[0].value))throw new Error("The exercise library response was incomplete.");
-      state.catalog=results[0].value;
-      const identity=results[1];
-      if(!guest&&identity.status==="rejected"){
-        if(identity.reason.status===401){$("accessPanel").hidden=false;$("modeNotice").textContent="Choose account sync or a separate guest log to continue.";return;}
-        throw identity.reason;
-      }
-      state.mode=guest?"guest":"account";state.user=guest?null:identity.value.user;state.csrfToken=guest?"":String(identity.value.csrfToken||"");
-      if(!guest&&!state.user?.id)throw new Error("Your account identity could not be verified. Retry before logging a session.");
-      state.ownerId=owner();
-      $("modeNotice").innerHTML=guest?"<strong>Guest workout room.</strong> Stored only in this browser profile, separate from all account logs. Anyone using this profile can view it. <a href='/workout.html'>Use account sync</a>":`<strong>${esc(state.user.name||"Your account")}’s workout room.</strong> Sessions sync to your account. Unsaved recovery drafts may remain in this browser. <a href='/account.html'>Account settings</a>`;
-      if(guest){
-        const raw=localStorage.getItem("strata_guest_plan_v1");
-        state.plan=raw?JSON.parse(raw):{restDay:"Sunday",days:Object.fromEntries(W.DAYS.map((day)=>[day,[]]))};
-        if(!state.plan||!state.plan.days)throw new Error("Your guest plan could not be read. Open Plan Studio to review it.");
-      }else{
-        const planResult=await accountRead("/api/plan");
-        if(String(planResult.user?.id)!==String(state.user.id)){blockSession();return;}
-        state.plan=planResult.plan;
-        if(!state.plan?.days)throw new Error("Your account plan could not be loaded. Retry to continue.");
-      }
+      const identity=await api("/api/me");
+      if(!identity.user?.id)throw new Error("Sign in to Strata+ to open your workout room.");
+      if(identity.user.discovery?.active!==true){$("accessPanel").hidden=false;$("modeNotice").textContent="Workout logging and history are included in Strata+.";return;}
+      state.mode="account";state.user=identity.user;state.csrfToken=String(identity.csrfToken||"");state.ownerId=owner();
+      const catalog=await fetch("/exercises.json",{credentials:"same-origin"});
+      if(!catalog.ok)throw new Error("The exercise library could not be loaded.");
+      state.catalog=await catalog.json();if(!Array.isArray(state.catalog))throw new Error("The exercise library response was incomplete.");
+      const planResult=await accountRead("/api/plan");
+      if(String(planResult.user?.id)!==String(state.user.id)){blockSession();return;}
+      state.plan=planResult.plan;
+      if(!state.plan?.days)throw new Error("Your account plan could not be loaded. Retry to continue.");
+      $("modeNotice").innerHTML=`<strong>${esc(state.user.name||"Your account")}’s Strata+ workout room.</strong> Sessions sync to your account. Unsaved recovery drafts may remain in this browser. <a href='/account.html'>Account settings</a>`;
       $("trainingRoom").hidden=false;$("historySection").hidden=false;renderPlan();scanDrafts();await loadHistory();
+      if(location.hash==="#historySection"&&!state.blocked){$("historySection").scrollIntoView({block:"start"});$("historyTitle").focus();}
     }catch(error){
-      $("loadError").hidden=false;$("loadErrorMessage").textContent=error.message;
-      $("modeNotice").textContent=state.mode==="account"?"Account workout room unavailable. Your sessions have not switched into guest mode.":"The workout room could not load. Retry when your connection is ready.";
+      $("loadError").hidden=false;$("loadErrorMessage").textContent=saveError(error);
+      $("modeNotice").textContent="The workout room could not load. Your saved sessions and device drafts have been kept.";
     }finally{state.loading=false;}
   }
-  $("enterGuest").addEventListener("click",()=>{const url=new URL(location.href);url.searchParams.set("guest","1");history.replaceState(null,"",url);void initialize({guest:true});});
-  $("retryLoad").addEventListener("click",()=>void initialize({guest:new URLSearchParams(location.search).get("guest")==="1"}));
+  $("retryLoad").addEventListener("click",()=>void initialize());
   $("planDay").addEventListener("change",()=>{
     state.day=$("planDay").value;
     const url=new URL(location.href);url.searchParams.set("day",state.day);history.replaceState(null,"",url);
@@ -481,7 +454,6 @@
   window.addEventListener("beforeunload",(event)=>{persistDraft();if(state.dirty){event.preventDefault();event.returnValue="";}});
   document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")persistDraft();else if(state.mode==="account"&&!state.blocked)void assertIdentity().catch((error)=>{if(error.status!==401&&error.code!=="IDENTITY_CHANGED")status(saveError(error),"error");});tick();});
   window.addEventListener("online",()=>{if(state.dirty&&!state.blocked&&!state.conflict)toast("Connection restored. Choose Save now to retry your pending account changes.");});
-  window.addEventListener("storage",(event)=>{if(event.key===GUEST_KEY&&state.mode==="guest"&&state.workout?.status==="active")toast("Guest history changed in another tab. Saving will check for conflicting changes.");});
   setInterval(tick,1000);
-  void initialize({guest:new URLSearchParams(location.search).get("guest")==="1"});
+  void initialize();
 })();

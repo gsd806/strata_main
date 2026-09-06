@@ -154,7 +154,7 @@ async function phase(name,operation) {
 
 function fixturePlan(user,round=0,variant=0) {
   return {
-    version:1,restDay:"Sunday",
+    version:1,restDay:"Sunday",restDays:["Sunday"],
     days:Object.fromEntries(DAYS.map((day,dayIndex)=>[
       day,dayIndex%2===0&&dayIndex<6?Array.from({length:4},(_,slot)=>({
         instanceId:`load-user-${user.index}-day-${dayIndex}-slot-${slot}`,
@@ -369,6 +369,10 @@ async function main() {
       const retry=await save(user,user.plan,revision,{metric:"plan.retry"});
       assert.equal(retry.body.reused,true);
       assert.equal(retry.body.planUpdatedAt,user.revision,"A duplicate save cannot advance the revision.");
+    }));
+
+    await phase("100 explicit Strata+ trial activations",()=>allUsers(users,async(user)=>{
+      await request(user,"/api/discovery/trial",{method:"POST",metric:"plus.trial",expected:[200,201],body:{}});
     }));
 
     await phase("100 concurrent workout starts and safe retries",()=>allUsers(users,async(user)=>{

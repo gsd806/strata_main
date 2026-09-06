@@ -96,7 +96,7 @@ async function main() {
   assert.match(workerText,/pathname==="\/healthz"/);
   const precacheBlock=workerText.match(/const PRECACHE_URLS=\[([\s\S]*?)\];/);
   assert.ok(precacheBlock,"service worker must expose a literal maintenance-auditable precache list");
-  assert.doesNotMatch(precacheBlock[1],/account\.html|discover\.html|admin\.html|reset-password|delete-account|\/api\/|\/auth\//);
+  assert.doesNotMatch(precacheBlock[1],/account\.html|discover\.html|workout\.html|onboarding\.html|admin\.html|reset-password|delete-account|\/api\/|\/auth\//);
 
   for(const [url,size] of [["/icons/strata-192.png",192],["/icons/strata-512.png",512],["/icons/strata-maskable-512.png",512],["/icons/apple-touch-icon.png",180]]) {
     const icon=await get(url),body=Buffer.from(icon.body);
@@ -128,7 +128,7 @@ async function main() {
     assert.match(pageText,new RegExp(`Build ${BUILD.replace(/\./g,"\\.")}`),route);
   }
 
-  for(const route of ["/account.html","/discover.html","/admin"]) {
+  for(const route of ["/account.html","/discover.html","/workout.html","/onboarding.html","/admin"]) {
     const page=await get(route);
     assert.match(page.response.headers.get("cache-control"),/no-store/,route);
   }

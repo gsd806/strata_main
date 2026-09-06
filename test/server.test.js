@@ -66,7 +66,7 @@ test.before(startServer);
 test.after(stopServer);
 
 test("serves rankings and gates private account pages",async()=>{
-  assert.equal(BUILD,"7.1.0");
+  assert.equal(BUILD,"7.1.1");
   const home=await request("/");
   assert.equal(home.response.status,200);
   assert.equal(home.response.headers.get("cache-control"),"private, no-store");
@@ -240,16 +240,16 @@ test("creates an account with a private default plan",async()=>{
   assert.equal(fractional.data.error,"Sets must be a whole number from 1 to 10.");
 
   const occupiedRestPlan=structuredClone(saved.data.plan);
-  occupiedRestPlan.restDay="Monday";
+  occupiedRestPlan.restDay="Monday";occupiedRestPlan.restDays=["Monday"];
   const occupiedRest=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":csrfToken},body:JSON.stringify({plan:occupiedRestPlan,expectedPlanUpdatedAt:saved.data.planUpdatedAt})});
   assert.equal(occupiedRest.response.status,400);
-  assert.equal(occupiedRest.data.error,"The selected rest day must not contain exercises.");
+  assert.equal(occupiedRest.data.error,"Rest days must not contain exercises.");
 
   const invalidRestPlan=structuredClone(saved.data.plan);
-  invalidRestPlan.restDay="Funday";
+  invalidRestPlan.restDay="Funday";invalidRestPlan.restDays=["Funday"];
   const invalidRest=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":csrfToken},body:JSON.stringify({plan:invalidRestPlan,expectedPlanUpdatedAt:saved.data.planUpdatedAt})});
   assert.equal(invalidRest.response.status,400);
-  assert.equal(invalidRest.data.error,"Choose a valid rest day.");
+  assert.equal(invalidRest.data.error,"Choose valid, unique rest days.");
 
   const malformedPlan=await request("/api/plan",{method:"PUT",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":csrfToken},body:JSON.stringify({plan:null,expectedPlanUpdatedAt:saved.data.planUpdatedAt})});
   assert.equal(malformedPlan.response.status,400);

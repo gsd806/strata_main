@@ -5,12 +5,12 @@
   <meta name="theme-color" content="#10110f" /><meta name="description" content="Build your editable first training week around your goals, equipment, experience, and availability." />
   <title>Your first week — STRATA</title>
   <link rel="icon" href="/icons/strata-icon.svg" type="image/svg+xml" /><link rel="manifest" href="/manifest.webmanifest" />
-  <link rel="stylesheet" href="/onboarding.css?v=7.1.0" /><link rel="stylesheet" href="/experience.css?v=7.1.0" />
-  <script src="/discovery-core.js?v=7.1.0" defer></script><script src="/onboarding-core.js?v=7.1.0" defer></script><script src="/onboarding.js?v=7.1.0" defer></script><script src="/pwa.js?v=7.1.0" defer></script>
+  <link rel="stylesheet" href="/onboarding.css?v=7.1.1" /><link rel="stylesheet" href="/experience.css?v=7.1.1" />
+  <script src="/discovery-core.js?v=7.1.1" defer></script><script src="/onboarding-core.js?v=7.1.1" defer></script><script src="/onboarding.js?v=7.1.1" defer></script><script src="/pwa.js?v=7.1.1" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#setupTitle">Skip to setup</a>
-  <header><a class="brand" href="/">STRATA<span aria-hidden="true"> / </span></a><nav aria-label="Training"><a href="/planner.html">Plan</a><a href="/workout.html">Train</a><a href="/account.html">Account</a></nav></header>
+  <header><a class="brand" href="/">STRATA<span aria-hidden="true"> / </span></a><nav aria-label="Training"><a href="/discover.html">Strata+</a><a href="/planner.html">Plan</a><a href="/workout.html">Train</a><a href="/account.html">Account</a></nav></header>
   <main>
     <section class="intro"><p class="eyebrow">01 / YOUR STARTING POINT</p><h1 id="setupTitle">A WEEK THAT<br />FITS <em>YOUR LIFE.</em></h1><p>A few choices. A clear starting point. Every movement stays editable in your planner.</p><p id="accountMode" class="mode" role="status">Checking your saved plan…</p></section>
     <div class="setup-grid">
@@ -22,10 +22,10 @@
           <section class="step"><span class="step-number">03</span><div><h2>Make room for your week.</h2><p>Pick one to six days. Leave space for recovery.</p><div id="dayChoices" class="choices days"></div><label class="duration">Time per session<select id="minutes"><option value="20">About 20 minutes</option><option value="35" selected>About 35 minutes</option><option value="50">About 50 minutes</option></select></label></div></section>
           <button class="primary" id="generateWeek" type="submit">Preview my first week <span aria-hidden="true">↗</span></button>
         </fieldset>
-        <p id="setupStatus" role="status" aria-live="polite"></p><button id="retrySetup" type="button" hidden>Retry connection</button><button id="offlineSetup" type="button" hidden>Use a separate guest plan</button>
+        <p id="setupStatus" role="status" aria-live="polite"></p><button id="retrySetup" type="button" hidden>Retry connection</button>
       </form>
-      <aside class="week-preview" aria-labelledby="previewTitle"><div class="preview-heading"><p class="eyebrow">YOUR WEEK / PREVIEW</p><span class="preview-dot" aria-hidden="true"></span></div><h2 id="previewTitle" tabindex="-1">Small steps.<br />A stronger routine.</h2><div id="weekPreview"><div class="week-illustration" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><p>Your training days will appear here. Previewing never changes your saved week.</p></div><div id="saveControls" hidden><p id="replaceNotice"></p><label class="replace-check" id="replaceLabel" hidden><input id="replaceWeek" type="checkbox" /> I reviewed the preview and want to replace my current week.</label><button class="primary" id="saveWeek" type="button">Save this week</button><p class="fine-print">Setup choices are remembered in this browser. Your week follows the account or guest storage shown above.</p></div><a id="openPlanner" class="primary" href="/planner.html" hidden>Edit my week →</a></aside>
+      <aside class="week-preview" aria-labelledby="previewTitle"><div class="preview-heading"><p class="eyebrow">YOUR WEEK / PREVIEW</p><span class="preview-dot" aria-hidden="true"></span></div><h2 id="previewTitle" tabindex="-1">Small steps.<br />A stronger routine.</h2><div id="weekPreview"><div class="week-illustration" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><p>Your training days will appear here. Previewing never changes your saved week.</p></div><div id="saveControls" hidden><p id="replaceNotice"></p><label class="replace-check" id="replaceLabel" hidden><input id="replaceWeek" type="checkbox" /> I reviewed the preview and want to replace my current week.</label><button class="primary" id="saveWeek" type="button">Save this week</button><p class="fine-print">Setup choices are remembered in this browser. Your week is saved to your Strata+ account.</p></div><a id="openPlanner" class="primary" href="/planner.html" hidden>Edit my week →</a></aside>
     </div>
-  </main><footer><span>STRATA / BUILD 7.1.0</span><a href="/planner.html">Already have a routine? Open your planner →</a></footer>
+  </main><footer><span>STRATA / BUILD 7.1.1</span><a href="/planner.html">Already have a routine? Open your planner →</a></footer>
 </body>
 </html>

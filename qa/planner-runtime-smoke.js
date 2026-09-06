@@ -145,11 +145,14 @@ function clickSelectDay(day){
   clickSelectDay("Tuesday");
   assert.equal(vm.runInContext("state.selectedDay",context),"Tuesday","Day chips must update the quick-add target");
   assert.match(elements.get("libraryList").innerHTML,/aria-label="Add [^"]+ to Tuesday"/,"Library add controls must announce the selected day");
-  const originalRest=vm.runInContext("state.plan.restDay",context);
-  for(const handler of elements.get("recommendRest").listeners.click||[])handler({currentTarget:elements.get("recommendRest")});
-  const recommendedRest=vm.runInContext("state.plan.restDay",context);
-  assert.notEqual(recommendedRest,originalRest,"Recommend rest day must exclude the current recovery day");
-  assert.equal(vm.runInContext("state.plan.days[state.plan.restDay].length",context),0,"A recommendation must choose an empty day");
+  assert.equal(elements.has("recommendRest"),false,"Rest recommendations must be removed");
+  vm.runInContext("setRestDay('Sunday')",context);
+  assert.equal(vm.runInContext("restDays().length",context),0,"The final rest marker can be removed");
+  vm.runInContext("setRestDay('Wednesday');setRestDay('Saturday')",context);
+  assert.equal(vm.runInContext("restDays().join(',')",context),"Wednesday,Saturday");
+  vm.runInContext("setRestDay('Wednesday')",context);
+  assert.equal(vm.runInContext("restDays().join(',')",context),"Saturday","Removing one marker preserves the others");
+  vm.runInContext("setRestDay('Saturday');setRestDay('Sunday')",context);
 
   const focusedRepsInput={
     dataset:{itemReps:"runtime-plan-item"},value:"12–15",
@@ -374,7 +377,7 @@ function clickSelectDay(day){
   assert.match(html,/id="manageWeekTemplates"/);
   assert.match(html,/<dialog[^>]+id="replaceExerciseDialog"[^>]+aria-labelledby=/,"Replacement must use an accessible modal dialog");
   assert.match(elements.get("weekBoard").innerHTML,/data-replace-item="editing-item"/);
-  assert.match(elements.get("startPlannedWorkout").href,/^\/workout\.html\?day=/);
+  assert.equal(elements.has("startPlannedWorkout"),false,"Workout starts belong in Strata+");
   assert.equal(run("removeItem('Monday','editing-item')"),true);
   run("state.plan.days.Tuesday.push({instanceId:'newer-edit',exerciseId:state.exercises[1].id,sets:2,reps:'12'});queueSave();");
   assert.equal(run("undoLastRemoval()"),true,"Undo must restore only the removed item, preserving later edits");
@@ -391,9 +394,20 @@ function clickSelectDay(day){
   assert.equal(snapshot().days.Monday.length,30);
   reset();run("removeItem('Monday','editing-item');for(const day of DAYS.slice(0,5))state.plan.days[day]=Array.from({length:28},(_,i)=>({instanceId:day+i,exerciseId:state.exercises[0].id,sets:3,reps:'8'}));");
   assert.equal(run("undoLastRemoval()"),false,"Undo must respect weekly capacity");
-  reset();run("removeItem('Monday','editing-item');state.plan.restDay='Monday'");
+  reset();run("removeItem('Monday','editing-item');updateRestDays(state.plan,['Monday','Sunday'])");
   assert.equal(run("undoLastRemoval()"),true);
-  assert.equal(snapshot().days[snapshot().restDay].length,0,"Undo must keep the recovery day empty");
+  assert.equal(snapshot().days.Monday.length,1,"Undo restores the actual removed exercise");
+  assert.deepEqual(snapshot().restDays,["Sunday"],"Undo clears only its own rest marker");
+
+  reset();
+  for(const value of [[],"broken"]){
+    context.invalidRest=value;
+    assert.throws(()=>run("validateWeekPlan({...state.plan,restDay:'Sunday',restDays:invalidRest})"),/rest|Rest/);
+  }
+  run("updateRestDays(state.plan,['Wednesday','Sunday'])");
+  assert.equal(run("JSON.stringify(validateWeekPlan(state.plan).restDays)"),'["Wednesday","Sunday"]');
+  run("updateRestDays(state.plan,[])");
+  assert.equal(run("validateWeekPlan(state.plan).restDay"),null);
 
   reset();assert.equal(run("openReplacement('Monday','editing-item')"),true);
   assert.equal(elements.get("replaceExerciseDialog").open,true);

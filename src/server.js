@@ -30,7 +30,7 @@ const {
 } = require("./payments");
 const {
   EXERCISES,
-  EXERCISE_IDS,
+  EXERCISE_IDS,DAYS,
   cleanText,
   defaultPlan,
   defaultPreferences,
@@ -152,7 +152,7 @@ const PAGE_ALIASES = new Map([
   ["/delete-account","delete-account.html"],
   ["/admin","admin.html"]
 ]);
-const PROTECTED_HTML = new Set(["discover.html"]);
+const PROTECTED_HTML = new Set(["discover.html","workout.html","onboarding.html"]);
 const PRIVATE_HTML = new Set(["index.html","account.html","verify-email.html","forgot-password.html","reset-password.html","delete-account.html","admin.html",...PROTECTED_HTML]);
 const MIME = {
   ".html":"text/html; charset=utf-8",
@@ -1023,14 +1023,16 @@ async function serveStatic(req,res,url) {
       params.set("next","planner");
       const add=cleanText(url.searchParams.get("add"),80);
       if (/^[a-z0-9-]{2,80}$/.test(add)&&EXERCISE_IDS.has(add)) params.set("add",add);
-    } else if (requested==="discover.html") {
-      params.set("next","discover");
+    } else {
+      params.set("next",requested.replace(".html",""));
+      const day=url.searchParams.get("day");
+      if (requested==="workout.html"&&DAYS.includes(day)) params.set("next",`/workout.html?day=${day}`);
     }
     res.writeHead(302,{...securityHeaders(),Location:`/account.html?${params}`,"Cache-Control":"no-store"});
     res.end();
     return;
   }
-  if (requested==="discover.html"&&!await store.hasDiscoveryAccess(activeSession.id)) {
+  if (PROTECTED_HTML.has(requested)&&!await store.hasDiscoveryAccess(activeSession.id)) {
     res.writeHead(302,{...securityHeaders(),Location:"/pricing?reason=discovery-required","Cache-Control":"no-store"});
     res.end();
     return;
@@ -1102,7 +1104,7 @@ async function start() {
     reconcileCheckoutCreationBeforeDeletion,reconcileUnsettledPurchases,isUniqueViolation,
     createAuthService,createAdminService,createSupportService
   }));
-  workouts=createWorkoutService({store,auth,rateAllowed,http:{json,bodyJson}});
+  workouts=createWorkoutService({store,auth,requireAccess:requireDiscoveryAccess,rateAllowed,http:{json,bodyJson}});
   await admin.bootstrap();
   await store.deleteExpired(Date.now());
   await admin.cleanup();

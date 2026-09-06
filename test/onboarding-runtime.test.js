@@ -8,14 +8,14 @@ const emptyWeek=()=>({version:1,restDay:"Sunday",days:Object.fromEntries(DAYS.ma
 const previewWeek=emptyWeek();
 previewWeek.days.Monday=[{instanceId:"preview-one",exerciseId:"bench-press",sets:3,reps:"8–12"}];
 
-async function setup({guest=false,switchedAccount=false,saveStatus=200,accountFailure=false,noRandomUUID=false}={}){
+async function setup({guest=false,switchedAccount=false,saveStatus=200,accountFailure=false,noRandomUUID=false,plus=true}={}){
   const html=fs.readFileSync(join(ROOT,"public/pages/onboarding.html"),"utf8");
   const elements=new Map([...html.matchAll(/\bid="([^"]+)"/g)].map(match=>[match[1],{
     id:match[1],value:"",disabled:true,hidden:false,checked:false,textContent:"",innerHTML:"",listeners:{},options:[],
     addEventListener(type,listener){this.listeners[type]=listener;},focus(){},after(){},remove(){}
   }]));
   elements.get("goal").value="balanced";elements.get("level").value="Beginner";elements.get("minutes").value="35";
-  const state={values:new Map(),failGuestWrite:false,requests:[],plan:emptyWeek()};
+  const state={values:new Map(),failGuestWrite:false,requests:[],plus,plan:emptyWeek()};
   const response=(status,data)=>({ok:status>=200&&status<300,status,json:async()=>data});
   const context={
     document:{getElementById:id=>elements.get(id)||null,querySelectorAll:()=>[],createElement:()=>({})},
@@ -30,9 +30,9 @@ async function setup({guest=false,switchedAccount=false,saveStatus=200,accountFa
       if(path.startsWith("/exercises.json"))return response(200,[{id:"bench-press",equipment:"Barbell"}]);
       if(path==="/api/plan"&&options.method!=="PUT"){
         if(accountFailure)return response(503,{error:"Account storage unavailable"});
-        return guest?response(401,{error:"Sign in required"}):response(200,{user:{id:"account-a"},csrfToken:"csrf-a",plan:state.plan,planUpdatedAt:100});
+        return guest?response(401,{error:"Sign in required"}):response(200,{user:{id:"account-a",discovery:{active:state.plus}},csrfToken:"csrf-a",plan:state.plan,planUpdatedAt:100});
       }
-      if(path==="/api/me")return guest?response(401,{error:"Sign in required"}):response(200,{user:{id:switchedAccount?"account-b":"account-a"},csrfToken:switchedAccount?"csrf-b":"csrf-a"});
+      if(path==="/api/me")return guest?response(401,{error:"Sign in required"}):response(200,{user:{id:switchedAccount?"account-b":"account-a",discovery:{active:state.plus}},csrfToken:switchedAccount?"csrf-b":"csrf-a"});
       if(path==="/api/plan"&&options.method==="PUT"){
         if(saveStatus!==200)return response(saveStatus,{error:"Your week changed",code:"PLAN_CHANGED"});
         state.plan=JSON.parse(options.body).plan;
@@ -48,34 +48,35 @@ async function setup({guest=false,switchedAccount=false,saveStatus=200,accountFa
   return {state,elements,generate,save};
 }
 
-test("onboarding guest save can retry after browser storage fails without inventing a tab conflict",async()=>{
-  const fixture=await setup({guest:true});
-  fixture.generate();fixture.state.failGuestWrite=true;
-  await fixture.save();
-  assert.equal(fixture.state.values.has(GUEST_KEY),false);
-  assert.match(fixture.elements.get("setupStatus").textContent,/temporarily unavailable/);
-  await fixture.save();
-  assert.deepEqual(JSON.parse(fixture.state.values.get(GUEST_KEY)),previewWeek);
-  assert.match(fixture.elements.get("setupStatus").textContent,/Saved in this browser/);
+test("onboarding denies guests and free accounts without changing their plans",async()=>{
+  for(const options of [{guest:true},{plus:false}]){
+    const fixture=await setup(options),stored=JSON.stringify(emptyWeek());fixture.state.values.set(GUEST_KEY,stored);
+    await fixture.generate();await fixture.save();
+    assert.equal(fixture.elements.get("setupFields").disabled,true);
+    assert.equal(fixture.state.generatedId,undefined);
+    assert.equal(fixture.state.requests.some(request=>request.options.method==="PUT"),false);
+    assert.equal(fixture.state.values.get(GUEST_KEY),stored);
+    assert.equal(fixture.elements.has("offlineSetup"),false);
+  }
 });
 
-test("onboarding preserves guest changes made in another tab",async()=>{
-  const fixture=await setup({guest:true});fixture.generate();
-  const otherWeek={...emptyWeek(),restDay:"Saturday"};
-  fixture.state.values.set(GUEST_KEY,JSON.stringify(otherWeek));
-  await fixture.save();
-  assert.deepEqual(JSON.parse(fixture.state.values.get(GUEST_KEY)),otherWeek);
-  assert.match(fixture.elements.get("setupStatus").textContent,/changed in another tab/);
+test("onboarding preserves its generated preview and account plan when Strata+ expires",async()=>{
+  const fixture=await setup();await fixture.generate();fixture.state.plus=false;await fixture.save();
+  assert.equal(fixture.state.requests.some(request=>request.options.method==="PUT"),false);
+  assert.equal(fixture.elements.get("saveWeek").disabled,true);
+  assert.equal(fixture.elements.get("saveControls").hidden,false);
+  assert.match(fixture.elements.get("setupStatus").textContent,/Strata\+/);
+  assert.deepEqual(fixture.state.plan,emptyWeek());
 });
 
 test("onboarding prevents an account A preview from being saved after switching to account B",async()=>{
-  const fixture=await setup({switchedAccount:true});fixture.generate();await fixture.save();
+  const fixture=await setup({switchedAccount:true});await fixture.generate();await fixture.save();
   assert.equal(fixture.state.requests.filter(request=>request.options.method==="PUT").length,0);
   assert.match(fixture.elements.get("setupStatus").textContent,/account changed/);
 });
 
 test("onboarding sends the original account and revision and preserves its preview on conflict",async()=>{
-  const fixture=await setup({saveStatus:409});fixture.generate();await fixture.save();
+  const fixture=await setup({saveStatus:409});await fixture.generate();await fixture.save();
   const request=fixture.state.requests.find(item=>item.options.method==="PUT");
   assert.equal(request.options.headers["X-Strata-User"],"account-a");
   assert.equal(request.options.headers["X-CSRF-Token"],"csrf-a");
@@ -88,14 +89,14 @@ test("onboarding sends the original account and revision and preserves its previ
 test("onboarding does not silently enter guest mode when account storage fails",async()=>{
   const fixture=await setup({accountFailure:true});
   assert.equal(fixture.elements.get("setupFields").disabled,true);
-  assert.equal(fixture.elements.get("offlineSetup").hidden,false);
-  fixture.generate();await fixture.save();
+  assert.equal(fixture.elements.has("offlineSetup"),false);
+  await fixture.generate();await fixture.save();
   assert.equal(fixture.state.values.has(GUEST_KEY),false);
   assert.equal(fixture.state.requests.filter(request=>request.options.method==="PUT").length,0);
 });
 
 test("onboarding preview works where crypto.randomUUID is unavailable",async()=>{
-  const fixture=await setup({guest:true,noRandomUUID:true});fixture.generate();
+  const fixture=await setup({noRandomUUID:true});await fixture.generate();
   assert.match(fixture.state.generatedId,/^setup-[a-zA-Z0-9_-]+$/);
-  await fixture.save();assert.deepEqual(JSON.parse(fixture.state.values.get(GUEST_KEY)),previewWeek);
+  await fixture.save();assert.deepEqual(fixture.state.plan,previewWeek);
 });

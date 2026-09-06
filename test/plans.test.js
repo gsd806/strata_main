@@ -118,3 +118,27 @@ test("31-day plan validation remains deterministic at the module boundary",()=>{
   unknown.days[0].exercises[0].exerciseId="not-in-catalog";
   assert.throws(()=>sanitizeMonthlyPlan(unknown),(error)=>error.code==="INVALID_MONTHLY_PLAN"&&/unknown exercise/.test(error.message));
 });
+
+test("rest markers support legacy imports, independent days, and no rest days",()=>{
+  const legacy={version:1,restDay:"Sunday",days:defaultPlan().days};
+  assert.deepEqual(sanitizePlan(legacy).restDays,["Sunday"]);
+  for(const restDays of [[],["Wednesday","Sunday"],DAYS]){
+    const plan={...defaultPlan(),restDays,restDay:restDays[0]??null};
+    assert.deepEqual(sanitizePlan(plan),plan);
+  }
+  assert.deepEqual(sanitizePlan({...legacy,restDay:null}).restDays,[]);
+});
+
+test("rest validation rejects malformed or conflicting markers before replacing a plan",()=>{
+  for(const restDays of [null,"Sunday",["Funday"],["Sunday","Sunday"]])assert.throws(()=>sanitizePlan({...defaultPlan(),restDays}),/rest days/);
+  assert.throws(()=>sanitizePlan({...defaultPlan(),restDays:[]}),/fields do not match/);
+  assert.throws(()=>sanitizePlan({...weeklyPlan(),restDay:"Monday",restDays:["Monday","Sunday"]}),/must not contain/);
+});
+
+test("legacy repair preserves all seven training days instead of returning an empty default",()=>{
+  const plan=defaultPlan();
+  for(const day of DAYS)plan.days[day]=[{instanceId:`repair-${day}`,exerciseId:"flat-dumbbell-press",sets:3,reps:"8"}];
+  const repaired=sanitizePlan(plan,{repair:true});
+  assert.deepEqual(repaired.days,plan.days);assert.deepEqual(repaired.restDays,[]);assert.equal(repaired.restDay,null);
+  assert.deepEqual(sanitizePlan(repaired),repaired);
+});

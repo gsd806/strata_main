@@ -17,7 +17,7 @@ function cleanText(value,max) {
 }
 
 function defaultPlan() {
-  return {version:1,restDay:"Sunday",days:Object.fromEntries(DAYS.map((day)=>[day,[]]))};
+  return {version:1,restDay:"Sunday",restDays:["Sunday"],days:Object.fromEntries(DAYS.map((day)=>[day,[]]))};
 }
 
 function defaultPreferences() {
@@ -68,9 +68,11 @@ function sanitizePlan(input,{repair=false}={}) {
   }
   const inputDays=input.days&&typeof input.days==="object"&&!Array.isArray(input.days)?input.days:null;
   if (!inputDays&&!repair) throw Object.assign(new Error("Invalid plan."),{status:400});
-  if (!DAYS.includes(input.restDay)&&!repair) throw Object.assign(new Error("Choose a valid rest day."),{status:400});
-  const output=defaultPlan();
-  output.restDay=DAYS.includes(input.restDay)?input.restDay:"Sunday";
+  const rawRest=Object.hasOwn(input,"restDays")?input.restDays:input.restDay===null?[]:DAYS.includes(input.restDay)?[input.restDay]:repair?["Sunday"]:null;
+  if ((!Array.isArray(rawRest)||rawRest.length>7||rawRest.some(day=>!DAYS.includes(day))||new Set(rawRest).size!==rawRest.length)&&!repair) throw Object.assign(new Error("Choose valid, unique rest days."),{status:400});
+  const restDays=DAYS.filter(day=>Array.isArray(rawRest)&&rawRest.includes(day));
+  if (!repair&&Object.hasOwn(input,"restDays")&&Object.hasOwn(input,"restDay")&&input.restDay!==(restDays[0]??null)) throw Object.assign(new Error("Rest-day fields do not match. Reload your plan before saving."),{status:400});
+  const output={...defaultPlan(),restDays,restDay:restDays[0]??null};
   const instanceIds=new Set();
   let total=0;
   for (const day of DAYS) {
@@ -100,11 +102,10 @@ function sanitizePlan(input,{repair=false}={}) {
     }).filter(Boolean);
   }
   if (total>140) throw Object.assign(new Error("Plan is too large."),{status:400});
-  if (output.days[output.restDay].length) {
-    if (!repair) throw Object.assign(new Error("The selected rest day must not contain exercises."),{status:400});
-    const emptyDay=DAYS.find((day)=>output.days[day].length===0);
-    if (!emptyDay) throw Object.assign(new Error("The plan needs an empty rest day."),{status:400});
-    output.restDay=emptyDay;
+  if (output.restDays.some(day=>output.days[day].length)) {
+    if (!repair) throw Object.assign(new Error("Rest days must not contain exercises."),{status:400});
+    output.restDays=output.restDays.filter(day=>!output.days[day].length);
+    output.restDay=output.restDays[0]??null;
   }
   return output;
 }

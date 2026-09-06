@@ -10,7 +10,8 @@ const destinations=[
   ["workout","/workout.html"],["/workout.html","/workout.html"],
   ["onboarding","/onboarding.html"],["/onboarding.html","/onboarding.html"],
   ["https://outside.test/workout.html","/planner.html"],["//outside.test/onboarding.html","/planner.html"],
-  ["/workout.html?next=//outside.test","/planner.html"],["/onboarding.html/../../outside","/planner.html"],
+  ["/workout.html?day=Monday","/workout.html?day=Monday"],["/workout.html?day=Funday","/planner.html"],["/workout.html?day=Monday&next=//outside.test","/planner.html"],
+    ["/workout.html?next=//outside.test","/planner.html"],["/onboarding.html/../../outside","/planner.html"],
   ["\\\\outside.test\\workout.html","/planner.html"]
 ];
 
@@ -51,6 +52,6 @@ test("native authentication failures carry new destinations across account and v
     const location=new URL(await form.submit(path,requested,{trusted:false}),"https://strata.test");
     assert.equal(location.origin,"https://strata.test");
     assert.equal(location.pathname,path.includes("verification")||path==="/auth/verify-email"?"/verify-email.html":"/account.html");
-    assert.equal(location.searchParams.get("next"),destination.slice(1,-5));
+    assert.equal(location.searchParams.get("next"),destination.includes("?")?destination:destination.slice(1,-5));
   }
 });

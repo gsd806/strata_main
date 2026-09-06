@@ -61,6 +61,11 @@ async function signup(context,label){
   const response=await context.request.post("/api/signup",{headers:{Origin:baseUrl},data:{name:`Training ${label}`,email:`training-${label}@example.test`,password:PASSWORD}});
   assert.equal(response.status(),201,await response.text());return(await response.json()).user;
 }
+async function activatePlus(context){
+  const current=await accountPlan(context);
+  const response=await context.request.post("/api/discovery/trial",{headers:{Origin:baseUrl,"X-CSRF-Token":current.csrfToken},data:{}});
+  assert.ok([200,201].includes(response.status()),await response.text());
+}
 async function accountPlan(context){const response=await context.request.get("/api/plan");assert.equal(response.status(),200);return response.json();}
 async function savedAccountEdit(page,action){
   const response=page.waitForResponse(item=>new URL(item.url()).pathname==="/api/plan"&&item.request().method()==="PUT");
@@ -71,19 +76,21 @@ function fixtureWeek(){
 }
 
 test("training journeys use real browser controls and isolated local fixtures",{timeout:120_000},async t=>{
-  await t.test("guest onboarding creates an editable week; replacement, undo, templates and portable import preserve intent",async()=>{
+  await t.test("free planning supports rest toggles, replacement, undo, templates and portable imports",async()=>{
     const {context,page}=await newPage({viewport:{width:390,height:844},reducedMotion:"reduce"});
-    await goto(page,"/onboarding.html");
-    await page.waitForFunction(()=>globalThis.document.querySelector("#setupFields")?.disabled===false);
-    for(const box of await page.locator('input[name="equipment"]').all())await box.setChecked((await box.getAttribute("value"))==="Bodyweight");
-    await page.selectOption("#goal","balanced");await page.click("#generateWeek");
-    await page.locator("#saveControls").waitFor({state:"visible"});
-    assert.equal(await guestPlan(page),null,"Previewing must not replace a saved week");
-    await page.click("#saveWeek");await page.locator("#openPlanner").waitFor({state:"visible"});
+    await goto(page,"/planner.html");await plannerReady(page);
+    await page.locator('[data-quick-add]').first().click();await plannerReady(page);
     const generated=await guestPlan(page),originalCount=Object.values(generated.days).flat().length;
-    assert.ok(originalCount>0);assert.equal(generated.days[generated.restDay].length,0);
-    assert.ok(Object.values(generated.days).flat().every(item=>CATALOG.find(exercise=>exercise.id===item.exerciseId).equipment==="Bodyweight"));
-    await page.click("#openPlanner");await plannerReady(page);
+    assert.ok(originalCount>0);
+    assert.equal(await page.locator('#startPlannedWorkout').count(),0);
+    assert.equal(await page.locator('#recommendRest').count(),0);
+    await page.locator('[data-set-rest="Sunday"]').click();await plannerReady(page);
+    await page.locator('[data-set-rest="Wednesday"]').click();await plannerReady(page);
+    await page.locator('[data-set-rest="Saturday"]').click();await plannerReady(page);
+    await page.reload({waitUntil:"domcontentloaded"});await plannerReady(page);
+    assert.deepEqual((await guestPlan(page)).restDays,["Wednesday","Saturday"]);
+    await page.locator('[data-set-rest="Wednesday"]').click();await plannerReady(page);
+    assert.deepEqual((await guestPlan(page)).restDays,["Saturday"]);
     const card=page.locator('[data-day="Monday"] [data-instance-id]').first(),instance=await card.getAttribute("data-instance-id");
     await card.locator("[data-item-sets]").fill("4");await card.locator("[data-item-reps]").fill("6–8");
     await page.waitForFunction(id=>JSON.parse(localStorage.getItem("strata_guest_plan_v1")).days.Monday.find(item=>item.instanceId===id)?.reps==="6–8",instance);
@@ -158,18 +165,20 @@ test("training journeys use real browser controls and isolated local fixtures",{
     await context.close();
   });
 
-  await t.test("a guest logs actual work, resumes after reload, finishes and sees the same results in history",async()=>{
+  await t.test("a Strata+ member logs actual work, resumes and sees the same completed results in history",async()=>{
     const {context,page}=await newPage({viewport:{width:390,height:844},reducedMotion:"reduce"});
-    await goto(page,"/");await page.evaluate(plan=>localStorage.setItem("strata_guest_plan_v1",JSON.stringify(plan)),fixtureWeek());
-    await goto(page,"/workout.html?guest=1&day=Monday");
+    const user=await signup(context,"mobile-workout");await activatePlus(context);
+    const current=await accountPlan(context);
+    const seed=await context.request.put("/api/plan",{headers:{Origin:baseUrl,"X-CSRF-Token":current.csrfToken,"X-Strata-User":user.id},data:{plan:fixtureWeek(),expectedPlanUpdatedAt:current.planUpdatedAt}});assert.equal(seed.status(),200);
+    await goto(page,"/workout.html?day=Monday");
     await page.locator("#trainingRoom").waitFor({state:"visible"});await page.selectOption("#planDay","Monday");await page.click("#startWorkout");
     await page.locator("#sessionPanel").waitFor({state:"visible"});
     const entry=page.locator("#sessionEntries [data-entry]").first();
     await entry.locator('[data-actual="weight"]').fill("40");await entry.locator('[data-actual="reps"]').fill("8");await entry.locator('[data-complete="0"]').click();
-    await page.waitForFunction(()=>globalThis.document.querySelector("#saveStatus")?.textContent==="Saved on this device only");
+    await page.waitForFunction(()=>globalThis.document.querySelector("#saveStatus")?.textContent==="Saved to your account");
     assert.equal(await page.locator("#sessionProgress").getAttribute("value"),"100");
     assert.equal(await page.locator("#timerToggle").textContent(),"Pause");await page.click("#timerToggle");
-    await page.waitForFunction(()=>globalThis.document.querySelector("#saveStatus")?.textContent==="Saved on this device only");
+    await page.waitForFunction(()=>globalThis.document.querySelector("#saveStatus")?.textContent==="Saved to your account");
     await page.reload({waitUntil:"domcontentloaded"});await page.locator('#recoveryList [data-recover="0"]').click();
     await page.locator("#sessionPanel").waitFor({state:"visible"});
     assert.equal(await entry.locator('[data-actual="weight"]').inputValue(),"40");assert.equal(await entry.locator('[data-actual="reps"]').inputValue(),"8");
@@ -183,7 +192,7 @@ test("training journeys use real browser controls and isolated local fixtures",{
     await context.close();
   });
   await t.test("account sessions persist actual values across reload, and identity-network errors never become guest access",async()=>{
-    const {context,page}=await newPage();const user=await signup(context,"workout");
+    const {context,page}=await newPage();const user=await signup(context,"workout");await activatePlus(context);
     const current=await accountPlan(context);
     const seed=await context.request.put("/api/plan",{headers:{Origin:baseUrl,"X-CSRF-Token":current.csrfToken,"X-Strata-User":user.id},data:{plan:fixtureWeek(),expectedPlanUpdatedAt:current.planUpdatedAt,expectedUserId:user.id}});
     assert.equal(seed.status(),200);
@@ -206,6 +215,24 @@ test("training journeys use real browser controls and isolated local fixtures",{
     await goto(disconnected,"/workout.html");await disconnected.locator("#loadError").waitFor({state:"visible"});
     assert.equal(await disconnected.locator("#accessPanel").isVisible(),false,"A failed account check must not offer anonymous fallback as though the user signed out");
     assert.equal(await disconnected.locator("#trainingRoom").isVisible(),false,"Network failures must not silently select a guest log");
+    await context.close();
+  });
+  await t.test("free accounts are gated; Strata+ setup creates an editable account week",async()=>{
+    const {context,page}=await newPage({viewport:{width:390,height:844},reducedMotion:"reduce"});
+    await goto(page,"/workout.html?guest=1");assert.match(page.url(),/account.html/);
+    await signup(context,"setup");
+    await goto(page,"/onboarding.html");assert.match(page.url(),/pricing/);
+    await activatePlus(context);await goto(page,"/discover.html");
+    await page.locator('#plusStartWorkout').waitFor({state:"visible"});
+    await page.getByRole('link',{name:'Set up my week',exact:false}).first().click();
+    await page.waitForFunction(()=>globalThis.document.querySelector('#setupFields')?.disabled===false);
+    const before=(await accountPlan(context)).plan;
+    await page.click('#generateWeek');await page.locator('#saveControls').waitFor({state:'visible'});
+    assert.deepEqual((await accountPlan(context)).plan,before);
+    await page.click('#saveWeek');await page.locator('#openPlanner').waitFor({state:'visible'});
+    const after=(await accountPlan(context)).plan;
+    assert.ok(Object.values(after.days).flat().length>0);assert.deepEqual(after.restDays,['Tuesday','Thursday','Saturday','Sunday']);
+    await page.click('#openPlanner');await plannerReady(page);
     await context.close();
   });
   assert.deepEqual(pageErrors,[],`Unexpected browser errors:\n${pageErrors.join("\n")}`);

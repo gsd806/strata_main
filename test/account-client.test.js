@@ -237,6 +237,7 @@ test("enhanced login and verification preserve only exact workout and onboarding
     ["workout","/workout.html"],["/workout.html","/workout.html"],
     ["onboarding","/onboarding.html"],["/onboarding.html","/onboarding.html"],
     ["https://outside.test/workout.html","/planner.html"],["//outside.test/onboarding.html","/planner.html"],
+    ["/workout.html?day=Monday","/workout.html?day=Monday"],["/workout.html?day=Funday","/planner.html"],["/workout.html?day=Monday&next=//outside.test","/planner.html"],
     ["/workout.html?next=https://outside.test","/planner.html"],["/onboarding.html/../../outside","/planner.html"]
   ];
   for(const [requested,destination] of destinations)for(const verify of [false,true]){
@@ -251,6 +252,6 @@ test("enhanced login and verification preserve only exact workout and onboarding
     assert.equal(page.elements.get("loginNext").value,destination);
     const form=page.elements.get("loginForm");form.values={email:"returning@example.test",password:"existing-password"};
     await form.emit("submit",{preventDefault(){}});
-    assert.deepEqual(page.navigations,[verify?`/verify-email.html?next=${destination.slice(1,-5)}&purpose=login`:destination]);
+    assert.deepEqual(page.navigations,[verify?`/verify-email.html?${new URLSearchParams({next:destination.includes("?")?destination:destination.slice(1,-5),purpose:"login"})}`:destination]);
   }
 });

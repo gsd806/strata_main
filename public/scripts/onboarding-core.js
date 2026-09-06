@@ -14,7 +14,7 @@
     const minutes=Number(profile.minutes);
     if(![20,35,50].includes(minutes))throw new Error("Choose 20, 35, or 50 minutes per session.");
     const preferences={version:1,goal:profile.goal,level:profile.level,days:days.length,equipment,preferences:["stable","simple-setup"],limitations:profile.limitations||[]};
-    const plan={version:1,restDay:[...DAYS].reverse().find(day=>!days.includes(day)),days:Object.fromEntries(DAYS.map(day=>[day,[]]))};
+    const plan={version:1,restDay:DAYS.find(day=>!days.includes(day))??null,restDays:DAYS.filter(day=>!days.includes(day)),days:Object.fromEntries(DAYS.map(day=>[day,[]]))};
     const sessions=[];
     for(const [index,day] of days.entries()){
       const focus=days.length>=4?(index%2===0?"upper":"lower"):"full";
