@@ -111,6 +111,9 @@ function pagination(value,fallback,min,max) {
 function createWorkoutService({store,auth,requireAccess,rateAllowed,http}) {
   if (!store||!auth||typeof requireAccess!=="function"||typeof rateAllowed!=="function"||!http) throw new TypeError("Workout service requires store, auth, request guards, and HTTP helpers.");
   const {json,bodyJson}=http;
+  function activeWorkoutConflict(res,workout) {
+    json(res,409,{error:"You already have a workout in progress. Resume it before starting another.",code:"ACTIVE_WORKOUT_EXISTS",workout});
+  }
   async function existingOrConflict(res,userId,id) {
     const current=workoutPayload(await store.workout(userId,id));
     json(res,current?409:404,current?{error:"This workout changed elsewhere. Review the saved workout before retrying.",code:"WORKOUT_CONFLICT",workout:current}:{error:"Workout not found.",code:"WORKOUT_NOT_FOUND"});
@@ -128,11 +131,18 @@ function createWorkoutService({store,auth,requireAccess,rateAllowed,http}) {
     const workoutJson=JSON.stringify(workout),digest=createHash("sha256").update(workoutJson).digest("hex");
     const record={id:workout.id,userId,workoutJson,summaryJson:JSON.stringify(summarizeWorkout(workout)),createHash:digest,startedAt:workout.startedAt,updatedAt:now};
     if (req.method==="POST") {
-      const saved=await store.insertWorkout(record);
-      if (saved) { json(res,201,{workout:workoutPayload(saved)});return; }
       const current=await store.workout(userId,workout.id);
       if (current?.create_hash===digest) { json(res,200,{workout:workoutPayload(current)});return; }
       if (current) { await existingOrConflict(res,userId,workout.id);return; }
+      const saved=await store.insertWorkout(record);
+      if (saved) { json(res,201,{workout:workoutPayload(saved)});return; }
+      const concurrent=await store.workout(userId,workout.id);
+      if (concurrent?.create_hash===digest) { json(res,200,{workout:workoutPayload(concurrent)});return; }
+      if (concurrent) { await existingOrConflict(res,userId,workout.id);return; }
+      if (workout.status==="active") {
+        const active=workoutPayload(await store.activeWorkout(userId));
+        if (active) { activeWorkoutConflict(res,active);return; }
+      }
       if (await store.workoutCount(userId)>=10000) throw workoutError("Workout history is full. Delete an old workout before adding another.",409,"WORKOUT_LIMIT");
       throw workoutError("Your account changed. Sign in again to save this workout.",409,"WORKOUT_ACCOUNT_CHANGED");
     }
@@ -140,8 +150,13 @@ function createWorkoutService({store,auth,requireAccess,rateAllowed,http}) {
     if (!current) { await existingOrConflict(res,userId,id);return; }
     if (current.startedAt!==workout.startedAt) throw workoutError("A workout's start time cannot change.");
     const saved=await store.updateWorkout(record,expectedRevision);
-    if (saved) json(res,200,{workout:workoutPayload(saved)});
-    else await existingOrConflict(res,userId,id);
+    if (saved) { json(res,200,{workout:workoutPayload(saved)});return; }
+    const concurrent=await store.workout(userId,id);
+    if (concurrent&&Number(concurrent.revision)===expectedRevision&&workout.status==="active") {
+      const active=workoutPayload(await store.activeWorkout(userId));
+      if (active&&active.id!==id) { activeWorkoutConflict(res,active);return; }
+    }
+    await existingOrConflict(res,userId,id);
   }
   async function handleApi(req,res,url) {
     if (url.pathname!=="/api/workouts"&&!url.pathname.startsWith("/api/workouts/")) return false;

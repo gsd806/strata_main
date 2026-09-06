@@ -38,6 +38,7 @@ function makeFixture(version="1.2.3"){
     `**Build ${version} is a deterministic test release.**`,
     `Build ${version} separates browser files from private code.`,
     `Build ${version} has public pages.`,
+    `[Release guide](docs/release-${version}.md).`,
     "Build 1.0.0 remains historical."
   ].join("\n"));
   write(root,"public/page.html",`<link href="/app.css?v=${version}"><p>Build ${version}</p>\n`);
@@ -176,6 +177,7 @@ test("updates advance only explicit release files and preserve excluded trees",t
   assert.match(fs.readFileSync(path.join(root,"public/page.html"),"utf8"),/v=1\.2\.4[\s\S]*Build 1\.2\.4/);
   const readme=fs.readFileSync(path.join(root,"README.md"),"utf8");
   assert.match(readme,/Build 1\.2\.4 is the current release/);
+  assert.match(readme,/docs\/release-1\.2\.4\.md/);
   assert.match(readme,/Build 1\.0\.0 remains historical/);
   for(const relative of excluded)assert.equal(fs.readFileSync(path.join(root,relative),"utf8"),"private 1.2.3\n");
   assert.doesNotThrow(()=>auditRelease(root,"1.2.4",FIXTURE_MANIFEST));

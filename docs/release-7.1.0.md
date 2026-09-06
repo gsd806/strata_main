@@ -56,7 +56,7 @@ The complete `check` command includes release consistency, architecture, strict 
 
 The added browser suite uses isolated synthetic accounts, a temporary SQLite store, and blocked external browser traffic. It covers guest onboarding/planner/template import; failed-save draft recovery against a newer server revision; switched-account protection; guest workout resume/completion/history; and authenticated workout persistence plus account-lookup failure. It includes a narrow viewport and reduced-motion setting. It is implemented, but could not execute here because the Chromium binary download timed out.
 
-See [release readiness](release-readiness.md) and [verification files](verification/7.1.0-load-distinct.json) for measured outcomes, environment, CPU, memory, percentiles and limitations. Local loopback tests do not establish production host or Turso capacity.
+See the [browser smoke record](verification/7.1.0-browser-smoke.md) and [load evidence](verification/7.1.0-load-distinct.json) for that release's retained outcomes, environment, CPU, memory, percentiles and limitations. Local loopback tests do not establish production host or Turso capacity.
 
 ## Migration from 7.0.0
 

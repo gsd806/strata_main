@@ -15,6 +15,7 @@ root bootstrap
           │     ├── admin service ────────── plan domain
           │     └── support service ─────┬── email boundary
           │                              └── plan domain
+          ├── setup service ──────────────── plan domain
           ├── database adapter ────┬── schema/queries
           │                        └── store contract
           ├── payment boundary
@@ -25,31 +26,32 @@ The HTTP root supplies services and adapters to the checked service-composition 
 
 ## Resulting module sizes
 
-The command-generated table below is the Build 7.1.0 review snapshot. CI generates the same table on every architecture check, while the policy enforces budgets and edges against the live sources.
+The command-generated table below is the Build 7.1.2 review snapshot. CI generates the same table on every architecture check, while the policy enforces budgets and edges against the live sources.
 
 | Module | Responsibility | Lines | Nonblank | Size | Line budget | Local dependencies |
 | --- | --- | ---: | ---: | ---: | ---: | --- |
 | `server.js` | Process bootstrap | 4 | 3 | 113 B | 20 | `src/server.js` |
 | `src/admin.js` | Administrative authorization and actions | 251 | 236 | 16.1 KiB | 300 | `src/plans.js` |
 | `src/auth.js` | Authentication and account lifecycle | 807 | 764 | 52.9 KiB | 850 | `src/email.js`, `src/plans.js` |
-| `src/database.js` | SQLite and Turso store adapters | 1262 | 1228 | 67.0 KiB | 1300 | `src/schema.js`, `src/store-contract.js` |
+| `src/database.js` | SQLite and Turso store adapters | 1300 | 1267 | 69.6 KiB | 1300 | `src/schema.js`, `src/store-contract.js` |
 | `src/email.js` | Resend integration and email security | 373 | 342 | 19.6 KiB | 420 | — |
 | `src/http.js` | HTTP transport helpers | 170 | 155 | 6.0 KiB | 180 | — |
 | `src/payments.js` | Paddle integration boundary | 448 | 425 | 21.2 KiB | 480 | — |
 | `src/plans.js` | Plan domain validation | 355 | 321 | 18.5 KiB | 400 | — |
-| `src/schema.js` | Shared storage schema and statements | 389 | 386 | 46.6 KiB | 420 | — |
-| `src/server.js` | HTTP composition root | 1152 | 1114 | 58.7 KiB | 1200 | `src/admin.js`, `src/auth.js`, `src/database.js`, `src/email.js`, `src/http.js`, `src/payments.js`, `src/plans.js`, `src/service-composition.js`, `src/static-assets.js`, `src/support.js`, `src/workouts.js` |
+| `src/schema.js` | Shared storage schema and statements | 413 | 409 | 49.2 KiB | 420 | — |
+| `src/server.js` | HTTP composition root | 1168 | 1129 | 59.5 KiB | 1200 | `src/admin.js`, `src/auth.js`, `src/database.js`, `src/email.js`, `src/http.js`, `src/payments.js`, `src/plans.js`, `src/service-composition.js`, `src/setup.js`, `src/static-assets.js`, `src/support.js`, `src/workouts.js` |
 | `src/service-composition.js` | Typed auth/admin/support composition | 39 | 37 | 1.7 KiB | 80 | — |
+| `src/setup.js` | Atomic weekly-plan and preference setup | 84 | 77 | 4.9 KiB | 120 | `src/plans.js` |
 | `src/static-assets.js` | Bounded public asset representations | 46 | 41 | 1.9 KiB | 80 | `src/http.js` |
-| `src/store-contract.js` | Storage boundary contract | 137 | 134 | 3.6 KiB | 180 | — |
+| `src/store-contract.js` | Storage boundary contract | 139 | 136 | 3.6 KiB | 180 | — |
 | `src/support.js` | Public and administrative support workflow | 137 | 129 | 10.0 KiB | 180 | `src/email.js`, `src/plans.js` |
-| `src/workouts.js` | Workout validation, history summaries, and authenticated lifecycle | 179 | 173 | 11.4 KiB | 240 | `src/plans.js` |
+| `src/workouts.js` | Workout validation, history summaries, and authenticated lifecycle | 194 | 188 | 12.3 KiB | 240 | `src/plans.js` |
 
-Snapshot result: 15 modules, zero dependency cycles, and zero policy violations.
+Snapshot result: 16 modules, zero dependency cycles, and zero policy violations.
 
 ## Static boundary types
 
-`tsconfig.boundaries.json` runs TypeScript in strict `allowJs` + `checkJs` mode with no output. The first enforced slice covers the HTTP transport, Paddle provider validation, store-registration boundary, and the production auth/admin/support wiring inside `src/service-composition.js`. These modules use shared declarations from `src/domain-types.d.ts`; the checked composition verifies its declared service/store/HTTP capabilities, cross-service methods, account-versus-session row shapes, and the admin bootstrap cycle.
+`tsconfig.boundaries.json` runs TypeScript in strict `allowJs` + `checkJs` mode with no output. The enforced slice covers the HTTP transport, Paddle provider validation, store-registration boundary, the atomic setup service, and the production auth/admin/support wiring inside `src/service-composition.js`. These modules use shared declarations from `src/domain-types.d.ts` and the plan-domain surface in `src/plans.d.ts`; the checked setup boundary verifies its untrusted request shape, session guard, plan/preference snapshots, and exact atomic store result, while the checked composition verifies its service/store/HTTP capabilities, account-versus-session row shapes, and the admin bootstrap cycle.
 
 This is deliberately an incremental boundary strategy rather than a cosmetic file-extension migration. Untrusted Paddle payload fields stay `unknown` until runtime validation narrows them, HTTP request/response/header values use Node types, and service stores are named capability sets rather than a catch-all index. The store factory preserves each adapter's concrete method signatures through a generic while its existing runtime contract enforces the complete method set.
 
@@ -57,6 +59,6 @@ The compiler currently checks the composition function's implementation, not the
 
 ## Interpreting the result
 
-The graph is acyclic. The largest remaining files are the composition root and the dual database adapter; their size is explicit and budgeted rather than hidden by extraction. Authentication, administration, and support are independently wired services. The direction of their imports confirms that they do not reach back into `src/server.js` or instantiate storage themselves.
+The graph is acyclic. The largest remaining files are the composition root and the dual database adapter; their size is explicit and budgeted rather than hidden by extraction. Authentication, administration, support, and atomic training setup are independently wired services. The direction of their imports confirms that they do not reach back into `src/server.js` or instantiate storage themselves.
 
 Line counts are a maintenance signal, not a quality score. They are paired with dependency constraints because a small cyclic module or a thin pass-through split would not represent a better architecture.

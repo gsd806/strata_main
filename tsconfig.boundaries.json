@@ -18,7 +18,9 @@
     "src/domain-types.d.ts",
     "src/http.js",
     "src/payments.js",
+    "src/plans.d.ts",
     "src/service-composition.js",
+    "src/setup.js",
     "src/store-contract.js"
   ]
 }

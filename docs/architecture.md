@@ -31,6 +31,7 @@ The application is intentionally server-rendered and framework-light. Public HTM
 | `src/auth.js` | Login, signup, email verification, recovery, reset, deletion, cookie/session/CSRF helpers, native auth forms and JSON routes, account-action delivery, and auth-data cleanup. |
 | `src/admin.js` | Primary-owner binding, admin identity and elevation, session rotation, permission gates, account actions, redacted admin payloads, and audit helpers/routes. |
 | `src/support.js` | Public support validation and durable rate reservations, acknowledgment/notification delivery, admin support workflow and responses, safe payload shaping, and retention cleanup. |
+| `src/setup.js` | Authenticated weekly setup boundary that validates matching plan/preferences revisions and commits them atomically. |
 | `src/database.js` | Local SQLite and remote Turso implementations of the same application store contract. |
 | `src/store-contract.js` | Explicit method allowlist checked when either store is created; missing and extra methods fail fast. |
 | `src/schema.js` | Shared schema and parameterized statements used to keep both adapters behaviorally aligned. |
@@ -47,7 +48,7 @@ Factories receive their dependencies explicitly instead of importing a global se
 
 1. The Node server parses the URL and applies shared request constraints.
 2. Authentication form routes and auth JSON routes are offered to the auth service.
-3. Admin and support routes are offered to their services. Each service returns whether it handled the request.
+3. Admin, support, and atomic training-setup routes are offered to their services. Each service returns whether it handled the request.
 4. Remaining application APIs, plans, discovery data, ratings, and payment routes are handled by the composition root and their focused helpers.
 5. Static requests are resolved through the explicit URL-to-file map. Unknown paths receive a controlled `404`; user input is never joined directly to the filesystem.
 6. Response helpers attach security and cache headers. Account and API responses use `no-store`; public versioned assets may use public caching.
@@ -102,7 +103,7 @@ Parity tests should compare observable results rather than private implementatio
 
 - nulls, numeric fields, timestamps, and returned rows;
 - unique and foreign-key behavior;
-- compare-and-swap plan revisions;
+- compare-and-swap plan revisions and atomic plan/preferences setup;
 - one-time verification and account-action claims;
 - session and credential-version revocation;
 - admin mutations with their audit record;

@@ -14,15 +14,15 @@ const RATINGS_REFRESH_MIN_INTERVAL_MS=15_000;
 const COMMUNITY_PAGE_SIZE=12;
 const FEATURE_DEFAULT="recommendations";
 const FEATURE_CONFIG=Object.freeze({
-  recommendations:{panelId:"recommendations",headingId:"recommendationTitle",label:"Best for you"},
-  explorer:{panelId:"exerciseExplorer",headingId:"explorerTitle",label:"Explore and rate"},
-  battle:{panelId:"battle",headingId:"battleTitle",label:"Exercise battle"},
-  profile:{panelId:"profile",headingId:"profileTitle",label:"Tune my ranking"},
-  community:{panelId:"communityPlans",headingId:"communityPlansTitle",label:"Community weekly plans"},
-  monthly:{panelId:"monthlyPlan",headingId:"monthlyPlanTitle",label:"31-day plan"},
-  session:{panelId:"sessionBuilder",headingId:"sessionBuilderTitle",label:"Session builder"}
+  recommendations:{panelId:"recommendations",headingId:"recommendationTitle",label:"Best exercises for you"},
+  explorer:{panelId:"exerciseExplorer",headingId:"explorerTitle",label:"Exercise library"},
+  battle:{panelId:"battle",headingId:"battleTitle",label:"Compare exercises"},
+  profile:{panelId:"profile",headingId:"profileTitle",label:"Personalize recommendations"},
+  community:{panelId:"communityPlans",headingId:"communityPlansTitle",label:"Browse community plans"},
+  monthly:{panelId:"monthlyPlan",headingId:"monthlyPlanTitle",label:"Build a 31-day plan"},
+  session:{panelId:"sessionBuilder",headingId:"sessionBuilderTitle",label:"Build a session"}
 });
-const state={exercises:[],methodology:null,sources:[],limited:new Set(),preferences:null,user:null,csrfToken:"",aggregate:new Map(),userRatings:new Map(),ratingsRefreshedAt:0,ratingsRefreshPromise:null,ratingSaving:new Set(),compare:[],collection:"all",query:"",group:"all",equipment:"all",pattern:"all",level:"all",sort:"personal",recommendations:[],activeExercise:null,activeFeature:null,explorerLimit:EXPLORER_DESKTOP_PAGE_SIZE,weeklyPlan:null,weeklyPlanUpdatedAt:0,session:null,sessionSaving:false,monthlyPlan:null,monthlyPlanUpdatedAt:0,monthlySchedule:null,monthlySource:"muscle-schedule",communityPlans:[],communityLoaded:false,communityLoading:false,communityError:"",communityNextOffset:0,communityQuery:"",communityPendingId:null,communityAppliedId:null,communityAppliedUpdatedAt:0};
+const state={exercises:[],methodology:null,sources:[],limited:new Set(),preferences:null,user:null,csrfToken:"",aggregate:new Map(),userRatings:new Map(),ratingsRefreshedAt:0,ratingsRefreshPromise:null,ratingSaving:new Set(),compare:[],collection:"all",query:"",group:"all",equipment:"all",pattern:"all",level:"all",sort:"personal",recommendations:[],activeExercise:null,activeFeature:null,explorerLimit:EXPLORER_DESKTOP_PAGE_SIZE,weeklyPlan:null,weeklyPlanUpdatedAt:0,session:null,sessionSaving:false,sessionDayInitialized:false,monthlyPlan:null,monthlyPlanUpdatedAt:0,monthlySchedule:null,monthlySource:"muscle-schedule",communityPlans:[],communityLoaded:false,communityLoading:false,communityError:"",communityNextOffset:0,communityQuery:"",communityPendingId:null,communityAppliedId:null,communityAppliedUpdatedAt:0};
 const el=(id)=>document.getElementById(id);
 
 async function api(path,options={}) {
@@ -102,7 +102,7 @@ function activateFeature(value,{focus=false,scroll=false,smooth=false,announce=f
   if(scroll||focus){
     const move=()=>{
       const reduceMotion=window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-      if(scroll)panel.scrollIntoView?.({behavior:smooth&&!reduceMotion?"smooth":"auto",block:"start"});
+      if(scroll)panel.scrollIntoView?.({behavior:smooth&&!reduceMotion?"smooth":"instant",block:"start"});
       if(focus)el(config.headingId)?.focus?.({preventScroll:true});
     };
     if(typeof globalThis.requestAnimationFrame==="function")globalThis.requestAnimationFrame(move);else setTimeout(move,0);
@@ -110,9 +110,8 @@ function activateFeature(value,{focus=false,scroll=false,smooth=false,announce=f
   return true;
 }
 function initializeFeatureNavigation(){
-  const rawHash=String(globalThis.location?.hash||"").replace(/^#/,"");
-  const requested=featureFromLocation(),atHub=rawHash==="featureHub";
-  activateFeature(requested||FEATURE_DEFAULT,{scroll:Boolean(requested),historyMode:requested||atHub?"none":"replace"});
+  const requested=featureFromLocation();
+  activateFeature(requested||FEATURE_DEFAULT,{scroll:Boolean(requested),historyMode:"none"});
 }
 let featureHistoryQueued=false;
 function restoreFeatureFromHistory(){
@@ -169,7 +168,7 @@ function renderRecommendations(){
   buildRecommendations();
   const goal={hypertrophy:"Hypertrophy selection",strength:"Strength skill",balanced:"Balanced","time-efficient":"Time-efficient setup"}[state.preferences.goal]||titleCase(state.preferences.goal);
   el("recommendationSummary").textContent=`Rules-based ${goal.toLowerCase()} ranking · ${state.preferences.equipment.length} equipment types · ${state.preferences.days} days`;
-  el("recommendationGrid").innerHTML=state.recommendations.length?state.recommendations.map(({exercise,result},index)=>`<article class="recommend-card" data-rank="${String(index+1).padStart(2,"0")}"><div class="card-topline"><span class="match-pill">${result.match}% personal match</span>${scoreButton(exercise)}</div><h3>${escapeHtml(exercise.name)}</h3><span class="target">${escapeHtml(GROUP_LABELS[exercise.group])} / ${escapeHtml(exercise.sub)}</span><p>${escapeHtml(profileReason(result))}. ${escapeHtml(exercise.why)}</p><div class="mini-meta"><span>${escapeHtml(exercise.equipment)}</span><span>${escapeHtml(exercise.level)}</span></div><div class="community-line"><span>Community rating</span><strong>${escapeHtml(communityLabel(exercise.id))}</strong></div><div class="mini-actions"><button data-open-detail="${exercise.id}" type="button" aria-label="Why ${escapeHtml(exercise.name)} ranks here">Why it ranks</button>${compareButton(exercise)}<a href="/planner.html?add=${encodeURIComponent(exercise.id)}" aria-label="Add ${escapeHtml(exercise.name)} to weekly plan">Plan +</a></div></article>`).join(""):`<div class="loading-card recommendation-empty"><p>No exercise matches all saved equipment and constraints.</p><a class="small-button" href="#profile" data-feature-target="profile">Tune my ranking →</a></div>`;
+  el("recommendationGrid").innerHTML=state.recommendations.length?state.recommendations.map(({exercise,result},index)=>`<article class="recommend-card" data-rank="${String(index+1).padStart(2,"0")}"><div class="card-topline"><span class="match-pill">${result.match}% personal match</span>${scoreButton(exercise)}</div><h3>${escapeHtml(exercise.name)}</h3><span class="target">${escapeHtml(GROUP_LABELS[exercise.group])} / ${escapeHtml(exercise.sub)}</span><p>${escapeHtml(profileReason(result))}. ${escapeHtml(exercise.why)}</p><div class="mini-meta"><span>${escapeHtml(exercise.equipment)}</span><span>${escapeHtml(exercise.level)}</span></div><div class="community-line"><span>Community rating</span><strong>${escapeHtml(communityLabel(exercise.id))}</strong></div><div class="mini-actions"><button data-open-detail="${exercise.id}" type="button" aria-label="Why ${escapeHtml(exercise.name)} ranks here">Why it ranks</button>${compareButton(exercise)}<a href="/planner.html?add=${encodeURIComponent(exercise.id)}" aria-label="Add ${escapeHtml(exercise.name)} to weekly plan">Add to plan</a></div></article>`).join(""):`<div class="loading-card recommendation-empty"><p>No exercise matches all saved equipment and constraints.</p><a class="small-button" href="#profile" data-feature-target="profile">Tune my ranking →</a></div>`;
 }
 
 function populateFilters(){
@@ -191,7 +190,7 @@ function resetExplorerWindow(){state.explorerLimit=explorerPageSize();}
 function renderExplorer(){
   const items=discoveryResults(),visibleItems=items.slice(0,state.explorerLimit),remaining=Math.max(0,items.length-visibleItems.length),nextCount=Math.min(explorerPageSize(),remaining);
   el("resultCount").textContent=items.length;el("resultNoun").textContent=items.length===1?"exercise":"exercises";el("exerciseGrid").hidden=!items.length;el("emptyState").hidden=Boolean(items.length);
-  el("exerciseGrid").innerHTML=visibleItems.map((exercise,index)=>{const personal=personalResult(exercise);return `<article class="exercise-card" data-result-index="${index}"><div class="card-topline"><span class="match-pill ${personal.eligible?"":"is-excluded"}">${escapeHtml(personalLabel(personal))}</span>${scoreButton(exercise)}</div><h3>${escapeHtml(exercise.name)}</h3><span class="target">${escapeHtml(GROUP_LABELS[exercise.group]||titleCase(exercise.group))} / ${escapeHtml(exercise.sub)}</span><p>${escapeHtml(exercise.why)}</p><div class="mini-meta"><span>${escapeHtml(exercise.equipment)}</span><span>${escapeHtml(exercise.pattern)}</span><span>${escapeHtml(exercise.level)}</span></div><div class="community-line"><span>Community rating</span><strong>${escapeHtml(communityLabel(exercise.id))}</strong></div><div class="mini-actions"><button data-open-detail="${exercise.id}" type="button" aria-label="Inspect ${escapeHtml(exercise.name)}">Inspect</button>${compareButton(exercise)}<a href="/planner.html?add=${encodeURIComponent(exercise.id)}" aria-label="Add ${escapeHtml(exercise.name)} to weekly plan">Plan +</a></div></article>`;}).join("")+(!remaining?"":`<div class="explorer-load-more"><p>Showing ${visibleItems.length} of ${items.length} matching exercises</p><button data-load-more-exercises type="button" aria-controls="exerciseGrid">Load ${nextCount} more <span aria-hidden="true">↓</span></button></div>`);
+  el("exerciseGrid").innerHTML=visibleItems.map((exercise,index)=>{const personal=personalResult(exercise);return `<article class="exercise-card" data-result-index="${index}"><div class="card-topline"><span class="match-pill ${personal.eligible?"":"is-excluded"}">${escapeHtml(personalLabel(personal))}</span>${scoreButton(exercise)}</div><h3>${escapeHtml(exercise.name)}</h3><span class="target">${escapeHtml(GROUP_LABELS[exercise.group]||titleCase(exercise.group))} / ${escapeHtml(exercise.sub)}</span><p>${escapeHtml(exercise.why)}</p><div class="mini-meta"><span>${escapeHtml(exercise.equipment)}</span><span>${escapeHtml(exercise.pattern)}</span><span>${escapeHtml(exercise.level)}</span></div><div class="community-line"><span>Community rating</span><strong>${escapeHtml(communityLabel(exercise.id))}</strong></div><div class="mini-actions"><button data-open-detail="${exercise.id}" type="button" aria-label="Inspect ${escapeHtml(exercise.name)}">Inspect</button>${compareButton(exercise)}<a href="/planner.html?add=${encodeURIComponent(exercise.id)}" aria-label="Add ${escapeHtml(exercise.name)} to weekly plan">Add to plan</a></div></article>`;}).join("")+(!remaining?"":`<div class="explorer-load-more"><p>Showing ${visibleItems.length} of ${items.length} matching exercises</p><button data-load-more-exercises type="button" aria-controls="exerciseGrid">Load ${nextCount} more <span aria-hidden="true">↓</span></button></div>`);
 }
 
 function renderCommunityViews(){
@@ -292,14 +291,14 @@ function openDetail(id){
   const profileHeading=personal.eligible?"Why it fits you":"Why it does not match your profile";
   const profileSummary=personal.eligible?`<strong>${personal.match}% rules-based match.</strong> ${escapeHtml(profileReason(personal))}.`:`<strong>Excluded by your saved rules.</strong> ${escapeHtml(profileReason(personal))}.`;
   el("detailContent").innerHTML=`
-    <div class="detail-hero"><div class="dialog-head" style="position:static;padding:0 0 24px;background:transparent;border-color:rgba(255,255,255,.18)"><p class="kicker">Exercise intelligence / ${escapeHtml(GROUP_LABELS[exercise.group]||titleCase(exercise.group))}</p><button class="icon-button" data-close-dialog="detailDialog" type="button" aria-label="Close exercise details">×</button></div><div class="detail-hero-grid"><div><h2 class="detail-title" id="detailTitle">${escapeHtml(exercise.name)}</h2><p>${escapeHtml(exercise.why)}</p><span class="match-pill ${personal.eligible?"":"is-excluded"}">${escapeHtml(personalLabel(personal))}</span></div><div class="detail-score"><strong>${exercise.score}</strong><span>Official FitScore</span></div></div><div class="detail-quick-actions"><button data-toggle-compare="${exercise.id}" type="button" aria-pressed="${state.compare.includes(id)}">${state.compare.includes(id)?"Remove from battle":"Add to battle"}</button><button data-scroll-alternatives type="button" aria-controls="alternativeSection">Find alternative ↓</button><a href="/planner.html?add=${encodeURIComponent(id)}">Add to week →</a><a href="${exercise.youtube}" target="_blank" rel="noreferrer">YouTube search ↗</a><button data-share-exercise="${exercise.id}" type="button">Share card ↗</button></div></div>
+    <div class="detail-hero"><div class="dialog-head" style="position:static;padding:0 0 24px;background:transparent;border-color:rgba(255,255,255,.18)"><p class="kicker">Exercise intelligence / ${escapeHtml(GROUP_LABELS[exercise.group]||titleCase(exercise.group))}</p><button class="icon-button" data-close-dialog="detailDialog" type="button" aria-label="Close exercise details">×</button></div><div class="detail-hero-grid"><div><h2 class="detail-title" id="detailTitle">${escapeHtml(exercise.name)}</h2><p>${escapeHtml(exercise.why)}</p><span class="match-pill ${personal.eligible?"":"is-excluded"}">${escapeHtml(personalLabel(personal))}</span></div><div class="detail-score"><strong>${exercise.score}</strong><span>Official FitScore</span></div></div><div class="detail-quick-actions"><button data-toggle-compare="${exercise.id}" type="button" aria-pressed="${state.compare.includes(id)}">${state.compare.includes(id)?"Remove from battle":"Add to battle"}</button><button data-scroll-alternatives type="button" aria-controls="alternativeSection">Find alternative ↓</button><a href="/planner.html?add=${encodeURIComponent(id)}">Add to plan <span aria-hidden="true">→</span></a><a href="${exercise.youtube}" target="_blank" rel="noreferrer">YouTube search ↗</a><button data-share-exercise="${exercise.id}" type="button">Share card ↗</button></div></div>
     <div class="detail-body"><div class="detail-grid"><div>
       <section class="detail-section"><h3>${profileHeading}</h3><p>${profileSummary} This selection is an editorial rules engine, not an AI prediction or medical recommendation.</p><p><strong>Target:</strong> ${escapeHtml(exercise.sub)} · <strong>Pattern:</strong> ${escapeHtml(exercise.pattern)} · <strong>Equipment:</strong> ${escapeHtml(exercise.equipment)} · <strong>Level:</strong> ${escapeHtml(exercise.level)}</p></section>
       <section class="detail-section"><h3>FitScore audit</h3><div class="metric-list">${metricMarkup(exercise)}</div><div class="adjustment-row"><strong>Weighted baseline: ${round(baseline,1)}</strong> · Published score: ${exercise.score} · Editorial adjustment: ${adjustment>0?"+":""}${adjustment}.<br/>${escapeHtml(state.methodology.adjustment)}</div><p>${escapeHtml(state.methodology.evidenceNote)}</p></section>
       <section class="detail-section"><h3>Evidence and boundaries</h3><span class="confidence">${confidence} exercise-specific confidence</span><p><strong>Evidence:</strong> the links below support broad training principles. <strong>STRATA interpretation:</strong> applying those principles to this exact exercise and score is editorial judgment.</p>${sources.map((source)=>`<article class="source-card"><a href="${source.url}" target="_blank" rel="noreferrer">${escapeHtml(source.title)} ↗</a><span>${escapeHtml(source.type)} · ${escapeHtml(source.publisher)} · ${source.year}</span><p><strong>Supports:</strong> ${escapeHtml(source.supports)}</p><p class="source-boundary"><strong>Does not support:</strong> ${escapeHtml(source.doesNotSupport)}</p></article>`).join("")}</section>
     </div><aside>
       <section class="detail-section"><h3>Practical decision</h3><p><strong>Stability:</strong> ${exercise.metrics.stability}/100 · <strong>Effective range:</strong> ${exercise.metrics.range}/100</p><p><strong>Resistance profile:</strong> ${escapeHtml(resistanceProfile(exercise))}</p><p><strong>Progression:</strong> ${exercise.metrics.progression}/100 · <strong>Setup:</strong> ${escapeHtml(setupLabel(exercise))}</p><p><strong>Editorial practicality:</strong> ${practicality(exercise)}/100</p><h4>Programming starting point</h4><p>${escapeHtml(exercise.sets)} sets · ${escapeHtml(exercise.reps)} reps · ${escapeHtml(exercise.rest)} rest</p><h4>Technique cues</h4><ul>${exercise.cues.map((cue)=>`<li>${escapeHtml(cue)}</li>`).join("")}</ul><h4>Consideration</h4><p>${escapeHtml(exercise.caution)}</p></section>
-      <section class="detail-section" id="alternativeSection"><h3 id="alternativeTitle" tabindex="-1">Find an alternative</h3><div class="alternative-list">${alternatives.length?alternatives.map(({exercise:candidate,match})=>`<div class="alternative-item"><div><strong>${escapeHtml(candidate.name)}</strong><small>${escapeHtml(gainsAndLosses(exercise,candidate))}</small></div><span>${match}%</span><div class="alternative-actions"><button data-open-detail="${candidate.id}" type="button" aria-label="Open ${escapeHtml(candidate.name)} details">Open</button><a href="/planner.html?add=${encodeURIComponent(candidate.id)}" aria-label="Add ${escapeHtml(candidate.name)} to weekly plan">Plan +</a></div></div>`).join(""):"<p>No eligible same-target alternative under your saved profile.</p>"}</div><p>Match percentages are transparent editorial similarity scores based on target, pattern, resistance profile, equipment, skill, and factor profile.</p></section>
+      <section class="detail-section" id="alternativeSection"><h3 id="alternativeTitle" tabindex="-1">Find an alternative</h3><div class="alternative-list">${alternatives.length?alternatives.map(({exercise:candidate,match})=>`<div class="alternative-item"><div><strong>${escapeHtml(candidate.name)}</strong><small>${escapeHtml(gainsAndLosses(exercise,candidate))}</small></div><span>${match}%</span><div class="alternative-actions"><button data-open-detail="${candidate.id}" type="button" aria-label="Open ${escapeHtml(candidate.name)} details">Open</button><a href="/planner.html?add=${encodeURIComponent(candidate.id)}" aria-label="Add ${escapeHtml(candidate.name)} to weekly plan">Add to plan</a></div></div>`).join(""):"<p>No eligible same-target alternative under your saved profile.</p>"}</div><p>Match percentages are transparent editorial similarity scores based on target, pattern, resistance profile, equipment, skill, and factor profile.</p></section>
       <section class="detail-section"><h3>Community score</h3><div class="rating-summary"><strong>${escapeHtml(community.hasRatings?`${community.score}/10`:community.label)}</strong><span>${escapeHtml(community.attribution)}</span></div>${community.hasRatings?`<div class="community-breakdown">${[["comfort","Comfort"],["pump","Pump"],["enjoyment","Enjoyment"],["stability","Stability"],["setup","Setup"],["overall","Overall"]].map(([key,label])=>`<span>${label}<b>${ratingAverage(aggregate[key])}/5</b></span>`).join("")}</div>`:""}${ownRating?`<p><strong>Your rating:</strong> ${Number(ownRating.overall)}/5 overall</p>`:"<p>Be the first Strata+ user to rate this exercise.</p>"}<p>Your rating is tied to your account and replaces your prior rating. It never changes the official FitScore.</p>${ratingFormMarkup(exercise,ratingDraft)}</section>
     </aside></div></div>`;
   openDialog(dialog,dialog.querySelector?.('[data-close-dialog="detailDialog"]'));
@@ -335,7 +334,7 @@ function openComparison(){
     tableRow("Practicality",exercises,(exercise)=>`${practicality(exercise)}/100`,{winner:true}),
     tableRow("Starting point",exercises,(exercise)=>`${escapeHtml(exercise.sets)} × ${escapeHtml(exercise.reps)}<br>${escapeHtml(exercise.rest)} rest`),
     tableRow("STRATA interpretation",exercises,(exercise)=>escapeHtml(exercise.why)),
-    tableRow("Add to week",exercises,(exercise)=>`<a class="small-button" href="/planner.html?add=${encodeURIComponent(exercise.id)}">Plan +</a>`)
+    tableRow("Add to plan",exercises,(exercise)=>`<a class="small-button" href="/planner.html?add=${encodeURIComponent(exercise.id)}">Add to plan</a>`)
   ];
   const columnHeaders=exercises.map((exercise)=>`<th scope="col"><strong>${escapeHtml(exercise.name)}</strong><span>${escapeHtml(exercise.sub)}</span></th>`).join("");
   el("battleResults").innerHTML=`<div class="battle-results-head"><h3>Side-by-side result</h3><div class="battle-results-actions"><button class="small-button" data-share-battle type="button">Share card ↗</button><a class="small-button" href="/planner.html">Open planner ↗</a></div></div><div class="battle-verdict"><strong>${verdict.winner?`${escapeHtml(verdict.winner.name)} leads`:"No universal winner"}</strong><p>${escapeHtml(verdict.text)}</p></div><div class="comparison-scroll" role="region" aria-label="Exercise comparison table. Scroll horizontally to see every exercise." tabindex="0"><table class="comparison-table"><caption class="sr-only">Exercise comparison across FitScore, targets, mechanics, progression, setup, equipment, and practicality</caption><thead><tr><th scope="col">Measure</th>${columnHeaders}</tr></thead><tbody>${rows.join("")}</tbody></table></div><p class="field-note">Highlighted cells lead this selected set on that factor. Rankings are editorial and do not predict individual results.</p>`;
@@ -389,7 +388,7 @@ function sharedPlanDayMarkup(day,plan){
 }
 function communityPlanCard(record,index){
   const stats=communityPlanStats(record),applied=state.communityAppliedId===record.id&&state.communityAppliedUpdatedAt===Number(record.updatedAt);
-  return `<article class="community-plan-card" data-community-plan="${escapeHtml(record.id)}"><div class="community-plan-card-head"><span class="community-plan-index">${String(index+1).padStart(2,"0")}</span><span class="community-plan-author">By ${escapeHtml(record.authorName)}</span></div><h3>${escapeHtml(record.title)}</h3><p class="community-plan-description">${escapeHtml(record.description||"A complete seven-day workout plan shared with the STRATA community.")}</p><div class="community-plan-meta"><span>${stats.trainingDays} training day${stats.trainingDays===1?"":"s"}</span><span>${stats.exercises} exercise${stats.exercises===1?"":"s"}</span><span>${escapeHtml(communityDateLabel(record.updatedAt||record.createdAt))}</span></div><details class="shared-plan-preview"><summary aria-label="Preview all 7 days of ${escapeHtml(record.title)} by ${escapeHtml(record.authorName)}">Preview all 7 days</summary><div class="shared-plan-week">${Monthly.DAYS.map((day)=>sharedPlanDayMarkup(day,record.plan)).join("")}</div></details><div class="community-plan-card-actions"><button class="button button-dark" data-apply-community="${escapeHtml(record.id)}" data-applied="${applied}" type="button" aria-label="${applied?"This exact version is already in My Plan":`Replace My Plan with ${escapeHtml(record.title)} by ${escapeHtml(record.authorName)}`}" ${applied?"disabled":""}>${applied?"Already in My Plan ✓":"Replace My Plan"} <span>${applied?"✓":"→"}</span></button><a class="small-button" href="/planner.html">View mine</a></div></article>`;
+  return `<article class="community-plan-card" data-community-plan="${escapeHtml(record.id)}"><div class="community-plan-card-head"><span class="community-plan-index">${String(index+1).padStart(2,"0")}</span><span class="community-plan-author">By ${escapeHtml(record.authorName)}</span></div><h3>${escapeHtml(record.title)}</h3><p class="community-plan-description">${escapeHtml(record.description||"A complete seven-day workout plan shared with the STRATA community.")}</p><div class="community-plan-meta"><span>${stats.trainingDays} training day${stats.trainingDays===1?"":"s"}</span><span>${stats.exercises} exercise${stats.exercises===1?"":"s"}</span><span>${escapeHtml(communityDateLabel(record.updatedAt||record.createdAt))}</span></div><details class="shared-plan-preview"><summary aria-label="Preview all 7 days of ${escapeHtml(record.title)} by ${escapeHtml(record.authorName)}">Preview all 7 days</summary><div class="shared-plan-week">${Monthly.DAYS.map((day)=>sharedPlanDayMarkup(day,record.plan)).join("")}</div></details><div class="community-plan-card-actions"><button class="button button-dark" data-apply-community="${escapeHtml(record.id)}" data-applied="${applied}" type="button" aria-label="${applied?"This exact version is already your weekly plan":`Use ${escapeHtml(record.title)} by ${escapeHtml(record.authorName)} as my weekly plan`}" ${applied?"disabled":""}>${applied?"Already using this plan":"Use this week"} <span aria-hidden="true">${applied?"✓":"→"}</span></button><a class="small-button" href="/planner.html">Open my plan <span aria-hidden="true">→</span></a></div></article>`;
 }
 function renderCommunityPlans(){
   const grid=el("communityPlanGrid"),status=el("communityPlanStatus"),query=state.communityQuery.trim().toLocaleLowerCase();
@@ -446,19 +445,19 @@ async function applyCommunityPlan(){
   const timeout=controller?setTimeout(()=>controller.abort(),15_000):null;
   try{
     const result=await api(`/api/community-plans/${encodeURIComponent(record.id)}/apply`,{method:"POST",body:JSON.stringify({sourceUpdatedAt:Number(record.updatedAt),targetUpdatedAt:state.weeklyPlanUpdatedAt}),...(controller?{signal:controller.signal}:{})});
-    state.weeklyPlan=Monthly.normalizeWeeklyPlan(result.plan,state.exercises);state.weeklyPlanUpdatedAt=Number(result.planUpdatedAt)||state.weeklyPlanUpdatedAt;state.communityAppliedId=record.id;state.communityAppliedUpdatedAt=Number(record.updatedAt);syncSessionPlanViews({regenerate:true});closeDialog("communityApplyDialog");state.communityPendingId=null;renderCommunityPlans();
+    state.weeklyPlan=Monthly.normalizeWeeklyPlan(result.plan,state.exercises);state.weeklyPlanUpdatedAt=Number(result.planUpdatedAt)||state.weeklyPlanUpdatedAt;state.communityAppliedId=record.id;state.communityAppliedUpdatedAt=Number(record.updatedAt);syncSessionPlanViews({invalidateSession:true});closeDialog("communityApplyDialog");state.communityPendingId=null;renderCommunityPlans();
     const planLink=el("communityOpenPlan");planLink.hidden=false;el("communityPlanStatus").textContent=`Saved. “${record.title}” is now your weekly plan.`;planLink.focus?.();showToast("Saved. Weekly plan replaced with the community week.");
   }catch(error){
     if(error.code==="COMMUNITY_PLAN_CHANGED"){
       const refreshed=await Promise.allSettled([api("/api/plan"),loadCommunityPlans({reset:true})]);
       if(refreshed[0].status==="fulfilled"){
         state.weeklyPlan=Monthly.normalizeWeeklyPlan(refreshed[0].value.plan,state.exercises);state.weeklyPlanUpdatedAt=Number(refreshed[0].value.planUpdatedAt)||0;
-        syncSessionPlanViews({regenerate:true});
+        syncSessionPlanViews({invalidateSession:true});
       }
       closeDialog("communityApplyDialog");state.communityPendingId=null;el("communityPlanStatus").textContent="Couldn't save — Retry. A shared plan or your current week changed; the latest versions are loaded for review.";showToast("Couldn't save — Retry. Review the latest plans first.");
     }else{const message=saveRetryMessage(error),node=el("communityApplyError");node.textContent=message;node.hidden=false;el("communityPlanStatus").textContent=message;}
   }
-  finally{if(timeout!==null)clearTimeout(timeout);dialog.dataset.busy="false";dialog.setAttribute?.("aria-busy","false");controls.forEach((control)=>{control.disabled=false;});confirm.innerHTML='Replace with this plan <span>→</span>';}
+  finally{if(timeout!==null)clearTimeout(timeout);dialog.dataset.busy="false";dialog.setAttribute?.("aria-busy","false");controls.forEach((control)=>{control.disabled=false;});confirm.innerHTML='Replace with this plan <span aria-hidden="true">→</span>';}
 }
 
 function blankMonthlySchedule(){
@@ -475,13 +474,15 @@ function renderWeeklyPulse(){
   el("weeklyPulseTitle").textContent=pulse.title;
   el("weeklyPulseDetail").textContent=pulse.detail;
   el("weeklyPulseBar").setAttribute("style",`width:${pulse.progressPercent}%`);
-  el("weeklyPulseAction").innerHTML=`${escapeHtml(pulse.actionLabel)} <span aria-hidden="true">→</span>`;
   pulseRoot.dataset.sessionDay=pulse.day||"empty";
-  const workoutDay=pulse.day||Core.WEEKDAYS[(new Date().getDay()+6)%7];
   const start=el("plusStartWorkout");
-  if(start){start.href=`/workout.html?day=${encodeURIComponent(workoutDay)}`;start.textContent=`Start ${workoutDay} workout ↗`;}
-  el("weeklyPulseAction").href=pulse.day?`/workout.html?day=${encodeURIComponent(pulse.day)}`:"/onboarding.html";
-  el("weeklyPulseAction").textContent=pulse.day?"Open workout →":"Set up my week →";
+  if(pulse.day){
+    start.href=`/workout.html?day=${encodeURIComponent(pulse.day)}`;start.innerHTML='Start working out <span aria-hidden="true">↗</span>';
+  }else{
+    start.href="/onboarding.html";start.innerHTML='Build my first week <span aria-hidden="true">→</span>';
+  }
+  el("weeklyPulseAction").href="/planner.html";
+  el("weeklyPulseAction").innerHTML='Edit weekly plan <span aria-hidden="true">→</span>';
 }
 function sessionBuilderAvailable(){return Boolean(el("sessionBuilder")&&el("sessionGroup")&&el("sessionLength")&&el("sessionDay")&&el("sessionGenerate")&&el("sessionResults")&&el("sessionStatus")&&el("sessionAddAll"));}
 function preferredSessionDay(current=""){
@@ -494,12 +495,12 @@ function preferredSessionDay(current=""){
 }
 function populateSessionDay(){
   if(!sessionBuilderAvailable())return;
-  const select=el("sessionDay"),selected=preferredSessionDay(select.value);
+  const select=el("sessionDay"),selected=preferredSessionDay(state.sessionDayInitialized?select.value:"");
   select.innerHTML=Core.WEEKDAYS.filter((day)=>!(state.weeklyPlan?.restDays||[state.weeklyPlan?.restDay]).includes(day)).map((day)=>{
     const count=Array.isArray(state.weeklyPlan?.days?.[day])?state.weeklyPlan.days[day].length:0;
     return `<option value="${day}" ${day===selected?"selected":""}>${day}${count?` · ${count} scheduled`:""}</option>`;
   }).join("");
-  select.value=selected;
+  select.value=selected;state.sessionDayInitialized=true;
 }
 function populateSessionBrief(){
   if(!sessionBuilderAvailable())return;
@@ -518,11 +519,11 @@ function sessionMergePreview(){
 }
 function updateSessionAddButton(){
   if(!sessionBuilderAvailable())return null;
-  const button=el("sessionAddAll");button.hidden=!state.session;
-  if(!state.session){button.disabled=true;return null;}
+  const button=el("sessionAddAll"),day=el("sessionDay").value,dayLabel=day||"the selected day";button.hidden=!state.session;
+  if(!state.session){button.disabled=true;button.title="";return null;}
   try{
-    const preview=sessionMergePreview();button.disabled=state.sessionSaving||!preview.changed;button.title=preview.changed?`Add ${preview.added} new movement${preview.added===1?"":"s"}${preview.skipped?` and skip ${preview.skipped} already on this day`:""}`:"Every movement in this session is already on the selected day.";return null;
-  }catch(error){button.disabled=true;button.title=error.message;return error;}
+    const preview=sessionMergePreview();button.disabled=state.sessionSaving||!preview.changed;button.title=preview.changed?`Add ${preview.added} new movement${preview.added===1?"":"s"}${preview.skipped?` and skip ${preview.skipped} already on this day`:""}`:"Every movement in this session is already on the selected day.";button.innerHTML=preview.changed?`Add ${preview.added} movement${preview.added===1?"":"s"} to ${escapeHtml(dayLabel)} <span aria-hidden="true">→</span>`:`Already in ${escapeHtml(dayLabel)} <span aria-hidden="true">✓</span>`;return null;
+  }catch(error){button.disabled=true;button.title=error.message;button.textContent=`Can't add to ${dayLabel}`;return error;}
 }
 function renderSession(session,{announce=false}={}){
   if(!sessionBuilderAvailable())return;
@@ -537,7 +538,7 @@ function renderSession(session,{announce=false}={}){
 }
 function showSessionBuildError(error){
   if(!sessionBuilderAvailable())return;
-  state.session=null;el("sessionResults").innerHTML=`<div class="session-empty-state"><span aria-hidden="true">!</span><div><h3 id="sessionResultsTitle">SESSION NEEDS AN ADJUSTMENT.</h3><p>${escapeHtml(error.message)}</p></div></div>`;el("sessionStatus").textContent=error.message;el("sessionAddAll").hidden=true;el("sessionAddAll").disabled=true;
+  state.session=null;el("sessionResults").innerHTML=`<div class="session-empty-state"><div><h3 id="sessionResultsTitle">SESSION NEEDS AN ADJUSTMENT.</h3><p>${escapeHtml(error.message)}</p></div></div>`;el("sessionStatus").textContent=error.message;el("sessionAddAll").hidden=true;el("sessionAddAll").disabled=true;el("sessionOpenPlan").hidden=true;
 }
 function generateSession({announce=false}={}){
   if(!sessionBuilderAvailable()||!state.exercises.length||!state.preferences)return;
@@ -549,10 +550,14 @@ function generateSession({announce=false}={}){
 function setSessionBusy(busy){
   state.sessionSaving=busy;el("sessionResults")?.setAttribute("aria-busy",String(busy));
   for(const id of ["sessionGroup","sessionLength","sessionDay","sessionGenerate"])if(el(id))el(id).disabled=busy;
-  if(el("sessionAddAll")){el("sessionAddAll").disabled=busy;el("sessionAddAll").innerHTML=busy?'Saving… <span aria-hidden="true">→</span>':'Add all to selected day <span aria-hidden="true">→</span>';}
+  if(el("sessionAddAll")){el("sessionAddAll").disabled=busy;if(busy)el("sessionAddAll").innerHTML='Saving… <span aria-hidden="true">→</span>';}
   if(!busy)updateSessionAddButton();
 }
-function syncSessionPlanViews({regenerate=false}={}){renderWeeklyPulse();populateSessionDay();updateMonthlySourceButtons();if(regenerate)generateSession();else updateSessionAddButton();}
+function resetSessionPreview(message="Choose your brief, then build a session."){
+  if(!sessionBuilderAvailable())return;
+  state.session=null;el("sessionResults").setAttribute("aria-busy","false");el("sessionResults").innerHTML='<div class="session-empty-state"><div><h3 id="sessionResultsTitle">YOUR SESSION WILL APPEAR HERE.</h3><p>Strata+ will prioritize personal fit, useful exercise order, and a practical amount of work for the time selected.</p></div></div>';el("sessionStatus").textContent=message;el("sessionAddAll").hidden=true;el("sessionAddAll").disabled=true;el("sessionOpenPlan").hidden=true;
+}
+function syncSessionPlanViews({invalidateSession=false}={}){renderWeeklyPulse();populateSessionDay();updateMonthlySourceButtons();if(invalidateSession)resetSessionPreview("Your weekly plan changed. Build the session again to refresh its exercise picks.");else updateSessionAddButton();}
 async function refreshSessionConflict(error){
   const latest=error?.payload?.plan?error.payload:await api("/api/plan");
   state.weeklyPlan=Monthly.normalizeWeeklyPlan(latest.plan,state.exercises);state.weeklyPlanUpdatedAt=Number(latest.planUpdatedAt)||0;syncSessionPlanViews();
@@ -581,7 +586,7 @@ async function addSessionToWeek(){
 }
 function initializeSessionBuilder(){
   if(!sessionBuilderAvailable())return;
-  populateSessionBrief();generateSession();renderWeeklyPulse();
+  populateSessionBrief();resetSessionPreview();renderWeeklyPulse();
 }
 function localIsoDate(){const date=new Date(),part=(value)=>String(value).padStart(2,"0");return `${date.getFullYear()}-${part(date.getMonth()+1)}-${part(date.getDate())}`;}
 function friendlyMonthlyDate(value){
@@ -730,7 +735,7 @@ profileForm.addEventListener("submit",async(event)=>{
   const formElement=event.currentTarget,form=new FormData(formElement),preferences={goal:form.get("goal"),level:form.get("level"),days:Number(form.get("days")),equipment:form.getAll("equipment"),preferences:form.getAll("preferences"),limitations:form.getAll("limitations")};
   const controls=[...formElement.elements];profileForm.dataset.saving="true";controls.forEach((control)=>{control.disabled=true;});
   el("profileStatus").textContent="Saving…";
-  try{const result=await api("/api/preferences",{method:"PUT",body:JSON.stringify({preferences})});state.preferences=result.preferences;renderProfile();renderRecommendations();resetExplorerWindow();renderExplorer();renderWeeklyPulse();generateSession();showToast("Personalized ranking refreshed.");}
+  try{const result=await api("/api/preferences",{method:"PUT",body:JSON.stringify({preferences})});state.preferences=result.preferences;renderProfile();renderRecommendations();resetExplorerWindow();renderExplorer();renderWeeklyPulse();resetSessionPreview("Preferences saved. Build a new session when you're ready.");showToast("Saved. Your recommendations are updated.");}
   catch(error){const message=saveRetryMessage(error);el("profileStatus").textContent=message;showToast(message);}
   finally{profileForm.dataset.saving="false";controls.forEach((control)=>{control.disabled=false;});}
 });
@@ -743,8 +748,8 @@ function lockFormControls(form){
 
 const monthlyPlanForm=el("monthlyPlanForm");
 el("sessionBuilderForm")?.addEventListener("submit",(event)=>{event.preventDefault();if(!state.sessionSaving)generateSession({announce:true});});
-el("sessionGroup")?.addEventListener("change",()=>{if(!state.sessionSaving)generateSession();});
-el("sessionLength")?.addEventListener("change",()=>{if(!state.sessionSaving)generateSession();});
+el("sessionGroup")?.addEventListener("change",()=>{if(!state.sessionSaving)resetSessionPreview("Focus changed. Build the session to see your updated picks.");});
+el("sessionLength")?.addEventListener("change",()=>{if(!state.sessionSaving)resetSessionPreview("Time changed. Build the session to see your updated picks.");});
 el("sessionDay")?.addEventListener("change",()=>{if(!state.sessionSaving){const error=updateSessionAddButton();el("sessionStatus").textContent=error?`This session does not fit the selected day: ${error.message}`:state.session?`Session ready to add to ${el("sessionDay").value}.`:"Build a session first.";}});
 el("sessionAddAll")?.addEventListener("click",()=>{void addSessionToWeek();});
 monthlyPlanForm.addEventListener("submit",async(event)=>{
@@ -901,7 +906,7 @@ async function init(){
   try{
     const data=await api("/api/discovery");state.exercises=data.exercises;state.methodology=data.methodology;state.sources=data.sources;state.limited=new Set(data.limitedConfidenceExercises);state.preferences=data.preferences;state.user=data.user;state.weeklyPlan=data.weeklyPlan||null;state.weeklyPlanUpdatedAt=Number(data.weeklyPlanUpdatedAt)||0;state.monthlyPlanUpdatedAt=Number(data.monthlyPlanUpdatedAt)||0;state.monthlyPlan=data.monthlyPlan||null;
     state.csrfToken=String(data.csrfToken||"");state.aggregate=new Map((data.ratings.aggregates||[]).map((item)=>[item.exercise_id,item]));state.userRatings=new Map((data.ratings.user||[]).map((item)=>[item.exercise_id,item]));state.ratingsRefreshedAt=Date.now();
-    el("userName").textContent=data.user.name;el("catalogTotal").textContent=state.exercises.length;el("recommendationTitle").innerHTML=`BEST EXERCISES <em>FOR ${escapeHtml(data.user.name.split(/\s+/)[0].toUpperCase())}.</em>`;
+    el("userName").textContent=data.user.name;el("catalogTotal").textContent=state.exercises.length;
     renderProfile();populateFilters();renderRecommendations();resetExplorerWindow();renderExplorer();renderCompareTray();populateMonthlyBuilder(state.monthlyPlan);initializeSessionBuilder();
     activateFeature(state.activeFeature||FEATURE_DEFAULT);
   }catch(error){if(!error?.redirecting)showInitialLoadError(error);}

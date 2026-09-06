@@ -11,6 +11,7 @@ const { getEmailVerificationConfig } = require("./email");
 const { createAuthService,configuredAdminEmail } = require("./auth");
 const { createAdminService } = require("./admin");
 const { createWorkoutService } = require("./workouts");
+const { createSetupService } = require("./setup");
 const { createSupportService } = require("./support");
 const { composeServices } = require("./service-composition");
 const {
@@ -96,6 +97,7 @@ const STATIC_FILES = new Map([
   ["workout-core.js","scripts/workout-core.js"],
   ["onboarding.html","pages/onboarding.html"],
   ["onboarding.css","styles/onboarding.css"],
+  ["product-nav.css","styles/product-nav.css"],
   ["onboarding.js","scripts/onboarding.js"],
   ["onboarding-core.js","scripts/onboarding-core.js"],
   ["planner.html","pages/planner.html"],
@@ -169,6 +171,7 @@ let auth;
 let admin;
 let support;
 let workouts;
+let setup;
 let paddleIpCache={cidrs:[],expiresAt:0,pending:null};
 
 function escapeHtml(value) { return String(value ?? "").replace(/[&<>'"]/g,(char) => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[char])); }
@@ -230,10 +233,17 @@ async function userPayload(session) {
   };
 }
 
-async function preferencesFor(userId) {
+async function preferencesSnapshotFor(userId) {
   const row=await store.preferences(userId);
-  if (!row) return defaultPreferences();
-  try { return sanitizePreferences(JSON.parse(row.preferences_json)); } catch { return defaultPreferences(); }
+  if (!row) return {preferences:defaultPreferences(),updatedAt:0,storedPreferencesJson:null};
+  const storedPreferencesJson=String(row.preferences_json),storedUpdatedAt=Number(row.updated_at);
+  const updatedAt=Number.isSafeInteger(storedUpdatedAt)&&storedUpdatedAt>0?storedUpdatedAt:0;
+  try { return {preferences:sanitizePreferences(JSON.parse(storedPreferencesJson)),updatedAt,storedPreferencesJson}; }
+  catch { return {preferences:defaultPreferences(),updatedAt,storedPreferencesJson}; }
+}
+
+async function preferencesFor(userId) {
+  return (await preferencesSnapshotFor(userId)).preferences;
 }
 
 function requireCommunityMutation(req,res,session,{jsonBody=false}={}) {
@@ -643,6 +653,7 @@ async function handleApi(req,res,url) {
   if (await auth.handleApi(req,res,url)) return;
   if (await admin.handleApi(req,res,url)) return;
   if (await workouts.handleApi(req,res,url)) return;
+  if (await setup.handleApi(req,res,url)) return;
   if (url.pathname === "/api/status" && req.method === "GET") {
     json(res,200,{ok:true,build:BUILD_NUMBER,storage:store.kind,persistent:store.kind==="turso"||process.env.NODE_ENV!=="production",paymentsConfigured:PAYMENT_CONFIG.configured,checkoutEnabled:PAYMENT_CONFIG.enabled,webhookIpAllowlist:ENFORCE_PADDLE_IPS,emailVerificationEnabled:EMAIL_CONFIG.enabled,emailVerificationConfigured:EMAIL_CONFIG.configured,passwordResetEnabled:EMAIL_CONFIG.enabled,accountDeletionEnabled:EMAIL_CONFIG.enabled,adminConfigured:Boolean(ADMIN_EMAIL)}); return;
   }
@@ -1105,6 +1116,11 @@ async function start() {
     createAuthService,createAdminService,createSupportService
   }));
   workouts=createWorkoutService({store,auth,requireAccess:requireDiscoveryAccess,rateAllowed,http:{json,bodyJson}});
+  setup=createSetupService({
+    store,auth,requireAccess:requireDiscoveryAccess,trustedOrigin:trustedAuthOrigin,
+    getPlanSnapshot:planSnapshotFor,getPreferencesSnapshot:preferencesSnapshotFor,getUserPayload:userPayload,
+    http:{json,bodyJson}
+  });
   await admin.bootstrap();
   await store.deleteExpired(Date.now());
   await admin.cleanup();

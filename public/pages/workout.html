@@ -9,13 +9,15 @@
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" href="/icons/strata-icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="/workout.css?v=7.1.1" />
+  <link rel="stylesheet" href="/workout.css?v=7.1.2" />
 </head>
 <body>
   <a class="skip-link" href="#workoutTitle">Skip to workout</a>
   <header class="site-header">
     <a class="brand" href="/" aria-label="STRATA rankings"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>STRATA</a>
-    <nav aria-label="Main navigation"><a href="/discover.html">Strata+</a><a href="/">Rankings</a><a href="/planner.html">Plan Studio</a><a href="/workout.html" aria-current="page">Workout</a><a href="/account.html" id="accountLink">Account</a></nav>
+    <nav class="workout-nav workout-nav-desktop" aria-label="Primary navigation"><a href="/">Rankings</a><a href="/discover.html">Strata+</a><a href="/planner.html">Plan</a><a href="/workout.html" aria-current="page">Train</a></nav>
+    <a class="header-account" href="/account.html" id="accountLink">Account</a>
+    <nav class="workout-nav workout-nav-mobile" aria-label="Primary navigation"><a href="/">Rankings</a><a href="/discover.html">Strata+</a><a href="/planner.html">Plan</a><a href="/workout.html" aria-current="page">Train</a></nav>
   </header>
   <main class="shell">
     <div class="mode-notice" id="modeNotice" role="status">Checking your session…</div>
@@ -32,7 +34,7 @@
         <div class="section-heading"><div><p class="eyebrow" id="todayLabel">Your next session</p><h2 id="startTitle">Turn your plan into progress.</h2></div><a class="text-link" href="/planner.html">Edit plan ↗</a></div>
         <label class="field day-field">Choose a plan day<select id="planDay"></select></label>
         <div class="plan-preview" id="planPreview"></div>
-        <div class="start-bottom"><p id="startHint" class="muted"></p><button class="button primary" type="button" id="startWorkout">Start workout <span aria-hidden="true">↗</span></button></div>
+        <div class="start-bottom"><p id="startHint" class="muted"></p><div class="start-actions"><button class="button secondary" type="button" id="chooseScheduledDay" hidden>Choose a scheduled day <span aria-hidden="true">→</span></button><a class="button secondary" id="openPlannerFromEmpty" href="/planner.html" hidden>Add exercises in Plan <span aria-hidden="true">↗</span></a><button class="button primary" type="button" id="startWorkout">Start working out <span aria-hidden="true">↗</span></button></div></div>
       </section>
       <section class="session" id="sessionPanel" aria-labelledby="sessionTitle" hidden>
         <div class="session-heading"><div><p class="eyebrow" id="sessionDate"></p><h2 id="sessionTitle" tabindex="-1"></h2><p class="muted">Log actual values. Planned reps are a guide, not a completed result.</p></div><div class="session-clock"><span>Time since start</span><strong id="sessionElapsed">0:00</strong></div></div>
@@ -45,21 +47,21 @@
         <div id="sessionEntries" class="session-entries"></div>
         <div class="finish-bar"><p id="finishHint" class="muted"></p><button id="finishWorkout" type="button" class="button primary">Finish workout <span aria-hidden="true">✓</span></button></div>
       </section>
-      <section class="panel celebration" id="celebration" hidden aria-labelledby="celebrationTitle"><span class="completion-badge" aria-hidden="true">✓</span><p class="eyebrow">Session complete</p><h2 id="celebrationTitle">That’s work worth building on.</h2><p id="celebrationMessage"></p><button type="button" class="button secondary" id="anotherSession">Back to my plan</button></section>
+      <section class="panel celebration" id="celebration" hidden aria-labelledby="celebrationTitle"><span class="completion-badge" aria-hidden="true">✓</span><p class="eyebrow">Session complete</p><h2 id="celebrationTitle">That’s work worth building on.</h2><p id="celebrationMessage"></p><button type="button" class="button secondary" id="anotherSession">Choose another workout</button></section>
     </div>
     <section class="history-section" id="historySection" hidden aria-labelledby="historyTitle">
       <div class="section-heading"><div><p class="eyebrow">Your training record</p><h2 id="historyTitle" tabindex="-1">The work adds up.</h2></div><button type="button" class="button secondary compact" id="refreshHistory">Refresh history</button></div>
       <div class="history-stats" id="historyStats"></div>
       <div class="history-layout"><section class="panel history-log" aria-labelledby="historyLogTitle"><h3 id="historyLogTitle">Recent sessions</h3><div id="historyList"></div><p id="historyError" class="inline-error" role="status" hidden></p><button type="button" class="button secondary full-width" id="loadMore" hidden>Load more sessions</button></section><section class="panel progress-panel" aria-labelledby="progressTitle"><p class="eyebrow">Progress, measured</p><h3 id="progressTitle">Build on your own best.</h3><p id="chartEmpty" class="muted">Complete a session to see your actual performance here.</p><div id="chartControls" hidden><label class="field">Exercise and logging format<select id="chartExercise"></select></label><label class="field">Measure<select id="chartMetric"></select></label></div><div id="performanceChart"></div><p class="scope-note" id="chartScope">Only completed sets in the loaded history are included. Reps and seconds are compared separately; bodyweight and assistance are never counted as external lifting volume.</p></section></div>
     </section>
-    <noscript><div class="panel">Enable JavaScript to log sessions and load workout history. Your plan remains available in <a href="/planner.html">Plan Studio</a>.</div></noscript>
+    <noscript><div class="panel">Enable JavaScript to log sessions and load workout history. Your week remains available in <a href="/planner.html">Plan</a>.</div></noscript>
   </main>
-  <footer>STRATA · Build 7.1.1 <span>Plan with purpose. Train with intent.</span><a href="/privacy">Privacy</a></footer>
+  <footer>STRATA · Build 7.1.2 <span>Plan with purpose. Train with intent.</span><a href="/privacy">Privacy</a></footer>
   <dialog id="finishDialog" aria-labelledby="finishDialogTitle"><form method="dialog"><p class="eyebrow">Close out your session</p><h2 id="finishDialogTitle">Finish this workout?</h2><p id="finishDialogMessage"></p><p>Only checked sets count toward your history and progress. Unfinished sets stay in the session for reference.</p><div class="actions"><button class="button secondary" value="cancel">Keep training</button><button class="button primary" value="finish">Finish and save</button></div></form></dialog>
   <dialog id="detailDialog" aria-labelledby="detailTitle"><div class="section-heading"><h2 id="detailTitle"></h2><button class="button quiet compact" type="button" id="closeDetail" aria-label="Close session details">Close ×</button></div><div id="detailBody"></div></dialog>
   <div class="toast" id="workoutToast" role="status" aria-live="polite"></div>
-  <script src="/workout-core.js?v=7.1.1"></script>
-  <script src="/workout.js?v=7.1.1" defer></script>
-  <script src="/pwa.js?v=7.1.1" defer></script>
+  <script src="/workout-core.js?v=7.1.2"></script>
+  <script src="/workout.js?v=7.1.2" defer></script>
+  <script src="/pwa.js?v=7.1.2" defer></script>
 </body>
 </html>

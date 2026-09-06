@@ -1,5 +1,15 @@
 # Changelog
 
+## 7.1.2 — Coherent Strata+ journeys and responsive UI
+
+- Replaced display-name-driven recommendation headings with stable, readable copy and kept long member names contained in account chrome.
+- Reworked Strata+ into a clear dashboard: one primary workout action, one weekly-plan action, seven equally weighted tools, and explicit session generation before anything can be added to a plan.
+- Standardized Rankings, Strata+, Plan, and Train navigation; added durable mobile bottom bars, touch-sized controls, clearer focus states, and corrected light/dark panel contrast.
+- Made empty and recovery workout days actionable, removed duplicate recovery/history surfaces, and ensured repeated or concurrent starts resume the one active account workout.
+- Saved weekly setup and its matching recommendation profile atomically with SQLite/Turso parity and both revision boundaries, including a safe recovery-day default for legacy seven-day plans.
+- Added strict setup-boundary typing and expanded unit, integration, browser, runtime, accessibility, breakpoint, and concurrency regressions.
+- See docs/release-7.1.2.md for deployment and rollback notes, and docs/release-readiness.md for verified results.
+
 ## 7.1.1 — Focused free planning and Strata+ training
 
 - Moved workout starts and Set up my week into Strata+. Logging, history and setup now require paid or active trial access; API reads/writes and direct training pages enforce the entitlement.
@@ -9,7 +19,7 @@
 - Restyled the Strata+ workspace with setup-inspired dark panels, softer lime, readable controls, responsive layouts and reduced-motion support.
 - Preserved workout-day destinations through sign-in; closed private workout views on session expiry; retained stored sessions when Plus access ends.
 - Updated pricing, offline cache rules, regression tests and the 100-user harness for the new feature boundary.
-- See docs/release-7.1.1.md for migration and rollback limits, and docs/release-readiness.md for verified results.
+- See docs/release-7.1.1.md for migration and rollback limits, and docs/verification/7.1.1-load-shared.json for that release's measured load record.
 
 ## 7.1.0 — Training workflows and account safety
 
@@ -22,7 +32,7 @@
 - Added isolated Paddle sandbox configuration without altering live checkout defaults; matching credentials and a separate catalog are required.
 - Added responsive black/lime screens, purposeful motion, clear save/error states, keyboard controls and reduced-motion styling; updated factual storage disclosures.
 - Extended 100-user workloads to workout lifecycle, conflicts, isolation and resource measurements; added migration, online backup/restore and full browser journey regressions.
-- Source is based on the actual 7.0.0 tag. Production deployment, provider transactions and full Chromium verification remain pending; see docs/release-readiness.md.
+- Source is based on the actual 7.0.0 tag. Production deployment, provider transactions and full Chromium verification remained pending; see docs/release-7.1.0.md and docs/verification/7.1.0-load-distinct.json for that release's records.
 
 ## 7.0.0 — Pilot readiness and interface update
 

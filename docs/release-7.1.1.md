@@ -40,4 +40,4 @@ Older 7.1.0 clients cannot represent zero/multiple rest days reliably and requir
 
 ## Validation and remaining gates
 
-See release-readiness.md and verification/7.1.1-release-check.log for actual outcomes. Local SQLite, fake signed Paddle-webhook tests and limited browser checks do not establish hosted Turso performance or real payment-provider readiness. The full authenticated desktop/mobile browser journey remains a release gate if Chromium is unavailable on this runner.
+See verification/7.1.1-load-shared.json for that release's retained measured load record; the check summary is preserved in this guide. Local SQLite, fake signed Paddle-webhook tests and limited browser checks do not establish hosted Turso performance or real payment-provider readiness. The full authenticated desktop/mobile browser journey remains a release gate if Chromium is unavailable on this runner.

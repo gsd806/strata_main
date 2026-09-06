@@ -1,26 +1,25 @@
-# STRATA 7.1.1 readiness
+# STRATA 7.1.2 readiness
 
 Status: reviewable source candidate; not deployed.
 
-This update keeps the manual planner free, moves workout logging/history and week setup into Strata+, supports independent optional rest days, and refreshes the Strata+ interface. See [release guide](release-7.1.1.md) and [changelog](../CHANGELOG.md).
+This patch repairs the Strata+ recommendation, setup, planner, and workout journeys without changing production credentials or provider configuration. See the [release guide](release-7.1.2.md) and [changelog](../CHANGELOG.md).
 
 | Check | Result |
 | --- | --- |
-| Node regression tests | 390 passed, zero failed |
-| Coverage | 92.33% lines; 81.43% branches; 87.68% functions; existing floors passed |
-| Release, architecture, type and lint checks | Passed; 15 server modules, zero cycles, reviewed budgets preserved |
-| Account, discovery, planner and PWA runtime checks | Passed |
-| Endpoint and storage performance budgets | Passed |
-| Paid/trial/free/expired access | API and private-page regression tests passed, including signed fake-Paddle grant/refund events |
-| 100 concurrent accounts sharing one IP | 5,823 requests, zero unexpected HTTP errors; 300 expected conflicts; all latency budgets passed |
-| Scoped free-planner browser check | Passed rest removal, independent additions and refresh persistence |
-| Automated Chromium E2E | Blocked before assertions: browser executable missing |
-| Authenticated visual matrix and hosted providers | Not verified on this runner |
+| Node regression tests | 402 passed, zero failed |
+| Coverage | 92.44% lines; 81.38% branches; 87.91% functions; enforced floors passed |
+| Release, architecture, type, and lint checks | Passed; 16 server modules, zero cycles, zero policy violations |
+| Runtime QA | Account, Strata+, planner, and PWA checks passed |
+| Endpoint and storage performance | Passed 40 measured samples after 8 warmups per operation |
+| Security and entitlement regressions | Passed auth/session revocation, setup revisions, active-workout isolation, signed fake-Paddle events, and free/trial/paid boundaries |
+| Automated Chromium E2E | 15 passed, zero failed across auth recovery, plan conflicts, payment entitlement, account deletion, responsive navigation, and training journeys |
+| Authenticated visual matrix | Passed at desktop and 700/390/320 px mobile widths; zero first-party browser errors and zero horizontal overflow on every audited route |
+| 100-account Linux load checks | Kept as CI gates; the local macOS runner correctly refused the Linux loopback-only harness before sending requests |
 
-The complete `npm run check` exits nonzero at its final Chromium stage. All preceding stages passed. [Full release log](verification/7.1.1-release-check.log) and [shared-network load report](verification/7.1.1-load-shared.json) contain the reproducible evidence. After the documentation and load-fixture update, release alignment and lint were checked again successfully.
+The complete `npm run check` gate passes on Node 24. The authenticated UI audit creates an isolated test account, verifies the trial/free boundary, checks contrast and keyboard behavior, exercises explicit session creation and plan saving, and captures the Strata+, Plan, and Train layouts. It also verifies that a long member name cannot replace or obscure `BEST EXERCISES FOR YOU.` and that the mobile product header remains visible and unobscured while using a tool.
 
-The shared-network run explicitly activated a trial for each synthetic account before logging workouts. Earlier free plan operations stayed free. Local p95 plan saves were 72.37 ms, workout saves 71.93 ms and workout completion 60.43 ms. These are local SQLite regression results, not hosted capacity measurements. Reports prefixed 7.1.0 are historical evidence for that candidate, not measurements of 7.1.1.
+Local endpoint p95 latency was 2.23 ms for health, 2.18 ms for status, 2.75 ms for authenticated plan reads, and 2.78 ms for authenticated plan saves. Storage p95 latency was 0.008 ms for session lookup, 0.004 ms for plan lookup, and 0.055 ms for plan compare-and-swap. These are local SQLite regression measurements, not production service-level objectives.
 
-The browser check on this runner exercised the free planner: removed its Sunday rest marker, independently added Tuesday and Thursday, refreshed and verified both persisted. Existing scheduled exercises stayed visible. A direct `/workout.html?guest=1&day=Monday` navigation redirected to sign-in with Monday preserved. No production account, purchase, email or deployment was used.
+The workout database tests verify the partial unique active-session index with `EXPLAIN`, concurrent starts through two independent SQLite connections, and equivalent mocked-Turso behavior. Legacy duplicate active rows are reconciled without deleting their workout history.
 
-The Strata+ interface was reviewed in source for responsive layout, contrast tokens, control readability and reduced-motion behavior. The authenticated Strata+ visual matrix still requires a browser session in the full end-to-end suite. Hosted Turso, real Resend and real Paddle sandbox transactions were not exercised. The existing deployment and provider checks in release-7.1.0.md remain applicable.
+Hosted Turso capacity, real Resend delivery, real Paddle sandbox/live transactions, production deployment, and production account migration were not exercised. The CI load jobs and authorized deployment/provider checks remain required before promoting this candidate.

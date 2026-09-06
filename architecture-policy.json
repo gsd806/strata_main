@@ -19,6 +19,7 @@
         "src/payments.js",
         "src/plans.js",
         "src/service-composition.js",
+        "src/setup.js",
         "src/static-assets.js",
         "src/support.js",
         "src/workouts.js"
@@ -100,6 +101,13 @@
     "src/workouts.js": {
       "role": "Workout validation, history summaries, and authenticated lifecycle",
       "maxLines": 240,
+      "allowedDependencies": [
+        "src/plans.js"
+      ]
+    },
+    "src/setup.js": {
+      "role": "Atomic weekly-plan and preference setup",
+      "maxLines": 120,
       "allowedDependencies": [
         "src/plans.js"
       ]

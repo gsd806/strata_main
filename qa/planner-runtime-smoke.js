@@ -131,7 +131,8 @@ function clickSelectDay(day){
   }
   assert.equal((dayNavMarkup.match(/\baria-pressed="true"/g)||[]).length,1,"Exactly one quick-add day must be selected");
   assert.match(html,/id="weekBoard"[^>]*aria-describedby="weekScrollHint"/,"The horizontal week must expose its scroll instructions");
-  const finalMobileRule=plannerCss.slice(plannerCss.lastIndexOf("@media(max-width:760px)"),plannerCss.lastIndexOf("@media(max-width:480px)"));
+  const finalMobileStart=plannerCss.lastIndexOf("@media(max-width:760px)"),nextMobileRule=plannerCss.indexOf("@media",finalMobileStart+1);
+  const finalMobileRule=plannerCss.slice(finalMobileStart,nextMobileRule<0?plannerCss.length:nextMobileRule);
   assert.match(finalMobileRule,/\.library-panel\{[^}]*\btop:auto\b/,"The final mobile cascade must cancel the desktop sticky offset");
   assert.doesNotMatch(finalMobileRule,/\.planner-day-chip\{[^}]*min-width:0/,"The final mobile cascade must preserve accessible day-chip targets");
   assert.match(plannerCss,/@media\(max-width:480px\)\{[^}]*\.library-panel\{[^}]*54svh[^}]*\}\.planner-day-chips\{grid-template-columns:repeat\(4,minmax\(44px,1fr\)\)/,"Small screens should expose four full-size day targets per row and leave the week within reach");

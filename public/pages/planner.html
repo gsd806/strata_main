@@ -9,25 +9,27 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="STRATA" />
-    <title>Plan Studio — STRATA</title>
+    <title>Weekly Plan — STRATA</title>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icons/strata-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="planner.css?v=7.1.1" />
-    <link rel="stylesheet" href="/experience.css?v=7.1.1" />
+    <link rel="stylesheet" href="planner.css?v=7.1.2" />
+    <link rel="stylesheet" href="/experience.css?v=7.1.2" />
   </head>
   <body>
     <a class="skip-link" href="#weekTitle">Skip to weekly plan</a>
     <header class="planner-header">
-      <a class="brand" href="/" aria-label="Back to Strata rankings"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>STRATA</span></a>
-      <div class="header-center"><span class="live-dot" aria-hidden="true"></span><span id="saveStatus" role="status" aria-live="polite" aria-atomic="true">Loading plan…</span><button class="save-retry" id="retryPlanSave" type="button" hidden>Retry</button></div>
-      <div class="user-menu"><a class="account-link" id="userName" href="/account.html" hidden>Account</a><a id="plannerSignIn" href="/account.html?mode=login&amp;next=planner" hidden>Sign in</a><a href="/discover.html">Strata+</a><a href="/install.html">Install</a><button id="logoutButton" type="button" hidden>Sign out</button></div>
+      <div class="planner-identity"><a class="brand" href="/" aria-label="STRATA rankings"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>STRATA</span></a><div class="header-center"><span class="live-dot" aria-hidden="true"></span><span id="saveStatus" role="status" aria-live="polite" aria-atomic="true">Loading plan…</span><button class="save-retry" id="retryPlanSave" type="button" hidden>Retry</button></div></div>
+      <nav class="planner-primary-nav planner-primary-nav-desktop" aria-label="Primary navigation"><a href="/">Rankings</a><a href="/discover.html">Strata+</a><a href="/planner.html" aria-current="page">Plan</a><a href="/workout.html">Train</a></nav>
+      <div class="user-menu"><a class="account-link" id="userName" href="/account.html" hidden>Account</a><a id="plannerSignIn" href="/account.html?mode=login&amp;next=planner" hidden>Account</a><button id="logoutButton" type="button" hidden>Sign out</button></div>
+      <nav class="planner-primary-nav planner-primary-nav-mobile" aria-label="Primary navigation"><a href="/">Rankings</a><a href="/discover.html">Strata+</a><a href="/planner.html" aria-current="page">Plan</a><a href="/workout.html">Train</a></nav>
     </header>
 
     <div class="planner-mode-notice" id="plannerModeNotice" role="status"><strong>Guest plan.</strong> This week stays on this device. Signing in opens a separate synced account plan.</div>
+    <nav class="planner-mobile-switcher" aria-label="Planner workspace"><a href="#libraryPanel">Exercise library <span aria-hidden="true">↑</span></a><a href="#weekTitle">My week <span aria-hidden="true">↓</span></a></nav>
 
     <section class="plan-conflict-panel" id="planConflictPanel" aria-labelledby="planConflictTitle" hidden>
       <div class="plan-conflict-heading">
@@ -57,7 +59,7 @@
           <div class="planner-day-chips" id="plannerDayNav" role="group" aria-labelledby="quickAddDayLabel"></div>
         </div>
         <div class="planner-filters" id="plannerFilters" role="group" aria-label="Exercise muscle filters"></div>
-        <p class="drag-note"><span aria-hidden="true">↗</span><span class="drag-note-wide">Drag onto any day, or choose a quick-add day and select Add. Use each card’s day and arrow controls to move it without dragging.</span><span class="drag-note-compact">Choose a day, select Add, then <a href="#weekTitle">review my week ↓</a></span></p>
+        <p class="drag-note"><span aria-hidden="true">↗</span><span class="drag-note-wide">Drag onto any day, or choose a quick-add day and select Add. Use each card’s day and arrow controls to move it without dragging.</span><span class="drag-note-compact">Choose a day, select Add, then <a class="planner-jump-link" href="#weekTitle">view my week <span aria-hidden="true">↓</span></a></span></p>
         <p class="sr-only" id="libraryResultStatus" role="status" aria-live="polite" aria-atomic="true"></p>
         <div class="library-list" id="libraryList"><div class="loading">Loading movements…</div></div>
       </aside>
@@ -129,10 +131,10 @@
       </section>
     </dialog>
 
-    <footer class="build-footer">STRATA · Build 7.1.1 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
+    <footer class="build-footer">STRATA · Build 7.1.2 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/install.html">Install app</a></footer>
     <div class="planner-toast" id="plannerToast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=7.1.1"></script>
-    <script src="planner.js?v=7.1.1"></script>
-    <script src="/motion.js?v=7.1.1" defer></script>
+    <script src="/pwa.js?v=7.1.2"></script>
+    <script src="planner.js?v=7.1.2"></script>
+    <script src="/motion.js?v=7.1.2" defer></script>
   </body>
 </html>

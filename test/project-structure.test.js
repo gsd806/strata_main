@@ -23,7 +23,7 @@ function walk(directory){
 
 test("keeps root, private server, and public browser files separated",()=>{
   for(const required of [
-    "server.js","src/server.js","src/admin.js","src/auth.js","src/database.js","src/domain-types.d.ts","src/email.js","src/http.js","src/payments.js","src/plans.js","src/schema.js","src/service-composition.js","src/store-contract.js","src/support.js",
+    "server.js","src/server.js","src/admin.js","src/auth.js","src/database.js","src/domain-types.d.ts","src/email.js","src/http.js","src/payments.js","src/plans.d.ts","src/plans.js","src/schema.js","src/service-composition.js","src/setup.js","src/store-contract.js","src/support.js",
     "src/data/discovery-data.json","public/pages/index.html","public/pages/forgot-password.html",
     "public/pages/reset-password.html","public/pages/delete-account.html",
     "public/pages/admin.html","public/scripts/admin.js","public/styles/admin.css",
@@ -34,7 +34,7 @@ test("keeps root, private server, and public browser files separated",()=>{
   assert.deepEqual(readdirSync(PUBLIC_ROOT).sort(),[
     "data","icons","manifest.webmanifest","pages","scripts","service-worker.js","styles"
   ]);
-  assert.deepEqual(readdirSync(SRC_ROOT).sort(),["admin.js","auth.js","data","database.js","domain-types.d.ts","email.js","http.js","payments.js","plans.js","schema.js","server.js","service-composition.js","static-assets.js","store-contract.js","support.js","workouts.js"]);
+  assert.deepEqual(readdirSync(SRC_ROOT).sort(),["admin.js","auth.js","data","database.js","domain-types.d.ts","email.js","http.js","payments.js","plans.d.ts","plans.js","schema.js","server.js","service-composition.js","setup.js","static-assets.js","store-contract.js","support.js","workouts.js"]);
 
   const rootFiles=readdirSync(PROJECT_ROOT,{withFileTypes:true}).filter((entry)=>entry.isFile()).map((entry)=>entry.name);
   assert.deepEqual(rootFiles.filter((name)=>name.endsWith(".js")).sort(),["server.js"]);

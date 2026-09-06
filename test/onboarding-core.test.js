@@ -27,3 +27,27 @@ test("four-day setup alternates upper and lower and never mutates its inputs",()
   const profile={...base,availability:["Monday","Tuesday","Thursday","Friday"]},before=JSON.stringify(profile);
   const result=core.buildWeek(profile,exercises,discovery);assert.deepEqual(result.sessions.map(s=>s.focus),["upper","lower","upper","lower"]);assert.equal(JSON.stringify(profile),before);
 });
+
+test("generated weeks retain the canonical preference profile instead of replacing it with setup defaults",()=>{
+  const profile={...base,preferences:["compound","long-range","compound"],limitations:["no-floor"]};
+  const result=core.buildWeek(profile,exercises,discovery);
+  assert.deepEqual(result.preferences.preferences,["compound","long-range"]);
+  assert.deepEqual(result.preferences.limitations,["no-floor"]);
+  assert.equal(result.preferences.days,profile.availability.length);
+});
+
+test("saved profiles prefill real plan days and produce a valid recovery-day default when the plan is empty",()=>{
+  const preferences={version:1,goal:"strength",level:"Advanced",days:7,equipment:["Barbell / Smith"],preferences:["compound"],limitations:["no-floor"]};
+  const plan={days:Object.fromEntries(core.DAYS.map(day=>[day,day==="Tuesday"||day==="Friday"?[{exerciseId:"fixture"}]:[]]))};
+  const existing=core.profileFromSaved(preferences,plan);
+  assert.deepEqual(existing.availability,["Tuesday","Friday"]);
+  assert.equal(existing.goal,"strength");assert.equal(existing.level,"Advanced");
+  assert.deepEqual(existing.equipment,["Barbell / Smith"]);assert.deepEqual(existing.preferences,["compound"]);assert.deepEqual(existing.limitations,["no-floor"]);
+  const empty=core.profileFromSaved(preferences,{days:Object.fromEntries(core.DAYS.map(day=>[day,[]]))});
+  assert.equal(empty.availability.length,6,"a seven-day profile must still open setup in a valid one-to-six-day state");
+  assert.equal(empty.availability.includes("Sunday"),false);
+  assert.equal(empty.recoveryAdjusted,true,"reducing an empty saved seven-day profile must be disclosed");
+  const everyDay=core.profileFromSaved(preferences,{days:Object.fromEntries(core.DAYS.map(day=>[day,[{exerciseId:`fixture-${day}`}]]))});
+  assert.deepEqual(everyDay.availability,core.DAYS.slice(0,6),"a saved seven-day week must not preselect an invalid setup state");
+  assert.equal(everyDay.recoveryAdjusted,true,"setup must disclose that it restored a recovery day");
+});

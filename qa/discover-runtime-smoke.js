@@ -113,6 +113,7 @@ assert.equal(vm.runInContext('Object.keys(FEATURE_CONFIG).filter((name)=>feature
   const applyBody=applyRequest?JSON.parse(applyRequest.options.body):{};
   vm.runInContext(`
     activateFeature("session");
+    generateSession();
     el("sessionDay").value="Tuesday";
     globalThis.sessionSavePromise=addSessionToWeek();
   `,context);

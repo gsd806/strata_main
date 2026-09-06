@@ -69,6 +69,7 @@
   function persistDraft(){
     if(!state.workout||!state.ownerId)return true;
     if(state.workout.status==="completed"&&!state.dirty)return true;
+    if(!state.dirty&&Number.isInteger(state.workout.revision)){removeDraft();return true;}
     if(!state.draftKey)state.draftKey=`${W.draftPrefix(state.ownerId)}${state.contextId}:${state.workout.id}`;
     const record={ownerId:state.ownerId,contextId:state.contextId,workout:state.workout,dirty:state.dirty,pausedSeconds:state.pausedSeconds,savedAt:Date.now()};
     try{localStorage.setItem(state.draftKey,JSON.stringify(record));return true;}
@@ -76,18 +77,20 @@
   }
   function removeDraft(key=state.draftKey){try{if(key)localStorage.removeItem(key);}catch{/* Keep the in-memory session when storage is unavailable. */}}
   function scanDrafts(){
-    const items=[];
+    const items=[],staleKeys=[];
     try{
       const prefix=W.draftPrefix(state.ownerId);
       for(let index=0;index<localStorage.length;index++){
         const key=localStorage.key(index);
         if(!key?.startsWith(prefix))continue;
         const record=W.readDraft(localStorage.getItem(key),state.ownerId);
-        if(record&&(record.dirty||record.workout.status==="active"))items.push({...record,key});
+        if(record?.dirty)items.push({...record,key});
+        else if(record)staleKeys.push(key);
       }
+      staleKeys.forEach((key)=>localStorage.removeItem(key));
     }catch{toast("Device draft recovery is unavailable in this browser. Keep this tab open until your session is saved.");}
     state.recoveries=items.sort((a,b)=>b.savedAt-a.savedAt);
-    renderRecovery();
+    renderRecovery();renderHistory();
   }
   function renderRecovery(){
     $("recoveryPanel").hidden=!state.recoveries.length||!!state.workout||state.blocked;
@@ -133,11 +136,19 @@
   function renderPlan(){
     $("planDay").innerHTML=W.DAYS.map((day)=>`<option value="${day}"${day===state.day?" selected":""}>${day}${day===W.today()?" · today":""}</option>`).join("");
     const items=state.plan?.days?.[state.day]||[];
+    const currentIndex=Math.max(0,W.DAYS.indexOf(state.day));
+    const upcomingDays=[...W.DAYS.slice(currentIndex+1),...W.DAYS.slice(0,currentIndex)];
+    const scheduledDay=upcomingDays.find((day)=>(state.plan?.days?.[day]||[]).length);
+    const startButton=$("startWorkout"),chooseButton=$("chooseScheduledDay"),plannerLink=$("openPlannerFromEmpty");
     $("todayLabel").textContent=`${W.localDate()} · ${state.day} plan`;
-    $("startWorkout").disabled=!items.length||!state.plan||state.blocked;
+    startButton.hidden=!items.length;startButton.disabled=!state.plan||state.blocked;
+    chooseButton.hidden=!!items.length||!scheduledDay;plannerLink.hidden=!!items.length||!!scheduledDay;
     if(!items.length){
-      $("planPreview").innerHTML=`<div class="empty-state"><strong>${(state.plan?.restDays||[state.plan?.restDay]).includes(state.day)?"Recovery is part of the plan.":"A fresh page for this day."}</strong>${(state.plan?.restDays||[state.plan?.restDay]).includes(state.day)?"There are no exercises scheduled for your recovery day. Choose another plan day when you’re ready to train.":"Add exercises in Plan Studio, or choose a day that already has a session."}</div>`;
-      $("startHint").textContent="Your plan remains editable in Plan Studio.";return;
+      const recovery=(state.plan?.restDays||[state.plan?.restDay]).includes(state.day);
+      $("planPreview").innerHTML=`<div class="empty-state"><strong>${recovery?"Recovery is part of the plan.":"Nothing is scheduled for this day yet."}</strong>${scheduledDay?`${esc(scheduledDay)} has a workout ready. Choose it below, or edit your week in Plan.`:"Add exercises in Plan to make your first workout available."}</div>`;
+      if(scheduledDay){chooseButton.dataset.day=scheduledDay;chooseButton.innerHTML=`Choose ${esc(scheduledDay)} workout <span aria-hidden="true">→</span>`;}
+      else delete chooseButton.dataset.day;
+      $("startHint").textContent=scheduledDay?`Your next scheduled session is ${scheduledDay}.`:"Build a session in Plan, then return here to train.";return;
     }
     $("planPreview").innerHTML=items.map((item,index)=>`<article class="preview-card"><span class="preview-number">${String(index+1).padStart(2,"0")}</span><strong>${esc(exercise(item.exerciseId).name)}</strong><small>${Number(item.sets)} sets · ${esc(item.reps)}</small></article>`).join("");
     $("startHint").textContent=`${items.length} exercises · ${items.reduce((count,item)=>count+Number(item.sets),0)} planned sets. This session will be dated today.`;
@@ -220,6 +231,9 @@
         }else{persistDraft();state.saveTimer=setTimeout(()=>void flushSave(),300);}
         return true;
       }catch(error){
+        if(error.status===409&&error.code==="ACTIVE_WORKOUT_EXISTS"&&error.data?.workout){
+          resumeExistingActive(error.data.workout,sequence);return false;
+        }
         if(error.status===409&&(!error.code||error.code==="WORKOUT_CONFLICT")){
           const latest=error.data?.workout||null;showConflict(latest);return false;
         }
@@ -235,6 +249,13 @@
     state.history=[summary,...state.history.filter((item)=>item.id!==summary.id)].sort((a,b)=>b.startedAt-a.startedAt);
     renderHistory();
   }
+  function resumeExistingActive(workout,snapshotSequence){
+    const rejectedDraftKey=state.draftKey,changedWhileSaving=state.sequence!==snapshotSequence;
+    if(changedWhileSaving)persistDraft();else removeDraft(rejectedDraftKey);
+    selectWorkout(workout);upsertHistory(W.summary(workout));
+    $("sessionPanel").scrollIntoView({block:"start"});
+    toast(changedWhileSaving?"Your existing workout was resumed. Changes made in this tab are kept as a separate device recovery draft.":"You already had a workout in progress, so STRATA resumed it instead of starting another.");
+  }
   function showCompleted(workout){
     $("sessionPanel").hidden=true;$("celebration").hidden=false;$("conflictPanel").hidden=true;
     const counts=W.progress(workout);
@@ -243,7 +264,7 @@
     $("celebration").scrollIntoView({block:"center"});
   }
   function returnToPlan(){
-    state.workout=null;state.draftKey="";state.pausedSeconds=null;$("celebration").hidden=true;$("sessionPanel").hidden=true;$("startPanel").hidden=false;scanDrafts();renderPlan();$("startWorkout").focus();
+    state.workout=null;state.draftKey="";state.pausedSeconds=null;$("celebration").hidden=true;$("sessionPanel").hidden=true;$("startPanel").hidden=false;scanDrafts();renderPlan();($("startWorkout").hidden?$("planDay"):$("startWorkout")).focus();
   }
   function exportDraft(){
     if(!state.workout)return;
@@ -296,8 +317,10 @@
   }
   function renderHistory(){
     const completed=state.history.filter((item)=>item.status==="completed"),sets=completed.reduce((total,item)=>total+item.completedSets,0),active=state.history.filter((item)=>item.status==="active").length;
+    const recoveryIds=new Set(state.recoveries.filter((record)=>record.dirty).map((record)=>record.workout.id));
+    const visibleHistory=state.history.filter((item)=>item.status!=="active"||!recoveryIds.has(item.id));
     $("historyStats").innerHTML=`<div><strong>${completed.length}</strong><span>Completed · loaded history</span></div><div><strong>${sets}</strong><span>Sets in completed sessions</span></div><div><strong>${active}</strong><span>Open · loaded history</span></div>`;
-    $("historyList").innerHTML=state.history.length?state.history.map((item)=>`<article class="history-row"><div><span class="status-chip${item.status==="active"?" active":""}">${item.status==="active"?"In progress":"Completed"}</span><h4>${esc(item.title)}</h4><p>${esc(item.date)} · ${item.completedSets}/${item.totalSets} sets · ${W.duration(item.elapsedSeconds)}</p></div><button type="button" class="button secondary compact" data-history="${esc(item.id)}">${item.status==="active"?"Resume":"View"}</button></article>`).join(""):"<div class='empty-state'><strong>Your story starts with one session.</strong>Start from your plan and your completed work will appear here.</div>";
+    $("historyList").innerHTML=visibleHistory.length?visibleHistory.map((item)=>`<article class="history-row"><div><span class="status-chip${item.status==="active"?" active":""}">${item.status==="active"?"In progress":"Completed"}</span><h4>${esc(item.title)}</h4><p>${esc(item.date)} · ${item.completedSets}/${item.totalSets} sets · ${W.duration(item.elapsedSeconds)}</p></div><button type="button" class="button secondary compact" data-history="${esc(item.id)}">${item.status==="active"?"Resume":"View"}</button></article>`).join(""):recoveryIds.size?"<div class='empty-state'><strong>Review your device draft above.</strong>The saved session stays separate until you choose which work to keep.</div>":"<div class='empty-state'><strong>Your story starts with one session.</strong>Start from your plan and your completed work will appear here.</div>";
     $("loadMore").hidden=!state.hasMore;$("loadMore").disabled=state.historyBusy;renderChartControls();
   }
   async function loadHistory({more=false}={}){
@@ -363,8 +386,29 @@
     const url=new URL(location.href);url.searchParams.set("day",state.day);history.replaceState(null,"",url);
     renderPlan();
   });
+  $("chooseScheduledDay").addEventListener("click",()=>{
+    const day=$("chooseScheduledDay").dataset.day;
+    if(!W.DAYS.includes(day))return;
+    state.day=day;
+    const url=new URL(location.href);url.searchParams.set("day",state.day);history.replaceState(null,"",url);
+    renderPlan();$("startWorkout").focus();
+  });
   $("startWorkout").addEventListener("click",()=>{
     if(state.workout?.status==="active"||state.blocked)return;
+    if(state.historyBusy){toast("Checking your saved sessions. Try again in a moment.");return;}
+    const active=state.history.find((item)=>item.status==="active");
+    if(active){
+      toast("You already have a workout in progress. Resume it before starting another.");
+      const recoveryIndex=state.recoveries.findIndex((record)=>record.dirty&&record.workout.id===active.id);
+      if(recoveryIndex>=0){
+        $("recoveryPanel").scrollIntoView({block:"start"});
+        $("recoveryList").querySelector(`[data-recover="${recoveryIndex}"]`)?.focus();
+      }else{
+        $("historySection").scrollIntoView({block:"start"});
+        [...$("historyList").querySelectorAll("[data-history]")].find((button)=>button.dataset.history===active.id)?.focus();
+      }
+      return;
+    }
     try{selectWorkout(W.createWorkout(state.plan,state.day,state.catalog),{dirty:true});markDirty();$("sessionPanel").scrollIntoView({block:"start"});}
     catch(error){toast(error.message);}
   });
