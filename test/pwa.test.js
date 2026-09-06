@@ -95,7 +95,7 @@ test("release version, cache keys, asset URLs, and catalog claims stay aligned",
   const serviceWorker=read("service-worker.js");
   const pages=["index.html","account.html","verify-email.html","forgot-password.html","reset-password.html","delete-account.html","admin.html","planner.html","discover.html","install.html","offline.html","pricing.html","contact.html","terms.html","privacy.html","refunds.html"];
 
-  assert.equal(version,"7.1.1");
+  assert.equal(version,"7.1.2");
   assert.match(serviceWorker,new RegExp(`const BUILD="${versionPattern}";`));
   assert.match(serviceWorker,/const CACHE_PREFIX="strata-static-";/);
   assert.match(serviceWorker,/const STATIC_CACHE=`\$\{CACHE_PREFIX\}\$\{BUILD\}`;/);
@@ -223,6 +223,7 @@ test("service worker precaches only public assets and never handles account APIs
   assert.ok(harness.precache.includes(`/exercises.json?v=${BUILD}`));
   for(const page of ["pricing","contact","terms","privacy","refunds","planner"])assert.ok(harness.precache.includes(`/${page}.html`),`${page} must be precached`);
   assert.ok(harness.precache.includes(`/site-info.css?v=${BUILD}`));
+  assert.ok(harness.precache.includes(`/product-nav.css?v=${BUILD}`));
   assert.ok(harness.precache.includes(`/pricing.js?v=${BUILD}`));
   assert.ok(harness.precache.includes(`/offline.js?v=${BUILD}`));
   assert.ok(harness.precache.some((url)=>url.includes("strata-512.png")));

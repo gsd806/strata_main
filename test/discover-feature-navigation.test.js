@@ -16,16 +16,19 @@ test("Strata+ feature blocks progressively enhance seven visible workspaces",()=
 
   assert.deepEqual(panels.map((match)=>match[2]).sort(),["battle","community","explorer","monthly","profile","recommendations","session"]);
   assert.equal(blocks.length,7);
+  for(const label of ["Recommendations","Library","Compare","Preferences","Community","31-day plan","Session"])assert.match(html,new RegExp(`<span>${label}</span>`));
+  assert.doesNotMatch(html,/<span>0[1-7] \/ (?:Recommendations|Library|Compare|Preferences|Community|31-day plan|Session)<\/span>/,"Decorative numbers must not contradict the panels' DOM and reading order");
   for(const [tag] of panels)assert.doesNotMatch(tag,/\bhidden\b/,"feature panels must remain visible when JavaScript is unavailable");
   for(const [tag] of blocks){
     assert.match(tag,/\baria-controls="[^"]+"/);
     assert.match(tag,/\baria-expanded="false"/);
   }
   assert.match(html,/class="studio-account" href="\/account\.html">Account<\/a>/);
+  assert.match(html,/aria-label="Primary navigation"><a href="\/">Rankings<\/a><a class="active" href="\/discover\.html" aria-current="page">Strata\+<\/a><a href="\/planner\.html">Plan<\/a><a href="\/workout\.html">Train<\/a>/);
   assert.match(script,/account\.html\?mode=login&next=discover/);
 });
 
-test("session builder explains a personalized routine and adds it with plan concurrency protection",()=>{
+test("session builder waits for an explicit build and adds the result with plan concurrency protection",()=>{
   const html=read("pages","discover.html"),script=read("scripts","discover.js");
   for(const id of ["sessionBuilder","sessionBuilderForm","sessionGroup","sessionLength","sessionGenerate","sessionDay","sessionResults","sessionResultsTitle","sessionStatus","sessionAddAll","sessionOpenPlan"]){
     assert.match(html,new RegExp(`\\bid="${id}"`),id);
@@ -39,6 +42,12 @@ test("session builder explains a personalized routine and adds it with plan conc
   assert.match(script,/error\.status===409\|\|error\.code==="PLAN_CHANGED"/);
   assert.match(script,/latest plan is loaded; review the selected day, then add the session again/i);
   assert.match(script,/Time is an estimate; actual duration changes with setup, rest, and training pace/);
+  assert.match(html,/id="sessionResultsTitle">YOUR SESSION WILL APPEAR HERE\./);
+  assert.match(script,/sessionBuilderForm"\)\?\.addEventListener\("submit",[^\n]+generateSession\(\{announce:true\}\)/);
+  assert.doesNotMatch(script,/sessionGroup"\)\?\.addEventListener\("change",[^\n]+generateSession/);
+  assert.doesNotMatch(script,/sessionLength"\)\?\.addEventListener\("change",[^\n]+generateSession/);
+  assert.doesNotMatch(script,/function initializeSessionBuilder\(\)[^\n]+generateSession/);
+  assert.match(script,/preferredSessionDay\(state\.sessionDayInitialized\?select\.value:""\)/,"The initial builder day must come from the saved week or today, not the first static Monday option");
   assert.ok((script.match(/id="sessionResultsTitle"/g)||[]).length>=2,"success and error rendering must retain the results label target");
 });
 
@@ -47,6 +56,12 @@ test("weekly pulse uses saved-plan counts without implying workout completion or
   for(const id of ["weeklyPulse","weeklyPulseEyebrow","weeklyPulseTitle","weeklyPulseDetail","weeklyPulseBar","weeklyPulseAction"])assert.match(html,new RegExp(`\\bid="${id}"`),id);
   assert.match(script,/Core\.weeklyPulse\(state\.weeklyPlan,\{profileDays:state\.preferences\.days\}\)/);
   assert.match(script,/weeklyPulseBar"\)\.setAttribute\("style",`width:\$\{pulse\.progressPercent\}%`/);
+  assert.match(html,/id="plusStartWorkout"[^>]*>Start working out <span aria-hidden="true">↗<\/span>/);
+  assert.match(script,/start\.href=`\/workout\.html\?day=\$\{encodeURIComponent\(pulse\.day\)\}`;start\.innerHTML='Start working out <span aria-hidden="true">↗<\/span>'/);
+  assert.match(script,/start\.href="\/onboarding\.html";start\.innerHTML='Build my first week <span aria-hidden="true">→<\/span>'/);
+  assert.doesNotMatch(html,/id="plusRoutineAction"/);
+  assert.match(script,/weeklyPulseAction"\)\.href="\/planner\.html"/);
+  assert.match(script,/weeklyPulseAction"\)\.innerHTML='Edit weekly plan <span aria-hidden="true">→<\/span>'/);
   assert.doesNotMatch(script,/weeklyPulse[^\n]*(?:recovered|readiness|completed)/i);
 });
 
@@ -62,7 +77,8 @@ test("community plans preview a full week and require confirmation before replac
   assert.match(script,/\/api\/community-plans\?limit=/);
   assert.match(script,/\/api\/community-plans\/\$\{encodeURIComponent\(record\.id\)\}\/apply/);
   assert.match(script,/Monthly\.DAYS\.map\(\(day\)=>sharedPlanDayMarkup/);
-  assert.match(script,/Replace My Plan/);
+  assert.match(script,/Use this week/);
+  assert.match(script,/Open my plan <span aria-hidden="true">→<\/span>/);
   assert.match(script,/sourceUpdatedAt:Number\(record\.updatedAt\)/);
   assert.match(script,/targetUpdatedAt:state\.weeklyPlanUpdatedAt/);
   assert.match(script,/openDialog\(dialog,el\("communityApplyCancel"\)\)/);
@@ -91,6 +107,7 @@ test("Strata+ feature navigation owns visibility, URL state, focus, and reduced 
   assert.match(script,/const FEATURE_DEFAULT="recommendations"/);
   assert.match(script,/candidatePanel\.hidden=candidate!==name/);
   assert.match(script,/historyMode:"push"/);
+  assert.match(script,/function initializeFeatureNavigation\(\)\{\s*const requested=featureFromLocation\(\);\s*activateFeature\(requested\|\|FEATURE_DEFAULT,\{scroll:Boolean\(requested\),historyMode:"none"\}\);\s*\}/);
   assert.match(script,/"popstate",restoreFeatureFromHistory/);
   assert.match(script,/"hashchange",restoreFeatureFromHistory/);
   assert.match(script,/if\(rawHash&&!requested\)return/);
@@ -102,6 +119,23 @@ test("Strata+ feature navigation owns visibility, URL state, focus, and reduced 
   assert.match(css,/@media \(prefers-reduced-motion: reduce\)/);
   assert.match(css,/\*,\*::before,\*::after\s*\{\s*animation:none\s*!important;\s*transition:none\s*!important/);
   assert.match(css,/\.session-result-card:hover[^}]*\{\s*transform:none/);
+});
+
+test("Strata+ copy and visual polish remain resilient across content and breakpoints",()=>{
+  const html=read("pages","discover.html"),script=read("scripts","discover.js"),css=read("styles","discover.css");
+
+  assert.match(html,/id="featureHubTitle">CHOOSE YOUR <em>NEXT STEP\.<\/em>/);
+  assert.match(html,/id="recommendationTitle"[^>]*>BEST EXERCISES <em>FOR YOU\.<\/em>/);
+  assert.doesNotMatch(script,/recommendationTitle"\)\.innerHTML/,"A display name must not be interpolated into the recommendation heading");
+  assert.match(html,/>Exercise library<\/strong>/);
+  assert.match(html,/>Build a session<\/strong>/);
+  assert.doesNotMatch(html,/feature-block-session/);
+  assert.doesNotMatch(css,/feature-block-session/);
+  assert.match(css,/\.plus-studio \.profile-section,\.plus-studio \.recommendation-section\s*\{[^}]*color:var\(--ink\);[^}]*background:var\(--paper\)/);
+  assert.match(css,/\.plus-studio \.profile-card,[^\n]*\.plus-studio \.recommend-card,[^\n]*\.plus-studio \.session-builder/);
+  assert.doesNotMatch(css,/\.recommendation-card|\.session-brief|\.choice span/);
+  assert.match(css,/@media\(max-width:800px\)[\s\S]*?\.plus-studio \.studio-header\s*\{[^}]*grid-template-columns:auto minmax\(0,1fr\);[^}]*grid-template-rows:auto auto/);
+  assert.match(css,/\.section-heading h2,\.studio-hero h1,\.weekly-pulse h2\{[^}]*overflow-wrap:normal;word-break:normal/);
 });
 
 test("Strata+ initial loading offers a normalized, retryable error without replacing auth redirects",()=>{

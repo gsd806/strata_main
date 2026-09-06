@@ -2,9 +2,8 @@
 
 const { mkdirSync } = require("node:fs");
 const { join } = require("node:path");
-const { SCHEMA,SQL } = require("./schema");
+const { SCHEMA,SQL,WORKOUT_ACTIVE_INDEX,RECONCILE_DUPLICATE_ACTIVE_WORKOUTS } = require("./schema");
 const { defineStore } = require("./store-contract");
-
 function plainValue(value) {
   return typeof value === "bigint" ? Number(value) : value;
 }
@@ -60,6 +59,9 @@ function migrateLocalSchema(db) {
   db.exec("DROP INDEX IF EXISTS paddle_purchases_customer_id");
   db.exec("DROP INDEX IF EXISTS discovery_trials_expires_at");
   db.exec("DROP INDEX IF EXISTS support_tickets_email");
+  let workoutMigrationOpen=false;
+  try { db.exec("BEGIN IMMEDIATE");workoutMigrationOpen=true;db.exec(RECONCILE_DUPLICATE_ACTIVE_WORKOUTS);db.exec(WORKOUT_ACTIVE_INDEX);db.exec("COMMIT");workoutMigrationOpen=false; }
+  catch(error) { if (workoutMigrationOpen) try { db.exec("ROLLBACK"); } catch { /* Preserve the migration error. */ }throw error; }
 }
 
 async function tursoColumnNames(client,table) {
@@ -87,6 +89,7 @@ async function migrateTursoSchema(client) {
   await client.execute("DROP INDEX IF EXISTS paddle_purchases_customer_id");
   await client.execute("DROP INDEX IF EXISTS discovery_trials_expires_at");
   await client.execute("DROP INDEX IF EXISTS support_tickets_email");
+  await client.batch([RECONCILE_DUPLICATE_ACTIVE_WORKOUTS,WORKOUT_ACTIVE_INDEX],"write");
 }
 
 function affectedRows(result) {
@@ -227,7 +230,7 @@ function localStore(root) {
   mkdirSync(dataDir,{recursive:true});
   const db = new DatabaseSync(join(dataDir,"strata.sqlite"),{timeout:5000,enableForeignKeyConstraints:true});
   db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
-  for (const statement of SCHEMA) db.exec(statement);
+  for (const statement of SCHEMA) if (statement!==WORKOUT_ACTIVE_INDEX) db.exec(statement);
   migrateLocalSchema(db);
 
   const statements = Object.fromEntries(Object.entries(SQL).map(([name,sql]) => [name,db.prepare(sql)]));
@@ -503,6 +506,7 @@ function localStore(root) {
       return {actions:actions+staged,sends};
     },
     async workout(userId,id) { return plainRow(statements.workout.get(userId,id)); },
+    async activeWorkout(userId) { return plainRow(statements.activeWorkout.get(userId)); },
     async workouts(userId,limit,offset) { return plainRows(statements.workouts.all(userId,limit,offset)); },
     async workoutCount(userId) { return Number(statements.workoutCount.get(userId).count); },
     async insertWorkout(record) {
@@ -515,6 +519,28 @@ function localStore(root) {
     async plan(userId) { return plainRow(statements.plan.get(userId)); },
     async upsertPlan(userId,planJson,updatedAt,expectedUpdatedAt) {
       return plainRow(statements.upsertPlan.get(planJson,updatedAt,userId,expectedUpdatedAt,expectedUpdatedAt,expectedUpdatedAt,expectedUpdatedAt));
+    },
+    async saveTrainingSetup(userId,planJson,preferencesJson,updatedAt,expectedUpdatedAt,expectedPreferencesUpdatedAt) {
+      let transactionOpen=false;
+      try {
+        db.exec("BEGIN IMMEDIATE");
+        transactionOpen=true;
+        const plan=plainRow(statements.upsertPlanForSetup.get(planJson,updatedAt,expectedPreferencesUpdatedAt,userId,expectedPreferencesUpdatedAt,expectedUpdatedAt,expectedUpdatedAt,expectedUpdatedAt,expectedUpdatedAt));
+        if (!plan) {
+          db.exec("ROLLBACK");
+          transactionOpen=false;
+          return null;
+        }
+        statements.upsertPreferences.run(userId,preferencesJson,Number(plan.updated_at));
+        db.exec("COMMIT");
+        transactionOpen=false;
+        return {...plan,preferences_json:preferencesJson,preferences_updated_at:Number(plan.updated_at)};
+      } catch(error) {
+        if (transactionOpen) {
+          try { db.exec("ROLLBACK"); } catch { /* Preserve the original transaction error. */ }
+        }
+        throw error;
+      }
     },
     async communityWeeklyPlans(limit,offset) { return plainRows(statements.communityWeeklyPlans.all(limit,offset)); },
     async communityWeeklyPlan(id) { return plainRow(statements.communityWeeklyPlan.get(id)); },
@@ -801,7 +827,7 @@ async function tursoStore(url,authToken,tursoClientFactory) {
     client.close();
     throw new Error("Turso foreign key enforcement could not be enabled.");
   }
-  for (const statement of SCHEMA) await client.execute(statement);
+  for (const statement of SCHEMA) if (statement!==WORKOUT_ACTIVE_INDEX) await client.execute(statement);
   await migrateTursoSchema(client);
 
   async function first(sql,args=[]) {
@@ -1014,6 +1040,7 @@ async function tursoStore(url,authToken,tursoClientFactory) {
       return {actions:affectedRows(results[0])+affectedRows(results[1]),sends:affectedRows(results[2])};
     },
     workout:(userId,id) => first(SQL.workout,[userId,id]),
+    activeWorkout:(userId) => first(SQL.activeWorkout,[userId]),
     workouts:(userId,limit,offset) => all(SQL.workouts,[userId,limit,offset]),
     async workoutCount(userId) { return Number((await first(SQL.workoutCount,[userId])).count); },
     insertWorkout:(record) => first(SQL.insertWorkout,[record.id,record.workoutJson,record.summaryJson,record.createHash,record.startedAt,record.updatedAt,record.userId]),
@@ -1023,6 +1050,17 @@ async function tursoStore(url,authToken,tursoClientFactory) {
     async upsertPlan(userId,planJson,updatedAt,expectedUpdatedAt) {
       const result=await run(SQL.upsertPlan,[planJson,updatedAt,userId,expectedUpdatedAt,expectedUpdatedAt,expectedUpdatedAt,expectedUpdatedAt]);
       return plainRow(result.rows?.[0],result.columns);
+    },
+    async saveTrainingSetup(userId,planJson,preferencesJson,updatedAt,expectedUpdatedAt,expectedPreferencesUpdatedAt) {
+      const results=await client.batch([
+        {sql:SQL.upsertPlanForSetup,args:[planJson,updatedAt,expectedPreferencesUpdatedAt,userId,expectedPreferencesUpdatedAt,expectedUpdatedAt,expectedUpdatedAt,expectedUpdatedAt,expectedUpdatedAt]},
+        {sql:SQL.upsertPreferencesAfterPlan,args:[userId,preferencesJson,userId]}
+      ],"write");
+      const plan=plainRow(results[0]?.rows?.[0],results[0]?.columns);
+      const preferences=plainRow(results[1]?.rows?.[0],results[1]?.columns);
+      if (!plan) return null;
+      if (!preferences) throw new Error("Training preferences could not be saved atomically with the weekly plan.");
+      return {...plan,preferences_json:preferences.preferences_json,preferences_updated_at:Number(preferences.updated_at)};
     },
     communityWeeklyPlans:(limit,offset) => all(SQL.communityWeeklyPlans,[limit,offset]),
     communityWeeklyPlan:(id) => first(SQL.communityWeeklyPlan,[id]),

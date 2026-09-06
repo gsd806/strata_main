@@ -75,11 +75,44 @@ test("Strata+ workout logging is idempotent, resumes saved state, and rejects st
   assert.equal((await request(url,owner,"DELETE",{expectedRevision:3})).status,200);assert.equal((await request(url,owner)).status,404);
 });
 
+test("concurrent workout starts keep one active session and return the session to resume",async()=>{
+  const member=await account("single-active"),first=workoutFixture("active-tab-one"),second=workoutFixture("active-tab-two");
+  second.startedAt+=1;
+  const starts=await Promise.all([
+    request("/api/workouts",member,"POST",{workout:first}),
+    request("/api/workouts",member,"POST",{workout:second})
+  ]);
+  assert.deepEqual(starts.map((result)=>result.status).sort(),[201,409]);
+  const created=starts.find((result)=>result.status===201),conflict=starts.find((result)=>result.status===409);
+  assert.equal(conflict.data.code,"ACTIVE_WORKOUT_EXISTS");
+  assert.equal(conflict.data.error,"You already have a workout in progress. Resume it before starting another.");
+  assert.deepEqual(conflict.data.workout,created.data.workout,"the conflict includes the complete resumable workout");
+  assert.ok(Array.isArray(conflict.data.workout.entries));
+  const history=await request("/api/workouts",member);
+  assert.equal(history.data.workouts.filter((workout)=>workout.status==="active").length,1);
+
+  const archived=workoutFixture("reactivation-conflict");
+  archived.status="completed";archived.completedAt=archived.startedAt+1000;archived.entries[0].sets[0].completed=true;
+  const archivedCreate=await request("/api/workouts",member,"POST",{workout:archived});assert.equal(archivedCreate.status,201);
+  const reactivated=structuredClone(archivedCreate.data.workout);
+  reactivated.status="active";reactivated.completedAt=null;
+  const reactivation=await request(`/api/workouts/${reactivated.id}`,member,"PUT",{workout:reactivated,expectedRevision:reactivated.revision});
+  assert.equal(reactivation.status,409);assert.equal(reactivation.data.code,"ACTIVE_WORKOUT_EXISTS");
+  assert.deepEqual(reactivation.data.workout,created.data.workout);
+
+  const completed=structuredClone(created.data.workout);
+  completed.status="completed";completed.completedAt=completed.startedAt+1000;completed.elapsedSeconds=1;completed.restEndsAt=null;completed.entries[0].sets[0].completed=true;
+  const finish=await request(`/api/workouts/${completed.id}`,member,"PUT",{workout:completed,expectedRevision:completed.revision});
+  assert.equal(finish.status,200);
+  const next=created.data.workout.id===first.id?second:first;
+  assert.equal((await request("/api/workouts",member,"POST",{workout:next})).status,201,"finishing the active workout permits the next start");
+});
+
 test("workout history pages newest first across active and completed sessions and logout revokes access",async()=>{
   const member=await account("history");
   for (let i=0;i<3;i++) {
     const workout=workoutFixture(`history-${i}`);workout.startedAt+=i;
-    if (i===1) {workout.status="completed";workout.completedAt=workout.startedAt+1000;workout.entries[0].sets[0].completed=true;}
+    if (i<2) {workout.status="completed";workout.completedAt=workout.startedAt+1000;workout.entries[0].sets[0].completed=true;}
     assert.equal((await request("/api/workouts",member,"POST",{workout})).status,201);
   }
   const first=await request("/api/workouts?limit=2",member),second=await request("/api/workouts?limit=2&offset=2",member);
@@ -89,12 +122,45 @@ test("workout history pages newest first across active and completed sessions an
   assert.equal((await request("/api/workouts",member)).status,401);
 });
 
+test("weekly setup saves its plan and matching profile atomically with both revision boundaries",async()=>{
+  const member=await account("setup-boundaries"),initial=await request("/api/setup",member);
+  assert.equal(initial.status,200);assert.equal(initial.data.planUpdatedAt,0);assert.equal(initial.data.preferencesUpdatedAt,0);
+  assert.equal(initial.data.preferences.goal,"hypertrophy");assert.equal(initial.data.preferences.days,4);
+  const plan=structuredClone(initial.data.plan);
+  plan.days.Monday=[{instanceId:"setup-monday",exerciseId:"flat-dumbbell-press",sets:3,reps:"8–12"}];
+  const preferences={...initial.data.preferences,goal:"strength",level:"Beginner",days:1,preferences:["compound"]};
+  const payload={plan,preferences,expectedPlanUpdatedAt:0,expectedPreferencesUpdatedAt:0,expectedUserId:member.id};
+  assert.equal((await request("/api/setup",member,"PUT",payload,{"X-CSRF-Token":"wrong"})).status,403);
+  assert.equal((await request("/api/setup",member,"PUT",payload,{Origin:"https://outside.example"})).status,403);
+  assert.equal((await request("/api/setup",member,"PUT",JSON.stringify(payload),{"Content-Type":"text/plain"})).status,415);
+  assert.equal((await request("/api/setup",member,"PUT",{...payload,expectedUserId:"another-user"})).status,409);
+  const saved=await request("/api/setup",member,"PUT",payload);
+  assert.equal(saved.status,200);assert.deepEqual(saved.data.plan,plan);assert.deepEqual(saved.data.preferences,preferences);
+  assert.equal(saved.data.planUpdatedAt,saved.data.preferencesUpdatedAt);
+  const replayed=await request("/api/setup",member,"PUT",payload);
+  assert.equal(replayed.status,200);assert.equal(replayed.data.reused,true);assert.equal(replayed.data.planUpdatedAt,saved.data.planUpdatedAt);
+  const mismatchedPlan=structuredClone(plan);
+  mismatchedPlan.days.Tuesday=[{instanceId:"setup-tuesday",exerciseId:"neutral-pulldown",sets:3,reps:"8–12"}];
+  const mismatch=await request("/api/setup",member,"PUT",{plan:mismatchedPlan,preferences,expectedPlanUpdatedAt:saved.data.planUpdatedAt,expectedPreferencesUpdatedAt:saved.data.preferencesUpdatedAt,expectedUserId:member.id});
+  assert.equal(mismatch.status,400);assert.equal(mismatch.data.code,"SETUP_PROFILE_MISMATCH");
+  const profileChanged=await request("/api/preferences",member,"PUT",{preferences:{...preferences,goal:"balanced"}});
+  assert.equal(profileChanged.status,200);
+  const stale=await request("/api/setup",member,"PUT",{...payload,plan:mismatchedPlan,preferences:{...preferences,days:2},expectedPlanUpdatedAt:saved.data.planUpdatedAt,expectedPreferencesUpdatedAt:saved.data.preferencesUpdatedAt});
+  assert.equal(stale.status,409);assert.equal(stale.data.code,"SETUP_CHANGED");
+  const current=await request("/api/setup",member);
+  assert.deepEqual(current.data.plan,plan,"a stale profile revision must not partially replace the plan");
+  assert.equal(current.data.preferences.goal,"balanced","a stale setup save must not overwrite the newer profile");
+  assert.ok(current.data.preferencesUpdatedAt>saved.data.preferencesUpdatedAt);
+});
+
 
 test("free plans stay editable while every workout route and setup page requires Strata+",async()=>{
   const member=await account("free-access",{plus:false}),workout=workoutFixture("paid-only");
   for(const [path,method,body] of [["/api/workouts","GET"],["/api/workouts/paid-only","GET"],["/api/workouts","POST",{workout}],["/api/workouts/paid-only","PUT",{workout,expectedRevision:1}],["/api/workouts/paid-only","DELETE",{expectedRevision:1}]]){
     const response=await request(path,member,method,body);assert.equal(response.status,402);assert.equal(response.data.code,"DISCOVERY_ACCESS_REQUIRED");
   }
+  assert.equal((await request("/api/setup",member)).status,402);
+  assert.equal((await request("/api/setup",member,"PUT",{})).status,402);
   for(const page of ["workout.html","onboarding.html"]){
     const anonymous=await fetch(`${base}/${page}?day=Monday&guest=1`,{redirect:"manual"});assert.equal(anonymous.status,302);assert.match(anonymous.headers.get("location"),/account.html/);assert.equal(anonymous.headers.get("cache-control"),"no-store");
     if(page==="workout.html")assert.equal(new URL(anonymous.headers.get("location"),base).searchParams.get("next"),"/workout.html?day=Monday");

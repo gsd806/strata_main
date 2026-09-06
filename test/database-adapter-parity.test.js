@@ -126,6 +126,11 @@ async function parityScenario(store) {
   const stalePlan=await store.upsertPlan(user.id,JSON.stringify({stale:true}),1_301,0);
   const monthlyResult=await store.upsertMonthlyPlan(user.id,JSON.stringify({month:1}),1_400);
   const preferencesResult=await store.upsertPreferences(user.id,JSON.stringify({goal:"strength"}),1_500);
+  const setupPlanJson=JSON.stringify({version:1,restDay:"Saturday",days:{Monday:[{exerciseId:"setup"}]}});
+  const setupPreferencesJson=JSON.stringify({goal:"balanced",days:1});
+  const setupResult=await store.saveTrainingSetup(user.id,setupPlanJson,setupPreferencesJson,1_200,1_300,1_500);
+  const staleSetup=await store.saveTrainingSetup(user.id,JSON.stringify({staleSetup:true}),JSON.stringify({goal:"stale"}),1_201,1_300,1_500);
+  const setupPlan=await store.plan(user.id),setupPreferences=await store.preferences(user.id);
   const ratingResult=await store.upsertRating(user.id,"parity-lift",{
     comfort:5,pump:4,enjoyment:3,stability:4,setup:2,overall:4
   },1_600,1_600);
@@ -216,7 +221,10 @@ async function parityScenario(store) {
     monthlyResult,
     monthlyPlan:await store.monthlyPlan(user.id),
     preferencesResult,
-    preferences:await store.preferences(user.id),
+    setupResult,
+    staleSetup,
+    setupPlan,
+    setupPreferences,
     ratingResult,
     ratings:await store.ratingsForUser(user.id),
     verificationSendResult,
@@ -266,6 +274,11 @@ test("SQLite and Turso adapters expose matching values, mutation results, and se
     assert.equal(localResult.resetAtExactExpiry,null,"reset tokens must expire at the exact stored boundary");
     assert.equal(localResult.expiryCredentials.password_hash,"original-expiry-hash");
     assert.ok(localResult.expirySessionAfter,"an expired reset attempt must not revoke an otherwise valid session");
+    assert.equal(localResult.setupResult.updated_at,1_501,"the joint revision must advance past both stored timestamps after clock rollback");
+    assert.equal(localResult.setupResult.preferences_updated_at,1_501);
+    assert.equal(localResult.staleSetup,null,"stale setup revisions must not partially update either record");
+    assert.equal(localResult.setupPlan.plan_json,JSON.stringify({version:1,restDay:"Saturday",days:{Monday:[{exerciseId:"setup"}]}}));
+    assert.equal(localResult.setupPreferences.preferences_json,JSON.stringify({goal:"balanced",days:1}));
   } finally {
     await fixture.close();
   }

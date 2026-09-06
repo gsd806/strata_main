@@ -182,7 +182,7 @@ function auditRelease(root,current,manifest=DEFAULT_MANIFEST){
 
 function replaceLiteral(source,current,target){
   const escaped=current.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
-  const expression=new RegExp(`(?<![0-9.])${escaped}(?![0-9.])`,"g");
+  const expression=new RegExp(`(?<![0-9.])${escaped}(?![0-9]|\\.[0-9])`,"g");
   let occurrences=0;
   const content=source.replace(expression,()=>{occurrences+=1;return target;});
   return {content,occurrences};

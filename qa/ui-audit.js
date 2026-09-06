@@ -72,6 +72,17 @@ async function savedPlanCount(page){
   });
 }
 
+async function clearSavedPlan(page){
+  return page.evaluate(async()=>{
+    const [planResponse,discoveryResponse]=await Promise.all([fetch("/api/plan",{credentials:"same-origin",headers:{Accept:"application/json"}}),fetch("/api/discovery",{credentials:"same-origin",headers:{Accept:"application/json"}})]);
+    if(!planResponse.ok||!discoveryResponse.ok)throw new Error(`Plan reset prerequisites failed with HTTP ${planResponse.status}/${discoveryResponse.status}`);
+    const planData=await planResponse.json(),discovery=await discoveryResponse.json(),days=Object.fromEntries(Object.keys(planData.plan?.days||{}).map((day)=>[day,[]]));
+    const response=await fetch("/api/plan",{method:"PUT",credentials:"same-origin",headers:{Accept:"application/json","Content-Type":"application/json","X-CSRF-Token":discovery.csrfToken},body:JSON.stringify({plan:{...planData.plan,days},expectedPlanUpdatedAt:planData.planUpdatedAt})});
+    if(!response.ok)throw new Error(`Plan reset failed with HTTP ${response.status}`);
+    return response.json();
+  });
+}
+
 async function capture(page,name,options={}){
   if(!ARTIFACT_DIR)return;
   mkdirSync(ARTIFACT_DIR,{recursive:true});
@@ -104,7 +115,7 @@ let browser;
     await page.keyboard.press("Escape");await publicDetailDialog.waitFor({state:"hidden"});
     assert.equal(await publicDetailTrigger.evaluate((trigger)=>trigger===document.activeElement),true,"Closing homepage details must return focus to its trigger");
     await Promise.all([page.waitForURL(url=>url.pathname.endsWith("/account.html")),page.click("#signupButton")]);
-    await page.fill('#signupPanel input[name="name"]',"UI Audit");
+    await page.fill('#signupPanel input[name="name"]',"UI Audit Member With A Long Display Name");
     await page.fill('#signupPanel input[name="email"]',`audit-${Date.now()}-${process.pid}@example.test`);
     await page.fill('#signupPanel input[name="password"]',"audit-password-123");
     await Promise.all([page.waitForURL(url=>url.pathname.endsWith("/planner.html")),page.click('#signupPanel button[type="submit"]')]);
@@ -182,6 +193,74 @@ let browser;
     ]);
     await page.waitForLoadState("networkidle");
 
+    assert.equal(new URL(page.url()).hash,"","Opening Strata+ without a tool hash must keep a clean URL");
+    assert.ok(await page.evaluate(()=>scrollY<=1),"Opening Strata+ without a tool hash must stay at the top of the page");
+    assert.equal(((await page.locator("#recommendationTitle").textContent())||"").replace(/\s+/g," ").trim(),"BEST EXERCISES FOR YOU.","Recommendation heading must not depend on a member's display name");
+    const recommendationContrast=await contrastRatio(page.locator("#recommendationTitle"));
+    assert.ok(recommendationContrast>=4.5,`Recommendation title contrast is ${recommendationContrast.toFixed(2)}:1; expected at least 4.5:1`);
+    const primaryWorkout=page.getByRole("link",{name:"Start working out",exact:true}),pulseAction=page.getByRole("link",{name:"Edit weekly plan",exact:true});
+    await primaryWorkout.waitFor({state:"visible"});await pulseAction.waitFor({state:"visible"});
+    const primaryWorkoutUrl=new URL(await primaryWorkout.getAttribute("href"),BASE_URL),pulseDay=await page.locator("#weeklyPulse").getAttribute("data-session-day");
+    assert.equal(primaryWorkoutUrl.pathname,"/workout.html");assert.equal(primaryWorkoutUrl.searchParams.get("day"),pulseDay,"The workout CTA must link to the next scheduled day shown in the pulse");
+    assert.equal(new URL(await pulseAction.getAttribute("href"),BASE_URL).pathname,"/planner.html","The pulse action must remain a planning action");
+    const featureWidths=await page.locator(".feature-block").evaluateAll((nodes)=>nodes.map((node)=>node.getBoundingClientRect().width));
+    assert.ok(Math.max(...featureWidths)-Math.min(...featureWidths)<=1,"All seven Strata+ tool cards must use equal widths");
+    await capture(page,"strata-plus-home-desktop.png",{fullPage:false});
+
+    await page.setViewportSize({width:390,height:844});
+    await page.goto(`${BASE_URL}/discover.html`,{waitUntil:"networkidle"});
+    await capture(page,"strata-plus-home-mobile.png",{fullPage:false});
+    await page.locator("#recommendationTitle").evaluate((node)=>window.scrollTo(0,node.getBoundingClientRect().top+window.scrollY-document.querySelector(".studio-header").getBoundingClientRect().height-20));
+    await page.waitForTimeout(550);
+    assert.equal(await page.locator(".studio-header .brand").isVisible(),true,"The Strata+ brand must remain visible after scrolling to a tool");
+    assert.equal(await page.locator(".studio-header .studio-account").isVisible(),true,"The Strata+ account action must remain visible after scrolling to a tool");
+    await capture(page,"strata-plus-recommendations-mobile.png",{fullPage:false});
+    await page.goto(`${BASE_URL}/discover.html#profile`,{waitUntil:"networkidle"});
+    await page.locator("#profile").waitFor({state:"visible"});
+    await page.waitForFunction(()=>document.querySelector("#profileStatus")?.textContent?.trim()==="Saved");
+    await page.locator("#profileTitle").evaluate((node)=>window.scrollTo({top:node.getBoundingClientRect().top+window.scrollY-document.querySelector(".studio-header").getBoundingClientRect().height-20,behavior:"instant"}));
+    await page.waitForTimeout(550);
+    const profileHeaderLayout=await page.locator(".studio-header").evaluate((header)=>{
+      const box=(node)=>{const rect=node.getBoundingClientRect();return{top:rect.top,right:rect.right,bottom:rect.bottom,left:rect.left,width:rect.width,height:rect.height};};
+      const visibleChild=(selector)=>{const node=header.querySelector(selector),rect=node.getBoundingClientRect(),hit=document.elementFromPoint(rect.left+rect.width/2,rect.top+rect.height/2);return{box:box(node),visible:getComputedStyle(node).visibility==="visible"&&Number(getComputedStyle(node).opacity)>0,uncovered:node===hit||node.contains(hit)};};
+      return{header:box(header),brand:visibleChild(".brand"),account:visibleChild(".studio-account"),logout:visibleChild("#logoutButton")};
+    });
+    assert.ok(profileHeaderLayout.header.top>=-1&&profileHeaderLayout.header.bottom>=64,"The Strata+ mobile header must remain fully visible while using a tool");
+    for(const [name,item] of Object.entries({brand:profileHeaderLayout.brand,account:profileHeaderLayout.account,logout:profileHeaderLayout.logout})){
+      assert.ok(item.visible&&item.uncovered&&item.box.top>=0&&item.box.bottom<=profileHeaderLayout.header.bottom+1,`The Strata+ ${name} control must remain visible and unobscured in profile settings`);
+    }
+    const profileTitleContrast=await contrastRatio(page.locator("#profileTitle"));
+    assert.ok(profileTitleContrast>=4.5,`Profile title contrast is ${profileTitleContrast.toFixed(2)}:1; expected at least 4.5:1 after its entrance animation`);
+    await capture(page,"strata-plus-profile-mobile.png",{fullPage:false});
+
+    await page.setViewportSize({width:700,height:900});
+    const headerLayout=await page.locator(".studio-header").evaluate((header)=>{const nav=header.querySelector(".studio-nav-mobile"),brand=header.querySelector(".brand"),user=header.querySelector(".studio-user"),box=(node)=>{const rect=node.getBoundingClientRect();return{top:rect.top,right:rect.right,bottom:rect.bottom,left:rect.left,width:rect.width,height:rect.height};};return{header:box(header),nav:box(nav),brand:box(brand),user:box(user),navPosition:getComputedStyle(nav).position,viewport:innerWidth,viewportHeight:innerHeight,overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth};});
+    assert.equal(headerLayout.navPosition,"fixed","At 700px, Strata+ navigation must use the same bottom-bar layout as Plan and Train");
+    assert.ok(Math.abs(headerLayout.nav.bottom-headerLayout.viewportHeight)<=1,"At 700px, Strata+ navigation must stay at the viewport bottom");
+    assert.ok(headerLayout.nav.left>=0&&headerLayout.nav.right<=headerLayout.viewport+1&&headerLayout.overflow<=1,"At 700px, the header and navigation must remain inside the viewport");
+    assert.ok(headerLayout.header.height<=80,`At 700px, the header is unexpectedly tall at ${headerLayout.header.height}px`);
+    for(const [route,selector,label] of [["/planner.html",".planner-primary-nav-mobile","Planner"],["/workout.html?day=Monday",".workout-nav-mobile","Workout"]]){
+      await page.goto(`${BASE_URL}${route}`,{waitUntil:"networkidle"});
+      const layout=await page.locator(selector).evaluate((node)=>{const rect=node.getBoundingClientRect();return{bottom:rect.bottom,position:getComputedStyle(node).position,viewport:innerHeight,overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth};});
+      assert.equal(layout.position,"fixed",`${label} navigation must use the shared bottom bar at 700px`);
+      assert.ok(Math.abs(layout.viewport-layout.bottom)<=1,`${label} navigation must stay at the viewport bottom at 700px`);
+      assert.ok(layout.overflow<=1,`${label} must not overflow horizontally at 700px`);
+    }
+    await page.setViewportSize({width:1440,height:1000});
+
+    await clearSavedPlan(page);await page.goto(`${BASE_URL}/discover.html`,{waitUntil:"networkidle"});
+    const firstWeekAction=page.getByRole("link",{name:"Build my first week",exact:true});
+    await firstWeekAction.waitFor({state:"visible"});assert.equal(new URL(await firstWeekAction.getAttribute("href"),BASE_URL).pathname,"/onboarding.html");
+    assert.equal(await page.locator("#plusRoutineAction").count(),0,"The hero must not duplicate the weekly pulse's planning action");
+    assert.equal(new URL(await page.getByRole("link",{name:"Edit weekly plan",exact:true}).getAttribute("href"),BASE_URL).pathname,"/planner.html");
+
+    await page.goto(`${BASE_URL}/discover.html#profile`,{waitUntil:"networkidle"});
+    assert.equal(new URL(page.url()).hash,"#profile","A direct Strata+ tool hash must be preserved");
+    await page.locator("#profile").waitFor({state:"visible"});
+    await page.goto(`${BASE_URL}/discover.html`,{waitUntil:"networkidle"});
+    assert.equal(new URL(page.url()).hash,"","Returning to plain Strata+ must not inject a default hash");
+    assert.ok(await page.evaluate(()=>scrollY<=1),"Returning to plain Strata+ must stay at the top");
+
     const sessionBuilder=page.locator("#sessionBuilder"),sessionGroup=page.locator("#sessionGroup"),sessionLength=page.locator("#sessionLength"),sessionDay=page.locator("#sessionDay"),sessionGenerate=page.locator("#sessionGenerate"),sessionResults=page.locator("#sessionResults"),sessionStatus=page.locator("#sessionStatus"),sessionAddAll=page.locator("#sessionAddAll");
     const sessionFeature=page.locator('[data-feature-target="session"]').first();
     await sessionFeature.waitFor({state:"visible"});
@@ -197,6 +276,8 @@ let browser;
     assert.ok(builderLabel||builderLabelledBy,"Session Builder must expose an accessible section name");
     assert.ok(["status","alert"].includes((await sessionStatus.getAttribute("role"))||""),"Session Builder status must be announced");
     assert.ok(["polite","assertive"].includes((await sessionStatus.getAttribute("aria-live"))||""),"Session Builder status must use an aria-live region");
+    assert.equal(await sessionAddAll.isHidden(),true,"Session plan action must stay hidden until the member explicitly builds a session");
+    assert.match(((await sessionResults.textContent())||""),/your session will appear here/i);
     snapshot.contrast={sessionStatus:await contrastRatio(sessionStatus),sessionAction:await contrastRatio(sessionGenerate)};
     assert.ok(snapshot.contrast.sessionStatus>=4.5,`Session status text contrast is ${snapshot.contrast.sessionStatus.toFixed(2)}:1; expected at least 4.5:1`);
     assert.ok(snapshot.contrast.sessionAction>=4.5,`Session action text contrast is ${snapshot.contrast.sessionAction.toFixed(2)}:1; expected at least 4.5:1`);
@@ -206,6 +287,7 @@ let browser;
       length:await chooseOption(sessionLength,{values:["20"],labelPattern:/20/i}),
       day:await chooseOption(sessionDay,{values:["Tuesday"],labelPattern:/Tuesday/i})
     };
+    assert.equal(await sessionAddAll.isHidden(),true,"Changing the session brief must not generate a hidden session automatically");
     const planCountBeforeSession=await savedPlanCount(page);
     await sessionGenerate.focus();
     await page.keyboard.press("Tab");
@@ -232,9 +314,11 @@ let browser;
     await capture(page,"session-builder-desktop.png",{fullPage:false});
 
     await page.setViewportSize({width:390,height:844});
-    await sessionBuilder.scrollIntoViewIfNeeded();
+    await page.locator("#sessionResultsTitle").evaluate((node)=>window.scrollTo(0,node.getBoundingClientRect().top+window.scrollY-document.querySelector(".studio-header").getBoundingClientRect().height-20));
     snapshot.sessionMobileOverflow=await horizontalOverflow(page);
     assert.ok(snapshot.sessionMobileOverflow<=1,`Generated Session Builder overflows mobile by ${snapshot.sessionMobileOverflow}px`);
+    const mobileResultsTitle=await page.locator("#sessionResultsTitle").boundingBox();
+    assert.ok(mobileResultsTitle&&mobileResultsTitle.y>=60&&mobileResultsTitle.y<844,"Generated session results must enter the mobile viewport");
     await capture(page,"session-builder-mobile.png",{fullPage:false});
 
     await page.setViewportSize({width:320,height:700});
@@ -269,6 +353,16 @@ let browser;
       snapshot.sessionOpenPlan=true;
     }else snapshot.sessionOpenPlan=false;
     await capture(page,"session-builder-saved-desktop.png",{fullPage:false});
+
+    await page.setViewportSize({width:390,height:844});
+    await page.goto(`${BASE_URL}/planner.html`,{waitUntil:"networkidle"});
+    const plannerMobileNav=await page.locator(".planner-primary-nav-mobile").evaluate((node)=>{const rect=node.getBoundingClientRect();return{top:rect.top,bottom:rect.bottom,viewport:innerHeight,position:getComputedStyle(node).position};});
+    assert.equal(plannerMobileNav.position,"fixed");assert.ok(Math.abs(plannerMobileNav.viewport-plannerMobileNav.bottom)<=1,`Planner mobile navigation must stay at the viewport bottom, not ${plannerMobileNav.top}px from the top`);
+    await capture(page,"planner-mobile.png",{fullPage:false});
+    await page.goto(`${BASE_URL}/workout.html?day=${encodeURIComponent(snapshot.sessionChoices.day.value)}`,{waitUntil:"networkidle"});
+    const workoutMobileNav=await page.locator(".workout-nav-mobile").evaluate((node)=>{const rect=node.getBoundingClientRect();return{bottom:rect.bottom,viewport:innerHeight,position:getComputedStyle(node).position};});
+    assert.equal(workoutMobileNav.position,"fixed");assert.ok(Math.abs(workoutMobileNav.viewport-workoutMobileNav.bottom)<=1,"Workout mobile navigation must stay at the viewport bottom");
+    await capture(page,"workout-mobile.png",{fullPage:false});
 
     await page.setViewportSize({width:320,height:700});
     snapshot.narrowOverflow={};

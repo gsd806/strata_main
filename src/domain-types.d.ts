@@ -120,7 +120,7 @@ export type SupportStoreMethod=
 export type AuthStore=StoreCapabilities<AuthStoreMethod>;
 export type AdminStore={readonly kind:string}&StoreCapabilities<AdminStoreMethod>;
 export type SupportStore=StoreCapabilities<SupportStoreMethod>;
-export type ApplicationStore={readonly kind:string}&AuthStore&AdminStore&SupportStore;
+export type ApplicationStore={readonly kind:string}&AuthStore&AdminStore&SupportStore&SetupStore;
 
 export interface AccountIdentityRow extends JsonObject {
   id:string;
@@ -185,6 +185,83 @@ export interface HttpHelpers {
 export type JsonHttpHelpers=Pick<HttpHelpers,"json"|"bodyJson">;
 export type AccountActionPurpose="password_reset"|"account_delete";
 export interface AccountActionDelivery {expiresAt:number;maskedEmail:string;}
+
+export interface WeeklyPlanExercise {
+  instanceId:string;
+  exerciseId:string;
+  sets:number;
+  reps:string;
+}
+
+export interface WeeklyPlan {
+  version:number;
+  restDay:string|null;
+  restDays:string[];
+  days:Record<string,WeeklyPlanExercise[]>;
+}
+
+export interface TrainingPreferences {
+  version:number;
+  goal:string;
+  level:string;
+  days:number;
+  equipment:string[];
+  preferences:string[];
+  limitations:string[];
+}
+
+export interface PlanSnapshot {
+  plan:WeeklyPlan;
+  updatedAt:number;
+  storedPlanJson:string|null;
+}
+
+export interface PreferencesSnapshot {
+  preferences:TrainingPreferences;
+  updatedAt:number;
+  storedPreferencesJson:string|null;
+}
+
+export interface TrainingSetupInput {
+  plan?:unknown;
+  preferences?:unknown;
+  expectedPlanUpdatedAt?:unknown;
+  expectedPreferencesUpdatedAt?:unknown;
+  expectedUserId?:unknown;
+}
+
+export interface SavedTrainingSetupRow {
+  plan_json:string;
+  updated_at:number;
+  preferences_json:string;
+  preferences_updated_at:number;
+}
+
+export interface SetupStore {
+  saveTrainingSetup(
+    userId:string,
+    planJson:string,
+    preferencesJson:string,
+    updatedAt:number,
+    expectedPlanUpdatedAt:number,
+    expectedPreferencesUpdatedAt:number
+  ):Promise<SavedTrainingSetupRow|null>;
+}
+
+export interface SetupServiceDependencies {
+  store:SetupStore;
+  auth:Pick<AuthService,"validCsrf">;
+  requireAccess:(request:HttpRequest,response:HttpResponse)=>Promise<SessionRow|null>;
+  trustedOrigin:(request:HttpRequest)=>boolean;
+  getPlanSnapshot:(userId:string)=>Promise<PlanSnapshot>;
+  getPreferencesSnapshot:(userId:string)=>Promise<PreferencesSnapshot>;
+  getUserPayload:(account:SessionRow)=>Promise<unknown>;
+  http:JsonHttpHelpers;
+}
+
+export interface SetupService {
+  handleApi(request:HttpRequest,response:HttpResponse,url:URL):Promise<boolean>;
+}
 
 export interface AuthServiceDependencies {
   store:AuthStore;
@@ -270,6 +347,7 @@ export interface SupportService {
 export type CreateAuthService=(dependencies:AuthServiceDependencies)=>AuthService;
 export type CreateAdminService=(dependencies:AdminServiceDependencies)=>AdminService;
 export type CreateSupportService=(dependencies:SupportServiceDependencies)=>SupportService;
+export type CreateSetupService=(dependencies:SetupServiceDependencies)=>SetupService;
 
 export interface ServiceCompositionDependencies {
   store:ApplicationStore;

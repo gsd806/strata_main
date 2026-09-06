@@ -287,7 +287,14 @@ test("an ended login verification offers sign-in recovery instead of signup copy
 });
 
 test("verification keeps safe new destinations in completion and account recovery links",async()=>{
-  for(const [requested,destination] of [["workout","/workout.html"],["/workout.html","/workout.html"],["onboarding","/onboarding.html"],["/onboarding.html","/onboarding.html"],["//outside.test/workout.html","/planner.html"],["/onboarding.html?url=//outside.test","/planner.html"]]){
+  const destinations=[
+    ["workout","/workout.html"],["/workout.html","/workout.html"],
+    ["/workout.html?day=Monday","/workout.html?day=Monday"],["/workout.html?day=Sunday","/workout.html?day=Sunday"],
+    ["onboarding","/onboarding.html"],["/onboarding.html","/onboarding.html"],
+    ["/workout.html?day=Funday","/planner.html"],["/workout.html?day=Monday&next=//outside.test","/planner.html"],
+    ["//outside.test/workout.html","/planner.html"],["/onboarding.html?url=//outside.test","/planner.html"]
+  ];
+  for(const [requested,destination] of destinations){
     for(const active of [false,true]){
       const page=verificationPage(async(path)=>{
         if(path==="/api/verification-status")return response(200,{active,expiresAt:Date.now()+600000,resendAfter:0});
@@ -302,8 +309,9 @@ test("verification keeps safe new destinations in completion and account recover
         await page.elements.get("verificationForm").emit("submit",{preventDefault(){}});
         assert.deepEqual(page.navigations,[destination]);
       }else{
-        assert.equal(page.elements.get("verificationRestart").href,`/account.html?mode=signup&next=${destination.slice(1,-5)}`);
-        assert.equal(page.elements.get("verificationSignIn").href,`/account.html?mode=login&next=${destination.slice(1,-5)}`);
+        const accountNext=destination.includes("?")?destination:destination.slice(1,-5);
+        assert.equal(page.elements.get("verificationRestart").href,`/account.html?${new URLSearchParams({mode:"signup",next:accountNext})}`);
+        assert.equal(page.elements.get("verificationSignIn").href,`/account.html?${new URLSearchParams({mode:"login",next:accountNext})}`);
       }
     }
   }

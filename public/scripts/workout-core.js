@@ -25,13 +25,13 @@
   }
   function createWorkout(plan,day,catalog,now=Date.now()){
     const prescriptions=plan?.days?.[day];
-    if(!DAYS.includes(day)||!Array.isArray(prescriptions)||!prescriptions.length)throw new Error("Add exercises to this day in Plan Studio first.");
-    if(prescriptions.length>30)throw new Error("This day has more than 30 exercises. Adjust it in Plan Studio before starting.");
+    if(!DAYS.includes(day)||!Array.isArray(prescriptions)||!prescriptions.length)throw new Error("Add exercises to this day in Plan first.");
+    if(prescriptions.length>30)throw new Error("This day has more than 30 exercises. Adjust it in Plan before starting.");
     const byId=new Map(catalog.map((exercise)=>[exercise.id,exercise]));
     return{id:id(),title:`${day} workout`,planDay:day,date:localDate(new Date(now)),status:"active",startedAt:now,completedAt:null,elapsedSeconds:0,restEndsAt:null,entries:prescriptions.map((item)=>{
       const exercise=byId.get(item.exerciseId);
-      if(!exercise)throw new Error("This plan contains an unavailable exercise. Review it in Plan Studio.");
-      if(!Number.isInteger(item.sets)||item.sets<1||item.sets>10)throw new Error("Each exercise needs 1–10 sets. Review this day in Plan Studio.");
+      if(!exercise)throw new Error("This plan contains an unavailable exercise. Review it in Plan.");
+      if(!Number.isInteger(item.sets)||item.sets<1||item.sets>10)throw new Error("Each exercise needs 1–10 sets. Review this day in Plan.");
       return{id:id(),exerciseId:item.exerciseId,...inferFormat(exercise,item.reps),prescribedReps:String(item.reps||exercise.reps||"").trim().slice(0,40),sets:Array.from({length:item.sets},()=>({reps:null,weight:null,seconds:null,completed:false}))};
     })};
   }

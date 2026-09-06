@@ -17,7 +17,7 @@ test("server modules stay within reviewed size and dependency boundaries",()=>{
 
 test("domain services do not reach into the composition root or database adapter",()=>{
   const byFile=new Map(analyzeArchitecture().map((entry)=>[entry.file,entry]));
-  for(const file of ["src/auth.js","src/admin.js","src/support.js"]){
+  for(const file of ["src/auth.js","src/admin.js","src/support.js","src/setup.js"]){
     assert.ok(!byFile.get(file).dependencies.includes("src/server.js"));
     assert.ok(!byFile.get(file).dependencies.includes("src/database.js"));
   }

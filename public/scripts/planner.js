@@ -988,7 +988,7 @@ async function init({guestOnly=false}={}){
   el("weekSummary").innerHTML="";
   el("weekBoard").innerHTML='<div class="planner-load-state">Loading your weekly plan…</div>';
   try{
-    const exercises=await api("/exercises.json?v=7.1.1");
+    const exercises=await api("/exercises.json?v=7.1.2");
     if(!Array.isArray(exercises))throw new Error("STRATA returned an incomplete exercise library.");
     state.exercises=exercises;
     let result;
@@ -1002,7 +1002,9 @@ async function init({guestOnly=false}={}){
     const storedAccountPlan=copyPlan(state.plan);
     const repairedRest=repairLegacyRestDay();
     state.selectedDay=DAYS.find((day)=>!isRestDay(day))||"Monday";
-    el("userName").textContent=state.guest?"Account":result.user.name;
+    el("userName").textContent="Account";
+    if(!state.guest&&result.user.name)el("userName").setAttribute("aria-label",`${result.user.name} account`);
+    else el("userName").removeAttribute("aria-label");
     el("userName").hidden=state.guest;
     el("logoutButton").hidden=state.guest;
     el("plannerSignIn").hidden=!state.guest;

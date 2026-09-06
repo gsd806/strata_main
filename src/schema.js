@@ -1,6 +1,7 @@
 "use strict";
 
 // Central catalog shared by the local SQLite and Turso adapters.
+const WORKOUT_ACTIVE_INDEX="CREATE UNIQUE INDEX IF NOT EXISTS workouts_one_active_per_user ON workouts(user_id) WHERE CASE WHEN json_valid(workout_json) THEN json_extract(workout_json,'$.status') END='active'";
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
@@ -101,6 +102,7 @@ const SCHEMA = [
     PRIMARY KEY(user_id,id)
   )`,
   "CREATE INDEX IF NOT EXISTS workouts_user_started ON workouts(user_id,started_at DESC,id DESC)",
+  WORKOUT_ACTIVE_INDEX,
   `CREATE TABLE IF NOT EXISTS plans (
     user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     plan_json TEXT NOT NULL,
@@ -311,14 +313,17 @@ const SQL = {
   deleteCommunityPlanForDeletedUser:"DELETE FROM community_weekly_plans WHERE user_id=? AND NOT EXISTS (SELECT 1 FROM users WHERE id=?) RETURNING id",
   deleteCheckoutClaimsForDeletedUser:"DELETE FROM paddle_checkout_claims WHERE user_id=? AND NOT EXISTS (SELECT 1 FROM users WHERE id=?) RETURNING claim_id",
   workout:"SELECT workout_json,create_hash,revision,updated_at FROM workouts WHERE user_id=? AND id=?",
+  activeWorkout:"SELECT workout_json,create_hash,revision,updated_at FROM workouts WHERE user_id=? AND CASE WHEN json_valid(workout_json) THEN json_extract(workout_json,'$.status') END='active' LIMIT 1",
   workouts:"SELECT summary_json,revision,updated_at FROM workouts WHERE user_id=? ORDER BY started_at DESC,id DESC LIMIT ? OFFSET ?",
   workoutCount:"SELECT COUNT(*) AS count FROM workouts WHERE user_id=?",
-  insertWorkout:"INSERT INTO workouts (id,workout_json,summary_json,create_hash,started_at,updated_at,user_id) SELECT ?,?,?,?,?,?,id FROM users WHERE id=? AND suspended_at IS NULL AND (SELECT COUNT(*) FROM workouts WHERE user_id=users.id)<10000 ON CONFLICT(user_id,id) DO NOTHING RETURNING workout_json,create_hash,revision,updated_at",
-  updateWorkout:"UPDATE workouts SET workout_json=?,summary_json=?,revision=revision+1,updated_at=MAX(updated_at+1,?) WHERE user_id=? AND id=? AND revision=? AND EXISTS(SELECT 1 FROM users WHERE users.id=workouts.user_id AND suspended_at IS NULL) RETURNING workout_json,create_hash,revision,updated_at",
+  insertWorkout:"INSERT OR IGNORE INTO workouts (id,workout_json,summary_json,create_hash,started_at,updated_at,user_id) SELECT ?,?,?,?,?,?,id FROM users WHERE id=? AND suspended_at IS NULL AND (SELECT COUNT(*) FROM workouts WHERE user_id=users.id)<10000 RETURNING workout_json,create_hash,revision,updated_at",
+  updateWorkout:"UPDATE OR IGNORE workouts SET workout_json=?,summary_json=?,revision=revision+1,updated_at=MAX(updated_at+1,?) WHERE user_id=? AND id=? AND revision=? AND EXISTS(SELECT 1 FROM users WHERE users.id=workouts.user_id AND suspended_at IS NULL) RETURNING workout_json,create_hash,revision,updated_at",
   deleteWorkout:"DELETE FROM workouts WHERE user_id=? AND id=? AND revision=? RETURNING id",
   deleteWorkoutsForDeletedUser:"DELETE FROM workouts WHERE user_id=? AND NOT EXISTS (SELECT 1 FROM users WHERE id=?)",
   plan:"SELECT plan_json,updated_at FROM plans WHERE user_id=?",
   upsertPlan:"INSERT INTO plans(user_id,plan_json,updated_at) SELECT u.id,?,? FROM users u WHERE u.id=? AND u.suspended_at IS NULL AND (?=0 OR EXISTS(SELECT 1 FROM plans current_plan WHERE current_plan.user_id=u.id AND current_plan.updated_at=?)) ON CONFLICT(user_id) DO UPDATE SET plan_json=excluded.plan_json,updated_at=MAX(plans.updated_at+1,excluded.updated_at) WHERE ?<>0 AND plans.updated_at=? RETURNING plan_json,updated_at",
+  upsertPlanForSetup:"INSERT INTO plans(user_id,plan_json,updated_at) SELECT u.id,?,MAX(?,?+1) FROM users u WHERE u.id=? AND u.suspended_at IS NULL AND COALESCE((SELECT updated_at FROM preferences WHERE user_id=u.id),0)=? AND (?=0 OR EXISTS(SELECT 1 FROM plans current_plan WHERE current_plan.user_id=u.id AND current_plan.updated_at=?)) ON CONFLICT(user_id) DO UPDATE SET plan_json=excluded.plan_json,updated_at=MAX(plans.updated_at+1,excluded.updated_at) WHERE ?<>0 AND plans.updated_at=? RETURNING plan_json,updated_at",
+  upsertPreferencesAfterPlan:"INSERT INTO preferences(user_id,preferences_json,updated_at) SELECT ?,?,p.updated_at FROM plans p WHERE p.user_id=? AND changes()=1 ON CONFLICT(user_id) DO UPDATE SET preferences_json=excluded.preferences_json,updated_at=excluded.updated_at RETURNING preferences_json,updated_at",
   communityWeeklyPlans:"SELECT c.id,c.title,c.description,c.plan_json,c.created_at,c.updated_at,u.name AS author_name FROM community_weekly_plans c JOIN users u ON u.id=c.user_id AND u.suspended_at IS NULL WHERE c.is_published=1 ORDER BY c.updated_at DESC,c.id DESC LIMIT ? OFFSET ?",
   communityWeeklyPlan:"SELECT c.id,c.title,c.description,c.plan_json,c.created_at,c.updated_at,u.name AS author_name FROM community_weekly_plans c JOIN users u ON u.id=c.user_id AND u.suspended_at IS NULL WHERE c.id=? AND c.is_published=1",
   communityWeeklyPlansForUser:"SELECT c.id,c.title,c.description,c.plan_json,c.is_published,c.created_at,c.updated_at,u.name AS author_name FROM community_weekly_plans c JOIN users u ON u.id=c.user_id WHERE c.user_id=? ORDER BY c.updated_at DESC,c.id DESC",
@@ -332,7 +337,7 @@ const SQL = {
   upsertMonthlyPlan:"INSERT INTO monthly_plans(user_id,plan_json,updated_at) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan_json=excluded.plan_json,updated_at=excluded.updated_at",
   compareAndSwapMonthlyPlan:"INSERT INTO monthly_plans(user_id,plan_json,updated_at) SELECT ?,?,? WHERE COALESCE((SELECT updated_at FROM monthly_plans WHERE user_id=?),0)=? ON CONFLICT(user_id) DO UPDATE SET plan_json=excluded.plan_json,updated_at=excluded.updated_at WHERE monthly_plans.updated_at=? RETURNING plan_json,updated_at",
   preferences:"SELECT preferences_json,updated_at FROM preferences WHERE user_id=?",
-  upsertPreferences:"INSERT INTO preferences(user_id,preferences_json,updated_at) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET preferences_json=excluded.preferences_json,updated_at=excluded.updated_at",
+  upsertPreferences:"INSERT INTO preferences(user_id,preferences_json,updated_at) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET preferences_json=excluded.preferences_json,updated_at=MAX(preferences.updated_at+1,excluded.updated_at)",
   ratingsForUser:"SELECT exercise_id,comfort,pump,enjoyment,stability,setup,overall,updated_at FROM ratings WHERE user_id=?",
   ratingAggregates:"SELECT exercise_id,COUNT(*) AS rating_count,AVG(comfort) AS comfort,AVG(pump) AS pump,AVG(enjoyment) AS enjoyment,AVG(stability) AS stability,AVG(setup) AS setup,AVG(overall) AS overall FROM ratings GROUP BY exercise_id",
   ratingAggregate:"SELECT exercise_id,COUNT(*) AS rating_count,AVG(comfort) AS comfort,AVG(pump) AS pump,AVG(enjoyment) AS enjoyment,AVG(stability) AS stability,AVG(setup) AS setup,AVG(overall) AS overall FROM ratings WHERE exercise_id=? GROUP BY exercise_id",
@@ -386,4 +391,23 @@ const SQL = {
   deleteOldSupportRequestEvents:"DELETE FROM support_request_events WHERE created_at<?"
 };
 
-module.exports = { SCHEMA,SQL };
+// Installed after the base schema so an existing database can reconcile the
+// short window in which older server replicas allowed duplicate active rows.
+// The predicate derives from the canonical JSON, so it cannot drift from the
+// workout returned to clients.
+const RECONCILE_DUPLICATE_ACTIVE_WORKOUTS=`UPDATE workouts AS stale
+  SET workout_json=json_set(stale.workout_json,'$.status','completed','$.completedAt',MAX(stale.started_at,stale.updated_at),'$.restEndsAt',NULL),
+      summary_json=CASE WHEN json_valid(stale.summary_json) THEN json_set(stale.summary_json,'$.status','completed','$.completedAt',MAX(stale.started_at,stale.updated_at)) ELSE stale.summary_json END,
+      revision=stale.revision+1,
+      updated_at=MAX(stale.updated_at+1,stale.started_at)
+  WHERE CASE WHEN json_valid(stale.workout_json) THEN json_extract(stale.workout_json,'$.status') END='active'
+    AND EXISTS (
+      SELECT 1 FROM workouts AS newer
+      WHERE newer.user_id=stale.user_id
+        AND CASE WHEN json_valid(newer.workout_json) THEN json_extract(newer.workout_json,'$.status') END='active'
+        AND (newer.updated_at>stale.updated_at
+          OR (newer.updated_at=stale.updated_at AND newer.started_at>stale.started_at)
+          OR (newer.updated_at=stale.updated_at AND newer.started_at=stale.started_at AND newer.id>stale.id))
+    )`;
+
+module.exports = { SCHEMA,SQL,WORKOUT_ACTIVE_INDEX,RECONCILE_DUPLICATE_ACTIVE_WORKOUTS };
