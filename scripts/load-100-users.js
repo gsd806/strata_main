@@ -388,10 +388,10 @@ async function main() {
       for(let round=0;round<ROUNDS;round+=1) {
         checkedWorkout(user,await request(user,`/api/workouts/${user.workout.id}`,{metric:"workout.resume"}));
         const workout=structuredClone(user.workout);
-        workout.entries[0].sets[round%3]={reps:8+round,weight:20+user.index,seconds:null,completed:true};
-        workout.entries[1].sets[0]={reps:10+user.index,weight:null,seconds:null,completed:true};
-        workout.entries[2].sets[0]={reps:null,weight:null,seconds:30+user.index,completed:true};
-        workout.entries[3].sets[0]={reps:6,weight:15,seconds:null,completed:true};
+        Object.assign(workout.entries[0].sets[round%3],{reps:8+round,weight:20+user.index,seconds:null,completed:true});
+        Object.assign(workout.entries[1].sets[0],{reps:10+user.index,weight:null,seconds:null,completed:true});
+        Object.assign(workout.entries[2].sets[0],{reps:null,weight:null,seconds:30+user.index,completed:true});
+        Object.assign(workout.entries[3].sets[0],{reps:6,weight:15,seconds:null,completed:true});
         workout.elapsedSeconds=(round+1)*60;workout.restEndsAt=Date.now()+60000;
         const saved=await saveWorkout(user,workout,user.workout.revision);
         assert.equal(saved.body.workout.revision,user.workout.revision+1);
