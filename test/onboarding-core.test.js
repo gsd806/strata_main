@@ -2,6 +2,15 @@
 const test=require("node:test"),assert=require("node:assert/strict");
 const core=require("../public/scripts/onboarding-core"),discovery=require("../public/scripts/discovery-core"),exercises=require("../public/data/exercises.json");
 const base={goal:"balanced",level:"Beginner",minutes:35,equipment:[...new Set(exercises.map(e=>e.equipment))],availability:["Monday","Wednesday","Friday"],limitations:[]};
+test("starter setup needs only an equipment choice before a useful three-day preview",()=>{
+  const starter=core.starterProfile();
+  assert.deepEqual(starter,{goal:"balanced",level:"Beginner",equipment:[],availability:["Monday","Wednesday","Friday"],preferences:["simple-setup"],limitations:[],recoveryAdjusted:false});
+  assert.equal(core.trainingSnapshot({...starter,minutes:35}).ready,false);
+  const selected={...starter,minutes:35,equipment:["Bodyweight"]},result=core.buildWeek(selected,exercises,discovery);
+  assert.equal(core.trainingSnapshot(selected).ready,true);
+  assert.equal(result.sessions.length,3);
+  assert.ok(result.sessions.every(session=>session.items.length===4));
+});
 test("first week honors availability, valid plan limits, and distinct session movements",()=>{
   const result=core.buildWeek(base,exercises,discovery);
   assert.equal(result.plan.days.Tuesday.length,0);assert.equal(result.plan.days.Sunday.length,0);

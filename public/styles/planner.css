@@ -79,10 +79,12 @@ button:disabled { cursor:not-allowed; opacity:.58; }
 .library-score { display:grid; place-items:center; width:42px; height:42px; border:1px solid var(--ink); border-radius:50%; font:600 16px var(--display); }
 .library-card h3 { margin:0 0 4px; text-transform:uppercase; font:600 16px/1.1 var(--display); }
 .library-card p { margin:0; color:var(--muted); font-size:11px; }
+.library-card>div:nth-child(2) { min-width:0; }
 .library-card h3,.library-card p,.scheduled-card h3,.scheduled-card small { overflow-wrap:anywhere; }
-.library-actions { display:flex; gap:4px; }
-.library-actions button,.yt-link { display:grid; place-items:center; min-width:44px; height:38px; padding:0 7px; color:var(--ink); border:1px solid var(--line); background:var(--white); text-decoration:none; text-transform:uppercase; font:600 9px var(--mono); }
+.library-actions { display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end; }
+.library-actions button,.yt-link { display:grid; place-items:center; min-width:44px; height:44px; padding:0 7px; color:var(--ink); border:1px solid var(--line); background:var(--white); text-decoration:none; text-transform:uppercase; font:600 9px var(--mono); }
 .library-actions button { color:var(--accent); border-color:var(--ink); background:var(--ink); }
+.library-actions .guide-button { color:var(--ink); border-color:var(--line); background:var(--white); }
 .library-actions button:hover { color:var(--accent); border-color:var(--ink); background:var(--ink); }
 .yt-link { color:#c93327; }
 .yt-link:hover { color:white; border-color:#c93327; background:#c93327; }
@@ -260,7 +262,6 @@ button:disabled { cursor:not-allowed; opacity:.58; }
 
 @media(max-width:760px){.plan-conflict-panel,.share-week-panel{box-shadow:var(--soft-shadow)}.week-toolbar h1{font-size:clamp(42px,13vw,56px);line-height:1.04;overflow-wrap:normal}}
 @media(max-width:480px){.week-toolbar h1{font-size:clamp(40px,12vw,48px)}}
-
 /* Forgiving editing tools follow the planner's existing palette and type. */
 .toolbar-actions a{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
 .replace-exercise-button{width:100%;min-height:36px;margin-top:10px;border:1px solid var(--line);background:transparent;color:var(--ink);font:500 10px var(--mono);text-transform:uppercase}
@@ -289,6 +290,19 @@ button:disabled { cursor:not-allowed; opacity:.58; }
 .template-preview-actions{display:flex;flex-wrap:wrap;gap:12px}
 @media(max-width:600px){.planner-dialog{padding:18px}.template-save-row{grid-template-columns:1fr}.planner-dialog-heading{flex-wrap:wrap}.replace-exercise-button{min-height:44px}.draft-storage-notice{margin-inline:15px}}
 .planner-dialog [hidden],.draft-recovery-label[hidden],.draft-storage-notice[hidden]{display:none!important}
+.exercise-guide-dialog{width:min(760px,calc(100vw - 28px))}
+.guide-purpose{max-width:680px;color:var(--muted)}
+.guide-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;margin-top:20px;border:1px solid var(--line);background:var(--line)}
+.guide-grid section{padding:16px;background:var(--white)}
+.guide-grid section>span{display:block;margin-bottom:8px;color:var(--orange);text-transform:uppercase;font:600 10px var(--mono)}
+.guide-grid p,.guide-grid ul{margin:0;color:var(--muted);font-size:13px;line-height:1.6}
+.guide-grid ul{padding-left:18px}.guide-caution{border-left:3px solid var(--orange)}
+.guide-swaps{margin-top:22px;padding-top:18px;border-top:1px solid var(--line)}
+.guide-swaps h3{margin:0;text-transform:uppercase;font:600 22px var(--display)}
+.guide-swaps>p{margin:5px 0 12px;color:var(--muted)}
+.guide-swaps>div{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.guide-swaps button{display:grid;align-content:start;min-height:86px;padding:12px;color:var(--ink);border:1px solid var(--line);background:var(--white);text-align:left}
+.guide-swaps button strong{font:600 15px/1.2 var(--display);text-transform:uppercase}.guide-swaps button span{margin-top:5px;color:var(--muted);font-size:10px;line-height:1.45}
 .week-toolbar{align-items:flex-start;flex-direction:column}
 .toolbar-actions{flex-wrap:wrap;max-width:100%;justify-content:flex-start}
 
@@ -326,4 +340,5 @@ button:disabled { cursor:not-allowed; opacity:.58; }
   .planner-guide>summary{grid-template-columns:1fr auto}.planner-guide>summary span{grid-column:1/-1}.planner-guide .planner-workflow{grid-template-columns:1fr}
   .week-distribution{gap:7px;padding-inline:12px}.week-bar-track{max-width:24px}
   .week-readiness{align-items:stretch;flex-direction:column;gap:15px}.week-readiness a{width:100%}
+  .guide-grid,.guide-swaps>div{grid-template-columns:1fr}
 }

@@ -17,11 +17,11 @@ test("server modules stay within reviewed size and dependency boundaries",()=>{
 
 test("domain services do not reach into the composition root or database adapter",()=>{
   const byFile=new Map(analyzeArchitecture().map((entry)=>[entry.file,entry]));
-  for(const file of ["src/auth.js","src/admin.js","src/support.js","src/setup.js","src/product-signals.js"]){
+  for(const file of ["src/auth.js","src/admin.js","src/support.js","src/setup.js","src/product-signals.js","src/training.js"]){
     assert.ok(!byFile.get(file).dependencies.includes("src/server.js"));
     assert.ok(!byFile.get(file).dependencies.includes("src/database.js"));
   }
-  assert.deepEqual(byFile.get("src/database.js").dependencies,["src/schema.js","src/store-contract.js"]);
+  assert.deepEqual(byFile.get("src/database.js").dependencies,["src/schema.js","src/store-contract.js","src/training-loop-store.js"]);
 });
 
 test("dependency analysis covers import calls and rejects computed module loading",()=>{

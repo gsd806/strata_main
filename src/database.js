@@ -4,6 +4,7 @@ const { mkdirSync } = require("node:fs");
 const { join } = require("node:path");
 const { SCHEMA,SQL,WORKOUT_ACTIVE_INDEX,RECONCILE_DUPLICATE_ACTIVE_WORKOUTS } = require("./schema");
 const { defineStore } = require("./store-contract");
+const {createLocalTrainingMethods,createTursoTrainingMethods,deleteLocalTrainingData,trainingDeletionBatch}=require("./training-loop-store");
 function plainValue(value) {
   return typeof value === "bigint" ? Number(value) : value;
 }
@@ -234,6 +235,7 @@ function localStore(root) {
   migrateLocalSchema(db);
 
   const statements = Object.fromEntries(Object.entries(SQL).map(([name,sql]) => [name,db.prepare(sql)]));
+  const trainingMethods=createLocalTrainingMethods({db,statements,plainRow});
   return defineStore("local",{
     async ping() { return probeConnection(() => statements.ping.get()); },
     async userByEmail(email) { return plainRow(statements.userByEmail.get(email)); },
@@ -482,6 +484,7 @@ function localStore(root) {
         if (!user) throw new Error("Account deletion did not remove the requested user.");
         // Keep deletion complete even if a future database connection loses
         // its per-session foreign-key PRAGMA state.
+        deleteLocalTrainingData(statements,user.id);
         statements.deleteCommunityPlanForDeletedUser.get(user.id,user.id);
         statements.deleteWorkoutsForDeletedUser.run(user.id,user.id);
         statements.deleteCheckoutClaimsForDeletedUser.all(user.id,user.id);
@@ -515,7 +518,6 @@ function localStore(root) {
     async updateWorkout(record,expectedRevision) {
       return plainRow(statements.updateWorkout.get(record.workoutJson,record.summaryJson,record.updatedAt,record.userId,record.id,expectedRevision));
     },
-    async deleteWorkout(userId,id,expectedRevision) { return Boolean(statements.deleteWorkout.get(userId,id,expectedRevision)); },
     async plan(userId) { return plainRow(statements.plan.get(userId)); },
     async upsertPlan(userId,planJson,updatedAt,expectedUpdatedAt) {
       return plainRow(statements.upsertPlan.get(planJson,updatedAt,userId,expectedUpdatedAt,expectedUpdatedAt,expectedUpdatedAt,expectedUpdatedAt));
@@ -806,6 +808,7 @@ function localStore(root) {
       )));
     },
     async deleteOldSupportRequestEvents(before) { return affectedRows(statements.deleteOldSupportRequestEvents.run(before)); },
+    ...trainingMethods,
     async close() { db.close(); }
   });
 }
@@ -844,6 +847,8 @@ async function tursoStore(url,authToken,tursoClientFactory) {
     const result = await client.execute({sql,args});
     return plainRows(result.rows,result.columns);
   }
+
+  const trainingMethods=createTursoTrainingMethods({client,first,run,plainRow});
 
   return defineStore("turso",{
     // A successful query is the health signal. Some Turso-compatible row
@@ -1020,6 +1025,7 @@ async function tursoStore(url,authToken,tursoClientFactory) {
         // This conditional cleanup is intentionally explicit. Turso PRAGMA
         // state is connection-scoped, so account privacy must not depend only
         // on ON DELETE CASCADE surviving a renewed serverless session.
+        ...trainingDeletionBatch(action.user_id),
         {sql:SQL.deleteCommunityPlanForDeletedUser,args:[action.user_id,action.user_id]},
         {sql:SQL.deleteWorkoutsForDeletedUser,args:[action.user_id,action.user_id]},
         {sql:SQL.deleteCheckoutClaimsForDeletedUser,args:[action.user_id,action.user_id]},
@@ -1048,7 +1054,6 @@ async function tursoStore(url,authToken,tursoClientFactory) {
     async workoutCount(userId) { return Number((await first(SQL.workoutCount,[userId])).count); },
     insertWorkout:(record) => first(SQL.insertWorkout,[record.id,record.workoutJson,record.summaryJson,record.createHash,record.startedAt,record.updatedAt,record.userId]),
     updateWorkout:(record,expectedRevision) => first(SQL.updateWorkout,[record.workoutJson,record.summaryJson,record.updatedAt,record.userId,record.id,expectedRevision]),
-    async deleteWorkout(userId,id,expectedRevision) { return Boolean(await first(SQL.deleteWorkout,[userId,id,expectedRevision])); },
     plan:(userId) => first(SQL.plan,[userId]),
     async upsertPlan(userId,planJson,updatedAt,expectedUpdatedAt) {
       const result=await run(SQL.upsertPlan,[planJson,updatedAt,userId,expectedUpdatedAt,expectedUpdatedAt,expectedUpdatedAt,expectedUpdatedAt]);
@@ -1289,6 +1294,7 @@ async function tursoStore(url,authToken,tursoClientFactory) {
       return Boolean(plainRow(result.rows?.[0],result.columns));
     },
     async deleteOldSupportRequestEvents(before) { return affectedRows(await run(SQL.deleteOldSupportRequestEvents,[before])); },
+    ...trainingMethods,
     async close() { client.close(); }
   });
 }

@@ -142,3 +142,26 @@
 @media(max-width:650px){.session-brief{grid-template-columns:1fr 1fr}.session-brief>div:last-child{grid-column:1/-1}.workout-page .progress-summary{display:grid;grid-template-columns:auto 1fr}.workout-page .progress-summary .next-set{grid-column:1/-1;width:100%}.workout-page .rest-control{gap:12px}.workout-page .auto-rest{min-height:44px}.workout-page .exercise-progress{margin-left:42px}.workout-page .exercise-heading{flex-wrap:wrap}.workout-page .sets-table tr.set-next td:first-child{box-shadow:inset 2px 0 0 var(--lime)}}
 @media(prefers-reduced-motion:reduce){.strata-scroll-progress{display:none}.workout-page .sets-table tr.set-next td{scroll-behavior:auto}}
 @media print{.strata-scroll-progress{display:none}}
+
+/* Catalog-backed movement guidance stays collapsed until it is useful. */
+.exercise-guide{grid-column:1/-1;margin:14px 0 0;border-top:1px solid var(--line)}
+.exercise-guide>summary{display:flex;align-items:center;min-height:46px;padding:10px 0;color:var(--lime);cursor:pointer;font:500 .72rem/1.4 var(--mono);text-transform:uppercase;letter-spacing:.045em}
+.exercise-guide-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;margin-bottom:8px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--line)}
+.exercise-guide-grid section{min-width:0;padding:14px;background:#141611}
+.exercise-guide-grid section>span{display:block;margin-bottom:7px;color:var(--lime);text-transform:uppercase;font:500 .62rem/1.35 var(--mono);letter-spacing:.05em}
+.exercise-guide-grid p,.exercise-guide-grid ul{margin:0;color:var(--muted);font-size:.76rem;line-height:1.55}
+.exercise-guide-grid ul{padding-left:17px}.exercise-guide-grid li+li{margin-top:5px}.exercise-guide-grid .guide-warning{border-left:2px solid var(--warning)}
+.preview-card>.exercise-guide{margin-top:12px}.preview-card>.exercise-guide>summary{font-size:.65rem}.preview-card>.exercise-guide .exercise-guide-grid{grid-template-columns:1fr}
+
+/* The completion check-in is explicit, optional and separate from logged results. */
+.celebration>.check-in,.celebration>.next-time,.celebration>.adaptation-proposal{width:min(900px,100%);margin:30px auto 0;padding:24px;text-align:left;border:1px solid var(--line);border-radius:12px;background:rgba(14,16,13,.78)}
+.check-in-heading{display:grid;grid-template-columns:minmax(0,.8fr) minmax(260px,1.2fr);gap:24px;align-items:end;padding-bottom:18px;border-bottom:1px solid var(--line)}
+.check-in-heading .eyebrow,.next-time>.eyebrow,.adaptation-proposal>.eyebrow{justify-content:flex-start;margin:0 0 8px}
+.check-in-heading h3,.next-time h3,.adaptation-proposal h3{margin:0;font-size:1.35rem}.check-in-heading>p{margin:0;font-size:.8rem;line-height:1.55}
+.check-in-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:18px}.check-in-grid label{display:grid;gap:6px;color:var(--muted);text-transform:uppercase;font:500 .65rem/1.4 var(--mono);letter-spacing:.05em}.check-in-grid select{width:100%;text-transform:none;font-family:var(--body)}
+.check-in-actions{display:flex;align-items:center;gap:14px;margin-top:18px}.check-in-actions span{color:var(--muted);font-size:.8rem}.check-in-actions span[data-state="saved"]{color:var(--lime)}.check-in-actions span[data-state="error"],#adaptationStatus{color:var(--warning)}
+.progression-suggestion{display:grid;grid-template-columns:minmax(160px,.65fr) minmax(120px,.45fr) minmax(240px,1.2fr);gap:14px;align-items:center;padding:15px 0;border-top:1px solid var(--line)}
+.progression-suggestion:first-child{margin-top:16px}.progression-suggestion span,.progression-suggestion small{display:block;color:var(--muted);text-transform:uppercase;font:500 .61rem/1.4 var(--mono);letter-spacing:.04em}.progression-suggestion h4{margin:4px 0 0}.progression-suggestion>strong{color:var(--lime);font-size:.9rem}.progression-suggestion p{margin:0;font-size:.78rem}.progression-suggestion small{grid-column:1/-1}.guidance-boundary{margin:16px 0 0;padding-top:15px;border-top:1px solid var(--line);font-size:.76rem!important}
+.adaptation-change{padding:13px 15px;color:var(--text)!important;border-left:3px solid var(--lime);background:rgba(212,245,120,.06);font-weight:700}.adaptation-proposal .actions{margin-top:18px!important}.adaptation-proposal #adaptationStatus{min-height:20px;margin:12px 0 0;font-size:.78rem}
+.celebration>#anotherSession{margin-top:24px}
+@media(max-width:650px){.exercise-guide-grid,.check-in-heading,.check-in-grid{grid-template-columns:1fr}.progression-suggestion{grid-template-columns:1fr;gap:6px}.progression-suggestion small{grid-column:auto}.celebration>.check-in,.celebration>.next-time,.celebration>.adaptation-proposal{padding:18px 14px}.check-in-actions{align-items:stretch;flex-direction:column}.check-in-actions .button{width:100%}}

@@ -210,6 +210,25 @@ test("alternative finder excludes exercises with incompatible targets",()=>{
   }
 });
 
+test("exercise guidance is catalog-backed and offers same-target equipment swaps",()=>{
+  for(const exercise of exercises){
+    const guidance=Core.exerciseGuidance(exercise,exercises);
+    assert.match(guidance.setup,new RegExp(exercise.equipment,"i"));
+    assert.equal(guidance.cues.length,2,`${exercise.id} should keep two concise technique cues after setup`);
+    assert.equal(guidance.mistake,exercise.caution);
+    assert.match(guidance.prescription,new RegExp(exercise.reps.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")));
+    assert.match(guidance.purpose,new RegExp(exercise.sub.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"),"i"));
+    assert.ok(guidance.alternatives.length>=2&&guidance.alternatives.length<=3,`${exercise.id} alternatives`);
+    for(const alternative of guidance.alternatives){
+      assert.notEqual(alternative.exercise.equipment,exercise.equipment);
+      assert.equal(alternative.exercise.group,exercise.group);
+      assert.equal(alternative.exercise.sub,exercise.sub);
+      assert.match(alternative.reason,/same .+ target with/i);
+    }
+  }
+  assert.equal(Core.exerciseGuidance(null,exercises),null);
+});
+
 test("search, collections, filters, and sorts return the expected library slices",()=>{
   const aggregate=new Map([["flat-dumbbell-press",{exercise_id:"flat-dumbbell-press",rating_count:2,overall:5}]]),aggregateFor=(id)=>aggregate.get(id)||null;
   const base={collection:"all",query:"",group:"all",equipment:"all",pattern:"all",level:"all",sort:"personal"};

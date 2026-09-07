@@ -138,6 +138,28 @@
     return exercises.filter((candidate)=>candidate.id!==reference.id&&targetsCompatible(reference,candidate)).map((exercise)=>({exercise,match:similarity(reference,exercise),personal:personalResult(exercise,preferences)})).filter((item)=>item.personal.eligible).sort((a,b)=>b.match-a.match||b.personal.match-a.personal.match||b.exercise.score-a.exercise.score).slice(0,limit);
   }
 
+  function exerciseGuidance(exercise,exercises,limit=3){
+    if(!exercise||typeof exercise!=="object")return null;
+    const cues=(Array.isArray(exercise.cues)?exercise.cues:[]).map((cue)=>String(cue||"").trim()).filter(Boolean).slice(0,3);
+    const alternatives=(Array.isArray(exercises)?exercises:[])
+      .filter((candidate)=>candidate&&candidate.id!==exercise.id&&targetsCompatible(exercise,candidate)&&candidate.equipment!==exercise.equipment)
+      .map((candidate)=>({
+        exercise:candidate,
+        match:similarity(exercise,candidate),
+        reason:`Same ${String(exercise.sub||exercise.group||"training").toLowerCase()} target with ${String(candidate.equipment||"a different setup").toLowerCase()}.`
+      }))
+      .sort((a,b)=>Number(b.exercise.pattern===exercise.pattern)-Number(a.exercise.pattern===exercise.pattern)||b.match-a.match||Number(b.exercise.score||0)-Number(a.exercise.score||0)||String(a.exercise.name||"").localeCompare(String(b.exercise.name||"")))
+      .slice(0,clamp(Math.round(Number(limit)||3),1,4));
+    return {
+      setup:`Use ${String(exercise.equipment||"the listed equipment").toLowerCase()}. ${cues[0]||"Set up in a stable position before the first working set."}`,
+      cues:cues.slice(1),
+      mistake:String(exercise.caution||"Keep the movement controlled and stop if the setup no longer feels comfortable."),
+      prescription:`${String(exercise.sets||"Review your plan")} sets · ${String(exercise.reps||"use your planned range")} · ${String(exercise.rest||"rest as needed")}`,
+      purpose:`${String(exercise.sub||exercise.group||"Training target")} · ${String(exercise.pattern||"movement")}. ${String(exercise.why||"")}`.trim(),
+      alternatives
+    };
+  }
+
   function gainsAndLosses(reference,candidate,methodology){
     const labels=Object.fromEntries(methodology.factors.map((factor)=>[factor.key,factor.label]));
     const diffs=FACTOR_KEYS.map((key)=>({key,label:labels[key]||key,diff:Number(candidate.metrics[key])-Number(reference.metrics[key])})).sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff));
@@ -309,5 +331,5 @@
     return {day:selected.day,isToday,offset,movements,workingSets,scheduledDays,targetDays,progressPercent,eyebrow:isToday?"Today in your week":"Next in your week",title:`${when.toUpperCase()} · ${movements} MOVEMENT${movements===1?"":"S"}.`,detail:`${selected.day} · ${workingSets} working sets · ${scheduledDays} scheduled training day${scheduledDays===1?"":"s"} vs ${targetDays}-day profile target.`,actionLabel:"Open weekly plan"};
   }
 
-  return {FACTOR_KEYS,TRAIT_KEYS,ISOLATION,UNILATERAL,OVERHEAD,DEEP_KNEE,UNSUPPORTED_HINGE,FLOOR,WEEKDAYS,SESSION_LENGTHS,SESSION_FOCUSES,hasTrait,movementClass,round,clamp,levelNumber,averageMetric,setupScore,setupLabel,resistanceProfile,practicality,factorWeights,weightedBaseline,scoreAdjustment,excludedByLimitations,personalResult,similarity,targetsCompatible,alternativesFor,gainsAndLosses,normalizeShortlist,filterExercises,comparisonRecommendation,sessionRoleMatches,sessionFocusMatches,buildSession,mergeSessionIntoPlan,weeklyPulse};
+  return {FACTOR_KEYS,TRAIT_KEYS,ISOLATION,UNILATERAL,OVERHEAD,DEEP_KNEE,UNSUPPORTED_HINGE,FLOOR,WEEKDAYS,SESSION_LENGTHS,SESSION_FOCUSES,hasTrait,movementClass,round,clamp,levelNumber,averageMetric,setupScore,setupLabel,resistanceProfile,practicality,factorWeights,weightedBaseline,scoreAdjustment,excludedByLimitations,personalResult,similarity,targetsCompatible,alternativesFor,exerciseGuidance,gainsAndLosses,normalizeShortlist,filterExercises,comparisonRecommendation,sessionRoleMatches,sessionFocusMatches,buildSession,mergeSessionIntoPlan,weeklyPulse};
 });

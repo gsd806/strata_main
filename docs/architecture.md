@@ -32,6 +32,9 @@ The application is intentionally server-rendered and framework-light. Public HTM
 | `src/admin.js` | Primary-owner binding, admin identity and elevation, session rotation, permission gates, account actions, redacted admin payloads, and audit helpers/routes. |
 | `src/support.js` | Public support validation and durable rate reservations, acknowledgment/notification delivery, admin support workflow and responses, safe payload shaping, and retention cleanup. |
 | `src/setup.js` | Authenticated weekly setup boundary that validates matching plan/preferences revisions and commits them atomically. |
+| `src/training.js` | Authenticated Strata+ boundary for optional workout check-ins, deterministic next-session suggestions, 4–8 week training blocks, and explicitly approved plan adaptations. |
+| `src/training-loop-schema.js` | Additive check-in, training-block, and adaptation schema and parameterized statements shared by both storage adapters. |
+| `src/training-loop-store.js` | Focused local SQLite and Turso implementations of the training-loop methods, including atomic compare-and-swap adaptation acceptance. |
 | `src/product-signals.js` | Anonymous allowlisted product-event intake, transient abuse limiting, UTC-day aggregation, retention, and elevated owner readout. |
 | `src/product-signals-schema.js` | Isolated aggregate-count table and statements shared by the two storage adapters. |
 | `src/database.js` | Local SQLite and remote Turso implementations of the same application store contract. |
@@ -50,7 +53,7 @@ Factories receive their dependencies explicitly instead of importing a global se
 
 1. The Node server parses the URL and applies shared request constraints.
 2. Authentication form routes and auth JSON routes are offered to the auth service.
-3. Product-signal, admin, support, and atomic training-setup routes are offered to their services. Each service returns whether it handled the request.
+3. Product-signal, admin, support, atomic training-setup, and authenticated training-loop routes are offered to their services. Each service returns whether it handled the request.
 4. Remaining application APIs, plans, discovery data, ratings, and payment routes are handled by the composition root and their focused helpers.
 5. Static requests are resolved through the explicit URL-to-file map. Unknown paths receive a controlled `404`; user input is never joined directly to the filesystem.
 6. Response helpers attach security and cache headers. Account and API responses use `no-store`; public versioned assets may use public caching.
@@ -85,6 +88,14 @@ The server independently requires a trusted same-origin request, JSON content, e
 
 The read route uses the existing elevated-owner boundary. Its response labels totals as aggregate action counts: repeated actions increment the count, unique people and connected journeys cannot be derived, and the numbers must not be represented as conversion rates. Account deletion has no signal row to remove because the aggregate table has no account relationship.
 
+### Private training-loop boundary
+
+Workout check-ins, training blocks, calculated progression, and plan-adaptation proposals require an authenticated account with active Strata+ access. Every mutation also requires a trusted same-origin request, JSON content, the current session's CSRF token, a bounded request rate, and server-side input validation. Reads and writes are owner-scoped; a browser response is never accepted as evidence that another account owns a record.
+
+A check-in contains only four explicit 1–5 answers: difficulty, energy, comfort, and enjoyment. STRATA does not infer pain, fatigue, recovery, readiness, technique, or injury risk. A first completed result establishes a baseline. An increase is suggested only after a later completed result matches or improves a comparable entry for the same exercise, measurement, load type, and unit and the member has submitted an acceptable check-in. Missing check-in data, low comfort or energy, maximum difficulty, or a result below the prior comparable target produces a repeat/hold suggestion.
+
+Progression output is advisory and does not mutate a workout or plan. A low-comfort, low-energy, or maximum-difficulty check-in may create one account-private proposal to reduce a planned set. The proposal captures the source workout, check-in revision, and exact plan revision. Accepting it requires a second explicit action and atomically compares and updates the plan while resolving the proposal; dismissing it resolves the proposal without touching the plan. Changed check-ins, stale plans, resolved proposals, cross-account requests, and replays fail closed. Training-block writes similarly use an exact per-account revision.
+
 ### Server to storage
 
 The store contract is the only application-facing database API. Both adapters use parameterized statements and normalized row/result semantics. Multi-record security changes—such as password reset plus session revocation, owner actions plus audit records, and entitlement transitions—belong in guarded database transactions or batches.
@@ -114,13 +125,14 @@ Parity tests should compare observable results rather than private implementatio
 - nulls, numeric fields, timestamps, and returned rows;
 - unique and foreign-key behavior;
 - compare-and-swap plan revisions and atomic plan/preferences setup;
+- owner-scoped check-ins and training blocks, exact block revisions, and atomic proposal/plan acceptance;
 - one-time verification and account-action claims;
 - session and credential-version revocation;
 - admin mutations with their audit record;
 - checkout claims, ordered transaction state, webhook replay records, and adjustments; and
 - cleanup and cascade behavior.
 
-The product-signal table is an intentional exception to user-owned application records: both adapters expose only daily increment, bounded-range count read, and retention delete operations. Its primary key is the actual lookup and update pattern; no speculative secondary index or raw-event table exists.
+The training-loop tables are additive user-owned records. Their primary and partial pending-proposal indexes match owner/workout reads and the latest pending proposal query. Account deletion removes check-ins, blocks, and pending or resolved proposals in both adapters. The product-signal table is an intentional exception to user-owned application records: both adapters expose only daily increment, bounded-range count read, and retention delete operations. Its primary key is the actual lookup and update pattern; no speculative secondary index or raw-event table exists.
 
 Add an index only for a demonstrated high-frequency lookup, join, ordering, or cleanup pattern. Keep its definition shared and cover it through behavior/query-plan evidence; speculative indexes slow writes and make adapter parity harder to maintain.
 
@@ -148,7 +160,7 @@ The manifest supplies the full-scope install metadata, icons, theme, and shortcu
 
 The worker cache name includes the application build. Install precaches one literal allowlist; activate deletes older caches with the STRATA prefix while preserving unrelated origin caches, then claims clients. Successful same-origin GETs enter runtime caching only when their complete URL—including an expected build query—is in the public asset allowlist. Unexpected query variants cannot create unbounded cache entries. The public product-signal script and styles may be cached like other versioned interface assets, while `/api/product-signals` remains network-only under the complete `/api/` exclusion.
 
-Navigation is network-first. When offline, only designated public information/planner pages may use their matching cached HTML; all other navigation falls back to the generic offline page. Paddle transaction-return URLs never use cached pricing. API/auth/health paths, private HTML, cross-origin requests, non-GET requests, and unlisted assets are never intercepted.
+Navigation is network-first. When offline, only designated public information/planner pages may use their matching cached HTML; all other navigation falls back to the generic offline page. Paddle transaction-return URLs never use cached pricing. API/auth/health paths—including every check-in, progression, block, and adaptation endpoint—private HTML, cross-origin requests, non-GET requests, and unlisted assets are never intercepted.
 
 Private server responses also carry `no-store`. The service-worker exclusion is one layer, not a substitute for correct HTTP caching headers.
 

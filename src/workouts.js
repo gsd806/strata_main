@@ -80,7 +80,7 @@ function summarizeWorkout(workout) {
   const groups=new Map();
   for (const entry of workout.entries) {
     const {exerciseId,measurement,loadType,unit}=entry,key=JSON.stringify([exerciseId,measurement,loadType,unit]);
-    if (!groups.has(key)) groups.set(key,{exerciseId,measurement,loadType,unit,completedSets:0,totalReps:0,maxReps:null,maxWeight:null,volume:0,totalSeconds:0,maxSeconds:null});
+    if (!groups.has(key)) groups.set(key,{exerciseId,measurement,loadType,unit,completedSets:0,totalReps:0,maxReps:null,maxWeight:null,minAssistance:null,volume:0,totalSeconds:0,maxSeconds:null});
     const summary=groups.get(key);
     result.totalSets+=entry.sets.length;
     for (const set of entry.sets) {
@@ -94,6 +94,7 @@ function summarizeWorkout(workout) {
       }
       // Assistance is resistance removed; body mass is not a known external load.
       if (loadType==="external") summary.maxWeight=Math.max(summary.maxWeight||0,set.weight);
+      if (loadType==="assisted") summary.minAssistance=summary.minAssistance===null?set.weight:Math.min(summary.minAssistance,set.weight);
     }
   }
   result.exerciseSummaries=[...groups.values()].map((summary)=>({...summary,volume:Math.round(summary.volume*100)/100}));

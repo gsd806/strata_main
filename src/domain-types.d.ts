@@ -138,7 +138,7 @@ export interface ProductSignalsStore {
 export type AuthStore=StoreCapabilities<AuthStoreMethod>;
 export type AdminStore={readonly kind:string}&StoreCapabilities<AdminStoreMethod>;
 export type SupportStore=StoreCapabilities<SupportStoreMethod>;
-export type ApplicationStore={readonly kind:string}&AuthStore&AdminStore&SupportStore&SetupStore&ProductSignalsStore;
+export type ApplicationStore={readonly kind:string}&AuthStore&AdminStore&SupportStore&SetupStore&ProductSignalsStore&TrainingStore;
 
 export interface AccountIdentityRow extends JsonObject {
   id:string;
@@ -281,6 +281,105 @@ export interface SetupService {
   handleApi(request:HttpRequest,response:HttpResponse,url:URL):Promise<boolean>;
 }
 
+export interface WorkoutCheckInRecord {
+  userId:string;
+  workoutId:string;
+  difficulty:number;
+  energy:number;
+  comfort:number;
+  enjoyment:number;
+  createdAt:number;
+  updatedAt:number;
+}
+
+export interface TrainingBlockRecord {
+  userId:string;
+  blockJson:string;
+  updatedAt:number;
+}
+
+export interface TrainingAdaptationRecord {
+  userId:string;
+  id:string;
+  workoutId:string;
+  adaptationJson:string;
+  planUpdatedAt:number;
+  createdAt:number;
+  checkInUpdatedAt:number;
+}
+
+export interface TrainingMutationRecord {
+  userId:string;
+  id:string;
+  planJson:string;
+  expectedPlanUpdatedAt:number;
+  expectedCheckInUpdatedAt:number;
+  resolvedAt:number;
+}
+
+export interface TrainingStore {
+  deleteWorkout(userId:string,id:string,expectedRevision:number):Promise<boolean>;
+  workoutCheckIn(userId:string,workoutId:string):Promise<JsonObject|null>;
+  upsertWorkoutCheckIn(record:WorkoutCheckInRecord):Promise<JsonObject|null>;
+  trainingBlock(userId:string):Promise<JsonObject|null>;
+  upsertTrainingBlock(record:TrainingBlockRecord,expectedRevision:number):Promise<JsonObject|null>;
+  trainingAdaptation(userId:string,id:string):Promise<JsonObject|null>;
+  latestTrainingAdaptation(userId:string):Promise<JsonObject|null>;
+  upsertTrainingAdaptation(record:TrainingAdaptationRecord):Promise<JsonObject|null>;
+  dismissTrainingAdaptation(userId:string,id:string,resolvedAt:number,checkInUpdatedAt?:number|null):Promise<JsonObject|null>;
+  acceptTrainingAdaptation(record:TrainingMutationRecord):Promise<{plan:JsonObject;adaptation:JsonObject}|null>;
+}
+
+export interface PreparedStatementLike {
+  get(...args:any[]):unknown;
+  run(...args:any[]):unknown;
+}
+
+export type TrainingPreparedStatementName=
+  |"workoutCheckIn"|"upsertWorkoutCheckIn"|"trainingBlock"|"upsertTrainingBlock"|"deleteWorkout"
+  |"trainingAdaptation"|"latestTrainingAdaptation"|"upsertTrainingAdaptation"
+  |"dismissTrainingAdaptation"|"applyTrainingAdaptationPlan"|"acceptTrainingAdaptation"
+  |"deleteTrainingAdaptationsForWorkout"|"deleteWorkoutCheckInForWorkout"
+  |"deleteTrainingAdaptationsForDeletedUser"|"deleteWorkoutCheckInsForDeletedUser"
+  |"deleteTrainingBlockForDeletedUser";
+
+export interface QueryResultLike {
+  rows?:any[];
+  columns?:string[];
+}
+
+export interface LocalTrainingStoreDependencies {
+  db:{exec(sql:string):unknown};
+  statements:Record<TrainingPreparedStatementName,PreparedStatementLike>;
+  plainRow:(row:unknown,columns?:string[])=>JsonObject|null;
+}
+
+export interface TursoTrainingStoreDependencies {
+  client:{batch(statements:{sql:string;args:any[]}[],mode:"write"):Promise<QueryResultLike[]>};
+  first(sql:string,args?:any[]):Promise<JsonObject|null>;
+  run(sql:string,args?:any[]):Promise<QueryResultLike>;
+  plainRow:(row:unknown,columns?:string[])=>JsonObject|null;
+}
+
+export interface TrainingServiceStore extends TrainingStore {
+  workout(userId:string,id:string):Promise<JsonObject|null>;
+  workouts(userId:string,limit:number,offset:number):Promise<JsonObject[]>;
+  plan(userId:string):Promise<JsonObject|null>;
+}
+
+export interface TrainingServiceDependencies {
+  store:TrainingServiceStore;
+  auth:Pick<AuthService,"validCsrf">;
+  requireAccess:(request:HttpRequest,response:HttpResponse)=>Promise<SessionRow|null>;
+  trustedOrigin:(request:HttpRequest)=>boolean;
+  rateAllowed:(request:HttpRequest,key:string,limit:number,windowMs?:number)=>boolean;
+  http:JsonHttpHelpers;
+}
+
+export interface TrainingService {
+  handleApi(request:HttpRequest,response:HttpResponse,url:URL):Promise<boolean>;
+}
+
 export interface ProductSignalsServiceDependencies {
   store:ProductSignalsStore;
   admin:Pick<AdminService,"requireAdmin">;
@@ -381,6 +480,7 @@ export type CreateAuthService=(dependencies:AuthServiceDependencies)=>AuthServic
 export type CreateAdminService=(dependencies:AdminServiceDependencies)=>AdminService;
 export type CreateSupportService=(dependencies:SupportServiceDependencies)=>SupportService;
 export type CreateSetupService=(dependencies:SetupServiceDependencies)=>SetupService;
+export type CreateTrainingService=(dependencies:TrainingServiceDependencies)=>TrainingService;
 
 export interface ServiceCompositionDependencies {
   store:ApplicationStore;

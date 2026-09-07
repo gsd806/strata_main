@@ -17,7 +17,7 @@ test("strict checkJs covers provider, transport, storage, and service compositio
   assert.equal(config.compilerOptions.noUncheckedIndexedAccess,true);
   for(const file of [
     "src/domain-types.d.ts","src/http.js","src/payments.js","src/plans.d.ts","src/product-signals.js","src/store-contract.js",
-    "src/service-composition.js","src/setup.js"
+    "src/service-composition.js","src/setup.js","src/training-loop-schema.js","src/training-loop-store.js","src/training.js","src/workouts.d.ts"
   ])assert.ok(config.include.includes(file),`${file} must remain in the strict boundary program`);
 });
 
@@ -39,7 +39,8 @@ test("service factories publish declared dependency and return contracts",()=>{
     ["admin.js","AdminServiceDependencies","AdminService"],
     ["support.js","SupportServiceDependencies","SupportService"],
     ["setup.js","SetupServiceDependencies","SetupService"],
-    ["product-signals.js","ProductSignalsServiceDependencies","ProductSignalsService"]
+    ["product-signals.js","ProductSignalsServiceDependencies","ProductSignalsService"],
+    ["training.js","TrainingServiceDependencies","TrainingService"]
   ]){
     const source=readFileSync(join(ROOT,"src",file),"utf8");
     assert.match(source,new RegExp(`@param \\{import\\("\\./domain-types"\\)\\.${dependencyType}\\} dependencies`));

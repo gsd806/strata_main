@@ -10,7 +10,7 @@ previewWeek.days.Monday=[{instanceId:"preview-one",exerciseId:"bench-press",sets
 const savedPreferences=()=>({version:1,goal:"strength",level:"Intermediate",days:4,equipment:["Barbell"],preferences:["compound"],limitations:["no-floor"]});
 const previewPreferences=()=>({version:1,goal:"strength",level:"Intermediate",days:1,equipment:["Barbell"],preferences:["compound"],limitations:["no-floor"]});
 
-async function setup({guest=false,switchedAccount=false,saveStatus=200,accountFailure=false,noRandomUUID=false,plus=true}={}){
+async function setup({guest=false,switchedAccount=false,saveStatus=200,accountFailure=false,noRandomUUID=false,plus=true,fresh=false}={}){
   const html=fs.readFileSync(join(ROOT,"public/pages/onboarding.html"),"utf8");
   const elements=new Map([...html.matchAll(/\bid="([^"]+)"/g)].map(match=>[match[1],{
     id:match[1],value:"",disabled:true,hidden:false,checked:false,textContent:"",innerHTML:"",target:"",rel:"",focused:false,listeners:{},options:[],dataset:{},attributes:{},
@@ -23,7 +23,7 @@ async function setup({guest=false,switchedAccount=false,saveStatus=200,accountFa
   const response=(status,data)=>({ok:status>=200&&status<300,status,json:async()=>data});
   const context={
     document:{getElementById:id=>elements.get(id)||null,querySelectorAll:()=>[],createElement:()=>({})},
-    window:{StrataOnboarding:{DAYS,profileFromSaved:(preferences,plan)=>({goal:preferences.goal,level:preferences.level,equipment:preferences.equipment,availability:DAYS.filter(day=>plan.days[day].length),preferences:preferences.preferences,limitations:preferences.limitations}),trainingSnapshot:(profile,week)=>({trainingDays:profile.availability.length,recoveryDays:7-profile.availability.length,minutes:profile.minutes,weeklyMinutes:profile.availability.length*profile.minutes,equipmentCount:profile.equipment.length,movementCount:week?.sessions?.flatMap(session=>session.items||[]).length||0,workingSets:0,ready:Boolean(profile.availability.length&&profile.equipment.length),message:"Preview choices summarized."}),buildWeek:(profile,_exercises,_discovery,makeId)=>{state.generatedId=makeId();state.generatedProfile=profile;return {plan:previewWeek,sessions:[],preferences:previewPreferences()};}},StrataDiscovery:{}},
+    window:{StrataOnboarding:{DAYS,starterProfile:()=>({goal:"balanced",level:"Beginner",equipment:[],availability:["Monday","Wednesday","Friday"],preferences:["simple-setup"],limitations:[],recoveryAdjusted:false}),profileFromSaved:(preferences,plan)=>({goal:preferences.goal,level:preferences.level,equipment:preferences.equipment,availability:DAYS.filter(day=>plan.days[day].length),preferences:preferences.preferences,limitations:preferences.limitations}),trainingSnapshot:(profile,week)=>({trainingDays:profile.availability.length,recoveryDays:7-profile.availability.length,minutes:profile.minutes,weeklyMinutes:profile.availability.length*profile.minutes,equipmentCount:profile.equipment.length,movementCount:week?.sessions?.flatMap(session=>session.items||[]).length||0,workingSets:0,ready:Boolean(profile.availability.length&&profile.equipment.length),message:"Preview choices summarized."}),buildWeek:(profile,_exercises,_discovery,makeId)=>{state.generatedId=makeId();state.generatedProfile=profile;return {plan:previewWeek,sessions:[],preferences:previewPreferences()};}},StrataDiscovery:{}},
     localStorage:{getItem:key=>state.values.get(key)||null,setItem(key,value){
       if(key===GUEST_KEY&&state.failGuestWrite){state.failGuestWrite=false;throw new Error("Browser storage is temporarily unavailable.");}
       state.values.set(key,value);
@@ -34,7 +34,7 @@ async function setup({guest=false,switchedAccount=false,saveStatus=200,accountFa
       if(path.startsWith("/exercises.json"))return response(200,[{id:"bench-press",equipment:"Barbell"}]);
       if(path==="/api/setup"&&options.method!=="PUT"){
         if(accountFailure)return response(503,{error:"Account storage unavailable"});
-        return guest?response(401,{error:"Sign in required"}):response(200,{user:{id:"account-a",name:"Setup Account",discovery:{active:state.plus}},csrfToken:"csrf-a",plan:state.plan,planUpdatedAt:100,preferences:state.preferences,preferencesUpdatedAt:90});
+        return guest?response(401,{error:"Sign in required"}):response(200,{user:{id:"account-a",name:"Setup Account",discovery:{active:state.plus}},csrfToken:"csrf-a",plan:state.plan,planUpdatedAt:fresh?0:100,preferences:state.preferences,preferencesUpdatedAt:fresh?0:90});
       }
       if(path==="/api/me")return guest?response(401,{error:"Sign in required"}):response(200,{user:{id:switchedAccount?"account-b":"account-a",discovery:{active:state.plus}},csrfToken:switchedAccount?"csrf-b":"csrf-a"});
       if(path==="/api/setup"&&options.method==="PUT"){
@@ -122,6 +122,20 @@ test("onboarding preview works where crypto.randomUUID is unavailable",async()=>
   const fixture=await setup({noRandomUUID:true});await fixture.generate();
   assert.match(fixture.state.generatedId,/^setup-[a-zA-Z0-9_-]+$/);
   await fixture.save();assert.deepEqual(fixture.state.plan,previewWeek);
+  assert.equal(fixture.elements.get("savedActions").hidden,false);
+  assert.equal(fixture.elements.get("startFirstWorkout").href,"/workout.html?day=Monday");
+  assert.equal(fixture.elements.get("startFirstWorkout").focused,true);
+});
+
+test("fresh Strata+ setup starts with a one-choice quick path and honest starter defaults",async()=>{
+  const fixture=await setup({fresh:true});
+  assert.equal(fixture.elements.get("starterPath").hidden,false);
+  assert.equal(fixture.elements.get("goal").value,"balanced");
+  assert.equal(fixture.elements.get("level").value,"Beginner");
+  assert.match(fixture.elements.get("dayChoices").innerHTML,/value="Monday" checked/);
+  assert.match(fixture.elements.get("dayChoices").innerHTML,/value="Wednesday" checked/);
+  assert.match(fixture.elements.get("dayChoices").innerHTML,/value="Friday" checked/);
+  assert.doesNotMatch(fixture.elements.get("equipmentChoices").innerHTML,/checked/);
 });
 
 test("onboarding starts from the account profile and describes an existing week as a replacement",async()=>{

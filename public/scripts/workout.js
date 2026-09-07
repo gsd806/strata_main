@@ -1,12 +1,13 @@
 (function(){
   "use strict";
   const W=globalThis.StrataWorkout;
+  const G=globalThis.StrataDiscovery;
   const $=(id)=>document.getElementById(id);
   const esc=(value)=>String(value??"").replace(/[&<>"']/g,(character)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[character]));
   const number=(value)=>Number(value||0).toLocaleString(undefined,{maximumFractionDigits:2});
   const signal=name=>globalThis.StrataSignals?.record?.(name);
   const PREFERENCE_KEY="strata_workout_preferences_v1",REST_DURATIONS=[30,60,90,120,180,300];
-  const state={mode:"",user:null,ownerId:"",contextId:W.id(),csrfToken:"",catalog:[],plan:null,day:W.dayFromSearch(location.search),workout:null,dirty:false,sequence:0,saving:null,saveTimer:null,blocked:false,conflict:null,pausedSeconds:null,timerAnnounced:false,draftKey:"",recoveries:[],history:[],offset:0,hasMore:false,historyBusy:false,detailBusy:false,loading:false,toastTimer:null};
+  const state={mode:"",user:null,ownerId:"",contextId:W.id(),csrfToken:"",catalog:[],plan:null,day:W.dayFromSearch(location.search),workout:null,dirty:false,sequence:0,saving:null,saveTimer:null,blocked:false,conflict:null,pausedSeconds:null,timerAnnounced:false,draftKey:"",recoveries:[],history:[],offset:0,hasMore:false,historyBusy:false,detailBusy:false,loading:false,toastTimer:null,checkInBusy:false,adaptation:null};
   function toast(message){
     $("workoutToast").textContent=message;$("workoutToast").classList.add("is-visible");
     clearTimeout(state.toastTimer);state.toastTimer=setTimeout(()=>$("workoutToast").classList.remove("is-visible"),5000);
@@ -14,6 +15,10 @@
   function status(message,kind=""){ $("saveStatus").textContent=message;$("saveStatus").dataset.state=kind; }
   function errorMessage(message){$("sessionError").textContent=message;$("sessionError").hidden=!message;}
   function exercise(id){return state.catalog.find((item)=>item.id===id)||{name:id,equipment:"",caution:""};}
+  function guideMarkup(item){
+    const guidance=G?.exerciseGuidance?.(item,state.catalog);if(!guidance)return"";
+    return `<details class="exercise-guide"><summary>Setup, cues &amp; equipment swaps</summary><div class="exercise-guide-grid"><section><span>Set up</span><p>${esc(guidance.setup)}</p></section><section><span>Purpose</span><p>${esc(guidance.purpose)}</p></section><section><span>Technique cues</span><ul>${guidance.cues.map((cue)=>`<li>${esc(cue)}</li>`).join("")}</ul></section><section class="guide-warning"><span>Caution / Common mistake</span><p>${esc(guidance.mistake)}</p></section><section><span>General catalog range</span><p>${esc(guidance.prescription)}</p></section><section><span>Same target · other equipment</span><ul>${guidance.alternatives.map(({exercise:alternative})=>`<li><strong>${esc(alternative.name)}</strong> · ${esc(alternative.equipment)}</li>`).join("")}</ul></section></div></details>`;
+  }
   function owner(){return `account:${state.user.id}`;}
   function restorePreferences(){
     try{
@@ -168,7 +173,7 @@
     }
     brief.hidden=false;
     brief.innerHTML=`<div><span>Movements</span><strong>${summary.movements}</strong></div><div><span>Working sets</span><strong>${summary.workingSets}</strong></div><div><span>Plan day</span><strong>${esc(summary.day)}</strong></div>`;
-    $("planPreview").innerHTML=items.map((item,index)=>`<article class="preview-card"><span class="preview-number">${String(index+1).padStart(2,"0")}</span><strong>${esc(exercise(item.exerciseId).name)}</strong><small>${Number(item.sets)} sets · ${esc(item.reps)}</small></article>`).join("");
+    $("planPreview").innerHTML=items.map((item,index)=>{const itemExercise=exercise(item.exerciseId);return `<article class="preview-card"><span class="preview-number">${String(index+1).padStart(2,"0")}</span><strong>${esc(itemExercise.name)}</strong><small>${Number(item.sets)} sets · ${esc(item.reps)}</small>${guideMarkup(itemExercise)}</article>`;}).join("");
     $("startHint").textContent=`${items.length} exercises · ${items.reduce((count,item)=>count+Number(item.sets),0)} planned sets. This session will be dated today.`;
   }
   function formatLabel(entry){return `${entry.measurement==="timed"?"Time":"Reps"} · ${entry.loadType==="bodyweight"?"Bodyweight":entry.loadType==="assisted"?"Assistance":"External load"}${entry.loadType!=="bodyweight"?` · ${entry.unit}`:""}`;}
@@ -182,7 +187,7 @@
   function renderEntry(entry,index){
     const ex=exercise(entry.exerciseId),timed=entry.measurement==="timed",weighted=entry.loadType!=="bodyweight",locked=hasActuals(entry)||state.workout.status==="completed",disabled=locked?" disabled":"",completedSets=entry.sets.filter((set)=>set.completed).length,next=W.nextIncompleteSet(state.workout);
     const measurement=timed?"seconds":"reps";
-    return `<article class="exercise-card" data-entry="${esc(entry.id)}"><div class="exercise-heading"><span class="exercise-index">${String(index+1).padStart(2,"0")}</span><div><h3>${esc(ex.name)}</h3><p>Planned: ${entry.sets.length} × ${esc(entry.prescribedReps)}${ex.equipment?` · ${esc(ex.equipment)}`:""}</p></div><span class="exercise-progress">${completedSets}/${entry.sets.length} sets</span></div><div class="format-controls"><label class="field">Record<select data-format="measurement" aria-label="Measurement for ${esc(ex.name)}"${disabled}>${option("reps","Repetitions",entry.measurement)}${option("timed","Time in seconds",entry.measurement)}</select></label><label class="field">Load type<select data-format="loadType" aria-label="Load type for ${esc(ex.name)}"${disabled}>${option("external","External load",entry.loadType)}${option("bodyweight","Bodyweight",entry.loadType)}${option("assisted","Assistance",entry.loadType)}</select></label><label class="field">Unit<select data-format="unit" aria-label="Load unit for ${esc(ex.name)}"${disabled}${!weighted&&!locked?" disabled":""}>${option("kg","kg",entry.unit)}${option("lb","lb",entry.unit)}</select></label></div><p class="format-note">${locked?"Logging format is locked while actual values are present. Clear uncompleted values to change it.":"Check the logging format before your first set. Enter 0 explicitly if an external or assisted set has no added load."}${entry.loadType==="assisted"?" Assistance is not lifted weight; it does not create weight or volume records.":""}</p><table class="sets-table"><thead><tr><th scope="col">Set</th>${weighted?`<th scope="col">${entry.loadType==="assisted"?"Assist":"Load"} (${entry.unit})</th>`:""}<th scope="col">${timed?"Seconds":"Reps"}</th><th scope="col">Completed</th></tr></thead><tbody>${entry.sets.map((set,setIndex)=>`<tr data-set="${setIndex}" class="${set.completed?"set-complete":next?.entryId===entry.id&&next.setIndex===setIndex?"set-next":""}"><td class="set-number">${setIndex+1}</td>${weighted?`<td><input type="number" inputmode="decimal" min="0" max="1000" step="0.01" data-actual="weight" value="${set.weight??""}" placeholder="—" aria-label="${esc(ex.name)}, set ${setIndex+1}, ${entry.loadType==="assisted"?"assistance":"load"} in ${entry.unit}"${set.completed||state.workout.status==="completed"?" disabled":""}/></td>`:""}<td><input type="number" inputmode="numeric" min="1" max="${timed?3600:1000}" step="1" data-actual="${measurement}" value="${set[measurement]??""}" placeholder="—" aria-label="${esc(ex.name)}, set ${setIndex+1}, actual ${measurement}"${set.completed||state.workout.status==="completed"?" disabled":""}/></td><td><button type="button" class="button secondary set-check" data-complete="${setIndex}" aria-pressed="${set.completed}" aria-label="${set.completed?"Uncheck":"Mark complete"} ${esc(ex.name)}, set ${setIndex+1}"${state.workout.status==="completed"?" disabled":""}>${set.completed?"✓ Done":"Mark done"}</button></td></tr>`).join("")}</tbody></table>${previous(entry)}</article>`;
+    return `<article class="exercise-card" data-entry="${esc(entry.id)}"><div class="exercise-heading"><span class="exercise-index">${String(index+1).padStart(2,"0")}</span><div><h3>${esc(ex.name)}</h3><p>Planned: ${entry.sets.length} × ${esc(entry.prescribedReps)}${ex.equipment?` · ${esc(ex.equipment)}`:""}</p></div><span class="exercise-progress">${completedSets}/${entry.sets.length} sets</span></div>${guideMarkup(ex)}<div class="format-controls"><label class="field">Record<select data-format="measurement" aria-label="Measurement for ${esc(ex.name)}"${disabled}>${option("reps","Repetitions",entry.measurement)}${option("timed","Time in seconds",entry.measurement)}</select></label><label class="field">Load type<select data-format="loadType" aria-label="Load type for ${esc(ex.name)}"${disabled}>${option("external","External load",entry.loadType)}${option("bodyweight","Bodyweight",entry.loadType)}${option("assisted","Assistance",entry.loadType)}</select></label><label class="field">Unit<select data-format="unit" aria-label="Load unit for ${esc(ex.name)}"${disabled}${!weighted&&!locked?" disabled":""}>${option("kg","kg",entry.unit)}${option("lb","lb",entry.unit)}</select></label></div><p class="format-note">${locked?"Logging format is locked while actual values are present. Clear uncompleted values to change it.":"Check the logging format before your first set. Enter 0 explicitly if an external or assisted set has no added load."}${entry.loadType==="assisted"?" Assistance is not lifted weight; it does not create weight or volume records.":""}</p><table class="sets-table"><thead><tr><th scope="col">Set</th>${weighted?`<th scope="col">${entry.loadType==="assisted"?"Assist":"Load"} (${entry.unit})</th>`:""}<th scope="col">${timed?"Seconds":"Reps"}</th><th scope="col">Completed</th></tr></thead><tbody>${entry.sets.map((set,setIndex)=>`<tr data-set="${setIndex}" class="${set.completed?"set-complete":next?.entryId===entry.id&&next.setIndex===setIndex?"set-next":""}"><td class="set-number">${setIndex+1}</td>${weighted?`<td><input type="number" inputmode="decimal" min="0" max="1000" step="0.01" data-actual="weight" value="${set.weight??""}" placeholder="—" aria-label="${esc(ex.name)}, set ${setIndex+1}, ${entry.loadType==="assisted"?"assistance":"load"} in ${entry.unit}"${set.completed||state.workout.status==="completed"?" disabled":""}/></td>`:""}<td><input type="number" inputmode="numeric" min="1" max="${timed?3600:1000}" step="1" data-actual="${measurement}" value="${set[measurement]??""}" placeholder="—" aria-label="${esc(ex.name)}, set ${setIndex+1}, actual ${measurement}"${set.completed||state.workout.status==="completed"?" disabled":""}/></td><td><button type="button" class="button secondary set-check" data-complete="${setIndex}" aria-pressed="${set.completed}" aria-label="${set.completed?"Uncheck":"Mark complete"} ${esc(ex.name)}, set ${setIndex+1}"${state.workout.status==="completed"?" disabled":""}>${set.completed?"✓ Done":"Mark done"}</button></td></tr>`).join("")}</tbody></table>${previous(entry)}</article>`;
   }
   function renderSession(){
     const workout=state.workout;if(!workout)return;
@@ -287,11 +292,87 @@
     $("sessionPanel").hidden=true;$("celebration").hidden=false;$("conflictPanel").hidden=true;
     const counts=W.progress(workout);
     $("celebrationMessage").textContent=`${counts.completed} completed set${counts.completed===1?"":"s"} · ${workout.entries.length} planned movements · ${W.duration(workout.elapsedSeconds)} since start. ${state.mode==="account"?"Saved to your account.":"Saved on this device only."}`;
+    resetCheckIn();void loadCheckIn(workout.id);
     toast("Workout complete. Your history is updated.");
     $("celebration").scrollIntoView({block:"center"});
   }
+  function resetCheckIn(){
+    state.adaptation=null;state.checkInBusy=false;
+    for(const id of ["checkInDifficulty","checkInEnergy","checkInComfort","checkInEnjoyment"])$(id).value="";
+    $("saveCheckIn").disabled=false;$("anotherSession").disabled=false;$("saveCheckIn").textContent="Save check-in";$("checkInStatus").textContent="";$("checkInStatus").dataset.state="";
+    $("progressionPanel").hidden=true;$("progressionList").innerHTML="";$("adaptationProposal").hidden=true;$("adaptationStatus").textContent="";
+  }
+  function suggestionTarget(suggestion){
+    const target=suggestion?.target||{},parts=[];
+    if(Number.isFinite(target.weight))parts.push(`${number(target.weight)} ${suggestion.unit||"kg"}`);
+    if(Number.isFinite(target.reps))parts.push(`${number(target.reps)} reps`);
+    if(Number.isFinite(target.seconds))parts.push(`${number(target.seconds)} seconds`);
+    return parts.join(" · ")||"Keep the current logged target";
+  }
+  function actionLabel(value){return String(value||"Review next target").replace(/[_-]+/g," ").replace(/\b\w/g,(letter)=>letter.toUpperCase());}
+  function renderTrainingGuidance(result,{saved=false}={}){
+    const checkIn=result?.checkIn;
+    if(checkIn){
+      $("checkInDifficulty").value=String(checkIn.difficulty);$("checkInEnergy").value=String(checkIn.energy);$("checkInComfort").value=String(checkIn.comfort);$("checkInEnjoyment").value=String(checkIn.enjoyment);
+      $("saveCheckIn").textContent="Update check-in";
+      if(saved){$("checkInStatus").textContent="Saved";$("checkInStatus").dataset.state="saved";}
+    }
+    const suggestions=Array.isArray(result?.progression?.suggestions)?result.progression.suggestions:[];
+    $("progressionPanel").hidden=!checkIn;
+    $("progressionList").innerHTML=suggestions.length?suggestions.map((suggestion)=>`<article class="progression-suggestion"><div><span>${esc(actionLabel(suggestion.action))}</span><h4>${esc(exercise(suggestion.exerciseId).name)}</h4></div><strong>${esc(suggestionTarget(suggestion))}</strong><p>${esc(suggestion.explanation||"Review this target against your next planned session.")}</p><small>${suggestion.requiresApproval===true?"Suggestion only · no workout or plan changed":"Review before changing your Plan"}</small></article>`).join(""):"<p class='muted'>No progression change is suggested from this session. Keep the current targets and continue logging comparable sets.</p>";
+    renderAdaptation(result?.adaptation||null);
+  }
+  function renderAdaptation(adaptation){
+    state.adaptation=adaptation?.status==="pending"?adaptation:null;
+    $("adaptationProposal").hidden=!state.adaptation;
+    if(!state.adaptation)return;
+    const change=state.adaptation.change||{};
+    $("adaptationTitle").textContent=state.adaptation.title||"Review a smaller next session.";
+    $("adaptationExplanation").textContent=state.adaptation.explanation||"Your check-in supports reviewing one small change.";
+    $("adaptationChange").textContent=`${change.day||"Planned day"} · ${exercise(change.exerciseId).name} · ${Number(change.fromSets)||"—"} to ${Number(change.toSets)||"—"} sets`;
+    $("acceptAdaptation").disabled=false;$("dismissAdaptation").disabled=false;$("adaptationStatus").textContent="";
+  }
+  async function loadCheckIn(workoutId){
+    try{
+      const result=await accountRead(`/api/workouts/${encodeURIComponent(workoutId)}/check-in`);
+      if(state.workout?.id!==workoutId||state.workout?.status!=="completed")return;
+      if(result.csrfToken)state.csrfToken=String(result.csrfToken);renderTrainingGuidance(result);
+    }catch(error){
+      if(error.status===404)return;
+      if(state.workout?.id===workoutId){$("checkInStatus").textContent="Couldn’t load an earlier check-in — you can still save these answers.";$("checkInStatus").dataset.state="error";}
+    }
+  }
+  async function saveCheckIn(){
+    if(state.checkInBusy||state.blocked||!state.workout||state.workout.status!=="completed")return;
+    const controls=["checkInDifficulty","checkInEnergy","checkInComfort","checkInEnjoyment"].map($),values=controls.map((control)=>Number(control.value));
+    const missing=controls[values.findIndex((value)=>!Number.isInteger(value)||value<1||value>5)];
+    if(missing){$("checkInStatus").textContent="Choose one response for each check-in question.";$("checkInStatus").dataset.state="error";missing.focus();return;}
+    const workoutId=state.workout.id;state.checkInBusy=true;$("saveCheckIn").disabled=true;$("anotherSession").disabled=true;$("saveCheckIn").textContent="Saving…";$("checkInStatus").textContent="Saving…";$("checkInStatus").dataset.state="";
+    try{
+      await assertIdentity();
+      const result=await api(`/api/workouts/${encodeURIComponent(workoutId)}/check-in`,{method:"POST",body:JSON.stringify({checkIn:{difficulty:values[0],energy:values[1],comfort:values[2],enjoyment:values[3]}})});
+      await assertIdentity();if(state.workout?.id!==workoutId)return;
+      if(result.csrfToken)state.csrfToken=String(result.csrfToken);renderTrainingGuidance(result,{saved:true});
+    }catch(error){
+      if(state.workout?.id===workoutId){$("checkInStatus").textContent=`Couldn't save — ${saveError(error)} Retry when ready.`;$("checkInStatus").dataset.state="error";$("saveCheckIn").textContent="Retry check-in";}
+    }finally{state.checkInBusy=false;if(state.workout?.id===workoutId){$("saveCheckIn").disabled=false;$("anotherSession").disabled=false;if($("saveCheckIn").textContent==="Saving…")$("saveCheckIn").textContent="Save check-in";}}
+  }
+  async function resolveAdaptation(decision){
+    const adaptation=state.adaptation;if(!adaptation||state.checkInBusy||state.blocked)return;
+    state.checkInBusy=true;$("acceptAdaptation").disabled=true;$("dismissAdaptation").disabled=true;$("anotherSession").disabled=true;$("adaptationStatus").textContent=decision==="accept"?"Saving the approved Plan change…":"Keeping your current Plan…";
+    try{
+      await assertIdentity();
+      const body=decision==="accept"?{decision,expectedPlanUpdatedAt:adaptation.expectedPlanUpdatedAt}:{decision};
+      const result=await api(`/api/training/adaptations/${encodeURIComponent(adaptation.id)}`,{method:"POST",body:JSON.stringify(body)});await assertIdentity();
+      if(result.plan?.days)state.plan=result.plan;
+      state.adaptation=null;$("adaptationProposal").hidden=true;$("adaptationStatus").textContent="";
+      $("checkInStatus").textContent=decision==="accept"?"Saved · Your approved one-set reduction is now in Plan.":"Saved · Your current Plan was kept.";$("checkInStatus").dataset.state="saved";renderPlan();
+    }catch(error){
+      $("adaptationStatus").textContent=error.status===409?"Your Plan or this suggestion changed elsewhere. Reload before deciding; nothing was overwritten.":`Couldn't save this decision — ${saveError(error)}`;
+    }finally{state.checkInBusy=false;$("anotherSession").disabled=false;if(state.adaptation){$("acceptAdaptation").disabled=false;$("dismissAdaptation").disabled=false;}}
+  }
   function returnToPlan(){
-    state.workout=null;state.draftKey="";state.pausedSeconds=null;$("celebration").hidden=true;$("sessionPanel").hidden=true;$("startPanel").hidden=false;scanDrafts();renderPlan();($("startWorkout").hidden?$("planDay"):$("startWorkout")).focus();
+    state.workout=null;state.draftKey="";state.pausedSeconds=null;resetCheckIn();$("celebration").hidden=true;$("sessionPanel").hidden=true;$("startPanel").hidden=false;scanDrafts();renderPlan();($("startWorkout").hidden?$("planDay"):$("startWorkout")).focus();
   }
   function exportDraft(){
     if(!state.workout)return;
@@ -510,8 +591,11 @@
     state.workout.status="completed";state.workout.completedAt=Date.now();state.workout.elapsedSeconds=Math.min(604800,Math.max(0,Math.floor((state.workout.completedAt-state.workout.startedAt)/1000)));state.workout.restEndsAt=null;state.pausedSeconds=null;
     markDirty({save:false});renderSession();signal("workout_completed");void flushSave();
   });
+  $("checkInForm").addEventListener("submit",event=>{event.preventDefault();void saveCheckIn();});
+  $("acceptAdaptation").addEventListener("click",()=>void resolveAdaptation("accept"));
+  $("dismissAdaptation").addEventListener("click",()=>void resolveAdaptation("dismiss"));
   $("anotherSession").addEventListener("click",()=>{
-    if(state.dirty||state.saving)return;
+    if(state.dirty||state.saving||state.checkInBusy)return;
     returnToPlan();
   });
   $("recoveryList").addEventListener("click",(event)=>{
@@ -536,7 +620,7 @@
   $("refreshHistory").addEventListener("click",()=>void loadHistory());$("loadMore").addEventListener("click",()=>void loadHistory({more:true}));
   $("chartExercise").addEventListener("change",renderMetricOptions);$("chartMetric").addEventListener("change",renderChart);
   $("closeDetail").addEventListener("click",()=>$("detailDialog").close());
-  window.addEventListener("beforeunload",(event)=>{persistDraft();if(state.dirty){event.preventDefault();event.returnValue="";}});
+  window.addEventListener("beforeunload",(event)=>{persistDraft();if(state.dirty||state.checkInBusy){event.preventDefault();event.returnValue="";}});
   document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")persistDraft();else if(state.mode==="account"&&!state.blocked)void assertIdentity().catch((error)=>{if(error.status!==401&&error.code!=="IDENTITY_CHANGED")status(saveError(error),"error");});tick();});
   window.addEventListener("online",()=>{if(state.dirty&&!state.blocked&&!state.conflict)toast("Connection restored. Choose Save now to retry your pending account changes.");});
   setInterval(tick,1000);

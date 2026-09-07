@@ -23,6 +23,7 @@
         "src/setup.js",
         "src/static-assets.js",
         "src/support.js",
+        "src/training.js",
         "src/workouts.js"
       ]
     },
@@ -59,7 +60,8 @@
       "maxLines": 1320,
       "allowedDependencies": [
         "src/schema.js",
-        "src/store-contract.js"
+        "src/store-contract.js",
+        "src/training-loop-store.js"
       ]
     },
     "src/store-contract.js": {
@@ -71,7 +73,8 @@
       "role": "Shared storage schema and statements",
       "maxLines": 420,
       "allowedDependencies": [
-        "src/product-signals-schema.js"
+        "src/product-signals-schema.js",
+        "src/training-loop-schema.js"
       ]
     },
     "src/product-signals-schema.js": {
@@ -83,6 +86,26 @@
       "role": "Consent-gated aggregate product-activity boundary",
       "maxLines": 140,
       "allowedDependencies": []
+    },
+    "src/training-loop-schema.js": {
+      "role": "Check-in, training-block, and adaptation storage schema",
+      "maxLines": 80,
+      "allowedDependencies": []
+    },
+    "src/training-loop-store.js": {
+      "role": "SQLite and Turso training-loop adapter parity",
+      "maxLines": 140,
+      "allowedDependencies": [
+        "src/training-loop-schema.js"
+      ]
+    },
+    "src/training.js": {
+      "role": "Check-ins, deterministic progression, blocks, and approved adaptations",
+      "maxLines": 450,
+      "allowedDependencies": [
+        "src/plans.js",
+        "src/workouts.js"
+      ]
     },
     "src/email.js": {
       "role": "Resend integration and email security",

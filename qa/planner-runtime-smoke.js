@@ -13,6 +13,7 @@ const readPublic=(...parts)=>fs.readFileSync(join(PROJECT_ROOT,"public",...parts
 const html=readPublic("pages","planner.html");
 const plannerCss=readPublic("styles","planner.css");
 const exercises=JSON.parse(readPublic("data","exercises.json"));
+const Discovery=require(join(PROJECT_ROOT,"public","scripts","discovery-core"));
 const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map((match)=>match[1]);
 const DAYS=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 
@@ -80,6 +81,7 @@ const context={
   requestAnimationFrame:(callback)=>callback(),setTimeout,clearTimeout,URL,URLSearchParams
 };
 context.globalThis=context;
+context.StrataDiscovery=Discovery;
 vm.createContext(context);
 vm.runInContext(readPublic("scripts","planner.js"),context,{filename:"planner.js"});
 
@@ -124,6 +126,7 @@ function clickSelectDay(day){
   assert.match(initialMarkup,/Load 32 more/,"Desktop Load more should reveal the next 32 cards");
   assert.match(initialMarkup,/>Add<\/button>/,"Library actions should use a clear text label instead of an unexplained symbol");
   assert.match(initialMarkup,/>Video<\/a>/,"Tutorial actions should use a clear text label instead of an unexplained symbol");
+  assert.match(initialMarkup,/data-guide-exercise=/,"Every planner movement should expose its catalog-backed setup guide");
   for(const day of DAYS){
     const chip=dayNavMarkup.match(new RegExp(`<button\\b(?=[^>]*data-day-chip="${day}")[^>]*>`))?.[0];
     assert.ok(chip,`${day} must have a quick-add day chip`);

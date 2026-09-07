@@ -11,6 +11,7 @@ const { getEmailVerificationConfig } = require("./email");
 const { createAuthService,configuredAdminEmail } = require("./auth");
 const { createAdminService } = require("./admin");
 const { createWorkoutService } = require("./workouts");
+const { createTrainingService } = require("./training");
 const { createSetupService } = require("./setup");
 const { createSupportService } = require("./support");
 const { createProductSignalsService } = require("./product-signals");
@@ -179,6 +180,7 @@ let auth;
 let admin;
 let support;
 let workouts;
+let training;
 let setup;
 let productSignals;
 let paddleIpCache={cidrs:[],expiresAt:0,pending:null};
@@ -662,6 +664,7 @@ async function handleApi(req,res,url) {
   if (await support.handleApi(req,res,url)) return;
   if (await auth.handleApi(req,res,url)) return;
   if (await admin.handleApi(req,res,url)) return;
+  if (await training.handleApi(req,res,url)) return;
   if (await workouts.handleApi(req,res,url)) return;
   if (await setup.handleApi(req,res,url)) return;
   if (url.pathname === "/api/status" && req.method === "GET") {
@@ -1127,6 +1130,7 @@ async function start() {
   }));
   productSignals=createProductSignalsService({store,admin,trustedOrigin:trustedAuthOrigin,requestAddress,rateKeyAllowed,http:{json,bodyJson}});
   workouts=createWorkoutService({store,auth,requireAccess:requireDiscoveryAccess,rateAllowed,http:{json,bodyJson}});
+  training=createTrainingService({store,auth,requireAccess:requireDiscoveryAccess,trustedOrigin:trustedAuthOrigin,rateAllowed,http:{json,bodyJson}});
   setup=createSetupService({
     store,auth,requireAccess:requireDiscoveryAccess,trustedOrigin:trustedAuthOrigin,
     getPlanSnapshot:planSnapshotFor,getPreferencesSnapshot:preferencesSnapshotFor,getUserPayload:userPayload,

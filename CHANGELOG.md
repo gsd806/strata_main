@@ -1,5 +1,18 @@
 # Changelog
 
+## 7.4.0 — A calmer, guided training loop
+
+- Reorganized Strata+ around four clear destinations—Today, Plan, Progress, and Explore—so the next workout remains primary while advanced tools stay available without dashboard clutter.
+- Added a Today brief with one Start or Resume action, estimated duration or elapsed time, relevant equipment, and the latest comparable result in the loaded 100-session window; replaced day-specific command copy with the stable “Start working out” action.
+- Added honest log-derived adherence, external-load volume, four-week consistency, repeat improvements, and personal bests while keeping partial history, measurement formats, assistance, bodyweight, kilograms, and pounds explicitly separate.
+- Added an optional 4–8 week training-block record with revision-safe updates, milestones, current-week state, and an optional lighter week without automatically rewriting the weekly Plan.
+- Added catalog-backed exercise guidance across Rankings, Plan, and Train, including one setup cue, two additional technique cues, a caution or common mistake, purpose, prescription, and a same-target different-equipment alternative where available.
+- Streamlined first-use setup with a deterministic three-day beginner profile, one explicit equipment choice, a visible week preview, and a direct first-workout hand-off after saving.
+- Added an optional four-answer post-workout check-in plus conservative, deterministic next-session guidance: first results stay baselines and increases require a comparable repeated result and an explicit acceptable check-in.
+- Added explicit, revision-bound plan-adjustment proposals for difficult check-ins. Suggestions never change a plan silently; acceptance atomically verifies the workout check-in and current Plan, while dismissal and replays cannot mutate it.
+- Added owner-scoped SQLite/Turso storage parity, account-deletion cleanup, strict checkJs boundaries, unit/integration/contract/browser coverage, private-cache exclusions, and public privacy/fitness disclosures for the complete training loop.
+- Improved responsive layout, touch targets, dialog focus restoration, reduced-motion behavior, validation errors, and consistent Saving… / Saved / Couldn't save — Retry states across the changed journeys.
+
 ## 7.3.0 — Product proof and returning-member clarity
 
 - Added a no-account homepage preview that ranks three real catalog movements from a visitor’s goal, muscle group, equipment, and experience while explaining the personal match, immutable editorial FitScore, strongest decision factors, and clearest trade-off.

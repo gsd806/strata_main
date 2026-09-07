@@ -16,10 +16,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="planner.css?v=7.3.0" />
-    <link rel="stylesheet" href="/product-signals.css?v=7.3.0" />
-    <link rel="stylesheet" href="/experience.css?v=7.3.0" />
-    <script src="/motion.js?v=7.3.0"></script>
+    <link rel="stylesheet" href="planner.css?v=7.4.0" />
+    <link rel="stylesheet" href="/product-signals.css?v=7.4.0" />
+    <link rel="stylesheet" href="/experience.css?v=7.4.0" />
+    <script src="/motion.js?v=7.4.0"></script>
   </head>
   <body>
     <a class="skip-link" href="#weekTitle">Skip to weekly plan</a>
@@ -123,6 +123,11 @@
       <button class="dark-button" id="confirmReplaceExercise" type="button" disabled>Confirm replacement</button>
     </dialog>
 
+    <dialog class="planner-dialog exercise-guide-dialog" id="exerciseGuideDialog" aria-labelledby="exerciseGuideTitle">
+      <div class="planner-dialog-heading"><h2 id="exerciseGuideTitle" tabindex="-1">EXERCISE GUIDE.</h2><button class="outline-button" id="closeExerciseGuide" type="button" aria-label="Close exercise guide">Close</button></div>
+      <div id="exerciseGuideBody"></div>
+    </dialog>
+
     <dialog class="planner-dialog week-templates-dialog" id="weekTemplatesDialog" aria-labelledby="weekTemplatesTitle" aria-describedby="weekTemplatesDescription">
       <div class="planner-dialog-heading"><h2 id="weekTemplatesTitle">WEEK TEMPLATES.</h2><button class="outline-button" id="closeWeekTemplates" type="button">Close</button></div>
       <p id="weekTemplatesDescription">Save reusable copies of your current week. Templates stay on this device, separately for each account and the free device plan. Export your week for a portable backup; import it here on another device.</p>
@@ -137,10 +142,11 @@
       </section>
     </dialog>
 
-    <footer class="build-footer">STRATA · Build 7.3.0 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
+    <footer class="build-footer">STRATA · Build 7.4.0 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
     <div class="planner-toast" id="plannerToast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=7.3.0"></script>
-    <script src="/product-signals.js?v=7.3.0"></script>
-    <script src="planner.js?v=7.3.0"></script>
+    <script src="/pwa.js?v=7.4.0"></script>
+    <script src="/product-signals.js?v=7.4.0"></script>
+    <script src="/discovery-core.js?v=7.4.0"></script>
+    <script src="planner.js?v=7.4.0"></script>
   </body>
 </html>

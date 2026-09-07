@@ -125,6 +125,15 @@ test("workout empty days and planner mobile hand-offs expose useful 44px actions
   assert.match(workoutHtml,/href="\/pricing">Review Strata\+ access<\/a>/);
   assert.match(workoutHtml,/href="\/planner\.html">Return to free Plan<\/a>/);
   assert.match(workoutHtml,/id="openPlannerFromEmpty"[^>]*>Add exercises to my week/);
+  assert.match(workoutHtml,/id="checkInForm"[^>]*aria-labelledby="checkInTitle"/);
+  for(const id of ["checkInDifficulty","checkInEnergy","checkInComfort","checkInEnjoyment"])assert.match(workoutHtml,new RegExp(`id="${id}" required`));
+  assert.match(workoutHtml,/STRATA does not detect recovery, fatigue, pain, or injury/);
+  assert.match(workout,/\/api\/workouts\/\$\{encodeURIComponent\(workoutId\)\}\/check-in/);
+  assert.match(workout,/checkIn:\{difficulty:values\[0\],energy:values\[1\],comfort:values\[2\],enjoyment:values\[3\]\}/);
+  assert.match(workoutHtml,/No change happens unless you approve it/);
+  assert.match(workout,/decision==="accept"\?\{decision,expectedPlanUpdatedAt:adaptation\.expectedPlanUpdatedAt\}/);
+  assert.match(workoutCss,/\.exercise-guide>summary\{[^}]*min-height:46px/);
+  assert.match(workoutCss,/\.check-in-grid\{display:grid/);
 });
 
 test("planner only offers workout logging to active Strata+ accounts",()=>{

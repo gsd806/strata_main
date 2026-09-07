@@ -58,8 +58,9 @@ test("completed summaries exclude unfinished sets, bodyweight and assistance fro
   const summary=summarizeWorkout(sanitizeWorkout(workout,NOW));
   assert.equal(summary.totalSets,7);assert.equal(summary.completedSets,5);assert.equal(summary.exerciseCount,4);
   const [external,bodyweight,assisted,timed]=summary.exerciseSummaries;
-  assert.deepEqual({reps:external.totalReps,maxReps:external.maxReps,maxWeight:external.maxWeight,volume:external.volume},{reps:18,maxReps:10,maxWeight:22.5,volume:380});
+  assert.deepEqual({reps:external.totalReps,maxReps:external.maxReps,maxWeight:external.maxWeight,minAssistance:external.minAssistance,volume:external.volume},{reps:18,maxReps:10,maxWeight:22.5,minAssistance:null,volume:380});
   for (const item of [bodyweight,assisted,timed]) {assert.equal(item.volume,0);assert.equal(item.maxWeight,null);}
+  assert.equal(assisted.minAssistance,40);assert.equal(bodyweight.minAssistance,null);assert.equal(timed.minAssistance,null);
   assert.equal(bodyweight.totalReps,15);assert.equal(assisted.totalReps,12);assert.equal(timed.totalSeconds,60);assert.equal(timed.maxSeconds,60);assert.equal(timed.maxReps,null);
 });
 test("summary groups keep kilograms and pounds and load types separate",()=>{

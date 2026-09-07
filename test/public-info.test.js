@@ -56,7 +56,7 @@ test("core footers use the policy directory instead of repeating every legal pag
 });
 
 test("published Strata+ price and refund promise are exact and consistent",()=>{
-  assert.equal(BUILD,"7.3.0");
+  assert.equal(BUILD,"7.4.0");
   const pricingHtml=read("pricing.html"),pricing=text("pricing.html"),refunds=text("refunds.html"),terms=text("terms.html");
   assert.match(pricing,/Strata\+/);
   assert.match(pricing,/\$5\.99 USD/i);
@@ -65,6 +65,10 @@ test("published Strata+ price and refund promise are exact and consistent",()=>{
   assert.match(pricing,/personalized session builder/i);
   assert.match(pricing,/community weekly plans/i);
   assert.match(pricing,/31-day planner/i);
+  assert.match(pricing,/post-workout check-ins/i);
+  assert.match(pricing,/no Plan change happens without your approval/i);
+  assert.match(pricing,/exercise setup and technique guides/i);
+  assert.match(pricing,/manual Plan is not taken away when access ends/i);
   assert.match(pricingHtml,/href="\/planner\.html">Open free planner/);
   assert.match(pricingHtml,/Create account to start trial/);
   assert.match(pricingHtml,/free 10-day trial or buy Strata\+ once for \$5\.99 USD/);

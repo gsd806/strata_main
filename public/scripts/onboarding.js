@@ -36,12 +36,13 @@
     if([...$("minutes").options].some(option=>option.value===String(saved.minutes)))$("minutes").value=String(saved.minutes);
   }
   function renderSavedProfile(preferences,plan){
-    const saved=core.profileFromSaved(preferences,plan);savedPreferenceTags=[...saved.preferences];
+    const fresh=preferenceRevision===0&&!hasItems(plan),saved=fresh?core.starterProfile():core.profileFromSaved(preferences,plan);savedPreferenceTags=[...saved.preferences];
     if([...$("goal").options].some(option=>option.value===String(saved.goal)))$("goal").value=String(saved.goal);
     if([...$("level").options].some(option=>option.value===String(saved.level)))$("level").value=String(saved.level);
     $("equipmentChoices").innerHTML=[...new Set(exercises.map(e=>e.equipment))].sort().map(value=>`<label><input type="checkbox" name="equipment" value="${escape(value)}" ${saved.equipment.includes(value)?"checked":""} /> ${escape(value)}</label>`).join("");
     $("dayChoices").innerHTML=core.DAYS.map(day=>`<label><input type="checkbox" name="days" value="${day}" ${saved.availability.includes(day)?"checked":""} /> ${day.slice(0,3)}</label>`).join("");
     document.querySelectorAll('input[name="limitations"]').forEach(input=>{input.checked=saved.limitations.includes(input.value);});
+    $("starterPath").hidden=!fresh;
     return saved;
   }
   function allowEditing(preferences){
@@ -56,10 +57,12 @@
   }
   function setPlannerAction({conflict=false,hidden=false}={}){
     const link=$("openPlanner");
-    link.textContent=conflict?"Open planner in a new tab →":"Open my saved week →";
+    link.textContent=conflict?"Open planner in a new tab →":"Adjust my saved week";
     link.target=conflict?"_blank":"";
     link.rel=conflict?"noopener":"";
     link.hidden=hidden;
+    $("savedActions").hidden=hidden;
+    if(conflict)$("startFirstWorkout").hidden=true;
   }
   function requirePlus(account){
     if(!account?.user?.id)throw new Error("Sign in to use Strata+ weekly setup. Your free Plan remains available without an account.");
@@ -74,7 +77,7 @@
     ready=false;$("setupFields").disabled=true;$("retrySetup").hidden=true;$("previewSummary").hidden=true;status("Loading your starting point…");
     try{
       if(!exercises.length){
-        const response=await fetch("/exercises.json?v=7.3.0");if(!response.ok)throw new Error("The exercise library is unavailable. Reconnect and retry.");exercises=await response.json();
+        const response=await fetch("/exercises.json?v=7.4.0");if(!response.ok)throw new Error("The exercise library is unavailable. Reconnect and retry.");exercises=await response.json();
       }
       const account=await request("/api/setup",{cache:"no-store"});requirePlus(account);
       if(!account.csrfToken)throw new Error("Your account could not be verified. Retry before editing.");
@@ -112,7 +115,9 @@
       await verifyAccess();
       const saved=await request("/api/setup",{method:"PUT",body:JSON.stringify({plan:preview.plan,preferences:preview.preferences,expectedPlanUpdatedAt:revision,expectedPreferencesUpdatedAt:preferenceRevision,expectedUserId:user.id})});
       revision=saved.planUpdatedAt;preferenceRevision=saved.preferencesUpdatedAt;original=saved.plan||preview.plan;savedPreferenceTags=[...(saved.preferences?.preferences||preview.preferences.preferences)];
-      $("saveControls").hidden=true;setPlannerAction();status("Saved to your account. Open your saved week, adjust anything you need, then train when you’re ready.",{tone:"good"});signal("onboarding_saved");$("openPlanner").focus();
+      const firstDay=core.DAYS.find(day=>saved.plan?.days?.[day]?.length)||core.DAYS.find(day=>preview.plan?.days?.[day]?.length);
+      $("startFirstWorkout").href=`/workout.html?day=${encodeURIComponent(firstDay||"Monday")}`;$("startFirstWorkout").hidden=false;
+      $("saveControls").hidden=true;setPlannerAction();status("Saved to your account. Your first workout is ready; start now or adjust the week first.",{tone:"good"});signal("onboarding_saved");$("startFirstWorkout").focus();
     }catch(error){
       if(error.status===409){setPlannerAction({conflict:true});status("Your saved week changed in another tab or device. Your preview is safe here. Open the planner in a new tab to compare both before replacing anything.",{tone:"error"});$("openPlanner").focus();}
       else status(error.message,{tone:"error",focus:true});
@@ -120,5 +125,14 @@
     finally{busy=false;$("saveWeek").textContent="Save this week and profile";$("saveWeek").disabled=!ready;$("setupFields").disabled=!ready;}
   });
   $("retrySetup").addEventListener("click",init);
+  $("equipmentPresetChoices").addEventListener("click",event=>{
+    const button=event.target.closest("[data-equipment-preset]");if(!button||!ready)return;
+    const all=[...new Set(exercises.map(item=>item.equipment))],preset=button.dataset.equipmentPreset;
+    const selected=preset==="gym"?all:preset==="dumbbells"?["Dumbbells","Bodyweight"]:["Bodyweight"];
+    document.querySelectorAll('input[name="equipment"]').forEach(input=>{input.checked=selected.includes(input.value);});
+    $("equipmentPresetChoices").querySelectorAll("button").forEach(item=>item.setAttribute("aria-pressed",String(item===button)));
+    preview=null;$("previewSummary").hidden=true;$("saveControls").hidden=true;setPlannerAction({hidden:true});renderSnapshot();
+    status(`${button.textContent.trim()} selected. Preview now, or adjust any choice below.`,{tone:"good"});$("generateWeek").focus();
+  });
   void init();
 })();

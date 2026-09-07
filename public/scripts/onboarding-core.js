@@ -13,6 +13,7 @@
     6:["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],
     7:["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
   };
+  function starterProfile(){return {goal:"balanced",level:"Beginner",equipment:[],availability:["Monday","Wednesday","Friday"],preferences:["simple-setup"],limitations:[],recoveryAdjusted:false};}
   function uniqueAllowed(values,allowed){return [...new Set(Array.isArray(values)?values:[])].filter(value=>allowed.includes(value));}
   function profileFromSaved(preferences,plan){
     const scheduled=DAYS.filter(day=>Array.isArray(plan?.days?.[day])&&plan.days[day].length>0);
@@ -67,5 +68,5 @@
     }
     return {plan,sessions,preferences};
   }
-  return {DAYS,buildWeek,profileFromSaved,trainingSnapshot};
+  return {DAYS,buildWeek,profileFromSaved,starterProfile,trainingSnapshot};
 });

@@ -141,6 +141,19 @@ test("homepage comparison scroller is a labeled keyboard-focusable region",async
   assert.match(comparison,/<caption class="sr-only">Comparison of /);
 });
 
+test("homepage exercise details expose setup, cues, common mistakes and equipment-equivalent swaps",async()=>{
+  const {context,elements}=createRuntime({meResponse:jsonResponse(401,{error:"Not signed in."})});
+  await settle();
+  vm.runInContext(`openDetail(${JSON.stringify(catalog[0].id)})`,context);
+  const detail=elements.get("detailContent").innerHTML;
+  assert.match(detail,/>Set up</);
+  assert.match(detail,/>Technique cues</);
+  assert.match(detail,/Caution \/ Common mistake:/);
+  assert.match(detail,/General catalog range/);
+  assert.match(detail,/Same target, different equipment/);
+  assert.equal((detail.match(/data-detail=/g)||[]).length,3);
+});
+
 test("homepage creates a real no-account shortlist with reasons and trade-offs",async()=>{
   const {context,elements}=createRuntime({meResponse:jsonResponse(401,{error:"Not signed in."})});
   await settle();

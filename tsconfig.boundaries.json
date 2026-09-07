@@ -22,6 +22,10 @@
     "src/product-signals.js",
     "src/service-composition.js",
     "src/setup.js",
-    "src/store-contract.js"
+    "src/store-contract.js",
+    "src/training-loop-schema.js",
+    "src/training-loop-store.js",
+    "src/training.js",
+    "src/workouts.d.ts"
   ]
 }

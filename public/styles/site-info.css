@@ -141,6 +141,8 @@ a { color:inherit; }
 .feature-list { margin:30px 0; padding:0; list-style:none; border-top:1px solid var(--line); }
 .feature-list li { display:grid; grid-template-columns:24px 1fr; gap:11px; padding:14px 0; border-bottom:1px solid var(--line); color:#363b34; font-size:14px; line-height:1.55; }
 .feature-list li::before { content:"✓"; display:grid; place-items:center; width:20px; height:20px; margin-top:1px; border-radius:50%; color:var(--ink); background:var(--accent); font-size:11px; font-weight:800; }
+.tier-boundary { margin:24px 0; padding:16px 17px; color:var(--muted); border-left:3px solid var(--orange-text); background:var(--paper); font-size:12px; line-height:1.6; }
+.tier-boundary strong { color:var(--ink); }
 .button-row { display:flex; flex-wrap:wrap; gap:10px; margin-top:30px; }
 .button { min-height:50px; display:inline-flex; align-items:center; justify-content:space-between; gap:24px; padding:0 18px; border:1px solid var(--ink); border-radius:8px; text-decoration:none; font:700 14px/1.35 var(--body); cursor:pointer; transition:color .18s,background-color .18s,border-color .18s,transform .22s var(--ease),box-shadow .22s var(--ease); }
 .button:active { transform:translateY(1px); }

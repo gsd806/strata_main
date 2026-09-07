@@ -390,6 +390,8 @@ function openDetail(id) {
   const exercise = exercises.find((item) => item.id === id);
   if (!exercise) return;
   const compared = state.compare.includes(id);
+  const guidance = window.StrataDiscovery.exerciseGuidance(exercise,exercises);
+  const alternatives = guidance.alternatives.map(({exercise:alternative,reason}) => `<li><button type="button" data-detail="${escapeHtml(alternative.id)}"><strong>${escapeHtml(alternative.name)}</strong><span>${escapeHtml(alternative.equipment)}</span></button><small>${escapeHtml(reason)}</small></li>`).join("");
   el("detailContent").innerHTML = `<div class="detail-hero">
     <button class="icon-button detail-close" data-close-dialog="detailDialog" type="button" aria-label="Close details">×</button>
     <div class="detail-hero-copy"><p class="kicker">${groups[exercise.group].name} / ${exercise.sub}</p><h2 id="detailTitle">${exercise.name}</h2><p>${exercise.why}</p></div>
@@ -398,7 +400,8 @@ function openDetail(id) {
     <div class="detail-meta"><div><span>Sets</span><strong>${exercise.sets}</strong></div><div><span>Reps</span><strong>${exercise.reps}</strong></div><div><span>Rest</span><strong>${exercise.rest}</strong></div><div><span>Level</span><strong>${exercise.level}</strong></div></div>
     <div class="metric-grid">${metricMarkup(exercise)}</div>
     <p class="detail-score-build"><strong>Score build</strong><span>Weighted baseline ${exercise.weightedBaseline}</span><span>Editorial adjustment ${adjustmentLabel(exercise.editorialAdjustment)}</span></p>
-    <div class="detail-columns"><div><h3>Execution notes</h3><ul>${exercise.cues.map((cue) => `<li>${cue}</li>`).join("")}</ul></div><div><h3>Why it ranks here</h3><p class="detail-rationale">${exercise.why}</p><p class="detail-note"><strong>Watch for:</strong> ${exercise.caution}</p></div></div>
+    <div class="detail-columns exercise-guidance"><div><h3>Set up</h3><p class="detail-rationale">${escapeHtml(guidance.setup)}</p><h3>Technique cues</h3><ul>${guidance.cues.map((cue) => `<li>${escapeHtml(cue)}</li>`).join("")}</ul></div><div><h3>Purpose &amp; working range</h3><p class="detail-rationale">${escapeHtml(guidance.purpose)}</p><p class="guidance-prescription"><strong>General catalog range</strong><span>${escapeHtml(guidance.prescription)}</span></p><p class="detail-note"><strong>Caution / Common mistake:</strong> ${escapeHtml(guidance.mistake)}</p></div></div>
+    <section class="guidance-alternatives" aria-labelledby="guidanceAlternativesTitle"><div><h3 id="guidanceAlternativesTitle">Same target, different equipment</h3><p>Equivalent purpose does not mean identical feel. Review the setup and choose the option that matches your available equipment.</p></div><ul>${alternatives}</ul></section>
     <div class="detail-footer"><button class="button button-dark" data-add-planner="${exercise.id}" type="button">Add to weekly planner<span aria-hidden="true">+</span></button><a class="button detail-youtube" href="${exercise.youtube}" target="_blank" rel="noreferrer">YouTube tutorials <span aria-hidden="true">▶</span></a><button class="button" style="border-color:var(--ink)" data-compare="${exercise.id}" type="button" aria-pressed="${compared}">${compared ? "Remove comparison" : "Compare exercise"}<span aria-hidden="true">⇄</span></button></div>
   </div>`;
   openModal(detailDialog);
@@ -440,7 +443,7 @@ async function initializeCatalog() {
   state.catalogStatus = "loading";
   renderAll();
   try {
-    exercises = normalizeCatalog(await api("/exercises.json?v=7.3.0"));
+    exercises = normalizeCatalog(await api("/exercises.json?v=7.4.0"));
     state.catalogStatus = "ready";
     el("catalogTotal").textContent = exercises.length;
   } catch {

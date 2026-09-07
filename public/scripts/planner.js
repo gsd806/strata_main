@@ -507,7 +507,7 @@ function renderLibrary(){
   el("libraryResultStatus").textContent=items.length?`Showing ${visibleItems.length} of ${items.length} matching movement${items.length===1?"":"s"}.`:`No matching movements.`;
   el("libraryList").innerHTML=items.length?visibleItems.map((exercise,index)=>{
     const id=escapeHtml(exercise.id),name=escapeHtml(exercise.name),sub=escapeHtml(exercise.sub),equipment=escapeHtml(exercise.equipment),youtube=escapeHtml(exercise.youtube);
-    return `<article class="library-card" draggable="true" data-library-id="${id}" data-library-index="${index}"><div class="library-score"><span aria-hidden="true">${escapeHtml(exercise.score)}</span><span class="sr-only">STRATA score ${escapeHtml(exercise.score)}</span></div><div><h3>${name}</h3><p>${sub} · ${equipment}</p></div><div class="library-actions"><button data-quick-add="${id}" type="button" aria-label="Add ${name} to ${escapeHtml(state.selectedDay)}">Add</button><a class="yt-link" href="${youtube}" target="_blank" rel="noreferrer" aria-label="Find ${name} tutorials on YouTube">Video</a></div></article>`;
+    return `<article class="library-card" draggable="true" data-library-id="${id}" data-library-index="${index}"><div class="library-score"><span aria-hidden="true">${escapeHtml(exercise.score)}</span><span class="sr-only">STRATA score ${escapeHtml(exercise.score)}</span></div><div><h3>${name}</h3><p>${sub} · ${equipment}</p></div><div class="library-actions"><button data-quick-add="${id}" type="button" aria-label="Add ${name} to ${escapeHtml(state.selectedDay)}">Add</button><button class="guide-button" data-guide-exercise="${id}" type="button" aria-label="Open setup and technique guide for ${name}">Guide</button><a class="yt-link" href="${youtube}" target="_blank" rel="noreferrer" aria-label="Find ${name} tutorials on YouTube">Video</a></div></article>`;
   }).join("")+(!remaining?"":`<div class="library-load-more"><span>${visibleItems.length} of ${items.length}</span><button data-load-more-library type="button" aria-controls="libraryList">Load ${nextCount} more <span aria-hidden="true">↓</span></button></div>`):`<div class="library-empty"><strong>No matching movements</strong><span>Try another search or choose a different muscle group.</span></div>`;
 }
 
@@ -516,7 +516,18 @@ function scheduledMarkup(item,day,index,count){
   if(!exercise)return"";
   const instanceId=escapeHtml(item.instanceId),name=escapeHtml(exercise.name),titleId=`scheduled-${instanceId}`;
   const options=DAYS.map((option)=>`<option value="${option}" ${option===day?"selected":""}>${option}${isRestDay(option)?" — recovery":""}</option>`).join("");
-  return `<article class="scheduled-card" draggable="true" data-instance-id="${instanceId}" aria-labelledby="${titleId}"><div class="scheduled-card-head"><div><h3 id="${titleId}">${name}</h3><small>${escapeHtml(exercise.sub)} · ${escapeHtml(exercise.equipment)}</small></div><div class="card-actions"><a href="${escapeHtml(exercise.youtube)}" target="_blank" rel="noreferrer" aria-label="Find ${name} tutorials on YouTube">▶</a><button data-remove-item="${instanceId}" type="button" aria-label="Remove ${name} from ${day}">×</button></div></div><button class="replace-exercise-button" data-replace-item="${instanceId}" type="button" aria-label="Replace ${name} on ${day}">Replace exercise</button><div class="prescription"><label>Sets<input data-item-sets="${instanceId}" type="number" min="1" max="10" step="1" inputmode="numeric" value="${escapeHtml(item.sets)}" aria-label="Sets for ${name} on ${day}" /></label><label>Reps / time<input data-item-reps="${instanceId}" type="text" maxlength="20" value="${escapeHtml(item.reps)}" aria-label="Reps or time for ${name} on ${day}" /></label></div><div class="card-move"><label><span>Day</span><select data-item-day="${instanceId}" aria-label="Move ${name} to another day">${options}</select></label><div class="move-buttons" role="group" aria-label="Reorder ${name}"><button data-move-item="${instanceId}" data-move-direction="-1" type="button" aria-label="Move ${name} earlier on ${day}" ${index===0?"disabled":""}>↑</button><button data-move-item="${instanceId}" data-move-direction="1" type="button" aria-label="Move ${name} later on ${day}" ${index===count-1?"disabled":""}>↓</button></div></div></article>`;
+  return `<article class="scheduled-card" draggable="true" data-instance-id="${instanceId}" aria-labelledby="${titleId}"><div class="scheduled-card-head"><div><h3 id="${titleId}">${name}</h3><small>${escapeHtml(exercise.sub)} · ${escapeHtml(exercise.equipment)}</small></div><div class="card-actions"><button data-guide-exercise="${escapeHtml(exercise.id)}" type="button" aria-label="Open setup and technique guide for ${name}">?</button><a href="${escapeHtml(exercise.youtube)}" target="_blank" rel="noreferrer" aria-label="Find ${name} tutorials on YouTube">▶</a><button data-remove-item="${instanceId}" type="button" aria-label="Remove ${name} from ${day}">×</button></div></div><button class="replace-exercise-button" data-replace-item="${instanceId}" type="button" aria-label="Replace ${name} on ${day}">Replace exercise</button><div class="prescription"><label>Sets<input data-item-sets="${instanceId}" type="number" min="1" max="10" step="1" inputmode="numeric" value="${escapeHtml(item.sets)}" aria-label="Sets for ${name} on ${day}" /></label><label>Reps / time<input data-item-reps="${instanceId}" type="text" maxlength="20" value="${escapeHtml(item.reps)}" aria-label="Reps or time for ${name} on ${day}" /></label></div><div class="card-move"><label><span>Day</span><select data-item-day="${instanceId}" aria-label="Move ${name} to another day">${options}</select></label><div class="move-buttons" role="group" aria-label="Reorder ${name}"><button data-move-item="${instanceId}" data-move-direction="-1" type="button" aria-label="Move ${name} earlier on ${day}" ${index===0?"disabled":""}>↑</button><button data-move-item="${instanceId}" data-move-direction="1" type="button" aria-label="Move ${name} later on ${day}" ${index===count-1?"disabled":""}>↓</button></div></div></article>`;
+}
+
+let exerciseGuideTrigger=null;
+function openExerciseGuide(id,trigger=null){
+  const exercise=exerciseById(id),guidance=globalThis.StrataDiscovery?.exerciseGuidance?.(exercise,state.exercises);
+  if(!exercise||!guidance){showToast("This exercise guide is unavailable. Try reloading Plan.");return;}
+  const dialog=el("exerciseGuideDialog");
+  if(!dialog.open)exerciseGuideTrigger=trigger;
+  el("exerciseGuideTitle").textContent=exercise.name;
+  el("exerciseGuideBody").innerHTML=`<p class="guide-purpose">${escapeHtml(guidance.purpose)}</p><div class="guide-grid"><section><span>01 / Set up</span><p>${escapeHtml(guidance.setup)}</p></section><section><span>02 / Working range</span><p>${escapeHtml(guidance.prescription)}</p></section><section><span>03 / Technique cues</span><ul>${guidance.cues.map((cue)=>`<li>${escapeHtml(cue)}</li>`).join("")}</ul></section><section class="guide-caution"><span>04 / Caution / Common mistake</span><p>${escapeHtml(guidance.mistake)}</p></section></div><section class="guide-swaps"><h3>Same target, different equipment</h3><p>Choose a swap only when its setup fits your available equipment.</p><div>${guidance.alternatives.map(({exercise:alternative,reason})=>`<button type="button" data-guide-exercise="${escapeHtml(alternative.id)}"><strong>${escapeHtml(alternative.name)}</strong><span>${escapeHtml(alternative.equipment)} · ${escapeHtml(reason)}</span></button>`).join("")}</div></section>`;
+  if(!dialog.open)dialog.showModal();requestAnimationFrame(()=>el("exerciseGuideTitle").focus());
 }
 
 function renderWeek(focusSelector=null){
@@ -875,8 +886,9 @@ document.addEventListener("dragend",()=>{state.drag=null;document.querySelectorA
 
 document.addEventListener("click",(event)=>{
   if(event.target.closest("[data-open-guest]")){void init({guestOnly:true});return;}
-  const replace=event.target.closest("[data-replace-item]"),filter=event.target.closest("[data-library-group]"),quick=event.target.closest("[data-quick-add]"),select=event.target.closest("[data-select-day]"),remove=event.target.closest("[data-remove-item]"),rest=event.target.closest("[data-set-rest]"),move=event.target.closest("[data-move-item]"),loadMore=event.target.closest("[data-load-more-library]"),retry=event.target.closest("[data-retry-init]"),unpublish=event.target.closest("[data-unpublish-plan]");
-  if(filter){state.group=filter.dataset.libraryGroup;resetLibraryWindow();renderFilters(state.group);renderLibrary();}
+  const guide=event.target.closest("[data-guide-exercise]"),replace=event.target.closest("[data-replace-item]"),filter=event.target.closest("[data-library-group]"),quick=event.target.closest("[data-quick-add]"),select=event.target.closest("[data-select-day]"),remove=event.target.closest("[data-remove-item]"),rest=event.target.closest("[data-set-rest]"),move=event.target.closest("[data-move-item]"),loadMore=event.target.closest("[data-load-more-library]"),retry=event.target.closest("[data-retry-init]"),unpublish=event.target.closest("[data-unpublish-plan]");
+  if(guide)openExerciseGuide(guide.dataset.guideExercise,guide);
+  else if(filter){state.group=filter.dataset.libraryGroup;resetLibraryWindow();renderFilters(state.group);renderLibrary();}
   else if(quick){addExercise(quick.dataset.quickAdd,state.selectedDay);}
   else if(select){
     state.selectedDay=select.dataset.selectDay;
@@ -949,6 +961,8 @@ el("replaceExerciseSearch").addEventListener("input",renderReplacementOptions);
 el("replaceExerciseSelect").addEventListener("change",()=>{el("confirmReplaceExercise").disabled=!el("replaceExerciseSelect").value;});
 el("confirmReplaceExercise").addEventListener("click",confirmReplacement);
 el("closeReplaceExercise").addEventListener("click",()=>el("replaceExerciseDialog").close());
+el("closeExerciseGuide").addEventListener("click",()=>el("exerciseGuideDialog").close());
+el("exerciseGuideDialog").addEventListener("close",()=>{const trigger=exerciseGuideTrigger;exerciseGuideTrigger=null;requestAnimationFrame(()=>trigger?.focus?.());});
 el("draftRecoverySelect").addEventListener("change",(event)=>selectRecoveredDraft(event.target.value));
 el("exportWeeklyPlan").addEventListener("click",downloadWeeklyPlan);
 el("retryPlanSave").addEventListener("click",async(event)=>{
@@ -1009,7 +1023,7 @@ async function init({guestOnly=false}={}){
   el("weekSummary").innerHTML="";
   el("weekBoard").innerHTML='<div class="planner-load-state">Loading your weekly plan…</div>';
   try{
-    const exercises=await api("/exercises.json?v=7.3.0");
+    const exercises=await api("/exercises.json?v=7.4.0");
     if(!Array.isArray(exercises))throw new Error("STRATA returned an incomplete exercise library.");
     state.exercises=exercises;
     let result;
