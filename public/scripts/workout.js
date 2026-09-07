@@ -175,21 +175,23 @@
     const upcomingDays=[...W.DAYS.slice(currentIndex+1),...W.DAYS.slice(0,currentIndex)];
     const scheduledDay=upcomingDays.find((day)=>(state.plan?.days?.[day]||[]).length);
     const startButton=$("startWorkout"),chooseButton=$("chooseScheduledDay"),plannerLink=$("openPlannerFromEmpty"),brief=$("planBrief"),summary=W.planDaySummary(state.plan,state.day);
+    const activeWorkout=state.workout?.status==="active"?state.workout:state.history.find((item)=>item.status==="active");
+    const activeHint=activeWorkout?`${activeWorkout.title} is already in progress. Resume it from Training history below before starting another session.`:"";
     $("todayLabel").textContent=`${W.localDate()} · ${state.day} plan`;
-    startButton.hidden=!items.length;startButton.disabled=!state.plan||state.blocked;
-    chooseButton.hidden=!!items.length||!scheduledDay;plannerLink.hidden=!!items.length||!!scheduledDay;
+    startButton.hidden=!items.length||!!activeWorkout;startButton.disabled=!state.plan||state.blocked;
+    chooseButton.hidden=!!activeWorkout||!!items.length||!scheduledDay;plannerLink.hidden=!!activeWorkout||!!items.length||!!scheduledDay;
     if(!items.length){
       brief.hidden=true;brief.innerHTML="";
       const recovery=(state.plan?.restDays||[state.plan?.restDay]).includes(state.day);
       $("planPreview").innerHTML=`<div class="empty-state"><strong>${recovery?"Recovery is part of the plan.":"Nothing is scheduled for this day yet."}</strong>${scheduledDay?`${esc(scheduledDay)} has a workout ready. Choose it below, or edit your week in Plan.`:"Add exercises to your week in Plan, then return here to train."}</div>`;
       if(scheduledDay){chooseButton.dataset.day=scheduledDay;chooseButton.innerHTML=`Choose ${esc(scheduledDay)} workout <span aria-hidden="true">→</span>`;}
       else delete chooseButton.dataset.day;
-      $("startHint").textContent=scheduledDay?`Your next scheduled session is ${scheduledDay}.`:"Build a session in Plan, then return here to train.";return;
+      $("startHint").textContent=activeHint||(scheduledDay?`Your next scheduled session is ${scheduledDay}.`:"Build a session in Plan, then return here to train.");return;
     }
     brief.hidden=false;
     brief.innerHTML=`<div><span>Movements</span><strong>${summary.movements}</strong></div><div><span>Working sets</span><strong>${summary.workingSets}</strong></div><div><span>Plan day</span><strong>${esc(summary.day)}</strong></div>`;
     $("planPreview").innerHTML=items.map((item,index)=>{const itemExercise=exercise(item.exerciseId);return `<article class="preview-card"><span class="preview-number">${String(index+1).padStart(2,"0")}</span><strong>${esc(itemExercise.name)}</strong><small>${Number(item.sets)} sets · ${esc(item.reps)}</small>${guideMarkup(itemExercise)}</article>`;}).join("");
-    $("startHint").textContent=`${items.length} exercises · ${items.reduce((count,item)=>count+Number(item.sets),0)} planned sets. This session will be dated today.`;
+    $("startHint").textContent=activeHint||`${items.length} exercises · ${items.reduce((count,item)=>count+Number(item.sets),0)} planned sets. This session will be dated today.`;
   }
   function formatLabel(entry){return `${entry.measurement==="timed"?"Time":"Reps"} · ${entry.loadType==="bodyweight"?"Bodyweight":entry.loadType==="assisted"?"Assistance":"External load"}${entry.loadType!=="bodyweight"?` · ${entry.unit}`:""}`;}
   function option(value,label,current){return `<option value="${value}"${value===current?" selected":""}>${label}</option>`;}
@@ -563,7 +565,7 @@
       const combined=more?[...state.history,...result.workouts]:result.workouts;
       state.history=[...new Map(combined.map((item)=>[item.id,item])).values()].sort((a,b)=>b.startedAt-a.startedAt);
       if(more)mergeMemory(result.workouts);else{state.memoryHistory=result.workouts;state.memoryExhausted=!result.hasMore;state.memoryError="";}
-      state.hasMore=result.hasMore;renderHistory();
+      state.hasMore=result.hasMore;renderPlan();renderHistory();
       if(state.workout){state.memoryReady=memoryReadyFor(state.workout);renderSession();if(!state.memoryReady)void loadWorkoutMemory(state.workout.id);}
     }catch(error){
       if(error.status===401)blockSession();

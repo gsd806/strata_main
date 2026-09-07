@@ -291,7 +291,7 @@ test("training journeys use real browser controls and isolated local fixtures",{
     await page.click("#accountPrimaryAction");await page.locator("#sessionPanel").waitFor({state:"visible"});
     assert.equal(await page.locator("#sessionTitle").evaluate(node=>globalThis.document.activeElement===node),true,"Account’s next action should resume the active session directly");
     let duplicateStarts=0;page.on("request",request=>{if(new URL(request.url()).pathname==="/api/workouts"&&request.method()==="POST")duplicateStarts++;});
-    await page.reload({waitUntil:"domcontentloaded"});const resume=page.locator('#historyList [data-history]').first();await resume.waitFor({state:"visible"});
+    await goto(page,"/workout.html?day=Monday");const resume=page.locator('#historyList [data-history]').first();await resume.waitFor({state:"visible"});
     assert.equal(await page.locator('#recoveryList [data-recover]').count(),0,"A clean saved active session must not also appear as recovery");
     assert.equal(await page.getByRole("button",{name:"Resume",exact:true}).count(),1,"A clean active session has exactly one Resume surface");
     assert.equal(await page.locator("#startWorkout").isHidden(),true,"An active session must not expose a redundant Start action");
@@ -358,8 +358,7 @@ test("training journeys use real browser controls and isolated local fixtures",{
     await page.waitForFunction(()=>globalThis.document.querySelector("#saveStatus")?.dataset.state==="error");
     page.once("dialog",dialog=>dialog.accept());await page.reload({waitUntil:"domcontentloaded"});await page.locator('#recoveryList [data-recover="0"]').waitFor({state:"visible"});
     assert.equal(await page.locator('#historyList [data-history]').count(),0,"A dirty device draft replaces the stale active-history Resume surface");
-    await page.click("#startWorkout");await page.locator("#workoutToast.is-visible").waitFor();
-    assert.equal(await page.locator('#recoveryList [data-recover="0"]').evaluate(node=>globalThis.document.activeElement===node),true,"Duplicate-start guidance must focus the visible recovery action");
+    assert.equal(await page.locator("#startWorkout").isHidden(),true,"An active session with a device recovery must not expose a redundant Start action");
     await page.locator('#recoveryList [data-recover="0"]').click();await page.locator("#sessionPanel").waitFor({state:"visible"});await page.unroute(`**/api/workouts/${first.workout.id}`,blockWorkoutSave);
     assert.equal(await entry.locator('[data-actual="weight"]').inputValue(),"25");assert.equal(await entry.locator('[data-actual="reps"]').inputValue(),"9");assert.equal(await entry.locator('[data-complete="0"]').getAttribute("aria-pressed"),"true");
     const saving=page.waitForResponse(response=>new URL(response.url()).pathname===`/api/workouts/${first.workout.id}`&&response.request().method()==="PUT");await page.click("#saveNow");
