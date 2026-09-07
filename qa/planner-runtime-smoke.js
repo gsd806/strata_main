@@ -300,7 +300,7 @@ function clickSelectDay(day){
   assert.equal(elements.get("sharePlanAccount").hidden,true,"Guest planners must not see account publishing controls");
   assert.equal(elements.get("userName").hidden,true,"Guest planners should not see a misleading account-name link");
   assert.equal(guestCommunityFetches,0,"Guest planners must not request private community management data");
-  assert.match(elements.get("plannerModeNotice").innerHTML,/Guest plan[\s\S]*separate synced account plan/i,"Guest copy must explain that signing in opens a separate plan");
+  assert.match(elements.get("plannerModeNotice").innerHTML,/Free device plan[\s\S]*No account required[\s\S]*stays in this browser[\s\S]*Use a synced plan/i,"Guest copy must distinguish the browser-local free plan from optional account sync");
   assert.doesNotMatch(elements.get("plannerModeNotice").innerHTML,/Sign in for cross-device sync/i);
   guestStorageWrites.length=0;
   vm.runInContext("state.plan.days.Monday.push({instanceId:'guest-save-one',exerciseId:state.exercises[0].id,sets:3,reps:'8–12'});state.revision+=1;",context);

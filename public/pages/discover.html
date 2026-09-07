@@ -16,9 +16,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/experience.css?v=7.2.0" />
-    <link rel="stylesheet" href="discover.css?v=7.2.0" />
-    <script src="/motion.js?v=7.2.0"></script>
+    <link rel="stylesheet" href="/experience.css?v=7.3.0" />
+    <link rel="stylesheet" href="discover.css?v=7.3.0" />
+    <link rel="stylesheet" href="/product-signals.css?v=7.3.0" />
+    <script src="/motion.js?v=7.3.0"></script>
   </head>
   <body class="plus-studio">
     <a class="skip-link" href="#featureHub">Skip to Strata+ tools</a>
@@ -124,6 +125,17 @@
             <div class="movement-board-actions"><p id="movementBoardStatus" role="status" aria-live="polite">Nothing saved yet.</p><div><button class="plain-button" id="clearMovementBoard" type="button" hidden>Clear board</button><button class="button button-dark" id="compareMovementBoard" type="button" disabled>Compare saved <span aria-hidden="true">→</span></button></div></div>
           </section>
           <div class="recommendation-grid" id="recommendationGrid"><div class="loading-card">Building your ranking…</div></div>
+          <aside class="recommendation-feedback" aria-labelledby="recommendationFeedbackTitle">
+            <div><p class="kicker">Recommendation check</p><h3 id="recommendationFeedbackTitle">DID THIS SHORTLIST HELP?</h3><p>Your answer is stored on this device. If you opt in to aggregate sharing, STRATA receives only the answer category as a count—never the exercises shown to you. It does not change FitScore, community ratings, or your profile.</p></div>
+            <div class="feedback-actions" role="group" aria-labelledby="recommendationFeedbackTitle">
+              <button type="button" data-recommendation-feedback="useful" aria-pressed="false">Yes, useful</button>
+              <button type="button" data-recommendation-feedback="not_relevant" aria-pressed="false">Not relevant</button>
+              <button type="button" data-recommendation-feedback="not_clear" aria-pressed="false">Not clear</button>
+              <p class="feedback-status" id="recommendationFeedbackStatus" role="status" aria-live="polite">No answer saved yet.</p>
+              <a href="/privacy#localProductSignals">Manage privacy choices</a>
+            </div>
+          </aside>
+          <div class="signal-consent-host" data-product-signals-consent-host></div>
         </div>
       </section>
 
@@ -259,7 +271,7 @@
 
     </main>
 
-    <footer class="build-footer">STRATA · Build 7.2.0 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
+    <footer class="build-footer">STRATA · Build 7.3.0 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
 
     <aside class="compare-tray" id="compareTray" hidden aria-label="Exercise comparison tray">
       <div><span>EXERCISE BATTLE</span><p id="compareNames">Choose 2–4 exercises</p></div>
@@ -281,9 +293,10 @@
     </dialog>
     <noscript><div class="no-script-note" role="status"><strong>Strata+ needs JavaScript for personalized tools.</strong> The page content remains available, but saving, filtering, comparing, and plan building require JavaScript.</div></noscript>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=7.2.0"></script>
-    <script src="discovery-core.js?v=7.2.0"></script>
-    <script src="monthly-plan-core.js?v=7.2.0"></script>
-    <script src="discover.js?v=7.2.0"></script>
+    <script src="/pwa.js?v=7.3.0"></script>
+    <script src="/product-signals.js?v=7.3.0"></script>
+    <script src="discovery-core.js?v=7.3.0"></script>
+    <script src="monthly-plan-core.js?v=7.3.0"></script>
+    <script src="discover.js?v=7.3.0"></script>
   </body>
 </html>

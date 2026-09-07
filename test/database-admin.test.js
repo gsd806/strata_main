@@ -362,7 +362,7 @@ test("a populated 6.7.5 database receives an additive, idempotent admin migratio
       plans:1,monthly_plans:0,preferences:1,ratings:1,paddle_purchases:1,paddle_adjustments:1,paddle_webhook_events:1,
       support_tickets:0,admin_principal:0,admin_elevations:0,admin_audit_events:0
     });
-    for(const table of ["monthly_plans","support_tickets","support_request_events","admin_principal","admin_elevations","admin_audit_events"])assert.equal(snapshot.tables.has(table),true,`${table} should be created`);
+    for(const table of ["monthly_plans","support_tickets","support_request_events","product_signal_counts","admin_principal","admin_elevations","admin_audit_events"])assert.equal(snapshot.tables.has(table),true,`${table} should be created`);
     assert.deepEqual(snapshot.foreignKeyProblems,[]);
   } finally {
     if(store)await store.close();

@@ -13,6 +13,7 @@ const { createAdminService } = require("./admin");
 const { createWorkoutService } = require("./workouts");
 const { createSetupService } = require("./setup");
 const { createSupportService } = require("./support");
+const { createProductSignalsService } = require("./product-signals");
 const { composeServices } = require("./service-composition");
 const {
   getPaymentConfig,
@@ -112,7 +113,9 @@ const STATIC_FILES = new Map([
   ["refunds.html","pages/refunds.html"],
   ["styles.css","styles/styles.css"],
   ["experience.css","styles/experience.css"],
+  ["product-signals.css","styles/product-signals.css"],
   ["motion.js","scripts/motion.js"],
+  ["product-signals.js","scripts/product-signals.js"],
   ["account.css","styles/account.css"],
   ["planner.css","styles/planner.css"],
   ["discover.css","styles/discover.css"],
@@ -125,6 +128,7 @@ const STATIC_FILES = new Map([
   ["account-recovery.js","scripts/account-recovery.js"],
   ["planner.js","scripts/planner.js"],
   ["discovery-core.js","scripts/discovery-core.js"],
+  ["preview-core.js","scripts/preview-core.js"],
   ["monthly-plan-core.js","scripts/monthly-plan-core.js"],
   ["discover.js","scripts/discover.js"],
   ["install.js","scripts/install.js"],
@@ -176,6 +180,7 @@ let admin;
 let support;
 let workouts;
 let setup;
+let productSignals;
 let paddleIpCache={cidrs:[],expiresAt:0,pending:null};
 
 function escapeHtml(value) { return String(value ?? "").replace(/[&<>'"]/g,(char) => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[char])); }
@@ -653,6 +658,7 @@ async function handlePaddleWebhook(req,res) {
 async function handleApi(req,res,url) {
   if (url.pathname==="/api/paddle/webhook") { await handlePaddleWebhook(req,res); return; }
   if (["POST","PUT","PATCH","DELETE"].includes(req.method) && !sameOrigin(req)) { json(res,403,{error:"Cross-origin request rejected."}); return; }
+  if (await productSignals.handleApi(req,res,url)) return;
   if (await support.handleApi(req,res,url)) return;
   if (await auth.handleApi(req,res,url)) return;
   if (await admin.handleApi(req,res,url)) return;
@@ -1119,6 +1125,7 @@ async function start() {
     reconcileCheckoutCreationBeforeDeletion,reconcileUnsettledPurchases,isUniqueViolation,
     createAuthService,createAdminService,createSupportService
   }));
+  productSignals=createProductSignalsService({store,admin,trustedOrigin:trustedAuthOrigin,requestAddress,rateKeyAllowed,http:{json,bodyJson}});
   workouts=createWorkoutService({store,auth,requireAccess:requireDiscoveryAccess,rateAllowed,http:{json,bodyJson}});
   setup=createSetupService({
     store,auth,requireAccess:requireDiscoveryAccess,trustedOrigin:trustedAuthOrigin,
@@ -1130,12 +1137,14 @@ async function start() {
   await admin.cleanup();
   await auth.cleanup();
   await support.cleanup();
+  await productSignals.cleanup();
   if (ENFORCE_PADDLE_IPS) void currentPaddleIps().catch((error)=>console.error(error.message));
   cleanup=setInterval(() => {
     void store.deleteExpired(Date.now()).catch(console.error);
     void auth.cleanup().catch(console.error);
     void admin.cleanup().catch(console.error);
     void support.cleanup().catch(console.error);
+    void productSignals.cleanup().catch(console.error);
     for (const [key,times] of rateBuckets) if (!times.some((time) => Date.now()-time<15*60*1000)) rateBuckets.delete(key);
   },60*60*1000);
   cleanup.unref();

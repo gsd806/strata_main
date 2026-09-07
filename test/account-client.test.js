@@ -17,7 +17,7 @@ class ClassList{
 
 class Element{
   constructor(id){
-    this.id=id;this.value="";this.textContent="";this.hidden=false;this.disabled=false;
+    this.id=id;this.value="";this.textContent="";this.innerHTML="";this.hidden=false;this.disabled=false;this.href="";this.max=1;
     this.dataset={};this.attributes={};this.listeners={};this.classList=new ClassList();this.values={};this.focused=false;
   }
   addEventListener(type,handler){(this.listeners[type]||=[]).push(handler);}
@@ -43,8 +43,8 @@ function createPage({search="",route}){
   elements.get("signupMessage").hidden=true;
   elements.get("loginMessage").hidden=true;
   elements.get("storageState").statusText=new Element("storageText");
-  const authGrid=new Element("authGrid"),navigations=[],requests=[],replaced=[];
-  const location={search,href:`http://strata.test/account.html${search}`,assign:(path)=>navigations.push(path),replace:(path)=>navigations.push(path)};
+  const authGrid=new Element("authGrid"),navigations=[],requests=[],replaced=[],reloads=[];
+  const location={search,href:`http://strata.test/account.html${search}`,assign:(path)=>navigations.push(path),replace:(path)=>navigations.push(path),reload:()=>reloads.push(true)};
   const document={
     getElementById:(id)=>elements.get(id)||null,
     querySelector:(selector)=>selector===".auth-grid"?authGrid:null
@@ -62,11 +62,33 @@ function createPage({search="",route}){
   context.globalThis=context;
   vm.createContext(context);
   vm.runInContext(script,context,{filename:"account.js"});
-  return {elements,requests,navigations,replaced};
+  return {elements,requests,navigations,replaced,reloads};
 }
 
 async function settle(){
   for(let count=0;count<5;count+=1)await new Promise(setImmediate);
+}
+
+const WEEKDAYS=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+function planFixture(dayCounts={}){
+  return {version:1,restDay:null,restDays:[],days:Object.fromEntries(WEEKDAYS.map((day)=>[day,Array.from({length:dayCounts[day]||0},(_,index)=>({
+    instanceId:`${day.toLowerCase()}-${index}`,exerciseId:index%2?"machine-chest-press":"flat-dumbbell-press",sets:index+2,reps:"8–12"
+  }))]))};
+}
+function memberFixture(overrides={}){
+  return {id:"member-1",name:"Ari Stone",email:"ari@example.test",createdAt:1704067200000,planCount:0,workoutDays:0,isAdmin:false,
+    discovery:{active:true,accessType:"paid",pendingPurchaseCount:0},accountDeletion:{pending:false},...overrides};
+}
+function localKey(date){
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+}
+function thisWeekDate(day){
+  const now=new Date(),todayIndex=(now.getDay()+6)%7,monday=new Date(now.getFullYear(),now.getMonth(),now.getDate()-todayIndex,12);
+  return localKey(new Date(monday.getFullYear(),monday.getMonth(),monday.getDate()+WEEKDAYS.indexOf(day),12));
+}
+function workoutFixture(overrides={}){
+  return {id:"workout-1",title:"Upper strength",planDay:"Monday",date:thisWeekDate("Monday"),status:"completed",startedAt:1,completedAt:2,elapsedSeconds:1800,totalSets:3,completedSets:3,exerciseCount:1,
+    exerciseSummaries:[{exerciseId:"flat-dumbbell-press",measurement:"reps",loadType:"external",unit:"kg",completedSets:3,totalReps:24,maxReps:8,maxWeight:20,volume:480,totalSeconds:0,maxSeconds:null}],revision:1,updatedAt:2,...overrides};
 }
 
 test("native forms remain available without the JavaScript enhancement",()=>{
@@ -176,32 +198,36 @@ test("signed-in dashboard distinguishes access and plan states with a useful nex
     {
       name:"paid account with a populated week",planCount:6,workoutDays:3,
       discovery:{active:true,accessType:"paid",pendingPurchaseCount:0},
-      access:"Unlocked",detail:/one-time access confirmed/i,primary:"Start training",href:"/workout.html",discoveryAction:"Open Strata+ studio →"
+      access:"Unlocked",detail:/one-time access confirmed/i,primary:"Open next workout",href:/^\/workout\.html\?day=/,discoveryAction:"Open Strata+ studio →"
     },
     {
       name:"trial account without a week",planCount:0,workoutDays:0,
       discovery:{active:true,accessType:"trial",pendingPurchaseCount:0,trial:{expiresAt:Date.now()+3*86400000}},
-      access:"Trial",detail:/3 days remaining/i,primary:"Build your week",href:"/onboarding.html",discoveryAction:"Open Strata+ studio →"
+      access:"Trial",detail:/3 days remaining/i,primary:"Build your week",href:/^\/onboarding\.html$/,discoveryAction:"Open Strata+ studio →"
     },
     {
       name:"pending purchase without a week",planCount:0,workoutDays:0,
       discovery:{active:false,accessType:null,pendingPurchaseCount:1},
-      access:"Pending",detail:/checkout needs attention/i,primary:"Build your week",href:"/planner.html",discoveryAction:"Check Strata+ purchase →"
+      access:"Pending",detail:/checkout needs attention/i,primary:"Build your week",href:/^\/planner\.html$/,discoveryAction:"Check Strata+ purchase →"
     },
     {
       name:"free account with a populated week",planCount:2,workoutDays:2,
       discovery:{active:false,accessType:null,pendingPurchaseCount:0},
-      access:"Free",detail:/rankings and plan included/i,primary:"Open your week",href:"/planner.html",discoveryAction:"Unlock Strata+ →"
+      access:"Free",detail:/rankings and plan included/i,primary:"Open your week",href:/^\/planner\.html$/,discoveryAction:"Unlock Strata+ →"
     }
   ];
   for(const [index,fixture] of cases.entries()){
+    const dayCounts=fixture.planCount===6?{Monday:2,Wednesday:2,Friday:2}:fixture.planCount===2?{Tuesday:1,Thursday:1}:{};
+    const user={
+      id:`member-${index}`,name:"Ari",email:"ari@example.test",createdAt:1704067200000,
+      planCount:fixture.planCount,workoutDays:fixture.workoutDays,isAdmin:false,discovery:fixture.discovery,accountDeletion:{pending:false}
+    };
     const page=createPage({route:async(path)=>{
       if(path==="/api/status")return jsonResponse(200,{persistent:true});
       if(path==="/healthz")return jsonResponse(200,{ok:true});
-      if(path==="/api/me")return jsonResponse(200,{csrfToken:"csrf-test",user:{
-        id:`member-${index}`,name:"Ari",email:"ari@example.test",createdAt:1704067200000,
-        planCount:fixture.planCount,workoutDays:fixture.workoutDays,isAdmin:false,discovery:fixture.discovery,accountDeletion:{pending:false}
-      }});
+      if(path==="/api/me")return jsonResponse(200,{csrfToken:"csrf-test",user});
+      if(path==="/api/plan")return jsonResponse(200,{csrfToken:"csrf-test",user,plan:planFixture(dayCounts),planUpdatedAt:10});
+      if(path==="/api/workouts?limit=100&offset=0")return jsonResponse(200,{workouts:[],hasMore:false,csrfToken:"csrf-test"});
       throw new Error(`Unexpected route ${path}`);
     }});
     await settle();
@@ -213,9 +239,145 @@ test("signed-in dashboard distinguishes access and plan states with a useful nex
     assert.match(page.elements.get("accountAccessDetail").textContent,fixture.detail,fixture.name);
     assert.match(page.elements.get("accountMemberSince").textContent,/2024/,fixture.name);
     assert.equal(page.elements.get("accountPrimaryLabel").textContent,fixture.primary,fixture.name);
-    assert.equal(page.elements.get("accountPrimaryAction").href,fixture.href,fixture.name);
+    assert.match(page.elements.get("accountPrimaryAction").href,fixture.href,fixture.name);
     assert.equal(page.elements.get("accountDiscoveryAction").textContent,fixture.discoveryAction,fixture.name);
   }
+});
+
+test("returning dashboard prioritizes an in-progress workout as the single next action",async()=>{
+  const user=memberFixture({planCount:2,workoutDays:1}),plan=planFixture({Monday:2});
+  const page=createPage({route:async(path)=>{
+    if(path==="/api/status")return jsonResponse(200,{persistent:true});
+    if(path==="/healthz")return jsonResponse(200,{ok:true});
+    if(path==="/api/me")return jsonResponse(200,{csrfToken:"csrf",user});
+    if(path==="/api/plan")return jsonResponse(200,{csrfToken:"csrf",user,plan,planUpdatedAt:11});
+    if(path==="/api/workouts?limit=100&offset=0")return jsonResponse(200,{csrfToken:"csrf",hasMore:false,workouts:[workoutFixture({status:"active",completedAt:null,title:"Monday upper",completedSets:1,totalSets:5})]});
+    throw new Error(`Unexpected route ${path}`);
+  }});
+  await settle();
+  assert.equal(page.elements.get("accountPrimaryLabel").textContent,"Continue workout");
+  assert.equal(page.elements.get("accountPrimaryAction").href,"/workout.html#resume=workout-1");
+  assert.equal(page.elements.get("accountNextEyebrow").textContent,"Workout in progress");
+  assert.equal(page.elements.get("accountNextTitle").textContent,"MONDAY UPPER");
+  assert.match(page.elements.get("accountNextDetail").textContent,/1 of 5 sets completed/i);
+  assert.equal(page.elements.get("accountAdaptationTitle").textContent,"FINISH THE OPEN SESSION.");
+});
+
+test("weekly progress and recent bests use only comparable saved workout summaries",async()=>{
+  const todayIndex=(new Date().getDay()+6)%7,today=WEEKDAYS[todayIndex],next=WEEKDAYS[(todayIndex+1)%7];
+  const user=memberFixture({planCount:2,workoutDays:2}),plan=planFixture({[today]:1,[next]:1});
+  const older=workoutFixture({id:"older",planDay:today,date:thisWeekDate(today),startedAt:100,maxWeight:undefined});
+  const latest=workoutFixture({id:"latest",planDay:today,date:thisWeekDate(today),startedAt:200,title:"Today strength",completedSets:4,totalSets:4,
+    exerciseSummaries:[{exerciseId:"flat-dumbbell-press",measurement:"reps",loadType:"external",unit:"kg",completedSets:4,totalReps:32,maxReps:8,maxWeight:30,volume:960,totalSeconds:0,maxSeconds:null},
+      {exerciseId:"assisted-pull-up",measurement:"reps",loadType:"assisted",unit:"kg",completedSets:3,totalReps:24,maxReps:10,maxWeight:null,volume:0,totalSeconds:0,maxSeconds:null}]});
+  const page=createPage({route:async(path)=>{
+    if(path==="/api/status")return jsonResponse(200,{persistent:true});
+    if(path==="/healthz")return jsonResponse(200,{ok:true});
+    if(path==="/api/me")return jsonResponse(200,{csrfToken:"csrf",user});
+    if(path==="/api/plan")return jsonResponse(200,{csrfToken:"csrf",user,plan,planUpdatedAt:12});
+    if(path==="/api/workouts?limit=100&offset=0")return jsonResponse(200,{csrfToken:"csrf",hasMore:false,workouts:[latest,older]});
+    throw new Error(`Unexpected route ${path}`);
+  }});
+  await settle();
+  assert.equal(page.elements.get("accountWeekProgress").hidden,false);
+  assert.equal(page.elements.get("accountWeekProgress").value,1);
+  assert.equal(page.elements.get("accountWeekProgress").max,2);
+  assert.equal(page.elements.get("accountWeekScore").textContent,"1/2");
+  assert.match(page.elements.get("accountWeekDetail").textContent,/2 saved sessions and 7 completed sets/i);
+  assert.match(page.elements.get("accountWeekDays").innerHTML,/class="complete today"/);
+  assert.equal(page.elements.get("accountNextTitle").textContent,`${next} WORKOUT`);
+  assert.match(page.elements.get("accountWinsList").innerHTML,/Session complete/);
+  assert.match(page.elements.get("accountWinsList").innerHTML,/Flat Dumbbell Press/);
+  assert.match(page.elements.get("accountWinsList").innerHTML,/Saved-history best · Top load 30 kg/);
+  assert.doesNotMatch(page.elements.get("accountWinsList").innerHTML,/Assisted Pull Up/);
+  assert.equal(page.elements.get("accountAdaptationTitle").textContent,"PROGRESS IS MOVING.");
+});
+
+test("partial history labels comparisons as recent rather than all-time records",async()=>{
+  const user=memberFixture({planCount:1,workoutDays:1}),plan=planFixture({Monday:1});
+  const page=createPage({route:async(path)=>{
+    if(path==="/api/status")return jsonResponse(200,{persistent:true});
+    if(path==="/healthz")return jsonResponse(200,{ok:true});
+    if(path==="/api/me")return jsonResponse(200,{csrfToken:"csrf",user});
+    if(path==="/api/plan")return jsonResponse(200,{csrfToken:"csrf",user,plan});
+    if(path==="/api/workouts?limit=100&offset=0")return jsonResponse(200,{csrfToken:"csrf",hasMore:true,workouts:[workoutFixture({id:"newest",startedAt:30,title:'<img src=x onerror="alert(1)">',exerciseSummaries:[{exerciseId:"flat-dumbbell-press",measurement:"reps",loadType:"external",unit:"kg",completedSets:1,maxWeight:30}]}),workoutFixture({id:"middle",startedAt:20,exerciseSummaries:[{exerciseId:"flat-dumbbell-press",measurement:"reps",loadType:"external",unit:"kg",completedSets:1,maxWeight:25}]}),workoutFixture({id:"old",startedAt:10,exerciseSummaries:[{exerciseId:"flat-dumbbell-press",measurement:"reps",loadType:"external",unit:"kg",completedSets:1,maxWeight:20}]})]});
+    throw new Error(`Unexpected route ${path}`);
+  }});
+  await settle();
+  assert.match(page.elements.get("accountWinsList").innerHTML,/Recent-history best/);
+  assert.doesNotMatch(page.elements.get("accountWinsList").innerHTML,/Saved-history best/);
+  assert.match(page.elements.get("accountWinsList").innerHTML,/Top load 30 kg/);
+  assert.doesNotMatch(page.elements.get("accountWinsList").innerHTML,/Top load 25 kg/);
+  assert.match(page.elements.get("accountWinsList").innerHTML,/&lt;img src=x onerror=&quot;alert\(1\)&quot;&gt;/);
+  assert.doesNotMatch(page.elements.get("accountWinsList").innerHTML,/<img/);
+});
+
+test("free and temporarily unavailable dashboards never invent completion progress",async()=>{
+  const freeUser=memberFixture({planCount:2,workoutDays:2,discovery:{active:false,accessType:null,pendingPurchaseCount:0}}),plan=planFixture({Tuesday:1,Thursday:1});
+  const free=createPage({route:async(path)=>{
+    if(path==="/api/status")return jsonResponse(200,{persistent:true});
+    if(path==="/healthz")return jsonResponse(200,{ok:true});
+    if(path==="/api/me")return jsonResponse(200,{csrfToken:"csrf",user:freeUser});
+    if(path==="/api/plan")return jsonResponse(200,{csrfToken:"csrf",user:freeUser,plan});
+    throw new Error(`Unexpected route ${path}`);
+  }});
+  await settle();
+  assert.equal(free.requests.some(({path})=>path.startsWith("/api/workouts")),false);
+  assert.equal(free.elements.get("accountWeekProgress").hidden,true);
+  assert.equal(free.elements.get("accountWeekScore").textContent,"2 days");
+  assert.match(free.elements.get("accountWeekDetail").textContent,/weekly structure is ready/i);
+  assert.match(free.elements.get("accountAdaptationDetail").textContent,/No training adaptation is claimed/i);
+
+  const paidUser=memberFixture({planCount:2,workoutDays:2});
+  const historyUnavailable=createPage({route:async(path)=>{
+    if(path==="/api/status")return jsonResponse(200,{persistent:true});
+    if(path==="/healthz")return jsonResponse(200,{ok:true});
+    if(path==="/api/me")return jsonResponse(200,{csrfToken:"csrf",user:paidUser});
+    if(path==="/api/plan")return jsonResponse(200,{csrfToken:"csrf",user:paidUser,plan});
+    if(path==="/api/workouts?limit=100&offset=0")throw new Error("offline");
+    throw new Error(`Unexpected route ${path}`);
+  }});
+  await settle();
+  assert.equal(historyUnavailable.elements.get("accountWeekProgress").hidden,true);
+  assert.match(historyUnavailable.elements.get("accountWeekDetail").textContent,/could not be loaded/i);
+  assert.match(historyUnavailable.elements.get("accountWinsEmpty").textContent,/Nothing was changed/i);
+  assert.equal(historyUnavailable.elements.get("accountPrimaryLabel").textContent,"Open next workout");
+});
+
+test("dashboard refuses to combine plan or workout data across account changes",async()=>{
+  const original=memberFixture({id:"original",planCount:1,workoutDays:1}),changed=memberFixture({id:"changed",planCount:1,workoutDays:1});
+  const page=createPage({route:async(path)=>{
+    if(path==="/api/status")return jsonResponse(200,{persistent:true});
+    if(path==="/healthz")return jsonResponse(200,{ok:true});
+    if(path==="/api/me")return jsonResponse(200,{csrfToken:"csrf",user:original});
+    if(path==="/api/plan")return jsonResponse(200,{csrfToken:"new-csrf",user:changed,plan:planFixture({Monday:1})});
+    throw new Error(`Unexpected route ${path}`);
+  }});
+  await settle();
+  assert.equal(page.requests.some(({path})=>path.startsWith("/api/workouts")),false);
+  assert.equal(page.elements.get("signedInCard").hidden,true);
+  assert.equal(page.elements.get("accountLoading").hidden,false);
+  assert.equal(page.elements.get("accountLoadingTitle").textContent,"ACCOUNT CHANGED.");
+  assert.equal(page.elements.get("accountReload").hidden,false);
+  await page.elements.get("accountReload").emit("click");
+  assert.equal(page.reloads.length,1);
+});
+
+test("dashboard rechecks identity after workout history before combining private account data",async()=>{
+  const original=memberFixture({id:"original",planCount:1,workoutDays:1}),changed=memberFixture({id:"changed",planCount:1,workoutDays:1});let identityReads=0;
+  const page=createPage({route:async(path)=>{
+    if(path==="/api/status")return jsonResponse(200,{persistent:true});
+    if(path==="/healthz")return jsonResponse(200,{ok:true});
+    if(path==="/api/me"){identityReads+=1;return jsonResponse(200,identityReads===1?{csrfToken:"original-csrf",user:original}:{csrfToken:"changed-csrf",user:changed});}
+    if(path==="/api/plan")return jsonResponse(200,{csrfToken:"original-csrf",user:original,plan:planFixture({Monday:1})});
+    if(path==="/api/workouts?limit=100&offset=0")return jsonResponse(200,{csrfToken:"changed-csrf",hasMore:false,workouts:[workoutFixture({title:"CHANGED ACCOUNT PRIVATE TITLE"})]});
+    throw new Error(`Unexpected route ${path}`);
+  }});
+  await settle();
+  assert.equal(identityReads,2);
+  assert.equal(page.elements.get("signedInCard").hidden,true);
+  assert.equal(page.elements.get("accountLoadingTitle").textContent,"ACCOUNT CHANGED.");
+  assert.doesNotMatch(page.elements.get("accountWinsList").innerHTML,/CHANGED ACCOUNT PRIVATE TITLE/);
 });
 
 test("enhanced signup reports an inline error, recovers, and retries",async()=>{

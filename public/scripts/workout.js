@@ -4,6 +4,7 @@
   const $=(id)=>document.getElementById(id);
   const esc=(value)=>String(value??"").replace(/[&<>"']/g,(character)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[character]));
   const number=(value)=>Number(value||0).toLocaleString(undefined,{maximumFractionDigits:2});
+  const signal=name=>globalThis.StrataSignals?.record?.(name);
   const PREFERENCE_KEY="strata_workout_preferences_v1",REST_DURATIONS=[30,60,90,120,180,300];
   const state={mode:"",user:null,ownerId:"",contextId:W.id(),csrfToken:"",catalog:[],plan:null,day:W.dayFromSearch(location.search),workout:null,dirty:false,sequence:0,saving:null,saveTimer:null,blocked:false,conflict:null,pausedSeconds:null,timerAnnounced:false,draftKey:"",recoveries:[],history:[],offset:0,hasMore:false,historyBusy:false,detailBusy:false,loading:false,toastTimer:null};
   function toast(message){
@@ -61,7 +62,7 @@
   function blockAccess(){
     state.blocked=true;clearTimeout(state.saveTimer);persistDraft();
     $("trainingRoom").hidden=true;$("historySection").hidden=true;$("recoveryPanel").hidden=true;$("conflictPanel").hidden=true;$("accessPanel").hidden=false;
-    $("modeNotice").textContent="Your Strata+ access ended. Saved sessions and device drafts are kept for when access resumes.";
+    $("modeNotice").textContent="Strata+ access ended. Saved sessions and device drafts are kept; your free Plan is unchanged.";
     if($("detailDialog").open)$("detailDialog").close();if($("finishDialog").open)$("finishDialog").close();
   }
   async function assertIdentity(){
@@ -160,7 +161,7 @@
     if(!items.length){
       brief.hidden=true;brief.innerHTML="";
       const recovery=(state.plan?.restDays||[state.plan?.restDay]).includes(state.day);
-      $("planPreview").innerHTML=`<div class="empty-state"><strong>${recovery?"Recovery is part of the plan.":"Nothing is scheduled for this day yet."}</strong>${scheduledDay?`${esc(scheduledDay)} has a workout ready. Choose it below, or edit your week in Plan.`:"Add exercises in Plan to make your first workout available."}</div>`;
+      $("planPreview").innerHTML=`<div class="empty-state"><strong>${recovery?"Recovery is part of the plan.":"Nothing is scheduled for this day yet."}</strong>${scheduledDay?`${esc(scheduledDay)} has a workout ready. Choose it below, or edit your week in Plan.`:"Add exercises to your week in Plan, then return here to train."}</div>`;
       if(scheduledDay){chooseButton.dataset.day=scheduledDay;chooseButton.innerHTML=`Choose ${esc(scheduledDay)} workout <span aria-hidden="true">→</span>`;}
       else delete chooseButton.dataset.day;
       $("startHint").textContent=scheduledDay?`Your next scheduled session is ${scheduledDay}.`:"Build a session in Plan, then return here to train.";return;
@@ -382,6 +383,17 @@
     }catch(error){toast(saveError(error));}
     finally{state.detailBusy=false;}
   }
+  async function openRequestedWorkout(){
+    const prefix="#resume=";
+    if(!location.hash.startsWith(prefix))return false;
+    let requested="";try{requested=decodeURIComponent(location.hash.slice(prefix.length));}catch{return false;}
+    const recoveryIndex=state.recoveries.findIndex((record)=>record.dirty&&record.workout.id===requested);
+    const clearRequest=()=>{const url=new URL(location.href);url.hash="";history.replaceState(null,"",url);};
+    if(recoveryIndex>=0){await recover(recoveryIndex);clearRequest();return true;}
+    const active=state.history.find((item)=>item.id===requested&&item.status==="active");
+    if(!active)return false;
+    await openDetail(active.id);clearRequest();return true;
+  }
   async function initialize(){
     if(state.loading)return;
     if(state.blocked){location.reload();return;}
@@ -389,7 +401,7 @@
     try{
       const identity=await api("/api/me");
       if(!identity.user?.id)throw new Error("Sign in to Strata+ to open your workout room.");
-      if(identity.user.discovery?.active!==true){$("accessPanel").hidden=false;$("modeNotice").textContent="Workout logging and history are included in Strata+.";return;}
+      if(identity.user.discovery?.active!==true){$("accessPanel").hidden=false;$("modeNotice").textContent="Guided workouts, set logging, and history are Strata+ features. Your free Plan is unchanged.";return;}
       state.mode="account";state.user=identity.user;state.csrfToken=String(identity.csrfToken||"");state.ownerId=owner();
       const catalog=await fetch("/exercises.json",{credentials:"same-origin"});
       if(!catalog.ok)throw new Error("The exercise library could not be loaded.");
@@ -398,9 +410,10 @@
       if(String(planResult.user?.id)!==String(state.user.id)){blockSession();return;}
       state.plan=planResult.plan;
       if(!state.plan?.days)throw new Error("Your account plan could not be loaded. Retry to continue.");
-      $("modeNotice").innerHTML=`<strong>${esc(state.user.name||"Your account")}’s Strata+ workout room.</strong> Sessions sync to your account. Unsaved recovery drafts may remain in this browser. <a href='/account.html'>Account settings</a>`;
+      $("modeNotice").innerHTML=`<strong>Strata+ · ${esc(state.user.name||"Your account")}.</strong> Saved sessions sync across devices; unfinished drafts stay in this browser. <a href='/account.html'>Account</a>`;
       $("trainingRoom").hidden=false;$("historySection").hidden=false;renderPlan();scanDrafts();await loadHistory();
-      if(location.hash==="#historySection"&&!state.blocked){$("historySection").scrollIntoView({block:"start"});$("historyTitle").focus();}
+      const resumed=!state.blocked&&await openRequestedWorkout();
+      if(!resumed&&location.hash==="#historySection"&&!state.blocked){$("historySection").scrollIntoView({block:"start"});$("historyTitle").focus();}
     }catch(error){
       $("loadError").hidden=false;$("loadErrorMessage").textContent=saveError(error);
       $("modeNotice").textContent="The workout room could not load. Your saved sessions and device drafts have been kept.";
@@ -435,7 +448,7 @@
       }
       return;
     }
-    try{selectWorkout(W.createWorkout(state.plan,state.day,state.catalog),{dirty:true});markDirty();$("sessionPanel").scrollIntoView({block:"start"});}
+    try{selectWorkout(W.createWorkout(state.plan,state.day,state.catalog),{dirty:true});markDirty();signal("workout_started");$("sessionPanel").scrollIntoView({block:"start"});}
     catch(error){toast(error.message);}
   });
   $("sessionEntries").addEventListener("input",(event)=>{
@@ -495,7 +508,7 @@
   $("finishDialog").addEventListener("close",()=>{
     if($("finishDialog").returnValue!=="finish"||state.blocked||state.conflict||!state.workout)return;
     state.workout.status="completed";state.workout.completedAt=Date.now();state.workout.elapsedSeconds=Math.min(604800,Math.max(0,Math.floor((state.workout.completedAt-state.workout.startedAt)/1000)));state.workout.restEndsAt=null;state.pausedSeconds=null;
-    markDirty({save:false});renderSession();void flushSave();
+    markDirty({save:false});renderSession();signal("workout_completed");void flushSave();
   });
   $("anotherSession").addEventListener("click",()=>{
     if(state.dirty||state.saving)return;

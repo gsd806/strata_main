@@ -32,6 +32,8 @@ The application is intentionally server-rendered and framework-light. Public HTM
 | `src/admin.js` | Primary-owner binding, admin identity and elevation, session rotation, permission gates, account actions, redacted admin payloads, and audit helpers/routes. |
 | `src/support.js` | Public support validation and durable rate reservations, acknowledgment/notification delivery, admin support workflow and responses, safe payload shaping, and retention cleanup. |
 | `src/setup.js` | Authenticated weekly setup boundary that validates matching plan/preferences revisions and commits them atomically. |
+| `src/product-signals.js` | Anonymous allowlisted product-event intake, transient abuse limiting, UTC-day aggregation, retention, and elevated owner readout. |
+| `src/product-signals-schema.js` | Isolated aggregate-count table and statements shared by the two storage adapters. |
 | `src/database.js` | Local SQLite and remote Turso implementations of the same application store contract. |
 | `src/store-contract.js` | Explicit method allowlist checked when either store is created; missing and extra methods fail fast. |
 | `src/schema.js` | Shared schema and parameterized statements used to keep both adapters behaviorally aligned. |
@@ -39,7 +41,7 @@ The application is intentionally server-rendered and framework-light. Public HTM
 | `src/email.js` | Browser-safe email configuration plus privately retained Resend credentials, HMAC digests, address masking, and transactional message delivery. |
 | `src/payments.js` | Browser-safe Paddle configuration, privately retained server credentials, checkout creation/reconciliation, signature verification, catalog validation, and adjustment interpretation. |
 | `src/plans.js` | Plan/preferences/community/monthly validation and sanitization shared by routes and storage. |
-| `public/scripts/` | Progressive browser behavior. The pure discovery and monthly-plan cores are also exercised directly by Node tests. |
+| `public/scripts/` | Progressive browser behavior. Discovery, monthly-plan, workout, onboarding, and guest-preview cores are also exercised directly by Node tests. `product-signals.js` owns the reviewable local summary and credential-free aggregate-event transport. |
 | `public/service-worker.js` | Explicit public precache, network-first navigation, public offline fallbacks, and versioned cache cleanup. |
 
 Factories receive their dependencies explicitly instead of importing a global server object. That keeps authentication, administration, and support behavior testable at their boundaries and prevents the HTTP composition root from regaining all domain logic.
@@ -48,7 +50,7 @@ Factories receive their dependencies explicitly instead of importing a global se
 
 1. The Node server parses the URL and applies shared request constraints.
 2. Authentication form routes and auth JSON routes are offered to the auth service.
-3. Admin, support, and atomic training-setup routes are offered to their services. Each service returns whether it handled the request.
+3. Product-signal, admin, support, and atomic training-setup routes are offered to their services. Each service returns whether it handled the request.
 4. Remaining application APIs, plans, discovery data, ratings, and payment routes are handled by the composition root and their focused helpers.
 5. Static requests are resolved through the explicit URL-to-file map. Unknown paths receive a controlled `404`; user input is never joined directly to the filesystem.
 6. Response helpers attach security and cache headers. Account and API responses use `no-store`; public versioned assets may use public caching.
@@ -74,6 +76,14 @@ Elevation rotates the session rather than upgrading a token in place. The primar
 ### Public support boundary
 
 Anonymous support is intentionally narrow. Input is length-limited and rejects secret- or payment-card-shaped content before persistence. Quotas are durably reserved so restarting the process does not reset abuse protection. Notification email contains a reference rather than copying the complete private message outside the help desk.
+
+### Anonymous product-signal boundary
+
+Product measurement is optional and deliberately separate from account analytics. The browser accepts only named milestones from a fixed allowlist, keeps a user-reviewable local count summary, discards arbitrary event detail, honors Global Privacy Control and Do Not Track, and exposes disable and clear controls. Its aggregate POST uses `credentials: "omit"`, a same-origin URL, and a one-field JSON body. It never needs a session or CSRF token because it cannot mutate account state.
+
+The server independently requires a trusted same-origin request, JSON content, exactly one allowlisted event name, and bounded network/global rates. It HMACs the request address with a process-random salt only to form an in-memory rate-limit key; neither the address nor hash reaches storage. The accepted event increments one row keyed by UTC day and event name. There are no raw event, visitor, account, session, URL, exercise, recommendation, plan, or workout rows. Counts expire after 90 days.
+
+The read route uses the existing elevated-owner boundary. Its response labels totals as aggregate action counts: repeated actions increment the count, unique people and connected journeys cannot be derived, and the numbers must not be represented as conversion rates. Account deletion has no signal row to remove because the aggregate table has no account relationship.
 
 ### Server to storage
 
@@ -110,6 +120,8 @@ Parity tests should compare observable results rather than private implementatio
 - checkout claims, ordered transaction state, webhook replay records, and adjustments; and
 - cleanup and cascade behavior.
 
+The product-signal table is an intentional exception to user-owned application records: both adapters expose only daily increment, bounded-range count read, and retention delete operations. Its primary key is the actual lookup and update pattern; no speculative secondary index or raw-event table exists.
+
 Add an index only for a demonstrated high-frequency lookup, join, ordering, or cleanup pattern. Keep its definition shared and cover it through behavior/query-plan evidence; speculative indexes slow writes and make adapter parity harder to maintain.
 
 ## Paddle lifecycle
@@ -134,7 +146,7 @@ Password-reset and account-deletion links put the random bearer value in the URL
 
 The manifest supplies the full-scope install metadata, icons, theme, and shortcuts. `public/scripts/pwa.js` registers the worker with `updateViaCache: "none"` and owns the deferred browser install prompt.
 
-The worker cache name includes the application build. Install precaches one literal allowlist; activate deletes older caches with the STRATA prefix while preserving unrelated origin caches, then claims clients. Successful same-origin GETs enter runtime caching only when their complete URL—including an expected build query—is in the public asset allowlist. Unexpected query variants cannot create unbounded cache entries.
+The worker cache name includes the application build. Install precaches one literal allowlist; activate deletes older caches with the STRATA prefix while preserving unrelated origin caches, then claims clients. Successful same-origin GETs enter runtime caching only when their complete URL—including an expected build query—is in the public asset allowlist. Unexpected query variants cannot create unbounded cache entries. The public product-signal script and styles may be cached like other versioned interface assets, while `/api/product-signals` remains network-only under the complete `/api/` exclusion.
 
 Navigation is network-first. When offline, only designated public information/planner pages may use their matching cached HTML; all other navigation falls back to the generic offline page. Paddle transaction-return URLs never use cached pricing. API/auth/health paths, private HTML, cross-origin requests, non-GET requests, and unlisted assets are never intercepted.
 

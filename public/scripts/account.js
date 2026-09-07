@@ -15,6 +15,8 @@ const authFields={
 };
 let navigating=false;
 let currentCsrfToken="";
+let dashboardRequest=0;
+const WEEKDAYS=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 
 function safeNext(raw,exerciseId){
   const addIsSafe=Boolean(exerciseId&&/^[a-z0-9-]{2,80}$/.test(exerciseId));
@@ -166,6 +168,7 @@ function showRequestedPanel(){
 }
 
 function showAccess(sessionError=""){
+  dashboardRequest+=1;
   document.body?.classList.remove("account-signed-in");
   currentCsrfToken="";
   el("accountLoading").hidden=true;
@@ -178,13 +181,259 @@ function showAccess(sessionError=""){
   else showRequestedPanel();
 }
 
+function escapeHtml(value){
+  return String(value??"").replace(/[&<>"']/g,(character)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[character]);
+}
+
+function localDateKey(date){
+  const year=date.getFullYear(),month=String(date.getMonth()+1).padStart(2,"0"),day=String(date.getDate()).padStart(2,"0");
+  return `${year}-${month}-${day}`;
+}
+
+function localNoon(date,offset=0){
+  return new Date(date.getFullYear(),date.getMonth(),date.getDate()+offset,12);
+}
+
+function weekContext(now=new Date()){
+  const today=localNoon(now),todayIndex=(today.getDay()+6)%7,monday=localNoon(today,-todayIndex);
+  const dates=WEEKDAYS.map((day,index)=>({day,date:localNoon(monday,index)}));
+  return {today,todayIndex,monday,dates,dateKeys:new Set(dates.map(({date})=>localDateKey(date)))};
+}
+
+function readableDate(value){
+  if(typeof value!=="string"||!/^\d{4}-\d{2}-\d{2}$/.test(value))return "Saved session";
+  const date=new Date(`${value}T12:00:00`);
+  return Number.isNaN(date.getTime())?"Saved session":new Intl.DateTimeFormat(undefined,{month:"short",day:"numeric"}).format(date);
+}
+
+function readableExerciseId(value){
+  const words=String(value||"").split(/[-_]+/).filter(Boolean).slice(0,8);
+  return words.length?words.map((word)=>word.charAt(0).toUpperCase()+word.slice(1)).join(" "):"Repeat movement";
+}
+
+function validPlan(value){
+  if(!value||typeof value!=="object"||!value.days||typeof value.days!=="object")return null;
+  if(!WEEKDAYS.every((day)=>Array.isArray(value.days[day])))return null;
+  return value;
+}
+
+function planSummary(plan){
+  const scheduled=WEEKDAYS.filter((day)=>plan.days[day].length>0);
+  const movements=scheduled.reduce((total,day)=>total+plan.days[day].length,0);
+  return {scheduled,movements};
+}
+
+function completedThisWeek(workouts,week){
+  return workouts.filter((workout)=>workout?.status==="completed"&&week.dateKeys.has(String(workout.date||"")));
+}
+
+function nextPlannedDay(plan,completedDays,week){
+  for(let offset=0;offset<14;offset+=1){
+    const index=(week.todayIndex+offset)%WEEKDAYS.length,day=WEEKDAYS[index],items=plan.days[day];
+    if(items.length&&(offset>=7||!completedDays.has(day)))return {day,items,offset,date:localNoon(week.today,offset)};
+  }
+  return null;
+}
+
+function formatDuration(seconds){
+  const safe=Math.max(0,Math.round(Number(seconds)||0));
+  if(safe<60)return `${safe} sec`;
+  const minutes=Math.floor(safe/60),remaining=safe%60;
+  return remaining?`${minutes}m ${remaining}s`:`${minutes} min`;
+}
+
+function recordMetric(summary){
+  if(!summary||Number(summary.completedSets)<=0||summary.loadType==="assisted")return null;
+  if(summary.measurement==="timed"&&Number.isFinite(Number(summary.maxSeconds))&&Number(summary.maxSeconds)>0){
+    return {key:"time",value:Number(summary.maxSeconds),label:"Longest set",formatted:formatDuration(summary.maxSeconds)};
+  }
+  if(summary.loadType==="external"&&Number.isFinite(Number(summary.maxWeight))&&Number(summary.maxWeight)>0){
+    const unit=summary.unit==="lb"?"lb":"kg";
+    return {key:`load:${unit}`,value:Number(summary.maxWeight),label:"Top load",formatted:`${Number(summary.maxWeight).toLocaleString()} ${unit}`};
+  }
+  if(summary.loadType==="bodyweight"&&Number.isFinite(Number(summary.maxReps))&&Number(summary.maxReps)>0){
+    return {key:"reps",value:Number(summary.maxReps),label:"Most reps in a set",formatted:`${Number(summary.maxReps).toLocaleString()} reps`};
+  }
+  return null;
+}
+
+function recentRecords(workouts,hasMore){
+  const completed=workouts.filter((workout)=>workout?.status==="completed").sort((a,b)=>Number(a.startedAt||0)-Number(b.startedAt||0));
+  const previous=new Map(),records=[];
+  for(const workout of completed){
+    for(const summary of Array.isArray(workout.exerciseSummaries)?workout.exerciseSummaries:[]){
+      const metric=recordMetric(summary);if(!metric)continue;
+      const comparisonKey=`${String(summary.exerciseId||"")}:${String(summary.measurement||"")}:${String(summary.loadType||"")}:${metric.key}`;
+      const earlier=previous.get(comparisonKey);
+      if(Number.isFinite(earlier)&&metric.value>earlier)records.push({
+        comparisonKey,exercise:readableExerciseId(summary.exerciseId),label:metric.label,value:metric.formatted,date:String(workout.date||""),startedAt:Number(workout.startedAt||0),scope:hasMore?"Recent-history best":"Saved-history best"
+      });
+      if(!Number.isFinite(earlier)||metric.value>earlier)previous.set(comparisonKey,metric.value);
+    }
+  }
+  const latestByMetric=new Map();
+  for(const record of records.sort((a,b)=>b.startedAt-a.startedAt))if(!latestByMetric.has(record.comparisonKey))latestByMetric.set(record.comparisonKey,record);
+  return [...latestByMetric.values()].slice(0,2);
+}
+
+function renderWeekRail(plan,completedDays,week,{completionKnown}){
+  el("accountWeekDays").innerHTML=WEEKDAYS.map((day,index)=>{
+    const scheduled=plan.days[day].length>0,complete=completionKnown&&scheduled&&completedDays.has(day),today=index===week.todayIndex;
+    const state=complete?"complete":scheduled?"scheduled":"recovery";
+    const description=complete?"completed":scheduled?completionKnown?"planned":"scheduled":"recovery";
+    return `<li class="${state}${today?" today":""}"${today?' aria-current="date"':""} aria-label="${day}, ${description}${today?", today":""}"><span>${day.slice(0,3)}</span><i aria-hidden="true">${complete?"✓":scheduled?"•":"—"}</i></li>`;
+  }).join("");
+}
+
+function renderWins(workouts,hasMore){
+  const completed=workouts.filter((workout)=>workout?.status==="completed"),latest=completed.slice().sort((a,b)=>Number(b.startedAt||0)-Number(a.startedAt||0))[0],records=recentRecords(workouts,hasMore),wins=[];
+  if(latest)wins.push({title:"Session complete",detail:`${String(latest.title||"Workout")} · ${readableDate(latest.date)} · ${Math.max(0,Number(latest.completedSets)||0)} completed sets`});
+  for(const record of records)wins.push({title:record.exercise,detail:`${record.scope} · ${record.label} ${record.value} · ${readableDate(record.date)}`});
+  const list=el("accountWinsList"),empty=el("accountWinsEmpty");
+  if(!wins.length){
+    list.hidden=true;list.innerHTML="";empty.hidden=false;
+    empty.textContent="Complete a session to start a private, saved progress trail.";
+    return records;
+  }
+  list.innerHTML=wins.map((win,index)=>`<li><span aria-hidden="true">${index===0?"✓":"↑"}</span><div><strong>${escapeHtml(win.title)}</strong><small>${escapeHtml(win.detail)}</small></div></li>`).join("");
+  list.hidden=false;empty.hidden=true;
+  return records;
+}
+
+function renderDashboard(plan,user,{workouts=null,hasMore=false,historyError=false}={}){
+  const summary=planSummary(plan),week=weekContext(),historyAvailable=Array.isArray(workouts),weekWorkouts=historyAvailable?completedThisWeek(workouts,week):[],completedDays=new Set(weekWorkouts.map((workout)=>String(workout.planDay||"")).filter((day)=>summary.scheduled.includes(day))),active=historyAvailable?workouts.find((workout)=>workout?.status==="active"):null;
+  const discoveryActive=user?.discovery?.active===true,historyLoading=discoveryActive&&!historyAvailable&&!historyError;
+  el("accountPlanCount").textContent=String(summary.movements);
+  el("accountWorkoutDays").textContent=String(summary.scheduled.length);
+  renderWeekRail(plan,completedDays,week,{completionKnown:historyAvailable});
+
+  const progress=el("accountWeekProgress"),weekSets=weekWorkouts.reduce((total,workout)=>total+Math.max(0,Number(workout.completedSets)||0),0);
+  if(historyAvailable&&summary.scheduled.length){
+    progress.hidden=false;progress.max=summary.scheduled.length;progress.value=Math.min(completedDays.size,summary.scheduled.length);progress.textContent=`${Math.round(progress.value/progress.max*100)}%`;
+    el("accountWeekScore").textContent=`${progress.value}/${progress.max}`;
+    el("accountWeekDetail").textContent=progress.value===progress.max
+      ?`Week complete: ${weekWorkouts.length} saved ${weekWorkouts.length===1?"session":"sessions"} and ${weekSets} completed ${weekSets===1?"set":"sets"}.`
+      :`${weekWorkouts.length} saved ${weekWorkouts.length===1?"session":"sessions"} and ${weekSets} completed ${weekSets===1?"set":"sets"} this week.`;
+  }else{
+    progress.hidden=true;progress.value=0;progress.max=Math.max(1,summary.scheduled.length);
+    el("accountWeekScore").textContent=summary.scheduled.length?`${summary.scheduled.length} ${summary.scheduled.length===1?"day":"days"}`:"No plan";
+    el("accountWeekDetail").textContent=!summary.scheduled.length
+      ?"No training days are scheduled yet."
+      :historyLoading?"Checking your saved completion history…"
+        :historyError?"Completion history could not be loaded. Your saved schedule is still shown."
+          :"Your weekly structure is ready. Completion history is available in the Strata+ workout room.";
+  }
+
+  const primary=el("accountPrimaryAction"),primaryLabel=el("accountPrimaryLabel"),nextTitle=el("accountNextTitle"),nextDetail=el("accountNextDetail"),nextEyebrow=el("accountNextEyebrow"),nextMetrics=el("accountNextMetrics");
+  nextMetrics.hidden=true;
+  if(active){
+    nextEyebrow.textContent="Workout in progress";nextTitle.textContent=String(active.title||"OPEN WORKOUT").toUpperCase();
+    nextDetail.textContent=`Started ${readableDate(active.date)} · ${Math.max(0,Number(active.completedSets)||0)} of ${Math.max(0,Number(active.totalSets)||0)} sets completed.`;
+    primary.href=`/workout.html#resume=${encodeURIComponent(active.id)}`;primaryLabel.textContent="Continue workout";
+  }else if(!summary.scheduled.length){
+    nextEyebrow.textContent="Start here";nextTitle.textContent="BUILD A WEEK YOU CAN REPEAT.";
+    nextDetail.textContent="Choose your training days and movements before tracking progress.";
+    primary.href=discoveryActive?"/onboarding.html":"/planner.html";primaryLabel.textContent="Build your week";
+  }else{
+    const next=nextPlannedDay(plan,completedDays,week),movements=next?.items.length||0,sets=(next?.items||[]).reduce((total,item)=>total+Math.max(0,Math.round(Number(item?.sets)||0)),0);
+    const when=next?.offset===0?"Today":next?.offset===1?"Tomorrow":next?.offset>=7?`Next ${next.day}`:next?.day||"Next up";
+    nextEyebrow.textContent=`${when} · ${next?new Intl.DateTimeFormat(undefined,{month:"short",day:"numeric"}).format(next.date):""}`;
+    nextTitle.textContent=`${next?.day||"NEXT"} WORKOUT`;
+    nextDetail.textContent=historyLoading?"Your plan is ready while STRATA checks saved completion history.":historyError?"Your plan is ready. Completion history is temporarily unavailable.":`${movements} ${movements===1?"movement":"movements"} in your saved plan.`;
+    el("accountNextMovements").textContent=String(movements);el("accountNextSets").textContent=String(sets);nextMetrics.hidden=false;
+    primary.href=discoveryActive?`/workout.html?day=${encodeURIComponent(next.day)}`:"/planner.html";
+    primaryLabel.textContent=discoveryActive?"Open next workout":"Open your week";
+  }
+
+  const winsEmpty=el("accountWinsEmpty"),winsList=el("accountWinsList");
+  let records=[];
+  if(historyAvailable)records=renderWins(workouts,hasMore)||[];
+  else{
+    winsList.hidden=true;winsList.innerHTML="";winsEmpty.hidden=false;
+    winsEmpty.textContent=historyLoading?"Loading recent saved sessions…":historyError?"Recent session history could not be loaded. Nothing was changed.":"Workout history is not available in this account view. Your saved plan is still ready.";
+  }
+
+  const adaptationTitle=el("accountAdaptationTitle"),adaptationDetail=el("accountAdaptationDetail");
+  if(!summary.scheduled.length){
+    adaptationTitle.textContent="START WITH A REPEATABLE WEEK.";adaptationDetail.textContent="A stable schedule makes future session comparisons meaningful. STRATA will not infer readiness from a plan alone.";
+  }else if(historyLoading){
+    adaptationTitle.textContent="BUILD A CLEAN BASELINE.";adaptationDetail.textContent="STRATA is checking repeat movements in your saved sessions. Recovery and form are never guessed from set totals.";
+  }else if(historyError||!discoveryActive){
+    adaptationTitle.textContent="YOUR WEEK HAS A SHAPE.";adaptationDetail.textContent=`${summary.scheduled.length} planned ${summary.scheduled.length===1?"day gives":"days give"} you a repeatable structure. No training adaptation is claimed without comparable session data.`;
+  }else if(active){
+    adaptationTitle.textContent="FINISH THE OPEN SESSION.";adaptationDetail.textContent="An in-progress workout is the clearest next signal. Finish or close it before changing the week.";
+  }else if(!weekWorkouts.length&&!(workouts||[]).some((workout)=>workout?.status==="completed")){
+    adaptationTitle.textContent="CREATE THE FIRST DATA POINT.";adaptationDetail.textContent="Complete one saved workout. A repeat in the same movement format and unit will make progress comparable.";
+  }else if(records.length){
+    adaptationTitle.textContent="PROGRESS IS MOVING.";adaptationDetail.textContent=`${records.length} repeat ${records.length===1?"movement exceeded":"movements exceeded"} an earlier saved result. Keep the format and unit consistent; recovery and form are not measured here.`;
+  }else if(summary.scheduled.length&&completedDays.size===summary.scheduled.length){
+    adaptationTitle.textContent="YOUR SCHEDULE IS COMPLETE.";adaptationDetail.textContent="Every planned day has a saved completion this week. Review recovery and notes before changing volume; this dashboard does not measure readiness.";
+  }else{
+    adaptationTitle.textContent="KEEP THE COMPARISON CLEAN.";adaptationDetail.textContent="Repeat key movements in the same format and unit. STRATA will surface a saved result only when it exceeds an earlier comparable session.";
+  }
+}
+
+function renderDashboardUnavailable(){
+  el("accountNextEyebrow").textContent="Saved week unavailable";el("accountNextTitle").textContent="YOUR ACCOUNT IS STILL SAFE.";el("accountNextDetail").textContent="STRATA could not load your plan right now. Refresh or open My Plan to retry.";el("accountNextMetrics").hidden=true;
+  el("accountWeekScore").textContent="—";el("accountWeekProgress").hidden=true;el("accountWeekDetail").textContent="Weekly progress could not be loaded.";el("accountWeekDays").innerHTML="";
+  el("accountWinsList").hidden=true;el("accountWinsList").innerHTML="";el("accountWinsEmpty").hidden=false;el("accountWinsEmpty").textContent="Recent activity could not be loaded. Nothing was changed.";
+  el("accountAdaptationTitle").textContent="KEEP YOUR CURRENT PLAN.";el("accountAdaptationDetail").textContent="There is not enough verified data to suggest a training change right now.";
+  el("accountPrimaryAction").href="/planner.html";el("accountPrimaryLabel").textContent="Open My Plan";
+}
+
+function showChangedAccount(){
+  dashboardRequest+=1;currentCsrfToken="";document.body?.classList.remove("account-signed-in");
+  el("signedInCard").hidden=true;el("accountAccess").hidden=true;el("accountLoading").hidden=false;
+  el("accountLoadingTitle").textContent="ACCOUNT CHANGED.";
+  el("accountLoadingMessage").textContent="The signed-in account changed in another tab. Reload to open the current account without mixing private training data.";
+  el("accountReload").hidden=false;el("accountPage").setAttribute("aria-busy","false");
+}
+
+function accountBoundaryChanged(error){return error?.status===401||error?.code==="account-changed";}
+
+async function loadAccountDashboard(user){
+  const request=++dashboardRequest;
+  try{
+    const planResult=await readJson("/api/plan",{cache:"no-store"});
+    if(request!==dashboardRequest)return;
+    if(String(planResult.user?.id||"")!==String(user?.id||""))throw Object.assign(new Error("The signed-in account changed."),{code:"account-changed"});
+    const plan=validPlan(planResult.plan);if(!plan)throw Object.assign(new Error("The saved plan response was incomplete."),{code:"invalid-response"});
+    const currentUser=planResult.user||user;
+    renderDashboard(plan,currentUser);
+    if(currentUser?.discovery?.active!==true)return;
+    try{
+      const historyResult=await readJson("/api/workouts?limit=100&offset=0",{cache:"no-store"});
+      if(request!==dashboardRequest)return;
+      if(!Array.isArray(historyResult.workouts)||typeof historyResult.hasMore!=="boolean")throw Object.assign(new Error("Workout history returned an incomplete response."),{code:"invalid-response"});
+      const identity=await readJson("/api/me",{cache:"no-store"});
+      if(request!==dashboardRequest)return;
+      if(String(identity.user?.id||"")!==String(currentUser.id)||!historyResult.csrfToken||String(historyResult.csrfToken)!==String(identity.csrfToken||""))throw Object.assign(new Error("The signed-in account changed."),{code:"account-changed"});
+      currentCsrfToken=String(identity.csrfToken||currentCsrfToken);
+      renderDashboard(plan,currentUser,{workouts:historyResult.workouts,hasMore:historyResult.hasMore});
+    }catch(error){
+      if(request!==dashboardRequest)return;
+      if(accountBoundaryChanged(error)){showChangedAccount();return;}
+      renderDashboard(plan,currentUser,{historyError:true});
+    }
+  }catch(error){
+    if(request!==dashboardRequest)return;
+    if(accountBoundaryChanged(error)){showChangedAccount();return;}
+    renderDashboardUnavailable();
+  }finally{
+    if(request===dashboardRequest)el("signedInCard").setAttribute("aria-busy","false");
+  }
+}
+
 function showSignedIn(user,csrfToken=""){
   document.body?.classList.add("account-signed-in");
   currentCsrfToken=String(csrfToken||"");
   el("accountLoading").hidden=true;
   el("accountAccess").hidden=true;
   el("signedInCard").hidden=false;
+  el("signedInCard").setAttribute("aria-busy","true");
   el("signedInIdentity").textContent=`${user.name} · ${user.email}`;
+  const firstName=String(user?.name||"").trim().split(/\s+/)[0]||"there",hour=new Date().getHours();
+  el("accountGreeting").textContent=`Good ${hour<12?"morning":hour<18?"afternoon":"evening"}, ${firstName}`;
   const planCount=Math.max(0,Number(user?.planCount)||0);
   const workoutDays=Math.max(0,Number(user?.workoutDays)||0);
   el("accountPlanCount").textContent=String(planCount);
@@ -220,6 +469,7 @@ function showSignedIn(user,csrfToken=""){
   if(deletionPending)showSecurityStatus("An account-deletion confirmation is pending. You can use the emailed link or cancel the request here.");
   else showSecurityStatus("");
   el("accountPage").setAttribute("aria-busy","false");
+  void loadAccountDashboard(user);
 }
 
 function renderStorageState(node,state,message){
@@ -251,7 +501,9 @@ async function initialize(){
   el("accountAccess").hidden=true;
   el("signedInCard").hidden=true;
   el("accountLoading").hidden=false;
+  el("accountLoadingTitle").textContent="CHECKING YOUR ACCOUNT…";
   el("accountLoadingMessage").textContent="Confirming whether you are already signed in.";
+  el("accountReload").hidden=true;
   void updateStorageStatus();
   try{
     const result=await readJson("/api/me");
@@ -364,6 +616,8 @@ el("accountDeleteCancel").addEventListener("click",async(event)=>{
   }catch(error){showSecurityStatus(securityError(error),{error:true});}
   finally{button.disabled=false;setButtonBusy(button,false);}
 });
+
+el("accountReload").addEventListener("click",()=>location.reload());
 
 el("accountLogout").addEventListener("click",async(event)=>{
   const button=event.currentTarget;

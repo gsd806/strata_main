@@ -13,9 +13,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/admin.css?v=7.2.0" />
-    <link rel="stylesheet" href="/experience.css?v=7.2.0" />
-    <script src="/motion.js?v=7.2.0"></script>
+    <link rel="stylesheet" href="/admin.css?v=7.3.0" />
+    <link rel="stylesheet" href="/experience.css?v=7.3.0" />
+    <script src="/motion.js?v=7.3.0"></script>
   </head>
   <body>
     <a class="skip-link" href="#adminMain">Skip to administration</a>
@@ -108,6 +108,16 @@
               <li><span class="status-dot" aria-hidden="true"></span><div><strong>Webhook protection</strong><small id="webhookStatus">Checking…</small></div></li>
             </ul>
             <p class="section-status" id="overviewStatus" role="status" aria-live="polite"></p>
+          </div>
+
+          <div class="panel product-signal-panel" aria-labelledby="productSignalTitle">
+            <div class="panel-heading">
+              <div><p class="panel-index">Opt-in counts</p><h3 id="productSignalTitle">AGGREGATE ACTIVITY</h3></div>
+              <label class="signal-range" for="productSignalDays"><span>Time window</span><select id="productSignalDays"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option></select></label>
+            </div>
+            <p class="signal-boundary">Directional action counts only—not unique people, cohorts, or conversion rates. Repeated and automated actions can increment a count. No account, browser, URL, exercise, plan, or workout detail is stored here.</p>
+            <dl class="product-signal-grid" id="productSignalRows" aria-busy="false"></dl>
+            <p class="section-status" id="productSignalStatus" role="status" aria-live="polite">Loading aggregate activity…</p>
           </div>
         </section>
 
@@ -247,8 +257,8 @@
       </div>
     </dialog>
 
-    <footer class="admin-footer">STRATA · Build 7.2.0 · Private administration · <a href="/contact">Contact</a> · <a href="/policies">Policies</a></footer>
+    <footer class="admin-footer">STRATA · Build 7.3.0 · Private administration · <a href="/contact">Contact</a> · <a href="/policies">Policies</a></footer>
     <noscript><p class="noscript-message">JavaScript is required for private administration. Your public STRATA pages still work normally.</p></noscript>
-    <script src="/admin.js?v=7.2.0"></script>
+    <script src="/admin.js?v=7.3.0"></script>
   </body>
 </html>

@@ -215,6 +215,81 @@ function renderExercises() {
   }).join("");
 }
 
+function previewPlaceholder(message) {
+  el("quickPreviewSummary").textContent = "Ready when you are";
+  el("quickPreviewResults").innerHTML = ["Recommendation","Recommendation","Recommendation"].map((label,index) => `<li class="preview-placeholder"><span>${String(index+1).padStart(2,"0")}</span><div><strong>${label}</strong><p>${escapeHtml(message)}</p></div></li>`).join("");
+  el("quickPreviewActions").hidden = true;
+}
+
+function previewGroup() {
+  const value = el("quickPreviewGroup").value;
+  return groups[value] ? value : "chest";
+}
+
+function updatePreviewEquipmentOptions({announce=false} = {}) {
+  const select = el("quickPreviewEquipment");
+  const submit = el("quickPreviewSubmit");
+  if (state.catalogStatus !== "ready") {
+    select.disabled = true;
+    submit.disabled = true;
+    select.innerHTML = `<option>${state.catalogStatus === "error" ? "Library unavailable" : "Loading equipment…"}</option>`;
+    return;
+  }
+  const group = previewGroup();
+  el("quickPreviewGroup").value = group;
+  const options = [...new Set(exercises.filter((exercise) => exercise.group === group).map((exercise) => exercise.equipment))].sort();
+  const previous = select.value;
+  const preferred = options.includes(previous) ? previous : options.includes("Dumbbells") ? "Dumbbells" : options.includes("Bodyweight") ? "Bodyweight" : options[0];
+  select.innerHTML = options.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join("");
+  select.value = preferred || "";
+  select.disabled = options.length === 0;
+  submit.disabled = options.length === 0;
+  el("quickPreviewOutput").setAttribute("aria-busy","false");
+  el("quickPreviewStatus").textContent = options.length ? (announce ? `${groups[group].name} selected. Choose your equipment, then show your shortlist.` : "Ready. Change any choice or generate this starting point.") : `No equipment options are available for ${groups[group].name}.`;
+}
+
+function quickPreviewProfile() {
+  return {
+    goal:el("quickPreviewGoal").value || "balanced",
+    group:previewGroup(),
+    equipment:el("quickPreviewEquipment").value,
+    level:el("quickPreviewLevel").value || "Intermediate"
+  };
+}
+
+function previewResultMarkup(item) {
+  const exercise=item.exercise;
+  return `<li class="preview-result">
+    <span class="preview-rank" aria-label="Rank ${item.rank}">${String(item.rank).padStart(2,"0")}</span>
+    <div class="preview-result-copy">
+      <div class="preview-result-title"><h3>${escapeHtml(exercise.name)}</h3><span>${escapeHtml(exercise.sub)} · ${escapeHtml(exercise.equipment)}</span></div>
+      <p>${escapeHtml(exercise.why)}</p>
+      <ul class="preview-reasons" aria-label="Why this moved up">${item.reasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>
+      <p class="preview-tradeoff"><strong>Trade-off:</strong> ${escapeHtml(item.tradeoffText)}.</p>
+    </div>
+    <div class="preview-scores" aria-label="${item.match} percent personal match and ${item.officialScore} official FitScore"><span><b>${item.match}%</b><small>Personal match</small></span><span><b>${item.officialScore}</b><small>FitScore</small></span></div>
+  </li>`;
+}
+
+function generateQuickPreview() {
+  const output=el("quickPreviewOutput"),submit=el("quickPreviewSubmit");
+  output.setAttribute("aria-busy","true");submit.disabled=true;el("quickPreviewStatus").textContent="Ranking this sample…";
+  try {
+    const result=window.StrataPreview.buildPreview({exercises,profile:quickPreviewProfile(),discovery:window.StrataDiscovery,limit:3});
+    el("quickPreviewSummary").textContent=result.summary;
+    el("quickPreviewResults").innerHTML=result.items.map(previewResultMarkup).join("");
+    el("quickPreviewActions").hidden=false;
+    el("quickPreviewStatus").textContent=`Shortlist ready. ${result.items.length} recommendation${result.items.length===1?"":"s"}, each with its decision factors and trade-off.`;
+    el("quickPreviewSummary").focus({preventScroll:false});
+    try { window.dispatchEvent?.(new CustomEvent("strata:milestone",{detail:{name:"preview_generated"}})); } catch {}
+  } catch (error) {
+    previewPlaceholder(error.message || "This preview could not be generated. Adjust a choice and try again.");
+    el("quickPreviewStatus").textContent=error.message || "This preview could not be generated. Adjust a choice and try again.";
+  } finally {
+    output.setAttribute("aria-busy","false");submit.disabled=state.catalogStatus!=="ready";
+  }
+}
+
 function guestPlanCount() {
   try {
     const plan = JSON.parse(localStorage.getItem(GUEST_PLAN_KEY) || "null");
@@ -365,7 +440,7 @@ async function initializeCatalog() {
   state.catalogStatus = "loading";
   renderAll();
   try {
-    exercises = normalizeCatalog(await api("/exercises.json?v=7.2.0"));
+    exercises = normalizeCatalog(await api("/exercises.json?v=7.3.0"));
     state.catalogStatus = "ready";
     el("catalogTotal").textContent = exercises.length;
   } catch {
@@ -374,6 +449,7 @@ async function initializeCatalog() {
     state.catalogStatus = "error";
   }
   renderAll();
+  updatePreviewEquipmentOptions();
 }
 
 function toggleCompare(id) {
@@ -468,6 +544,18 @@ el("clearFilters").addEventListener("click", resetFilters);
 el("resetActiveFilters").addEventListener("click", resetFilters);
 el("clearCompare").addEventListener("click", () => { state.compare=[];updateCompareDock();renderExercises();requestAnimationFrame(()=>el("searchInput").focus()); });
 el("openCompare").addEventListener("click", openComparison);
+el("quickPreviewForm").addEventListener("submit", (event) => { event.preventDefault();generateQuickPreview(); });
+el("quickPreviewForm").addEventListener("change", (event) => {
+  if (event.target.id === "quickPreviewGroup") updatePreviewEquipmentOptions({announce:true});
+  previewPlaceholder("Your choices changed. Generate again to refresh this shortlist.");
+  el("quickPreviewStatus").textContent="Choices updated. Show your shortlist to apply them.";
+});
+el("quickPreviewRankings").addEventListener("click", () => {
+  selectGroup(previewGroup(),false);
+  const target=el("rankings");
+  target.scrollIntoView?.({behavior:window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches?"auto":"smooth",block:"start"});
+  requestAnimationFrame(()=>target.focus?.({preventScroll:true}));
+});
 [detailDialog,compareDialog].forEach((dialog) => {
   dialog.addEventListener("close", () => { syncDialogState();restoreModalFocus(dialog); });
   dialog.addEventListener("click", (event) => {

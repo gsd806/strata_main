@@ -14,6 +14,7 @@
   const checkButton=el("checkAccess");
   const pageReason=new URLSearchParams(location.search).get("reason");
   const trialRequested=new URLSearchParams(location.search).get("trial")==="1";
+  const signal=name=>globalThis.StrataSignals?.record?.(name);
 
   const state={
     user:null,
@@ -29,6 +30,7 @@
   };
 
   function setStatus(message,tone="",{focus=false}={}){
+    statusNode.setAttribute("role",tone==="error"?"alert":"status");
     statusNode.textContent=state.config?.environment==="sandbox"?`TEST MODE · ${message}`:message;
     statusNode.classList.toggle("purchase-status-good",tone==="good");
     statusNode.classList.toggle("purchase-status-warn",tone==="warn");
@@ -171,6 +173,7 @@
       state.user=result.user||await readAccount();
       renderPurchaseState();
       setStatus("Your 10-day Strata+ trial has started. No card was charged and it will end automatically.","good",{focus:true});
+      signal("trial_started");
     }catch(error){
       if(error.status===401){location.assign("/account.html?mode=login&next=pricing");return;}
       state.actionError=error.message||"The trial could not be started.";
@@ -250,6 +253,7 @@
         settings:{displayMode:"overlay",variant:"one-page",theme:"light",allowLogout:false,showAddDiscounts:true}
       });
       state.checkoutOpen=true;
+      signal("checkout_opened");
     }catch(error){
       if(error.status===401){location.assign("/account.html?mode=login&next=pricing");return;}
       if(error.code==="ALREADY_ENTITLED"||error.code==="DISCOVERY_ALREADY_ACTIVE"){
@@ -298,6 +302,7 @@
       if(discoveryIsActive(state.user)){
         state.awaitingAccess=false;
         setStatus("Strata+ is unlocked on this account.","good",{focus});
+        if(state.user?.discovery?.accessType==="paid")signal("upgrade_activated");
       }else{
         state.awaitingAccess=true;
         setStatus("Access is still being confirmed. Wait a moment, then check again. You will not be charged twice.","warn",{focus});
@@ -341,7 +346,7 @@
     state.busy=false;
     state.awaitingAccess=!unlocked;
     renderPurchaseState();
-    if(unlocked)setStatus("Purchase confirmed. Strata+ is now unlocked on this account.","good",{focus:true});
+    if(unlocked){setStatus("Purchase confirmed. Strata+ is now unlocked on this account.","good",{focus:true});signal("upgrade_activated");}
     else setStatus("Paddle completed the checkout, but access is still processing. Wait a moment, then choose Check access. Do not purchase again.","warn",{focus:true});
   }
 
@@ -351,5 +356,6 @@
   window.addEventListener("online",()=>{renderPurchaseState();});
   window.addEventListener("offline",()=>{renderPurchaseState();});
 
+  signal("upgrade_viewed");
   void loadPageState();
 })();

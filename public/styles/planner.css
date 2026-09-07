@@ -27,7 +27,7 @@ button:disabled { cursor:not-allowed; opacity:.58; }
 .user-menu button { min-height:36px; border:1px solid rgba(255,255,255,.35); color:var(--white); background:transparent; padding:8px 11px; text-transform:uppercase; font:500 10px var(--mono); }
 .planner-mode-notice { padding:10px max(24px,env(safe-area-inset-left)); color:var(--ink); background:var(--accent); border-bottom:1px solid var(--ink); text-align:center; font:500 11px/1.5 var(--mono); }
 .planner-mode-notice strong { text-transform:uppercase; }
-.planner-mode-notice a { color:inherit; font-weight:700; }
+.planner-mode-notice a { display:inline-flex; align-items:center; min-height:44px; padding-inline:4px; color:inherit; font-weight:700; }
 .plan-conflict-panel { position:relative; z-index:20; margin:20px max(24px,env(safe-area-inset-left)); padding:clamp(20px,3vw,32px); border:1px solid var(--orange); border-radius:14px; background:var(--white); box-shadow:var(--soft-shadow); }
 .plan-conflict-panel[hidden] { display:none; }
 .plan-conflict-heading { display:grid; grid-template-columns:minmax(260px,.75fr) minmax(320px,1.25fr); gap:28px; align-items:end; padding-bottom:20px; border-bottom:1px solid var(--line); }
@@ -47,6 +47,7 @@ button:disabled { cursor:not-allowed; opacity:.58; }
 .plan-conflict-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:9px; margin-top:18px; }
 .planner-shell { display:grid; grid-template-columns:340px minmax(0,1fr); min-height:calc(100vh - 72px); }
 .library-panel { position:sticky; top:72px; height:calc(100vh - 72px); overflow:hidden; display:flex; flex-direction:column; border-right:1px solid var(--ink); background:linear-gradient(180deg,#e8e7e0 0,#deddd5 100%); }
+.library-panel:focus { outline:3px solid var(--orange); outline-offset:-3px; }
 .library-heading { display:flex; justify-content:space-between; align-items:end; padding:24px 20px 16px; }
 .library-heading p { margin:0; text-transform:uppercase; font:600 25px var(--display); }
 .library-heading span { display:block; margin-top:5px; color:var(--muted); text-transform:uppercase; font:500 8px var(--mono); letter-spacing:.07em; }
@@ -306,7 +307,7 @@ button:disabled { cursor:not-allowed; opacity:.58; }
 
 @media(max-width:760px){
   body{padding-bottom:calc(56px + env(safe-area-inset-bottom))}
-  .planner-header{backdrop-filter:none}
+  .planner-header{background:var(--ink);backdrop-filter:none}
   .library-panel{top:auto}
   .planner-identity{gap:8px}
   .user-menu{grid-column:2}

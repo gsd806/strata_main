@@ -3,7 +3,14 @@
   const core=window.StrataOnboarding,discovery=window.StrataDiscovery,$=id=>document.getElementById(id);
   let exercises=[],user=null,csrf="",revision=0,preferenceRevision=0,original=null,preview=null,ready=false,busy=false,profileKey="",previousDownload=null,savedPreferenceTags=[];
   const escape=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-  function status(message){$("setupStatus").textContent=message;}
+  const signal=name=>globalThis.StrataSignals?.record?.(name);
+  function status(message,{tone="",focus=false}={}){
+    const node=$("setupStatus");
+    node.dataset.state=tone;
+    node.setAttribute("role",tone==="error"?"alert":"status");
+    node.textContent=message;
+    if(message&&focus)node.focus({preventScroll:false});
+  }
   async function request(path,options={}){
     let response;
     try{response=await fetch(path,{credentials:"same-origin",...options,headers:{Accept:"application/json",...(options.body?{"Content-Type":"application/json","X-CSRF-Token":csrf,"X-Strata-User":String(user?.id||"")} :{}),...options.headers}});}catch{throw new Error("Connection interrupted. Your preview is still here; reconnect and retry.");}
@@ -22,7 +29,7 @@
     $("setupMinutesMetric").textContent=snapshot.minutes?`${snapshot.minutes} min`:"—";
     $("setupReadiness").textContent=snapshot.message;
   }
-  function rememberProfile(){try{localStorage.setItem(profileKey,JSON.stringify({version:1,minutes:Number($("minutes").value)}));}catch{status("Browser storage is unavailable. Keep this page open until your week is saved.");}}
+  function rememberProfile(){try{localStorage.setItem(profileKey,JSON.stringify({version:1,minutes:Number($("minutes").value)}));}catch{status("Browser storage is unavailable. Keep this page open until your week is saved.",{tone:"error"});}}
   function restoreSessionLength(){
     let saved;try{saved=JSON.parse(localStorage.getItem(profileKey)||"null");}catch{return;}
     if(!saved||saved.version!==1)return;
@@ -49,14 +56,14 @@
   }
   function setPlannerAction({conflict=false,hidden=false}={}){
     const link=$("openPlanner");
-    link.textContent=conflict?"Open planner in a new tab →":"Edit my week →";
+    link.textContent=conflict?"Open planner in a new tab →":"Open my saved week →";
     link.target=conflict?"_blank":"";
     link.rel=conflict?"noopener":"";
     link.hidden=hidden;
   }
   function requirePlus(account){
-    if(!account?.user?.id)throw new Error("Sign in to Strata+ to set up your week.");
-    if(account.user.discovery?.active!==true){ready=false;$("setupFields").disabled=true;$("saveWeek").disabled=true;throw new Error("Weekly setup is included in Strata+. Open Strata+ to restore access; your plan has not changed.");}
+    if(!account?.user?.id)throw new Error("Sign in to use Strata+ weekly setup. Your free Plan remains available without an account.");
+    if(account.user.discovery?.active!==true){ready=false;$("setupFields").disabled=true;$("saveWeek").disabled=true;throw new Error("Guided weekly setup is a Strata+ feature. Your free Plan is unchanged. Review Strata+ access to continue.");}
   }
   async function verifyAccess(){
     const me=await request("/api/me",{cache:"no-store"});requirePlus(me);
@@ -67,15 +74,15 @@
     ready=false;$("setupFields").disabled=true;$("retrySetup").hidden=true;$("previewSummary").hidden=true;status("Loading your starting point…");
     try{
       if(!exercises.length){
-        const response=await fetch("/exercises.json?v=7.2.0");if(!response.ok)throw new Error("The exercise library is unavailable. Reconnect and retry.");exercises=await response.json();
+        const response=await fetch("/exercises.json?v=7.3.0");if(!response.ok)throw new Error("The exercise library is unavailable. Reconnect and retry.");exercises=await response.json();
       }
       const account=await request("/api/setup",{cache:"no-store"});requirePlus(account);
       if(!account.csrfToken)throw new Error("Your account could not be verified. Retry before editing.");
       user=account.user;csrf=account.csrfToken;revision=Number(account.planUpdatedAt);preferenceRevision=Number(account.preferencesUpdatedAt)||0;original=account.plan;allowEditing(account.preferences);
-    }catch(error){status(error.message);$("accountMode").textContent="Account connection unavailable. Your existing account plan has not changed.";$("retrySetup").hidden=false;}
+    }catch(error){status(error.message,{tone:"error",focus:true});$("accountMode").textContent="Setup is unavailable right now. Your existing plan has not changed.";$("retrySetup").hidden=false;}
   }
   function renderPreview(){
-    $("previewTitle").textContent="Your next chapter.";
+    $("previewTitle").textContent="Review your week.";
     const snapshot=core.trainingSnapshot(profile(),preview);
     $("previewSummary").innerHTML=`<div><strong>${snapshot.trainingDays}</strong><span>training day${snapshot.trainingDays===1?"":"s"}</span></div><div><strong>${snapshot.movementCount}</strong><span>movements</span></div><div><strong>${snapshot.workingSets}</strong><span>working sets</span></div>`;
     $("previewSummary").hidden=false;
@@ -92,23 +99,23 @@
   $("setupForm").addEventListener("submit",async event=>{
     event.preventDefault();if(!ready||busy)return;
     busy=true;$("setupFields").disabled=true;$("generateWeekLabel").textContent="Building your preview…";
-    try{await verifyAccess();preview=core.buildWeek(profile(),exercises,discovery,()=>globalThis.crypto?.randomUUID?.()||`setup-${Date.now()}-${Math.random().toString(16).slice(2)}`);rememberProfile();renderPreview();status("Preview ready. Exercises match the equipment and movement filters you selected. Review their notes in the planner; you can replace any selection.");}
-    catch(error){preview=null;$("previewSummary").hidden=true;$("saveControls").hidden=true;status(error.message);}
+    try{await verifyAccess();preview=core.buildWeek(profile(),exercises,discovery,()=>globalThis.crypto?.randomUUID?.()||`setup-${Date.now()}-${Math.random().toString(16).slice(2)}`);rememberProfile();renderPreview();status("Preview ready. Review this week, save it, then open Plan to adjust it or Train to begin.",{tone:"good"});signal("onboarding_previewed");}
+    catch(error){preview=null;$("previewSummary").hidden=true;$("saveControls").hidden=true;status(error.message,{tone:"error",focus:true});}
     finally{busy=false;$("setupFields").disabled=!ready;$("generateWeekLabel").textContent=hasItems(original)?"Preview a replacement week":"Preview my first week";}
   });
   $("setupForm").addEventListener("change",()=>{if(!ready)return;preview=null;$("previewSummary").hidden=true;$("saveControls").hidden=true;setPlannerAction({hidden:true});rememberProfile();renderSnapshot();status("Choices updated. Preview again to see your revised week.");});
   $("saveWeek").addEventListener("click",async()=>{
     if(!preview||busy||!ready)return;
-    if(hasItems(original)&&!$("replaceWeek").checked){status("Review the preview and confirm replacing your current week first.");$("replaceWeek").focus();return;}
+    if(hasItems(original)&&!$("replaceWeek").checked){status("Review the preview and confirm replacing your current week first.",{tone:"error"});$("replaceWeek").focus();return;}
     busy=true;$("saveWeek").disabled=true;$("saveWeek").textContent="Saving your week…";$("setupFields").disabled=true;setPlannerAction({hidden:true});status("Saving your week…");
     try{
       await verifyAccess();
       const saved=await request("/api/setup",{method:"PUT",body:JSON.stringify({plan:preview.plan,preferences:preview.preferences,expectedPlanUpdatedAt:revision,expectedPreferencesUpdatedAt:preferenceRevision,expectedUserId:user.id})});
       revision=saved.planUpdatedAt;preferenceRevision=saved.preferencesUpdatedAt;original=saved.plan||preview.plan;savedPreferenceTags=[...(saved.preferences?.preferences||preview.preferences.preferences)];
-      $("saveControls").hidden=true;setPlannerAction();status("Saved to your account. Open your planner to make it yours.");$("openPlanner").focus();
+      $("saveControls").hidden=true;setPlannerAction();status("Saved to your account. Open your saved week, adjust anything you need, then train when you’re ready.",{tone:"good"});signal("onboarding_saved");$("openPlanner").focus();
     }catch(error){
-      if(error.status===409){setPlannerAction({conflict:true});status("Your saved week changed in another tab or device. Your preview is safe here. Open the planner in a new tab to compare both before replacing anything.");$("openPlanner").focus();}
-      else status(error.message);
+      if(error.status===409){setPlannerAction({conflict:true});status("Your saved week changed in another tab or device. Your preview is safe here. Open the planner in a new tab to compare both before replacing anything.",{tone:"error"});$("openPlanner").focus();}
+      else status(error.message,{tone:"error",focus:true});
     }
     finally{busy=false;$("saveWeek").textContent="Save this week and profile";$("saveWeek").disabled=!ready;$("setupFields").disabled=!ready;}
   });

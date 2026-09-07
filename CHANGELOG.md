@@ -1,5 +1,17 @@
 # Changelog
 
+## 7.3.0 — Product proof and returning-member clarity
+
+- Added a no-account homepage preview that ranks three real catalog movements from a visitor’s goal, muscle group, equipment, and experience while explaining the personal match, immutable editorial FitScore, strongest decision factors, and clearest trade-off.
+- Clarified the free-versus-Strata+ boundary across the homepage, weekly planner, setup, workout room, and pricing without removing free rankings or browser-local weekly planning.
+- Rebuilt the signed-in Account view around one useful next action, scheduled-day progress, recent saved activity, comparable progress records, honest partial-history labels, and conservative adaptation cues.
+- Made an open workout directly resumable from Account while preserving dirty-draft recovery, account isolation, one-active-session enforcement, and saved-history behavior.
+- Added public recommendation methodology that keeps editorial FitScore, personal match, community ratings, recommendation feedback, and product activity counts distinct and appropriately limited.
+- Added optional, inspectable device product insights and an explicit aggregate-sharing choice. The server stores only UTC-day plus allowlisted-action counts for 90 days, never raw events, cookies, accounts, URLs, exercises, plans, workouts, or recommendation payloads.
+- Added an elevated owner readout for directional activity counts and labeled repeated actions, automated traffic, non-unique people, and the absence of connected cohorts so the numbers cannot be mistaken for audited conversion analytics.
+- Kept SQLite and Turso aligned through a shared additive aggregate schema, narrow store methods, retention behavior, query-plan evidence, and real composed-server, adapter-parity, client-privacy, and owner-elevation tests.
+- Improved first-session language, validation and conflict announcements, focus targets, touch sizing, fixed-navigation spacing, mobile headers, and narrow-screen layouts across setup, Plan, Train, pricing, and the consent surface.
+
 ## 7.2.0 — Connected training system and founder-led relaunch
 
 - Reframed the public experience around one Rank → Plan → Train → Refine workflow while preserving the complete 200-exercise index, scoring boundaries, licensed photography, founder story, and purchase facts.

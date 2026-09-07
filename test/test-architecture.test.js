@@ -16,6 +16,9 @@ test("coverage floors are enforced against the measured application baseline",()
   assert.ok(args.includes("--test-coverage-include=src/**/*.js"));
   assert.ok(args.includes("--test-coverage-include=public/scripts/discovery-core.js"));
   assert.ok(args.includes("--test-coverage-include=public/scripts/monthly-plan-core.js"));
+  assert.ok(args.includes("--test-coverage-include=public/scripts/workout-core.js"));
+  assert.ok(args.includes("--test-coverage-include=public/scripts/onboarding-core.js"));
+  assert.ok(args.includes("--test-coverage-include=public/scripts/preview-core.js"));
   assert.equal(args.some((argument)=>argument.includes("public/scripts/**/*.js")),false,"untouched DOM entry scripts must not disappear from the denominator");
 });
 

@@ -76,6 +76,25 @@ function fixtureWeek(){
 }
 
 test("training journeys use real browser controls and isolated local fixtures",{timeout:120_000},async t=>{
+  await t.test("a visitor can inspect a private recommendation preview before signup",async()=>{
+    const {context,page}=await newPage({viewport:{width:320,height:760},reducedMotion:"reduce"});
+    await goto(page,"/");
+    const submit=page.locator("#quickPreviewSubmit");await submit.waitFor({state:"visible"});await page.waitForFunction(()=>!globalThis.document.querySelector("#quickPreviewSubmit")?.disabled);
+    await page.selectOption("#quickPreviewGoal","hypertrophy");await page.selectOption("#quickPreviewGroup","chest");await page.selectOption("#quickPreviewEquipment","Dumbbells");await page.selectOption("#quickPreviewLevel","Intermediate");await submit.click();
+    await page.locator("#quickPreviewResults .preview-result").first().waitFor({state:"visible"});
+    assert.equal(await page.locator("#quickPreviewResults .preview-result").count(),3);
+    assert.match(await page.locator("#quickPreviewSummary").textContent(),/Build muscle · Chest · Dumbbells · Intermediate/);
+    assert.equal(await page.locator(".preview-reasons").count(),3);
+    assert.equal(await page.locator(".preview-tradeoff").count(),3);
+    assert.equal(await page.locator(".preview-scores").count(),3);
+    assert.equal(await page.locator("#quickPreviewSummary").evaluate((node)=>node===globalThis.document.activeElement),true,"generated preview should move focus to its result summary");
+    const consent=page.locator("#productSignalsConsent");await consent.waitFor({state:"visible"});
+    assert.equal(await consent.evaluate((node)=>globalThis.getComputedStyle(node).position),"relative","optional signal consent must stay inline instead of covering the preview");
+    const client=await page.evaluate(()=>({overflow:globalThis.document.documentElement.scrollWidth-globalThis.document.documentElement.clientWidth,stored:Object.values(globalThis.localStorage)}));
+    assert.ok(client.overflow<=1,`guest preview overflows 320px by ${client.overflow}px`);
+    assert.ok(!client.stored.some((value)=>value.includes("Dumbbells")||value.includes("hypertrophy")),"preview choices must not be saved");
+    await context.close();
+  });
   await t.test("free planning supports rest toggles, replacement, undo, templates and portable imports",async()=>{
     const {context,page}=await newPage({viewport:{width:390,height:844},reducedMotion:"reduce"});
     await goto(page,"/planner.html");await plannerReady(page);
@@ -209,6 +228,11 @@ test("training journeys use real browser controls and isolated local fixtures",{
     assert.equal(await page.locator("#sessionProgress").getAttribute("value"),"100");
     assert.equal(await page.locator("#timerToggle").textContent(),"Pause");await page.click("#timerToggle");
     await page.waitForFunction(()=>globalThis.document.querySelector("#saveStatus")?.textContent==="Saved to your account");
+    await goto(page,"/account.html");await page.locator("#signedInCard").waitFor({state:"visible"});
+    await page.waitForFunction(()=>globalThis.document.querySelector("#accountPrimaryLabel")?.textContent==="Continue workout");
+    assert.match(await page.locator("#accountPrimaryAction").getAttribute("href"),/^\/workout\.html#resume=/);
+    await page.click("#accountPrimaryAction");await page.locator("#sessionPanel").waitFor({state:"visible"});
+    assert.equal(await page.locator("#sessionTitle").evaluate(node=>globalThis.document.activeElement===node),true,"Account’s next action should resume the active session directly");
     let duplicateStarts=0;page.on("request",request=>{if(new URL(request.url()).pathname==="/api/workouts"&&request.method()==="POST")duplicateStarts++;});
     await page.reload({waitUntil:"domcontentloaded"});const resume=page.locator('#historyList [data-history]').first();await resume.waitFor({state:"visible"});
     assert.equal(await page.locator('#recoveryList [data-recover]').count(),0,"A clean saved active session must not also appear as recovery");

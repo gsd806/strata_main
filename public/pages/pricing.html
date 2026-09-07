@@ -16,9 +16,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/site-info.css?v=7.2.0" />
-    <link rel="stylesheet" href="/experience.css?v=7.2.0" />
-    <script src="/motion.js?v=7.2.0"></script>
+    <link rel="stylesheet" href="/site-info.css?v=7.3.0" />
+    <link rel="stylesheet" href="/product-signals.css?v=7.3.0" />
+    <link rel="stylesheet" href="/experience.css?v=7.3.0" />
+    <script src="/motion.js?v=7.3.0"></script>
   </head>
   <body class="pricing-page">
     <a class="skip-link" href="#main">Skip to pricing</a>
@@ -46,7 +47,7 @@
             <div class="price" aria-label="$5.99 USD, one-time purchase"><strong>$5.99</strong><span>USD</span></div>
             <p class="price-subtitle">One-time purchase. No recurring subscription.</p>
             <ol class="access-path" aria-label="How Strata+ access works">
-              <li><span>01</span><div><strong>Create an account</strong><small>Your free planner and account sync remain available either way.</small></div></li>
+              <li><span>01</span><div><strong>Create an account</strong><small>Your account’s synced weekly Plan stays free even if you do not keep Strata+.</small></div></li>
               <li><span>02</span><div><strong>Try every Strata+ tool</strong><small>One 10-day trial, with no card and no automatic charge.</small></div></li>
               <li><span>03</span><div><strong>Keep it only if it helps</strong><small>Pay $5.99 USD once. This is not a subscription.</small></div></li>
             </ol>
@@ -59,14 +60,14 @@
             </ul>
             <div class="purchase-panel" id="purchasePanel" aria-busy="false">
               <div class="button-row purchase-actions">
-                <a class="button button-dark" id="purchaseSignup" href="/account.html?mode=signup&amp;next=pricing">Create account / start free trial <span aria-hidden="true">→</span></a>
+                <a class="button button-dark" id="purchaseSignup" href="/account.html?mode=signup&amp;next=pricing">Create account to start trial <span aria-hidden="true">→</span></a>
                 <a class="button button-light" id="purchaseLogin" href="/account.html?mode=login&amp;next=pricing">Already have an account? Sign in</a>
                 <button class="button button-dark" id="trialDiscovery" type="button" aria-describedby="purchaseStatus" hidden disabled>Try Strata+ free for 10 days <span aria-hidden="true">→</span></button>
                 <button class="button button-dark" id="buyDiscovery" type="button" aria-describedby="purchaseStatus" hidden disabled>Buy Strata+ · $5.99 USD <span aria-hidden="true">→</span></button>
                 <a class="button button-dark" id="openDiscovery" href="/discover.html" hidden>Open Strata+ <span aria-hidden="true">→</span></a>
                 <button class="button button-light" id="checkAccess" type="button" aria-describedby="purchaseStatus" hidden>Check access <span aria-hidden="true">↻</span></button>
               </div>
-              <p class="purchase-status" id="purchaseStatus" role="status" aria-live="polite" aria-atomic="true" tabindex="-1">Sign in to start a one-time 10-day trial, or make the one-time Strata+ purchase.</p>
+              <p class="purchase-status" id="purchaseStatus" role="status" aria-live="polite" aria-atomic="true" tabindex="-1">Sign in to start your free 10-day trial or buy Strata+ once for $5.99 USD.</p>
             </div>
             <noscript><p class="purchase-status purchase-status-warn">JavaScript is required to open secure Paddle checkout. You can still create an account, then return to this page.</p></noscript>
             <p class="checkout-note"><strong>Secure checkout:</strong> Paddle is the merchant of record and handles payment details, applicable tax, receipts, and refunds. STRATA does not receive or store your full card number. Strata+ unlocks after STRATA securely confirms the completed transaction. See the <a href="/refunds">14-day refund policy</a>.</p>
@@ -75,7 +76,7 @@
           <article class="free-card" aria-labelledby="freeTitle">
             <p class="card-kicker">STRATA core · Free</p>
             <h2 id="freeTitle">CORE STAYS FREE.</h2>
-            <p>STRATA should be useful before you pay. Build a weekly plan without creating an account. Guest plans stay on that device; signing in adds secure cross-device plan sync. Public rankings and the PWA installation guide also remain free.</p>
+            <p>STRATA should be useful before you pay. Build a weekly Plan without an account; it stays in that browser. A signed-in account gets its own synced Plan. Public rankings and the PWA installation guide also remain free.</p>
             <ul class="feature-list">
               <li>200 ranked exercises across 8 muscle groups</li>
               <li>Login-free weekly planner with optional account sync</li>
@@ -91,6 +92,7 @@
           <article><span>02 / See the total</span><strong>Checkout stays explicit.</strong><p>Paddle shows applicable tax and the final total before payment, then handles the receipt as merchant of record.</p></article>
           <article><span>03 / Reconsider</span><strong>A clear refund window.</strong><p>A paid Strata+ purchase may be refunded within 14 calendar days after purchase. <a href="/refunds">Read the policy</a>.</p></article>
         </div>
+        <div class="signal-consent-host" data-product-signals-consent-host></div>
       </section>
     </main>
 
@@ -98,11 +100,12 @@
       <div class="info-container info-footer-grid">
         <div><a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>STRATA</span></a><p class="footer-tagline">Make every working set intentional.</p></div>
         <nav class="footer-nav" aria-label="Footer navigation"><a href="/">Rankings</a><a href="/discover.html">Strata+</a><a href="/pricing">Pricing</a><a href="/contact">Contact</a><a href="/policies">Policies</a><a href="/install">Install</a></nav>
-        <p class="footer-meta">© 2026 Strata Index<br />Build 7.2.0</p>
+        <p class="footer-meta">© 2026 Strata Index<br />Build 7.3.0</p>
       </div>
     </footer>
     <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
-    <script src="/pwa.js?v=7.2.0"></script>
-    <script src="/pricing.js?v=7.2.0"></script>
+    <script src="/pwa.js?v=7.3.0"></script>
+    <script src="/product-signals.js?v=7.3.0"></script>
+    <script src="/pricing.js?v=7.3.0"></script>
   </body>
 </html>

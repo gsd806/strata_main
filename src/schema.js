@@ -1,5 +1,7 @@
 "use strict";
 
+const {PRODUCT_SIGNAL_TABLE,PRODUCT_SIGNAL_SQL}=require("./product-signals-schema");
+
 // Central catalog shared by the local SQLite and Turso adapters.
 const WORKOUT_ACTIVE_INDEX="CREATE UNIQUE INDEX IF NOT EXISTS workouts_one_active_per_user ON workouts(user_id) WHERE CASE WHEN json_valid(workout_json) THEN json_extract(workout_json,'$.status') END='active'";
 const SCHEMA = [
@@ -217,6 +219,7 @@ const SCHEMA = [
   "CREATE INDEX IF NOT EXISTS support_request_events_ip_time ON support_request_events(ip_hash,created_at)",
   "CREATE INDEX IF NOT EXISTS support_request_events_email_time ON support_request_events(email_hash,created_at)",
   "CREATE INDEX IF NOT EXISTS support_request_events_time ON support_request_events(created_at)",
+  PRODUCT_SIGNAL_TABLE,
   `CREATE TABLE IF NOT EXISTS admin_principal (
     slot TEXT PRIMARY KEY CHECK(slot='primary'),
     user_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE RESTRICT,
@@ -388,7 +391,8 @@ const SQL = {
   updateSupportTicket:"UPDATE support_tickets SET status=?,admin_note=?,last_response_at=CASE WHEN ?=1 THEN ? ELSE last_response_at END,updated_at=? WHERE id=? AND updated_at=? RETURNING id,reference,user_id,name,email,category,subject,reference_id,message,status,admin_note,last_response_at,created_at,updated_at",
   markSupportResponseSent:"UPDATE support_tickets SET last_response_at=?,updated_at=MAX(updated_at,?) WHERE id=? RETURNING id,reference,user_id,name,email,category,subject,reference_id,message,status,admin_note,last_response_at,created_at,updated_at",
   claimSupportRequestEvent:"INSERT INTO support_request_events(id,ip_hash,email_hash,created_at) SELECT ?,?,?,? WHERE (SELECT COUNT(*) FROM support_request_events WHERE ip_hash=? AND created_at>=?)<? AND (SELECT COUNT(*) FROM support_request_events WHERE email_hash=? AND created_at>=?)<? AND (SELECT COUNT(*) FROM support_request_events WHERE created_at>=?)<? RETURNING id",
-  deleteOldSupportRequestEvents:"DELETE FROM support_request_events WHERE created_at<?"
+  deleteOldSupportRequestEvents:"DELETE FROM support_request_events WHERE created_at<?",
+  ...PRODUCT_SIGNAL_SQL
 };
 
 // Installed after the base schema so an existing database can reconcile the

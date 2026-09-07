@@ -16,10 +16,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="account.css?v=7.2.0" />
-    <link rel="stylesheet" href="/product-nav.css?v=7.2.0" />
-    <link rel="stylesheet" href="/experience.css?v=7.2.0" />
-    <script src="/motion.js?v=7.2.0"></script>
+    <link rel="stylesheet" href="account.css?v=7.3.0" />
+    <link rel="stylesheet" href="/product-nav.css?v=7.3.0" />
+    <link rel="stylesheet" href="/experience.css?v=7.3.0" />
+    <script src="/motion.js?v=7.3.0"></script>
   </head>
   <body class="account-page-shell">
     <a class="skip-link" href="#accountPage">Skip to account</a>
@@ -37,9 +37,43 @@
 
       <section class="signed-in-card" id="signedInCard" hidden aria-labelledby="signedInTitle">
         <div class="account-dashboard-head">
-          <div><p class="kicker">Your STRATA account</p><h2 id="signedInTitle">YOUR TRAINING HOME.</h2><p id="signedInIdentity"></p></div>
+          <div><p class="kicker" id="accountGreeting">Welcome back</p><h2 id="signedInTitle">YOUR NEXT MOVE.</h2><p id="signedInIdentity"></p></div>
           <a class="account-primary-action" id="accountPrimaryAction" href="/planner.html"><span id="accountPrimaryLabel">Build your week</span><span aria-hidden="true">→</span></a>
         </div>
+
+        <div class="account-training-grid">
+          <section class="account-next-card" aria-labelledby="accountNextTitle">
+            <p class="account-section-label" id="accountNextEyebrow">Next up</p>
+            <h3 id="accountNextTitle">LOADING YOUR WEEK…</h3>
+            <p id="accountNextDetail" role="status" aria-live="polite">Reading your saved plan.</p>
+            <dl class="account-next-metrics" id="accountNextMetrics" hidden>
+              <div><dt>Movements</dt><dd id="accountNextMovements">0</dd></div>
+              <div><dt>Working sets</dt><dd id="accountNextSets">0</dd></div>
+            </dl>
+          </section>
+
+          <section class="account-week-card" aria-labelledby="accountWeekTitle">
+            <div class="account-section-head"><div><p class="account-section-label">Current week</p><h3 id="accountWeekTitle">WEEKLY PROGRESS</h3></div><strong id="accountWeekScore">—</strong></div>
+            <progress id="accountWeekProgress" value="0" max="1" hidden aria-labelledby="accountWeekTitle" aria-describedby="accountWeekDetail">0%</progress>
+            <p id="accountWeekDetail">Loading your schedule.</p>
+            <ol class="account-week-days" id="accountWeekDays" aria-label="This week's training days"></ol>
+          </section>
+        </div>
+
+        <div class="account-insight-grid">
+          <section class="account-insight-card" aria-labelledby="accountWinsTitle">
+            <p class="account-section-label">Saved activity</p>
+            <h3 id="accountWinsTitle">RECENT MOMENTUM</h3>
+            <ul class="account-wins-list" id="accountWinsList" hidden></ul>
+            <p class="account-insight-empty" id="accountWinsEmpty">Loading recent sessions.</p>
+          </section>
+          <section class="account-insight-card account-adaptation-card" aria-labelledby="accountAdaptationTitle">
+            <p class="account-section-label">Training signal</p>
+            <h3 id="accountAdaptationTitle">BUILD A CLEAN BASELINE.</h3>
+            <p id="accountAdaptationDetail">Complete saved sessions and STRATA will compare repeat movements without guessing about recovery or form.</p>
+          </section>
+        </div>
+
         <div class="account-stat-grid" aria-label="Account overview">
           <div><span>Plan movements</span><strong id="accountPlanCount">0</strong><small><b id="accountWorkoutDays">0</b> training days</small></div>
           <div><span>Strata+ access</span><strong id="accountAccessState">Checking</strong><small id="accountAccessDetail">Confirming access…</small></div>
@@ -65,6 +99,7 @@
         <p class="kicker">Account session</p>
         <h2 id="accountLoadingTitle">CHECKING YOUR ACCOUNT…</h2>
         <p id="accountLoadingMessage" role="status" aria-live="polite">Confirming whether you are already signed in.</p>
+        <button class="account-reload" id="accountReload" type="button" hidden>Reload current account <span aria-hidden="true">↻</span></button>
       </section>
 
       <section class="account-access" id="accountAccess" aria-label="Create an account or sign in">
@@ -106,8 +141,8 @@
         </div>
       </section>
     </main>
-    <footer class="build-footer">STRATA · Build 7.2.0 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
-    <script src="/pwa.js?v=7.2.0"></script>
-    <script src="account.js?v=7.2.0"></script>
+    <footer class="build-footer">STRATA · Build 7.3.0 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
+    <script src="/pwa.js?v=7.3.0"></script>
+    <script src="account.js?v=7.3.0"></script>
   </body>
 </html>

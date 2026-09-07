@@ -56,7 +56,7 @@ test("core footers use the policy directory instead of repeating every legal pag
 });
 
 test("published Strata+ price and refund promise are exact and consistent",()=>{
-  assert.equal(BUILD,"7.2.0");
+  assert.equal(BUILD,"7.3.0");
   const pricingHtml=read("pricing.html"),pricing=text("pricing.html"),refunds=text("refunds.html"),terms=text("terms.html");
   assert.match(pricing,/Strata\+/);
   assert.match(pricing,/\$5\.99 USD/i);
@@ -66,6 +66,9 @@ test("published Strata+ price and refund promise are exact and consistent",()=>{
   assert.match(pricing,/community weekly plans/i);
   assert.match(pricing,/31-day planner/i);
   assert.match(pricingHtml,/href="\/planner\.html">Open free planner/);
+  assert.match(pricingHtml,/Create account to start trial/);
+  assert.match(pricingHtml,/free 10-day trial or buy Strata\+ once for \$5\.99 USD/);
+  assert.match(pricingHtml,/without an account; it stays in that browser[\s\S]*own synced Plan/);
   assert.match(pricingHtml,/href="\/refunds"/);
   assert.match(pricingHtml,/id="buyDiscovery"/);
   assert.match(pricingHtml,/src="https:\/\/cdn\.paddle\.com\/paddle\/v2\/paddle\.js"/);

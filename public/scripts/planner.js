@@ -18,6 +18,7 @@ const state={
   conflictDraft:null,conflictLatest:null,conflictReview:false,csrfToken:"",sharedPlans:[],sharedPlansLoaded:false,sharedPlansRequest:0,shareBusy:false,pendingUnpublish:""
 };
 const el=(id)=>document.getElementById(id);
+const signal=name=>globalThis.StrataSignals?.record?.(name);
 
 async function api(path,options={}) {
   const method=String(options.method||"GET").toUpperCase(),changesState=method!=="GET"&&method!=="HEAD";
@@ -55,7 +56,7 @@ async function verifyPlannerIdentity(){
 }
 
 function planSaveError(error){
-  if(error?.code==="GUEST_PLAN_CHANGED")return "Your guest week changed in another tab. This draft is still unsaved. Export this week, then reload to compare the saved copy; retry will not overwrite it.";
+  if(error?.code==="GUEST_PLAN_CHANGED")return "Your free device week changed in another tab. This draft is still unsaved. Export this week, then reload to compare the saved copy; retry will not overwrite it.";
   if(error?.code==="NETWORK_ERROR")return "STRATA is offline. Your changes are still unsaved; check your connection and retry.";
   if(error?.status===401)return "Your session ended before the plan was saved. Sign in again, then retry.";
   if(error?.status===403)return "The secure save token expired. Refresh this page, review your plan, and retry.";
@@ -99,7 +100,7 @@ async function saveGuestPlan(plan,expectedRaw){
   const write=()=>{
     let current;
     try{current=localStorage.getItem(GUEST_PLAN_KEY);}catch{throw new Error("This browser blocked local storage, so the plan could not be saved.");}
-    if(current!==expectedRaw)throw Object.assign(new Error("Your guest week changed in another tab."),{code:"GUEST_PLAN_CHANGED"});
+    if(current!==expectedRaw)throw Object.assign(new Error("Your free device week changed in another tab."),{code:"GUEST_PLAN_CHANGED"});
     try{localStorage.setItem(GUEST_PLAN_KEY,raw);}catch{throw new Error("This browser blocked local storage, so the plan could not be saved.");}
     return raw;
   };
@@ -544,11 +545,12 @@ function renderSummary(){
   if(restConflict)readiness={tone:"needs-attention",label:"Plan check",title:"Clear the recovery conflict.",detail:`Move exercises off ${restDays().filter((day)=>state.plan.days[day].length).join(", ")} before this week can save cleanly.`,action:"",href:""};
   else if(!total)readiness={tone:"getting-started",label:"Next move",title:"Build your first training day.",detail:"Choose a destination day, then add one movement from the library. Sets and reps remain editable.",action:"Choose a movement",href:"#libraryPanel"};
   else {
-    const noRecovery=restDays().length===0,guest=state.guest;
+    const noRecovery=restDays().length===0,plusActive=state.user?.discovery?.active===true;
+    const nextDetail=`${next?.isToday?"Today":`Next scheduled: ${next?.day||"your plan"}`} · ${next?.movements||total} movement${(next?.movements||total)===1?"":"s"}.${noRecovery?" Consider marking an open day for recovery.":" Changes save automatically."}`;
     readiness={
-      tone:noRecovery?"review-recovery":"ready",label:noRecovery?"Recovery check":"Train-ready",title:noRecovery?"Your week is built. Recovery is unmarked.":"Your week is ready to train.",
-      detail:`${next?.isToday?"Today":`Next scheduled: ${next?.day||"your plan"}`} · ${next?.movements||total} movement${(next?.movements||total)===1?"":"s"}.${noRecovery?" Consider marking an open day for recovery.":" Changes save automatically."}`,
-      action:guest?"Explore Strata+":"Start working out",href:guest?"/pricing":`/workout.html?day=${encodeURIComponent(next?.day||DAYS.find((day)=>state.plan.days[day].length))}`
+      tone:noRecovery?"review-recovery":"ready",label:noRecovery?"Recovery check":plusActive?"Train-ready":"Free plan ready",title:noRecovery?"Your week is built. Recovery is unmarked.":plusActive?"Your week is ready to train.":"Your free week is ready.",
+      detail:plusActive?nextDetail:`${nextDetail} Guided workouts and set logging are included in Strata+.`,
+      action:plusActive?"Start working out":"See guided workout tools",href:plusActive?`/workout.html?day=${encodeURIComponent(next?.day||DAYS.find((day)=>state.plan.days[day].length))}`:"/pricing"
     };
   }
   el("weekSummary").innerHTML=`<div class="summary-stat"><span>Scheduled movements</span><strong>${total}</strong></div><div class="summary-stat"><span>Training days</span><strong>${trainingDays}</strong></div><div class="summary-stat"><span>Working sets</span><strong>${totalSets}</strong></div><div class="summary-stat ${restConflict?"summary-warning":""}"><span>Rest days</span><strong>${restDays().length}${restConflict?" · clear":""}</strong></div><div class="week-distribution" role="img" aria-label="Weekly exercise distribution. ${distribution}">${DAYS.map((day)=>`<div aria-hidden="true"><span>${state.plan.days[day].length}</span><div class="week-bar-track"><i style="height:${Math.max(3,state.plan.days[day].length/peak*100)}%" class="${isRestDay(day)?"is-rest":""}"></i></div><small>${day.slice(0,3)}</small></div>`).join("")}</div><section class="week-readiness ${readiness.tone}" aria-label="Plan guidance"><div><span>${readiness.label}</span><strong>${readiness.title}</strong><p>${readiness.detail}</p></div>${readiness.href?`<a href="${readiness.href}">${readiness.action} <span aria-hidden="true">→</span></a>`:""}</section>`;
@@ -753,6 +755,7 @@ async function performSave({keepalive=true,silent=false}={}){
       if(state.savedRevision===state.revision)clearSavedDraft();else persistAccountDraft();
       if(state.conflictReview&&state.savedRevision===state.revision)clearPlanConflict();
       setSaveStatus(state.savedRevision===state.revision?"Saved":"Unsaved changes");
+      signal("plan_saved");
       return true;
     }catch(error){
       let saveError=error;
@@ -841,7 +844,7 @@ function renderLoadError(error){
   el("plannerDayNav").innerHTML="";
   el("quickAddDayValue").textContent="Unavailable";
   el("weekSummary").innerHTML="";
-  const localOption=error.code==="NETWORK_ERROR"&&state.exercises.length?'<p>You can open the separate guest plan stored on this device while offline. Account plans need a connection.</p><button type="button" data-open-guest>Open device guest plan</button>':"";
+  const localOption=error.code==="NETWORK_ERROR"&&state.exercises.length?'<p>You can open the separate free plan stored in this browser while offline. Account plans need a connection.</p><button type="button" data-open-guest>Open free device plan</button>':"";
   el("weekBoard").innerHTML=`<div class="planner-load-state planner-error" role="alert"><strong>Plan unavailable</strong><p>${message}</p><button type="button" data-retry-init>Try again</button>${localOption}</div>`;
   el("weekBoard").setAttribute("aria-busy","false");
 }
@@ -1006,7 +1009,7 @@ async function init({guestOnly=false}={}){
   el("weekSummary").innerHTML="";
   el("weekBoard").innerHTML='<div class="planner-load-state">Loading your weekly plan…</div>';
   try{
-    const exercises=await api("/exercises.json?v=7.2.0");
+    const exercises=await api("/exercises.json?v=7.3.0");
     if(!Array.isArray(exercises))throw new Error("STRATA returned an incomplete exercise library.");
     state.exercises=exercises;
     let result;
@@ -1028,8 +1031,10 @@ async function init({guestOnly=false}={}){
     el("plannerSignIn").hidden=!state.guest;
     el("plannerModeNotice").hidden=false;
     el("plannerModeNotice").innerHTML=state.guest
-      ? '<strong>Guest plan.</strong> This week stays on this device. Signing in opens a separate synced account plan. <a href="/account.html?mode=login&amp;next=planner">Open my account plan</a>.'
-      : '<strong>Account plan.</strong> Changes sync securely across your signed-in devices.';
+      ? '<strong>Free device plan.</strong> No account required. This week stays in this browser. <a href="/account.html?mode=login&amp;next=planner">Use a synced plan</a>.'
+      : result.user.discovery?.active===true
+        ? '<strong>Synced account plan.</strong> Changes save across your signed-in devices. <a href="/discover.html">Open Strata+</a>.'
+        : '<strong>Free synced plan.</strong> Changes save across your signed-in devices. <a href="/pricing">See what Strata+ adds</a>.';
     setReady(true);
     resetLibraryWindow();renderFilters();renderLibrary();renderWeek();renderShareAccess();setSaveStatus("Saved");
     const oversized=DAYS.some((day)=>state.plan.days[day].length>MAX_DAY_ITEMS)||DAYS.reduce((n,day)=>n+state.plan.days[day].length,0)>MAX_WEEK_ITEMS;

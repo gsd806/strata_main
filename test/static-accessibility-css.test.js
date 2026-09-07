@@ -97,10 +97,11 @@ test("planner and workout share clear Plan and Train navigation at mobile widths
   assert.match(discoverCss,/@media\(max-width:800px\)[\s\S]*?\.plus-studio \.studio-nav-desktop \{ display:none; \}[\s\S]*?\.plus-studio \.studio-nav-mobile \{ display:flex; \}/);
   assert.match(plannerCss,/\.planner-primary-nav\{position:fixed;[^}]*grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
   assert.match(plannerCss,/\.planner-primary-nav a\{[^}]*font-size:11px/);
-  assert.match(plannerCss,/@media\(max-width:760px\)\{[\s\S]*?\.planner-header\{backdrop-filter:none\}/);
+  assert.match(plannerCss,/@media\(max-width:760px\)\{[\s\S]*?\.planner-header\{background:var\(--ink\);backdrop-filter:none\}/);
   assert.match(workoutCss,/@media\(max-width:760px\)\{[\s\S]*?\.site-header nav\{position:fixed/);
   assert.match(discoverCss,/@media\(max-width:760px\)\s*\{[\s\S]*?\.plus-studio \.studio-nav\s*\{[^}]*position:fixed/);
   assert.match(workoutCss,/\.site-header nav\{position:fixed;[^}]*grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
+  assert.match(workoutCss,/@media\(max-width:760px\)\{[\s\S]*?\.workout-page \.site-header\{[^}]*background:var\(--bg\);backdrop-filter:none\}/);
 });
 
 test("workout empty days and planner mobile hand-offs expose useful 44px actions",()=>{
@@ -113,10 +114,26 @@ test("workout empty days and planner mobile hand-offs expose useful 44px actions
   assert.match(workoutHtml,/id="anotherSession">Choose another workout<\/button>/);
   assert.doesNotMatch(workoutHtml,/Back to my plan/);
   assert.match(plannerHtml,/class="planner-mobile-switcher"[^>]*>[\s\S]*Exercise library[\s\S]*My week/);
+  assert.match(plannerHtml,/id="libraryPanel"[^>]*tabindex="-1"/);
   assert.match(plannerCss,/\.planner-mobile-switcher\{position:sticky;[^}]*display:grid/);
   assert.match(plannerCss,/\.planner-jump-link\{[^}]*min-height:44px/);
+  assert.match(plannerCss,/\.planner-mode-notice a \{[^}]*min-height:44px/);
   assert.match(plannerCss,/\.build-footer a\{min-width:44px;color:inherit/);
   assert.match(workoutCss,/\.skip-link\{[^}]*z-index:100;/,"The focused workout skip link must paint above its sticky header");
+  assert.match(workoutCss,/@media\(max-width:760px\)\{\s*html\{scroll-padding-bottom:calc\(76px \+ env\(safe-area-inset-bottom\)\)\}/);
+  assert.match(workoutHtml,/id="historyError"[^>]*role="alert"/);
+  assert.match(workoutHtml,/href="\/pricing">Review Strata\+ access<\/a>/);
+  assert.match(workoutHtml,/href="\/planner\.html">Return to free Plan<\/a>/);
+  assert.match(workoutHtml,/id="openPlannerFromEmpty"[^>]*>Add exercises to my week/);
+});
+
+test("planner only offers workout logging to active Strata+ accounts",()=>{
+  const planner=read("public/scripts/planner.js");
+  assert.match(planner,/plusActive=state\.user\?\.discovery\?\.active===true/);
+  assert.match(planner,/action:plusActive\?"Start working out":"See guided workout tools"/);
+  assert.match(planner,/href:plusActive\?`\/workout\.html\?day=/);
+  assert.match(planner,/Free device plan/);
+  assert.match(planner,/Free synced plan/);
 });
 
 test("fixed mobile navigation reserves scroll space for keyboard focus",()=>{

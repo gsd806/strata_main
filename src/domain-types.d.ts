@@ -117,10 +117,28 @@ export type SupportStoreMethod=
   |"adminSupportTickets"|"claimSupportRequestEvent"|"deleteOldSupportRequestEvents"
   |"insertSupportTicket"|"markSupportResponseSent"|"supportTicketById"|"updateSupportTicket";
 
+export type ProductSignalEvent=
+  |"preview_generated"|"onboarding_previewed"|"onboarding_saved"|"plan_saved"
+  |"workout_started"|"workout_completed"|"upgrade_viewed"|"trial_started"
+  |"checkout_opened"|"upgrade_activated"|"recommendation_feedback_useful"
+  |"recommendation_feedback_not_relevant"|"recommendation_feedback_not_clear";
+
+export interface ProductSignalCountRow {
+  event_day:string;
+  event_name:ProductSignalEvent;
+  event_count:number;
+}
+
+export interface ProductSignalsStore {
+  incrementProductSignal(eventDay:string,eventName:ProductSignalEvent):Promise<unknown>;
+  productSignalCounts(sinceDay:string,throughDay:string):Promise<ProductSignalCountRow[]>;
+  deleteOldProductSignals(beforeDay:string):Promise<unknown>;
+}
+
 export type AuthStore=StoreCapabilities<AuthStoreMethod>;
 export type AdminStore={readonly kind:string}&StoreCapabilities<AdminStoreMethod>;
 export type SupportStore=StoreCapabilities<SupportStoreMethod>;
-export type ApplicationStore={readonly kind:string}&AuthStore&AdminStore&SupportStore&SetupStore;
+export type ApplicationStore={readonly kind:string}&AuthStore&AdminStore&SupportStore&SetupStore&ProductSignalsStore;
 
 export interface AccountIdentityRow extends JsonObject {
   id:string;
@@ -261,6 +279,21 @@ export interface SetupServiceDependencies {
 
 export interface SetupService {
   handleApi(request:HttpRequest,response:HttpResponse,url:URL):Promise<boolean>;
+}
+
+export interface ProductSignalsServiceDependencies {
+  store:ProductSignalsStore;
+  admin:Pick<AdminService,"requireAdmin">;
+  trustedOrigin:(request:HttpRequest)=>boolean;
+  requestAddress:(request:HttpRequest)=>string;
+  rateKeyAllowed:(key:string,limit:number,windowMs:number)=>boolean;
+  http:JsonHttpHelpers;
+  now?:()=>number;
+}
+
+export interface ProductSignalsService {
+  handleApi(request:HttpRequest,response:HttpResponse,url:URL):Promise<boolean>;
+  cleanup(timestamp?:number):Promise<unknown>;
 }
 
 export interface AuthServiceDependencies {

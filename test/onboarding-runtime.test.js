@@ -13,8 +13,8 @@ const previewPreferences=()=>({version:1,goal:"strength",level:"Intermediate",da
 async function setup({guest=false,switchedAccount=false,saveStatus=200,accountFailure=false,noRandomUUID=false,plus=true}={}){
   const html=fs.readFileSync(join(ROOT,"public/pages/onboarding.html"),"utf8");
   const elements=new Map([...html.matchAll(/\bid="([^"]+)"/g)].map(match=>[match[1],{
-    id:match[1],value:"",disabled:true,hidden:false,checked:false,textContent:"",innerHTML:"",target:"",rel:"",focused:false,listeners:{},options:[],
-    addEventListener(type,listener){this.listeners[type]=listener;},focus(){this.focused=true;},after(){},remove(){}
+    id:match[1],value:"",disabled:true,hidden:false,checked:false,textContent:"",innerHTML:"",target:"",rel:"",focused:false,listeners:{},options:[],dataset:{},attributes:{},
+    addEventListener(type,listener){this.listeners[type]=listener;},setAttribute(name,value){this.attributes[name]=String(value);},focus(){this.focused=true;},after(){},remove(){}
   }]));
   elements.get("goal").value="balanced";elements.get("goal").options=["balanced","hypertrophy","strength","time-efficient"].map(value=>({value}));
   elements.get("level").value="Beginner";elements.get("level").options=["Beginner","Intermediate","Advanced"].map(value=>({value}));
@@ -61,7 +61,18 @@ test("onboarding denies guests and free accounts without changing their plans",a
     assert.equal(fixture.state.requests.some(request=>request.options.method==="PUT"),false);
     assert.equal(fixture.state.values.get(GUEST_KEY),stored);
     assert.equal(fixture.elements.has("offlineSetup"),false);
+    assert.equal(fixture.elements.get("setupStatus").attributes.role,"alert");
+    assert.equal(fixture.elements.get("setupStatus").dataset.state,"error");
+    assert.equal(fixture.elements.get("setupStatus").focused,true);
   }
+});
+
+test("onboarding restores a polite success status after an announced error",async()=>{
+  const fixture=await setup();
+  await fixture.generate();
+  const setupStatus=fixture.elements.get("setupStatus");
+  assert.equal(setupStatus.attributes.role,"status");
+  assert.equal(setupStatus.dataset.state,"good");
 });
 
 test("onboarding preserves its generated preview and account plan when Strata+ expires",async()=>{

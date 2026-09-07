@@ -97,7 +97,10 @@ summary span { color:var(--muted); text-transform:uppercase; font:500 .62rem var
 details p { padding-top:8px; }
 .primary { display:flex; align-items:center; justify-content:space-between; gap:20px; width:100%; min-height:52px; padding:14px 18px; color:#18200f; border:1px solid var(--lime); border-radius:8px; background:var(--lime); text-decoration:none; font-size:.875rem; font-weight:700; transition:transform .18s var(--ease-out),background-color .18s ease,box-shadow .18s ease; }
 .primary:hover:not(:disabled) { background:#e2fb9c; box-shadow:0 10px 30px rgba(212,245,120,.11); }
-#setupStatus { min-height:24px; margin:0; color:var(--lime); font-size:.85rem; }
+#setupStatus { min-height:24px; margin:0; padding:0; color:var(--lime); border:1px solid transparent; border-radius:8px; font-size:.85rem; }
+#setupStatus[data-state="good"] { color:var(--lime); }
+#setupStatus[data-state="error"] { padding:11px 13px; color:#ffd2c8; border-color:#9d3e2a; background:#291713; }
+#setupStatus:focus { outline:3px solid var(--lime); outline-offset:3px; }
 #retrySetup { justify-self:start; min-height:46px; border-color:var(--line-strong); }
 
 .week-preview { position:sticky; top:96px; min-width:0; padding:28px; border:1px solid var(--line); border-radius:var(--radius); background:linear-gradient(145deg,#242c1d,var(--surface) 58%); overflow:hidden; }

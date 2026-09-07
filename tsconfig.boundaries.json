@@ -19,6 +19,7 @@
     "src/http.js",
     "src/payments.js",
     "src/plans.d.ts",
+    "src/product-signals.js",
     "src/service-composition.js",
     "src/setup.js",
     "src/store-contract.js"

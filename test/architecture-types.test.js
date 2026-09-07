@@ -16,7 +16,7 @@ test("strict checkJs covers provider, transport, storage, and service compositio
   assert.equal(config.compilerOptions.exactOptionalPropertyTypes,true);
   assert.equal(config.compilerOptions.noUncheckedIndexedAccess,true);
   for(const file of [
-    "src/domain-types.d.ts","src/http.js","src/payments.js","src/plans.d.ts","src/store-contract.js",
+    "src/domain-types.d.ts","src/http.js","src/payments.js","src/plans.d.ts","src/product-signals.js","src/store-contract.js",
     "src/service-composition.js","src/setup.js"
   ])assert.ok(config.include.includes(file),`${file} must remain in the strict boundary program`);
 });
@@ -38,7 +38,8 @@ test("service factories publish declared dependency and return contracts",()=>{
     ["auth.js","AuthServiceDependencies","AuthService"],
     ["admin.js","AdminServiceDependencies","AdminService"],
     ["support.js","SupportServiceDependencies","SupportService"],
-    ["setup.js","SetupServiceDependencies","SetupService"]
+    ["setup.js","SetupServiceDependencies","SetupService"],
+    ["product-signals.js","ProductSignalsServiceDependencies","ProductSignalsService"]
   ]){
     const source=readFileSync(join(ROOT,"src",file),"utf8");
     assert.match(source,new RegExp(`@param \\{import\\("\\./domain-types"\\)\\.${dependencyType}\\} dependencies`));

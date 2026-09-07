@@ -578,6 +578,9 @@ function localStore(root) {
     async ratingAggregates() { return plainRows(statements.ratingAggregates.all()); },
     async ratingAggregate(exerciseId) { return plainRow(statements.ratingAggregate.get(exerciseId)); },
     async upsertRating(userId,exerciseId,rating,createdAt,updatedAt) { statements.upsertRating.run(userId,exerciseId,rating.comfort,rating.pump,rating.enjoyment,rating.stability,rating.setup,rating.overall,createdAt,updatedAt); },
+    async incrementProductSignal(eventDay,eventName) { return Boolean(plainRow(statements.incrementProductSignal.get(eventDay,eventName))); },
+    async productSignalCounts(sinceDay,throughDay) { return plainRows(statements.productSignalCounts.all(sinceDay,throughDay)); },
+    async deleteOldProductSignals(beforeDay) { return affectedRows(statements.deleteOldProductSignals.run(beforeDay)); },
     async insertPendingPurchase(purchase) {
       return plainRow(statements.insertPendingPurchase.get(purchase.transactionId,purchase.priceId,purchase.productId,purchase.paddleStatus||"ready",purchase.createdAt,purchase.updatedAt,purchase.userId,purchase.updatedAt));
     },
@@ -1107,6 +1110,12 @@ async function tursoStore(url,authToken,tursoClientFactory) {
     async upsertRating(userId,exerciseId,rating,createdAt,updatedAt) {
       await run(SQL.upsertRating,[userId,exerciseId,rating.comfort,rating.pump,rating.enjoyment,rating.stability,rating.setup,rating.overall,createdAt,updatedAt]);
     },
+    async incrementProductSignal(eventDay,eventName) {
+      const result=await run(SQL.incrementProductSignal,[eventDay,eventName]);
+      return Boolean(plainRow(result.rows?.[0],result.columns));
+    },
+    productSignalCounts:(sinceDay,throughDay) => all(SQL.productSignalCounts,[sinceDay,throughDay]),
+    async deleteOldProductSignals(beforeDay) { return affectedRows(await run(SQL.deleteOldProductSignals,[beforeDay])); },
     async insertPendingPurchase(purchase) {
       const result=await run(SQL.insertPendingPurchase,[purchase.transactionId,purchase.priceId,purchase.productId,purchase.paddleStatus||"ready",purchase.createdAt,purchase.updatedAt,purchase.userId,purchase.updatedAt]);
       return plainRow(result.rows?.[0],result.columns);

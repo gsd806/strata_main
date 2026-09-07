@@ -12,6 +12,8 @@ const BUILD=RELEASE.strataBuild||RELEASE.version;
 const html=fs.readFileSync(path.join(PROJECT_ROOT,"public","pages","index.html"),"utf8");
 const appSource=fs.readFileSync(path.join(PROJECT_ROOT,"public","scripts","app.js"),"utf8");
 const catalog=JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT,"public","data","exercises.json"),"utf8"));
+const Discovery=require(path.join(PROJECT_ROOT,"public","scripts","discovery-core"));
+const Preview=require(path.join(PROJECT_ROOT,"public","scripts","preview-core"));
 const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map((match)=>match[1]);
 
 class ClassList{
@@ -71,7 +73,7 @@ function createRuntime({meResponse,guestPlan=null,serverUser=null}={}){
   }
   const context={
     console,document,location:{search:""},history:{replaceState(){}},requestAnimationFrame:(callback)=>callback(),setTimeout,clearTimeout,URLSearchParams,
-    window:{location:{assign(){}}},
+    window:{location:{assign(){}},StrataDiscovery:Discovery,StrataPreview:Preview},
     localStorage:{getItem(key){return key==="strata_guest_plan_v1"&&guestPlan!==null?guestPlan:null;}},
     fetch:async(pathname)=>{
       if(pathname==="/api/me")return typeof meResponse==="function"?meResponse():meResponse;
@@ -137,6 +139,26 @@ test("homepage comparison scroller is a labeled keyboard-focusable region",async
   const comparison=elements.get("compareContent").innerHTML;
   assert.match(comparison,/<div class="compare-table-wrap" role="region" aria-label="[^"]+ comparison table" tabindex="0">/);
   assert.match(comparison,/<caption class="sr-only">Comparison of /);
+});
+
+test("homepage creates a real no-account shortlist with reasons and trade-offs",async()=>{
+  const {context,elements}=createRuntime({meResponse:jsonResponse(401,{error:"Not signed in."})});
+  await settle();
+  elements.get("quickPreviewGoal").value="hypertrophy";
+  elements.get("quickPreviewGroup").value="chest";
+  vm.runInContext("updatePreviewEquipmentOptions()",context);
+  elements.get("quickPreviewEquipment").value="Dumbbells";
+  elements.get("quickPreviewLevel").value="Intermediate";
+  vm.runInContext("generateQuickPreview()",context);
+
+  assert.match(elements.get("quickPreviewSummary").textContent,/Build muscle · Chest · Dumbbells · Intermediate/);
+  assert.equal((elements.get("quickPreviewResults").innerHTML.match(/class="preview-result"/g)||[]).length,3);
+  assert.match(elements.get("quickPreviewResults").innerHTML,/Why this moved up/);
+  assert.match(elements.get("quickPreviewResults").innerHTML,/Trade-off:/);
+  assert.match(elements.get("quickPreviewResults").innerHTML,/Personal match/);
+  assert.match(elements.get("quickPreviewResults").innerHTML,/FitScore/);
+  assert.equal(elements.get("quickPreviewActions").hidden,false);
+  assert.match(elements.get("quickPreviewStatus").textContent,/Shortlist ready/);
 });
 
 test("homepage has one score ring and lets JavaScript create the equipment default once",()=>{

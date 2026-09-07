@@ -5,6 +5,21 @@ const USER_LIMIT=20;
 const SUPPORT_LIMIT=20;
 const SECTION_NAMES=new Set(["overview","people","support","activity"]);
 const SUPPORT_STATES=new Set(["new","open","waiting","resolved"]);
+const PRODUCT_SIGNAL_LABELS=Object.freeze({
+  preview_generated:"Preview generated",
+  onboarding_previewed:"Setup previewed",
+  onboarding_saved:"Setup saved",
+  plan_saved:"Plan saved",
+  workout_started:"Workout started",
+  workout_completed:"Workout completed",
+  upgrade_viewed:"Pricing viewed",
+  trial_started:"Trial started",
+  checkout_opened:"Checkout opened",
+  upgrade_activated:"Paid access activated",
+  recommendation_feedback_useful:"Shortlist · useful",
+  recommendation_feedback_not_relevant:"Shortlist · not relevant",
+  recommendation_feedback_not_clear:"Shortlist · not clear"
+});
 const state={
   admin:null,
   csrfToken:"",
@@ -129,7 +144,8 @@ function clearAdminData() {
   state.actionTrigger=null;state.userDialogTrigger=null;state.supportDialogTrigger=null;
   for(const dialog of document.querySelectorAll("dialog[open]"))dialog.close();
   syncDialogLock();
-  el("userResults").replaceChildren();el("supportResults").replaceChildren();el("auditResults").replaceChildren();
+  el("userResults").replaceChildren();el("supportResults").replaceChildren();el("auditResults").replaceChildren();el("productSignalRows").replaceChildren();
+  el("productSignalStatus").textContent="";
   el("userFacts").replaceChildren();el("supportFacts").replaceChildren();
   el("ticketMessage").textContent="";el("ticketNote").value="";el("ticketResponse").value="";
   el("actionReason").value="";el("actionConfirmation").value="";
@@ -220,6 +236,32 @@ function renderSystemStatus(data) {
   setService("webhookStatus",webhook===true?"Source allowlist enabled":webhook===false?"IP allowlist disabled":"Status unavailable",webhook===true?"good":webhook===false?"warn":"warn");
 }
 
+function renderProductSignals(data) {
+  const totals=data?.totals&&typeof data.totals==="object"?data.totals:{};
+  const fragment=document.createDocumentFragment();
+  let total=0;
+  for(const [name,label] of Object.entries(PRODUCT_SIGNAL_LABELS)){
+    const count=numberValue(totals[name],0);total+=count;
+    const row=create("div"),term=create("dt","",label),value=create("dd","",formatCount(count));
+    row.append(term,value);fragment.append(row);
+  }
+  el("productSignalRows").replaceChildren(fragment);
+  const scope=data?.scope||{},since=cleanString(scope.sinceDay,"the selected start"),through=cleanString(scope.throughDay,"today");
+  setSectionStatus("productSignalStatus",`${formatCount(total)} aggregate action ${total===1?"count":"counts"} from ${since} through ${through}. Counts expire within ${formatCount(scope.retentionDays||90)} days.`);
+}
+
+async function loadProductSignals() {
+  const rows=el("productSignalRows");
+  setBusy(rows,true);setSectionStatus("productSignalStatus","Loading aggregate action counts…");
+  try{
+    const days=Math.max(1,Math.min(90,Number(el("productSignalDays").value)||30));
+    const data=await api(`/api/admin/product-signals?days=${days}`);
+    if(state.elevated)renderProductSignals(data);
+  }catch(error){
+    if(!handleAuthorizationFailure(error))setSectionStatus("productSignalStatus",friendlyError(error),{error:true});
+  }finally{setBusy(rows,false);}
+}
+
 async function loadOverview() {
   const button=el("refreshOverview");
   button.disabled=true;
@@ -243,6 +285,8 @@ async function loadOverview() {
     const verified=numberValue(firstValue(accounts,["verified","verifiedUsers","verified_users"],0));
     el("verifiedUsersNote").textContent=total>0?`${Math.round((verified/total)*100)}% of registered accounts`:"Confirmed accounts";
     renderSystemStatus(data);
+    await loadProductSignals();
+    if(!state.elevated)return;
     state.loaded.add("overview");
     setLastUpdated();
     setSectionStatus("overviewStatus","Overview is current.");
@@ -662,6 +706,7 @@ function setupEvents() {
     });
   }
   el("refreshOverview").addEventListener("click",()=>{void loadOverview();});
+  el("productSignalDays").addEventListener("change",()=>{void loadProductSignals();});
   el("userSearchForm").addEventListener("submit",(event)=>{event.preventDefault();state.users.query=el("userQuery").value.trim();state.users.offset=0;void loadUsers();});
   el("clearUserSearch").addEventListener("click",()=>{el("userQuery").value="";state.users.query="";state.users.offset=0;void loadUsers();el("userQuery").focus();});
   el("previousUsers").addEventListener("click",()=>{state.users.offset=Math.max(0,state.users.offset-USER_LIMIT);void loadUsers();});

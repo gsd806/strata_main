@@ -16,9 +16,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="planner.css?v=7.2.0" />
-    <link rel="stylesheet" href="/experience.css?v=7.2.0" />
-    <script src="/motion.js?v=7.2.0"></script>
+    <link rel="stylesheet" href="planner.css?v=7.3.0" />
+    <link rel="stylesheet" href="/product-signals.css?v=7.3.0" />
+    <link rel="stylesheet" href="/experience.css?v=7.3.0" />
+    <script src="/motion.js?v=7.3.0"></script>
   </head>
   <body>
     <a class="skip-link" href="#weekTitle">Skip to weekly plan</a>
@@ -29,7 +30,7 @@
       <nav class="planner-primary-nav planner-primary-nav-mobile" aria-label="Primary navigation"><a href="/">Rankings</a><a href="/discover.html">Strata+</a><a href="/planner.html" aria-current="page">Plan</a><a href="/workout.html">Train</a></nav>
     </header>
 
-    <div class="planner-mode-notice" id="plannerModeNotice" role="status"><strong>Guest plan.</strong> This week stays on this device. Signing in opens a separate synced account plan.</div>
+    <div class="planner-mode-notice" id="plannerModeNotice" role="status"><strong>Free device plan.</strong> No account required. This week stays in this browser. <a href="/account.html?mode=login&amp;next=planner">Use a synced plan</a>.</div>
     <nav class="planner-mobile-switcher" aria-label="Planner workspace"><a href="#libraryPanel">Exercise library <span aria-hidden="true">↑</span></a><a href="#weekTitle">My week <span aria-hidden="true">↓</span></a></nav>
 
     <section class="plan-conflict-panel" id="planConflictPanel" aria-labelledby="planConflictTitle" hidden>
@@ -52,7 +53,7 @@
     <p class="draft-storage-notice" id="draftStorageNotice" role="alert" hidden>This browser cannot keep a recovery draft. Keep this page open until your changes show Saved, or export your week before leaving.</p>
 
     <main class="planner-shell" id="plannerShell" aria-busy="true">
-      <aside class="library-panel" id="libraryPanel" aria-label="Exercise library" aria-busy="true">
+      <aside class="library-panel" id="libraryPanel" aria-label="Exercise library" aria-busy="true" tabindex="-1">
         <div class="library-heading"><div><p>Exercise library</p><span>Ranked by STRATA FitScore</span></div><strong id="libraryCount">200</strong></div>
         <label class="planner-search"><span class="sr-only">Search exercise library</span><span aria-hidden="true">⌕</span><input id="plannerSearch" type="search" placeholder="Search all movements" disabled /></label>
         <div class="planner-day-picker">
@@ -110,6 +111,7 @@
         <p class="week-scroll-hint" id="weekScrollHint"><span aria-hidden="true">↔</span> Swipe or scroll sideways to review all seven days. Choose a destination day in the exercise library before selecting Add.</p>
         <div class="week-board" id="weekBoard" role="region" aria-label="Weekly workout schedule" aria-describedby="weekScrollHint" aria-busy="true" tabindex="0"><div class="planner-load-state">Loading your weekly plan…</div></div>
       </section>
+      <div class="signal-consent-host" data-product-signals-consent-host></div>
     </main>
 
     <dialog class="planner-dialog" id="replaceExerciseDialog" aria-labelledby="replaceExerciseTitle" aria-describedby="replaceExerciseDescription">
@@ -123,7 +125,7 @@
 
     <dialog class="planner-dialog week-templates-dialog" id="weekTemplatesDialog" aria-labelledby="weekTemplatesTitle" aria-describedby="weekTemplatesDescription">
       <div class="planner-dialog-heading"><h2 id="weekTemplatesTitle">WEEK TEMPLATES.</h2><button class="outline-button" id="closeWeekTemplates" type="button">Close</button></div>
-      <p id="weekTemplatesDescription">Save reusable copies of your current week. Templates stay on this device, separately for each account and the guest plan. Export your week for a portable backup; import it here on another device.</p>
+      <p id="weekTemplatesDescription">Save reusable copies of your current week. Templates stay on this device, separately for each account and the free device plan. Export your week for a portable backup; import it here on another device.</p>
       <div class="template-save-row"><label>Name this week<input id="weekTemplateName" type="text" maxlength="60" autocomplete="off" placeholder="My strength week" /></label><button class="outline-button" id="saveWeekTemplate" type="button">Save week template</button></div>
       <div class="template-save-row"><label>Saved weeks<select id="weekTemplateSelect"></select></label><button class="outline-button" id="previewWeekTemplate" type="button" disabled>Preview week</button></div>
       <label class="template-file-label">Import a STRATA week<input id="templateFile" type="file" accept=".json,application/json" /></label>
@@ -135,9 +137,10 @@
       </section>
     </dialog>
 
-    <footer class="build-footer">STRATA · Build 7.2.0 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
+    <footer class="build-footer">STRATA · Build 7.3.0 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
     <div class="planner-toast" id="plannerToast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=7.2.0"></script>
-    <script src="planner.js?v=7.2.0"></script>
+    <script src="/pwa.js?v=7.3.0"></script>
+    <script src="/product-signals.js?v=7.3.0"></script>
+    <script src="planner.js?v=7.3.0"></script>
   </body>
 </html>

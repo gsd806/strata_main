@@ -331,7 +331,7 @@ test("an unverified exact email, aliases, forged role fields, and anonymous call
   });
   assert.equal(dotVariant.user.isAdmin,false);
 
-  for(const path of ["/api/admin/session","/api/admin/overview","/api/admin/users","/api/admin/audit","/api/admin/support"]){
+  for(const path of ["/api/admin/session","/api/admin/overview","/api/admin/product-signals","/api/admin/users","/api/admin/audit","/api/admin/support"]){
     const anonymousApi=await request(path);
     assert.equal(anonymousApi.response.status,401,`${path} must reject anonymous callers`);
     assertPrivateJson(anonymousApi.response);
@@ -381,7 +381,7 @@ test("the verified exact address binds ownership, forces a fresh login, and requ
   assert.deepEqual(session.data,{admin:true,elevated:false,elevatedUntil:null});
   assertPrivateJson(session.response);
 
-  for(const path of ["/api/admin/overview","/api/admin/users","/api/admin/audit","/api/admin/support"]){
+  for(const path of ["/api/admin/overview","/api/admin/product-signals","/api/admin/users","/api/admin/audit","/api/admin/support"]){
     const lockedRead=await request(path,{headers:{Cookie:admin.cookie}});
     assert.equal(lockedRead.response.status,428,`${path} must require a fresh password confirmation`);
     assert.equal(lockedRead.data.code,"ADMIN_ELEVATION_REQUIRED");
@@ -485,6 +485,17 @@ test("admin reads require elevation and return bounded, explicitly redacted acco
   assert.ok(overview.data.overview.discovery.activeUsers>=1);
   assertPrivateJson(overview.response);
   assertAdminResponseRedacted(overview.data,secrets);
+
+  const signal=await request("/api/product-signals",{method:"POST",headers:{Origin:base,"Content-Type":"application/json"},body:JSON.stringify({event:"preview_generated"})});
+  assert.equal(signal.response.status,202);
+  const productSignals=await request("/api/admin/product-signals?days=30",{headers:{Cookie:admin.cookie}});
+  assert.equal(productSignals.response.status,200);
+  assert.equal(productSignals.data.totals.preview_generated,1);
+  assert.equal(productSignals.data.scope.measure,"aggregate_action_counts");
+  assert.equal(productSignals.data.scope.uniquePeople,false);
+  assert.equal(productSignals.data.scope.repeatedActionsIncrement,true);
+  assertPrivateJson(productSignals.response);
+  assertAdminResponseRedacted(productSignals.data,secrets);
 
   const users=await request("/api/admin/users?q=member%40example.test&limit=500&offset=-5",{headers:{Cookie:admin.cookie}});
   assert.equal(users.response.status,200);

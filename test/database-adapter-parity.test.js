@@ -209,6 +209,14 @@ async function parityScenario(store) {
   const expiryCredentials=await store.accountCredentialsById("expiry-user");
   const expirySessionAfter=await store.session("expiry-session",6_000);
 
+  const oldSignal=await store.incrementProductSignal("2026-06-09","preview_generated");
+  const firstSignal=await store.incrementProductSignal("2026-09-06","preview_generated");
+  const repeatedSignal=await store.incrementProductSignal("2026-09-06","preview_generated");
+  const workoutSignal=await store.incrementProductSignal("2026-09-07","workout_started");
+  const signalCounts=await store.productSignalCounts("2026-06-10","2026-09-07");
+  const deletedSignals=await store.deleteOldProductSignals("2026-06-10");
+  const retainedSignalCounts=await store.productSignalCounts("2026-01-01","2026-09-07");
+
   return {
     insertUserResult,
     insertedSession,
@@ -244,7 +252,14 @@ async function parityScenario(store) {
     resetCredentials,
     resetAtExactExpiry,
     expiryCredentials,
-    expirySessionAfter
+    expirySessionAfter,
+    oldSignal,
+    firstSignal,
+    repeatedSignal,
+    workoutSignal,
+    signalCounts,
+    deletedSignals,
+    retainedSignalCounts
   };
 }
 
@@ -279,6 +294,12 @@ test("SQLite and Turso adapters expose matching values, mutation results, and se
     assert.equal(localResult.staleSetup,null,"stale setup revisions must not partially update either record");
     assert.equal(localResult.setupPlan.plan_json,JSON.stringify({version:1,restDay:"Saturday",days:{Monday:[{exerciseId:"setup"}]}}));
     assert.equal(localResult.setupPreferences.preferences_json,JSON.stringify({goal:"balanced",days:1}));
+    assert.deepEqual(localResult.signalCounts,[
+      {event_day:"2026-09-06",event_name:"preview_generated",event_count:2},
+      {event_day:"2026-09-07",event_name:"workout_started",event_count:1}
+    ]);
+    assert.equal(localResult.deletedSignals,1);
+    assert.deepEqual(localResult.retainedSignalCounts,localResult.signalCounts);
   } finally {
     await fixture.close();
   }

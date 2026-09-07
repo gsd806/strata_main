@@ -44,6 +44,9 @@ test("coverage reports application code and enforces calibrated regression floor
   assert.match(coverageRunner,/--test-coverage-include=src\/\*\*\/\*\.js/);
   assert.match(coverageRunner,/--test-coverage-include=public\/scripts\/discovery-core\.js/);
   assert.match(coverageRunner,/--test-coverage-include=public\/scripts\/monthly-plan-core\.js/);
+  assert.match(coverageRunner,/--test-coverage-include=public\/scripts\/workout-core\.js/);
+  assert.match(coverageRunner,/--test-coverage-include=public\/scripts\/onboarding-core\.js/);
+  assert.match(coverageRunner,/--test-coverage-include=public\/scripts\/preview-core\.js/);
   assert.doesNotMatch(coverageRunner,/public\/scripts\/\*\*\/\*\.js/);
 });
 

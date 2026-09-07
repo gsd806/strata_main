@@ -22,12 +22,13 @@
       href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=7.2.0" />
-    <link rel="stylesheet" href="/experience.css?v=7.2.0" />
-    <script src="/motion.js?v=7.2.0"></script>
+    <link rel="stylesheet" href="styles.css?v=7.3.0" />
+    <link rel="stylesheet" href="/product-signals.css?v=7.3.0" />
+    <link rel="stylesheet" href="/experience.css?v=7.3.0" />
+    <script src="/motion.js?v=7.3.0"></script>
   </head>
   <body class="home-page">
-    <a class="skip-link" href="#rankings">Skip to rankings</a>
+    <a class="skip-link" href="#preview">Skip to training preview</a>
 
     <header class="site-header" id="top">
       <a class="brand" href="#top" aria-label="Strata home">
@@ -67,7 +68,7 @@
               Rank the right movement. Build the week. Run the workout. STRATA connects exercise choice to training execution in one focused system.
             </p>
             <div class="hero-actions">
-              <a class="button button-accent" href="#rankings">Start with rankings <span aria-hidden="true">↘</span></a>
+              <a class="button button-accent" href="#preview">Try STRATA now <span aria-hidden="true">↘</span></a>
               <a class="text-link" href="/planner.html">Build a free week <span aria-hidden="true">→</span></a>
             </div>
           </div>
@@ -88,11 +89,59 @@
         </div>
       </section>
 
+      <section class="proof-section" id="preview" aria-labelledby="preview-title" tabindex="-1">
+        <div class="container">
+          <div class="section-heading proof-heading">
+            <div>
+              <p class="kicker kicker-light">01 / Try the decision engine</p>
+              <h2 id="preview-title">SEE THE REASON.<br /><em>BEFORE YOU JOIN.</em></h2>
+            </div>
+            <p>Choose four basics and STRATA will rank a real sample from the exercise library. No account, email, or saved profile required.</p>
+          </div>
+
+          <div class="proof-workspace" data-reveal>
+            <form class="preview-form" id="quickPreviewForm" aria-describedby="quickPreviewPrivacy quickPreviewStatus">
+              <div class="preview-form-heading">
+                <span>YOUR INPUT</span>
+                <strong>Four choices. One transparent shortlist.</strong>
+              </div>
+              <div class="preview-fields">
+                <label><span>Training goal</span><select id="quickPreviewGoal" name="goal"><option value="balanced">Balanced training</option><option value="hypertrophy">Build muscle</option><option value="strength">Build strength</option><option value="time-efficient">Make the most of my time</option></select></label>
+                <label><span>Muscle group</span><select id="quickPreviewGroup" name="group"><option value="chest">Chest</option><option value="back">Back</option><option value="shoulders">Shoulders</option><option value="arms">Arms</option><option value="legs">Legs</option><option value="glutes">Glutes</option><option value="calves">Lower leg</option><option value="core">Core</option></select></label>
+                <label><span>Equipment</span><select id="quickPreviewEquipment" name="equipment" disabled><option>Loading equipment…</option></select></label>
+                <label><span>Experience</span><select id="quickPreviewLevel" name="level"><option>Beginner</option><option selected>Intermediate</option><option>Advanced</option></select></label>
+              </div>
+              <button class="button button-accent" id="quickPreviewSubmit" type="submit" disabled>Show my shortlist <span aria-hidden="true">→</span></button>
+              <p class="preview-privacy" id="quickPreviewPrivacy"><span aria-hidden="true">●</span> This preview runs in your browser and does not save these choices.</p>
+              <p class="preview-status" id="quickPreviewStatus" role="status" aria-live="polite" aria-atomic="true">Loading the exercise library…</p>
+            </form>
+
+            <div class="preview-output" id="quickPreviewOutput" aria-busy="true">
+              <div class="preview-output-head">
+                <div><span>RULES-BASED RESULT</span><strong id="quickPreviewSummary" tabindex="-1">Waiting for your choices</strong></div>
+                <p><b>Personal match</b> responds to these choices. <b>FitScore</b> stays editorial and does not change.</p>
+              </div>
+              <ol class="preview-results" id="quickPreviewResults">
+                <li class="preview-placeholder"><span>01</span><div><strong>Recommendation</strong><p>Its strongest reason and clearest trade-off will appear here.</p></div></li>
+                <li class="preview-placeholder"><span>02</span><div><strong>Recommendation</strong><p>The result will explain itself instead of asking for blind trust.</p></div></li>
+                <li class="preview-placeholder"><span>03</span><div><strong>Recommendation</strong><p>You can continue into the complete rankings without signing up.</p></div></li>
+              </ol>
+              <div class="preview-actions" id="quickPreviewActions" hidden>
+                <button class="button button-dark" id="quickPreviewRankings" type="button">Explore this muscle <span aria-hidden="true">↓</span></button>
+                <a class="preview-free-link" href="/planner.html"><strong>Free</strong><span>Build and edit a weekly plan →</span></a>
+                <a class="preview-plus-link" href="/pricing"><strong>Strata+</strong><span>Save a profile and adapt recommendations →</span></a>
+              </div>
+            </div>
+          </div>
+          <div class="signal-consent-host" data-product-signals-consent-host></div>
+        </div>
+      </section>
+
       <section class="rankings-section" id="rankings" aria-labelledby="rankings-title" tabindex="-1">
         <div class="container">
           <div class="section-heading rankings-heading">
             <div>
-              <p class="kicker">01 / The index</p>
+              <p class="kicker">02 / The index</p>
               <h2 id="rankings-title">TRAIN THE <em>RIGHT LAYER.</em></h2>
             </div>
             <p>Choose a region, narrow the target, and sort the list around your equipment and experience.</p>
@@ -163,7 +212,7 @@
         <div class="container">
           <div class="section-heading system-heading">
             <div>
-              <p class="kicker">02 / One training system</p>
+              <p class="kicker">03 / One training system</p>
               <h2 id="system-title">FROM QUESTION TO <em>WORKING SET.</em></h2>
             </div>
             <p>STRATA keeps the useful parts of training connected, so a movement you discover can become a plan you follow and a session you can review.</p>
@@ -221,7 +270,7 @@
       <section class="method-section" id="method" aria-labelledby="method-title">
         <div class="container method-grid">
           <div class="method-intro">
-            <p class="kicker kicker-light">03 / Scoring protocol</p>
+            <p class="kicker kicker-light">04 / Scoring protocol</p>
             <h2 id="method-title">A SCORE YOU CAN<br /><em>INTERROGATE.</em></h2>
             <p>
               FitScore is an editorial tool for hypertrophy-oriented exercise selection—not a scientific measurement or a substitute for coaching. Each score starts with the rounded weighted baseline shown here, then may receive an exercise-specific editorial adjustment of up to four points when the five factors miss a meaningful trade-off.
@@ -256,7 +305,7 @@
             <a href="https://unsplash.com/photos/a-woman-lifting-a-barbell-in-a-gym-t7SyUNppIeA" target="_blank" rel="noreferrer">HamZa NOUASRIA / Unsplash <span aria-hidden="true">↗</span></a>
           </div>
           <article>
-            <p class="kicker">04 / Use the list well</p>
+            <p class="kicker">05 / Use the list well</p>
             <h2>CONSISTENCY OUTLIVES <em>NOVELTY.</em></h2>
             <p>
               Rankings help you shortlist. Your logbook decides. Keep a movement if it feels stable, reaches the target, tolerates progressive loading, and does not create unwanted joint pain.
@@ -274,7 +323,7 @@
         <div class="container">
           <div class="section-heading sources-heading">
             <div>
-              <p class="kicker">05 / Research ledger</p>
+              <p class="kicker">06 / Research ledger</p>
               <h2 id="sources-title">THE RECEIPTS.<br /><em>NOT THE HYPE.</em></h2>
             </div>
             <p>Primary research, professional exercise libraries, anatomy texts, and licensed imagery used to shape this guide.</p>
@@ -297,7 +346,7 @@
       <section class="discovery-offer" aria-labelledby="discoveryOfferTitle">
         <div class="container offer-grid">
           <div>
-            <p class="kicker">06 / Strata+ access</p>
+            <p class="kicker">07 / Strata+ access</p>
             <h2 id="discoveryOfferTitle">TRY THE FULL SYSTEM.<br /><em>KEEP IT FOR $5.99 USD.</em></h2>
             <p>Start a no-card Strata+ trial for 10 days, then keep access with one $5.99 USD purchase—never a subscription. Personalize the rankings, build focused sessions, compare movements, follow progress, and shape a 31-day plan around your account.</p>
           </div>
@@ -322,7 +371,7 @@
         <div class="footer-meta">
           <p>© 2026 Strata Index</p>
           <p>Built for education, not diagnosis.</p>
-          <p class="build-number">Build 7.2.0</p>
+          <p class="build-number">Build 7.3.0</p>
         </div>
       </div>
     </footer>
@@ -351,7 +400,10 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=7.2.0"></script>
-    <script src="app.js?v=7.2.0"></script>
+    <script src="/pwa.js?v=7.3.0"></script>
+    <script src="/product-signals.js?v=7.3.0"></script>
+    <script src="/discovery-core.js?v=7.3.0"></script>
+    <script src="/preview-core.js?v=7.3.0"></script>
+    <script src="app.js?v=7.3.0"></script>
   </body>
 </html>

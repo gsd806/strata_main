@@ -118,7 +118,7 @@ async function main() {
   const guestPlannerText=Buffer.from(guestPlanner.body).toString("utf8");
   assert.equal(guestPlanner.response.status,200);
   assert.equal(guestPlanner.response.headers.get("cache-control"),"no-cache");
-  assert.match(guestPlannerText,/Guest plan[\s\S]*separate synced account plan/);
+  assert.match(guestPlannerText,/Free device plan[\s\S]*No account required[\s\S]*Use a synced plan/);
 
   for(const route of ["/forgot-password","/reset-password","/delete-account"]) {
     const page=await get(route);
