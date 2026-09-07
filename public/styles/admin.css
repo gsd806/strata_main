@@ -307,3 +307,9 @@ dialog::backdrop { background:rgba(10,11,9,.8); backdrop-filter:blur(4px); }
   html { scroll-behavior:auto; }
   *,*::before,*::after { scroll-behavior:auto!important; transition-duration:.01ms!important; animation-duration:.01ms!important; animation-iteration-count:1!important; }
 }
+
+/* Admin content includes account IDs, emails, provider references, and support copy. */
+:where(.admin-header > *,.admin-shell,.admin-hero > *,.admin-identity,.dashboard,.admin-section,.section-heading > *,.stat-grid > *,.attention-grid > *,.panel-heading > *,.system-grid > *,.product-signal-grid > *,.filter-panel > *,.support-filter > *,.result-toolbar > *,.record-card > button > *,.record-primary,.record-meta,.audit-item > *,.dialog-header > *,.dialog-body,.fact-grid > *,.action-grid > *,.dialog-actions > *) { min-width:0; }
+:where(.admin-identity,.global-message,.dialog-message,.access-panel,.elevation-panel,.section-heading h2,.section-lede,.stat-card,.attention-grid dt,.system-grid,.signal-boundary,.product-signal-grid dt,.panel-heading,.field-hint,.result-toolbar > p,.section-status,.record-primary,.badge,.empty-state,.audit-item,.dialog-lede,.fact-grid dd,.action-zone,.action-grid button,.ticket-message,.admin-footer) { overflow-wrap:anywhere; }
+.button,.pagination button,.section-nav button { height:auto; padding-top:10px; padding-bottom:10px; white-space:normal; }
+@media(max-width:900px){.admin-header{background:var(--ink)}}

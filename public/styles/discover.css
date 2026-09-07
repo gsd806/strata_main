@@ -179,8 +179,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .movement-board-open:hover { background:#22281c; }
 .movement-board-open > span:first-child { color:var(--accent); font:500 10px var(--mono); }
 .movement-board-open > span:nth-child(2) { min-width:0; }
-.movement-board-open strong,.movement-board-open small { display:block; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.movement-board-open strong { font-size:12px; }
+.movement-board-open strong,.movement-board-open small { display:block; min-width:0; overflow-wrap:anywhere; }
+.movement-board-open strong { font-size:12px; line-height:1.35; }
 .movement-board-open small { margin-top:5px; color:rgba(255,255,255,.48); font:400 9px var(--mono); }
 .movement-board-open b { color:var(--accent); font:600 14px var(--display); }
 .movement-board-open b.is-excluded { color:#ffc4b5; font:600 10px var(--mono); text-transform:uppercase; letter-spacing:.03em; }
@@ -530,6 +530,8 @@ dialog::backdrop { background: rgba(8,9,7,.78); backdrop-filter: blur(4px); }
 .dialog-head h2, .detail-title { font-size: clamp(42px, 6vw, 72px); }
 .icon-button { width: 44px; height: 44px; border: 1px solid var(--ink); color: var(--ink); background: transparent; font-size: 24px; line-height: 1; }
 .icon-button:hover { color: var(--white); background: var(--ink); }
+.detail-hero .dialog-head .icon-button { flex:none; border-color:rgba(255,255,255,.38); color:var(--white); }
+.detail-hero .dialog-head .icon-button:hover,.detail-hero .dialog-head .icon-button:focus-visible { border-color:var(--accent); color:var(--ink); background:var(--accent); }
 .detail-hero { padding: 30px; color: var(--white); background: var(--ink); }
 .detail-hero .kicker { color: var(--accent); }
 .detail-hero-grid { display: grid; grid-template-columns: 1fr auto; gap: 30px; }
@@ -664,7 +666,7 @@ dialog::backdrop { background: rgba(8,9,7,.78); backdrop-filter: blur(4px); }
   .discovery-error-copy { align-items:flex-start; }
   .discovery-load-error .small-button { width:100%; }
   body { padding-bottom: calc(56px + env(safe-area-inset-bottom)); }
-  body:has(.compare-tray:not([hidden])) { padding-bottom: calc(190px + env(safe-area-inset-bottom)); }
+  body:has(.compare-tray:not([hidden])) { padding-bottom: calc(156px + env(safe-area-inset-bottom)); }
   .toast { bottom: calc(110px + env(safe-area-inset-bottom)); }
   body:has(.compare-tray:not([hidden])) .toast { bottom: calc(225px + env(safe-area-inset-bottom)); }
   .studio-hero { padding: 52px 0 48px; }
@@ -744,13 +746,17 @@ dialog::backdrop { background: rgba(8,9,7,.78); backdrop-filter: blur(4px); }
   .explorer-toolbar > label:nth-child(even) { border-left: 0; }
   .explorer-load-more { align-items: stretch; flex-direction: column; gap: 10px; text-align: center; }
   .explorer-load-more button { min-height: 48px; width: 100%; }
-  .compare-tray { bottom: calc(67px + env(safe-area-inset-bottom)); align-items: stretch; flex-direction: column; padding: 14px; }
-  .compare-tray-actions .button { flex: 1; }
+  .compare-tray { bottom:calc(67px + env(safe-area-inset-bottom)); min-height:76px; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:12px; padding:10px 12px; }
+  .compare-tray p { display:-webkit-box; margin-top:3px; overflow:hidden; -webkit-box-orient:vertical; -webkit-line-clamp:2; line-clamp:2; font-size:11px; line-height:1.35; }
+  .compare-tray-actions { gap:4px; }
+  .compare-tray-actions .button { min-width:104px; padding-inline:11px; }
+  .compare-tray-actions .plain-button { padding-inline:7px; }
   .dialog-head { padding: 18px; }
-  .dialog-head .kicker { display: none; }
+  .detail-hero .dialog-head .kicker { min-width:0; margin:0; overflow-wrap:anywhere; color:var(--accent); font-size:9px; }
+  .detail-title,.community-confirm-body h2 { line-height:.98; }
   .detail-hero, .detail-body, .compare-content { padding: 20px; }
   .detail-hero-grid, .detail-grid { grid-template-columns: 1fr; }
-  .detail-score { width: 90px; height: 90px; }
+  .detail-score { width: 104px; height: 104px; }
   .metric-row { grid-template-columns: 100px 1fr 28px; }
   .metric-row small { display: none; }
   .rating-grid { grid-template-columns: 1fr; }
@@ -775,6 +781,12 @@ dialog::backdrop { background: rgba(8,9,7,.78); backdrop-filter: blur(4px); }
   .weekly-pulse-metrics dd { margin:0; }
   .movement-board-actions > div { align-items:stretch; flex-direction:column-reverse; }
   .movement-board-actions .plain-button { width:100%; }
+}
+
+@media (max-width: 380px) {
+  .compare-tray { grid-template-columns:minmax(0,1fr) minmax(0,1.45fr); }
+  .compare-tray-actions { display:grid; grid-template-columns:auto minmax(0,1fr); }
+  .compare-tray-actions .button { min-width:0; gap:7px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -963,6 +975,7 @@ html{overflow-x:clip}:where(a,button,input,select){touch-action:manipulation}.st
 
 @media(max-width:760px) {
   .plus-studio { padding-bottom:calc(56px + env(safe-area-inset-bottom)); }
+  body.plus-studio:has(.compare-tray:not([hidden])) { padding-bottom:calc(156px + env(safe-area-inset-bottom)); }
   .plus-studio .studio-header { min-height:calc(64px + env(safe-area-inset-top)); grid-template-columns:minmax(0,1fr) auto; grid-template-rows:auto; padding-top:calc(10px + env(safe-area-inset-top)); padding-bottom:10px; background:#10110f; backdrop-filter:none; }
   .plus-studio .brand { grid-column:1; grid-row:1; }
   .plus-studio .studio-user { grid-column:2; grid-row:1; }
@@ -971,6 +984,8 @@ html{overflow-x:clip}:where(a,button,input,select){touch-action:manipulation}.st
   .plus-studio .studio-nav-mobile { display:grid; }
   .plus-studio .studio-nav a { display:grid; place-items:center; min-width:0; min-height:56px; padding:0 5px; border-top:3px solid transparent; }
   .plus-studio .studio-nav a.active { border-top-color:var(--accent); }
+  .plus-studio .compare-tray { bottom:calc(67px + env(safe-area-inset-bottom)); }
+  body.plus-studio:has(.compare-tray:not([hidden])) .toast { bottom:calc(155px + env(safe-area-inset-bottom)); }
   .plus-studio .discovery-load-error { top:calc(64px + env(safe-area-inset-top)); }
   .plus-studio .no-script-note { bottom:calc(68px + env(safe-area-inset-bottom)); }
 }

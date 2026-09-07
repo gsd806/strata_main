@@ -1,6 +1,6 @@
 # Module architecture evidence
 
-Build 7.4.0 treats extraction as an enforceable boundary, not merely a file-count change. `npm run architecture:check` recursively inventories server JavaScript and reports physical lines, nonblank lines, bytes, reviewed line budgets, and every statically analyzable local dependency. It fails when a module exceeds its budget, gains an unapproved dependency, is omitted from the policy, references a missing local module, introduces a dependency cycle, or uses aliased, member-based, or computed module loading that cannot be audited.
+Build 7.4.1 retains extraction as an enforceable boundary, not merely a file-count change. `npm run architecture:check` recursively inventories server JavaScript and reports physical lines, nonblank lines, bytes, reviewed line budgets, and every statically analyzable local dependency. It fails when a module exceeds its budget, gains an unapproved dependency, is omitted from the policy, references a missing local module, introduces a dependency cycle, or uses aliased, member-based, or computed module loading that cannot be audited.
 
 The policy lives in `architecture-policy.json`; it should change only with an intentional architecture review. A larger line budget is not the default response to a failure: first decide whether the module has accumulated another responsibility.
 
@@ -31,7 +31,7 @@ The HTTP root supplies services and adapters to the checked service-composition 
 
 ## Browser, account, and product-signal boundaries
 
-The server architecture inventory deliberately covers the process bootstrap and `src/**/*.js`; it does not present browser entry scripts as server modules. Build 7.4.0 keeps the existing preview, account, and privacy boundaries and adds these training-facing browser responsibilities:
+The server architecture inventory deliberately covers the process bootstrap and `src/**/*.js`; it does not present browser entry scripts as server modules. Build 7.4.1 keeps the existing preview, account, privacy, and training-facing browser responsibilities:
 
 - `public/scripts/preview-core.js` is a deterministic, side-effect-free recommendation slice. The homepage passes it the public exercise catalog, a bounded visitor profile, and the existing ranking helpers. Preview choices remain page state and are not written to a plan or account.
 - `public/scripts/account.js` remains the Account page controller. Its returning-member dashboard reads `/api/plan` and, only for active Strata+ access, a bounded `/api/workouts` summary window. Today/next-workout, current-week completion, and comparable records are derived in the browser rather than persisted as a second training model. The controller verifies that the plan response still belongs to the initially authenticated account before requesting or combining workout data.
@@ -44,7 +44,7 @@ The public `/api/product-signals` boundary is implemented by the typed `src/prod
 
 ## Resulting module sizes
 
-The command-generated table below is the Build 7.4.0 review snapshot. CI generates the same table on every architecture check, while the policy enforces budgets and edges against the live sources.
+The command-generated table below is the Build 7.4.1 review snapshot. CI generates the same table on every architecture check, while the policy enforces budgets and edges against the live sources.
 
 | Module | Responsibility | Lines | Nonblank | Size | Line budget | Local dependencies |
 | --- | --- | ---: | ---: | ---: | ---: | --- |

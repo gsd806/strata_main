@@ -327,3 +327,32 @@ a { color:inherit; }
   .policy-page .policy-content { padding:0; border:0; box-shadow:none; }
   .policy-content section { break-inside:avoid; }
 }
+
+/* Preserve every user-facing status and long identifier without masking it. */
+:where(
+  .info-hero-grid > *,.policy-layout > *,.policy-content,
+  .policy-card-grid > *,.policy-founder > *,.policy-support-band > *,
+  .pricing-grid > *,.price-card > *,.free-card > *,
+  .access-path > *,.decision-strip > *,.contact-grid > *,
+  .support-path > *,.support-form > *,.support-form-actions > *,
+  .info-footer-grid > *
+) { min-width:0; }
+
+:where(
+  .info-lede,.updated,.hero-facts,.policy-nav a,.policy-intro,
+  .policy-content h2,.policy-content h3,.policy-content p,.policy-content li,
+  .policy-card > span,.policy-card > strong,.policy-card > small,.policy-card > b,
+  .policy-method-list dt,.policy-method-list dd,.policy-founder-copy,
+  .policy-founder-facts dd,.price-subtitle,.access-path,.feature-list,
+  .tier-boundary,.purchase-status,.checkout-note,.decision-strip,
+  .support-path,.contact-email,.contact-list,.safety-note,
+  .field-help,.support-response-time,.support-status,.footer-tagline,.footer-meta
+) { overflow-wrap:anywhere; }
+
+.button { min-width:0; max-width:100%; height:auto; padding-top:10px; padding-bottom:10px; text-align:left; white-space:normal; }
+.price strong { line-height:.9; }
+.price-subtitle { line-height:1.45; }
+
+@media (max-width:800px) {
+  .info-header { background:var(--ink); }
+}

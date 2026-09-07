@@ -670,3 +670,22 @@ body.compare-open .toast { bottom:calc(112px + env(safe-area-inset-bottom)); }
   .home-page .method-intro h2,.home-page .editorial-section h2 { font-size:38px; overflow-wrap:anywhere; }
   .footer-links { grid-template-columns:1fr; }
 }
+
+/* Keep dynamic catalogue copy inside its own layout track. */
+:where(
+  .hero-copy,.preview-form,.preview-output,.preview-output-head > *,
+  .rankings-shell > *,.exercise-list,.exercise-row > *,
+  .exercise-title,.exercise-title button,.results-meta > *,
+  .system-grid > *,.system-console,.console-session > *,
+  .detail-hero-copy,.detail-meta > *,.detail-columns > *,
+  .guidance-alternatives > *,.compare-dock > *
+) { min-width:0; }
+
+:where(
+  .preview-status,.preview-result-title h3,.preview-result-copy,
+  .exercise-title h3,.exercise-title p,.mobile-exercise-meta,
+  .results-meta p,.empty-state p,.console-note,
+  .detail-hero h2,.detail-hero p,.detail-meta strong,
+  .detail-note,.guidance-prescription,.guidance-alternatives,
+  .compare-dock p,.toast
+) { overflow-wrap:anywhere; }

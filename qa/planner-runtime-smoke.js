@@ -138,7 +138,8 @@ function clickSelectDay(day){
   const finalMobileRule=plannerCss.slice(finalMobileStart,nextMobileRule<0?plannerCss.length:nextMobileRule);
   assert.match(finalMobileRule,/\.library-panel\{[^}]*\btop:auto\b/,"The final mobile cascade must cancel the desktop sticky offset");
   assert.doesNotMatch(finalMobileRule,/\.planner-day-chip\{[^}]*min-width:0/,"The final mobile cascade must preserve accessible day-chip targets");
-  assert.match(plannerCss,/@media\(max-width:480px\)\{[^}]*\.library-panel\{[^}]*54svh[^}]*\}\.planner-day-chips\{grid-template-columns:repeat\(4,minmax\(44px,1fr\)\)/,"Small screens should expose four full-size day targets per row and leave the week within reach");
+  assert.match(plannerCss,/@media\(max-width:480px\)\{[^}]*\.library-panel\{[^}]*72svh[^}]*\}\.planner-day-chips\{grid-template-columns:repeat\(4,minmax\(44px,1fr\)\)/,"Small screens should expose four full-size day targets per row and enough room to read library results");
+  assert.match(plannerCss,/\.library-list \{[^}]*grid-auto-rows:max-content/,"Library rows must grow with wrapped exercise names instead of clipping them");
   assert.match(html,/id="exportWeeklyPlan"[^>]*>Export week/,"Export should use a short, familiar label");
   assert.match(html,/id="shareWeeklyPlan"[^>]*>Share week/,"Community publishing should not be described as a file upload");
   assert.match(html,/id="userName" href="\/account\.html"/,"Signed-in planners should have a direct account link");

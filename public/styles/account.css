@@ -38,3 +38,12 @@
 @media(prefers-reduced-motion:reduce){.account-primary-action{transition:none}.account-primary-action:hover{transform:none}}
 .account-week-days li.recovery{color:rgba(255,255,255,.62)}
 .account-loading .account-reload{min-height:50px;margin-top:18px;padding:0 16px;border:1px solid rgba(255,255,255,.32);border-radius:8px;color:var(--ink);background:var(--accent);font:700 14px var(--body);cursor:pointer}.account-loading .account-reload[hidden]{display:none}.account-loading .account-reload:hover{background:var(--white)}
+
+/* Long identities and server responses must wrap instead of widening or clipping a card. */
+html{overflow-x:clip}
+:where(.account-page,.account-intro,.account-access,.auth-grid,.auth-panel,.signed-in-card,.account-loading,.account-dashboard-head>div,.account-training-grid>*,.account-insight-grid>*,.account-security,.security-actions>*,.verification-ended,.recovery-success){min-width:0}
+.storage-state{max-width:100%;white-space:normal}
+.storage-state span{min-width:0}
+:where(.storage-state span,.account-message,.panel-message,.auth-panel h2,.auth-panel>p,.auth-panel small,.auth-panel button,.signed-actions a,.signed-actions button,.security-actions button,.security-status,.verification-status,.verification-ended,.recovery-success,.account-primary-action,.build-footer){overflow-wrap:anywhere}
+:where(.auth-panel button,.signed-actions a,.signed-actions button,.security-actions button,.recovery-success a,.account-primary-action){height:auto;padding-top:10px;padding-bottom:10px;text-align:left;white-space:normal}
+@media(max-width:760px){.account-header{background:var(--ink)}}

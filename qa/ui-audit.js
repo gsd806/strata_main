@@ -39,6 +39,40 @@ async function horizontalOverflow(page){
   return page.evaluate(()=>Math.max(0,document.documentElement.scrollWidth-document.documentElement.clientWidth));
 }
 
+async function textOutsideContainers(page,selector){
+  return page.locator(selector).evaluateAll((containers)=>containers.flatMap((container,index)=>{
+    const bounds=container.getBoundingClientRect(),issues=[];
+    if(bounds.width<=0||bounds.height<=0||getComputedStyle(container).visibility==="hidden")return issues;
+    const walker=document.createTreeWalker(container,NodeFilter.SHOW_TEXT);
+    for(let textNode=walker.nextNode();textNode;textNode=walker.nextNode()){
+      const text=String(textNode.textContent||"").replace(/\s+/g," ").trim(),parent=textNode.parentElement;
+      if(!text||!parent||parent.closest(".sr-only,[hidden],[aria-hidden='true']"))continue;
+      const style=getComputedStyle(parent);
+      if(style.display==="none"||style.visibility==="hidden"||Number(style.opacity)===0)continue;
+      const range=document.createRange();range.selectNodeContents(textNode);
+      for(const rect of range.getClientRects()){
+        if(rect.width<=0||rect.height<=0)continue;
+        if(rect.left<bounds.left-2||rect.right>bounds.right+2||rect.top<bounds.top-2||rect.bottom>bounds.bottom+2){
+          issues.push(`${index}:${text.slice(0,48)}`);break;
+        }
+      }
+    }
+    return issues;
+  }));
+}
+
+async function plannerLibraryLayoutIssues(page){
+  return page.locator(".library-card").evaluateAll((cards)=>cards.flatMap((card,index)=>{
+    const box=(node)=>{const rect=node.getBoundingClientRect();return{top:rect.top,right:rect.right,bottom:rect.bottom,left:rect.left,width:rect.width,height:rect.height};};
+    const cardBox=box(card),copy=card.children[1],actions=card.querySelector(".library-actions"),copyBox=copy?box(copy):null,actionsBox=actions?box(actions):null,issues=[];
+    if(copyBox&&actionsBox&&copyBox.top<actionsBox.bottom-1&&copyBox.bottom>actionsBox.top+1&&copyBox.left<actionsBox.right-1&&copyBox.right>actionsBox.left+1)issues.push(`${index}:copy overlaps actions`);
+    if(copyBox&&(copyBox.top<cardBox.top-1||copyBox.bottom>cardBox.bottom+1))issues.push(`${index}:copy leaves card`);
+    if(actionsBox&&(actionsBox.top<cardBox.top-1||actionsBox.bottom>cardBox.bottom+1))issues.push(`${index}:actions leave card`);
+    const next=cards[index+1];if(next&&cardBox.bottom>box(next).top+1)issues.push(`${index}:card overlaps next card`);
+    return issues;
+  }));
+}
+
 async function contrastRatio(locator){
   return locator.evaluate((node)=>{
     const rgba=(value)=>{
@@ -143,6 +177,17 @@ let browser;
     assert.ok(planResponse.ok(),`Planner save failed with HTTP ${planResponse.status()}`);
     snapshot.scheduled=await page.locator(".scheduled-card").count();
     positive(snapshot.scheduled,"Scheduled planner cards");
+    snapshot.plannerResponsive={};
+    for(const width of [1440,1024,768,761,760,700,600,430,390,360,339,320]){
+      await page.setViewportSize({width,height:900});await page.evaluate(()=>document.fonts?.ready);
+      const [layoutIssues,textIssues,overflow]=await Promise.all([plannerLibraryLayoutIssues(page),textOutsideContainers(page,".library-card"),horizontalOverflow(page)]);
+      snapshot.plannerResponsive[width]={layoutIssues:layoutIssues.length,textIssues:textIssues.length,overflow};
+      assert.deepEqual(layoutIssues,[],`Planner library geometry issues at ${width}px: ${layoutIssues.join(", ")}`);
+      assert.deepEqual(textIssues,[],`Planner library text outside its card at ${width}px: ${textIssues.join(", ")}`);
+      assert.ok(overflow<=1,`Planner overflows horizontally by ${overflow}px at ${width}px`);
+      if(width===339)await capture(page,"planner-library-339.png",{fullPage:false});
+    }
+    await page.setViewportSize({width:1440,height:1000});
 
     await page.goto(`${BASE_URL}/pricing`,{waitUntil:"networkidle"});
     await page.locator("#purchaseStatus").waitFor();
@@ -421,16 +466,21 @@ let browser;
     assert.equal(workoutMobileNav.position,"fixed");assert.ok(Math.abs(workoutMobileNav.viewport-workoutMobileNav.bottom)<=1,"Workout mobile navigation must stay at the viewport bottom");
     await capture(page,"workout-mobile.png",{fullPage:false});
 
-    await page.setViewportSize({width:320,height:700});
-    snapshot.narrowOverflow={};
-    for(const route of ["/","/account.html","/verify-email.html","/forgot-password","/reset-password","/delete-account","/planner.html","/discover.html","/pricing","/contact","/policies","/terms","/privacy","/refunds","/install.html"]){
-      await page.goto(`${BASE_URL}${route}`,{waitUntil:"networkidle"});
-      const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth);
-      snapshot.narrowOverflow[route]=overflow;
-      assert.ok(overflow<=1,`${route} overflows a 320px viewport by ${overflow}px`);
-      if(route==="/pricing")await capture(page,"pricing-mobile-320.png",{fullPage:true});
-      if(route==="/policies")await capture(page,"policies-mobile-320.png",{fullPage:true});
-      if(route==="/terms")await capture(page,"terms-mobile-320.png",{fullPage:true});
+    const responsiveRoutes=["/","/account.html","/verify-email.html","/forgot-password","/reset-password","/delete-account","/planner.html","/discover.html",`/workout.html?day=${encodeURIComponent(snapshot.sessionChoices.day.value)}`,"/onboarding.html","/pricing","/contact","/policies","/terms","/privacy","/refunds","/offline.html","/install.html"];
+    const responsiveContainers=".exercise-row,.library-card,.scheduled-card,.recommend-card,.exercise-card,.session-result-card,.progress-metric-grid article,.feature-block,.auth-panel,.signed-in-card,.account-next-card,.account-week-card,.account-insight-card,.price-card,.free-card,.policy-card,.contact-card,.device-card,.today-context-card,.training-block-card,.progression-card,.plan-summary-card,.stat-card";
+    snapshot.responsiveLayout={};
+    for(const width of [768,700,600,430,390,360,339,320]){
+      await page.setViewportSize({width,height:Math.max(700,Math.round(width*1.5))});snapshot.responsiveLayout[width]={routes:responsiveRoutes.length,maxOverflow:0,textIssues:0};
+      for(const route of responsiveRoutes){
+        await page.goto(`${BASE_URL}${route}`,{waitUntil:"networkidle"});await page.evaluate(()=>document.fonts?.ready);
+        const [overflow,textIssues]=await Promise.all([horizontalOverflow(page),textOutsideContainers(page,responsiveContainers)]);
+        snapshot.responsiveLayout[width].maxOverflow=Math.max(snapshot.responsiveLayout[width].maxOverflow,overflow);snapshot.responsiveLayout[width].textIssues+=textIssues.length;
+        assert.ok(overflow<=1,`${route} overflows a ${width}px viewport by ${overflow}px`);
+        assert.deepEqual(textIssues,[],`${route} has text outside a content card at ${width}px: ${textIssues.join(", ")}`);
+        if(width===320&&route==="/pricing")await capture(page,"pricing-mobile-320.png",{fullPage:true});
+        if(width===320&&route==="/policies")await capture(page,"policies-mobile-320.png",{fullPage:true});
+        if(width===320&&route==="/terms")await capture(page,"terms-mobile-320.png",{fullPage:true});
+      }
     }
     assert.equal(await page.locator(".device-card").count(),4,"Install guide should cover four device paths");
     assert.equal(await page.locator(".device-card.recommended").count(),1,"Install guide should identify the current device path");

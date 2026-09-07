@@ -165,3 +165,28 @@
 .adaptation-change{padding:13px 15px;color:var(--text)!important;border-left:3px solid var(--lime);background:rgba(212,245,120,.06);font-weight:700}.adaptation-proposal .actions{margin-top:18px!important}.adaptation-proposal #adaptationStatus{min-height:20px;margin:12px 0 0;font-size:.78rem}
 .celebration>#anotherSession{margin-top:24px}
 @media(max-width:650px){.exercise-guide-grid,.check-in-heading,.check-in-grid{grid-template-columns:1fr}.progression-suggestion{grid-template-columns:1fr;gap:6px}.progression-suggestion small{grid-column:auto}.celebration>.check-in,.celebration>.next-time,.celebration>.adaptation-proposal{padding:18px 14px}.check-in-actions{align-items:stretch;flex-direction:column}.check-in-actions .button{width:100%}}
+
+/* Narrow training controls keep their own space instead of squeezing labels and values. */
+@media(max-width:420px){
+  .workout-page .exercise-heading{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:start}
+  .workout-page .exercise-heading>div{grid-column:2}
+  .workout-page .exercise-progress{grid-column:2;margin:2px 0 0;justify-self:start}
+  .workout-page .rest-timer{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%;gap:8px}
+  .workout-page .rest-timer .timer-readout{min-width:0;margin:0}
+  .workout-page .rest-timer select{width:100%;max-width:none}
+  .workout-page .rest-timer .button{width:100%}
+  .workout-page .save-strip .actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%;margin-left:0}
+  .workout-page .save-strip .actions .button{width:100%;padding-inline:8px}
+  .workout-page .save-strip .actions .button:last-child{grid-column:1/-1}
+  .workout-page dialog .section-heading{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start}
+  .workout-page dialog .section-heading h2{min-width:0;overflow-wrap:anywhere}
+  .workout-page .detail-set{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:start}
+  .workout-page .detail-set span:nth-child(2){min-width:0;text-align:center;overflow-wrap:anywhere}
+  .workout-page .adaptation-proposal .actions{display:grid;width:100%}
+  .workout-page .adaptation-proposal .actions .button{width:100%}
+}
+@media(max-width:340px){
+  .workout-page .format-controls{display:grid;grid-template-columns:minmax(0,1fr)}
+  .workout-page .format-controls .field,.workout-page .format-controls .field:last-child{min-width:0;max-width:none}
+  .workout-page .format-controls select{width:100%}
+}

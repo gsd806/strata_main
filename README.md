@@ -1,8 +1,8 @@
 # STRATA — Exercise Rankings and Workout Planning
 
-STRATA is an evidence-informed workout index with server-backed, email-verified accounts, a private Strata+ studio, and weekly, community, and monthly workout planning. It includes 200 resistance-training exercises—25 per muscle group, including 50 bodyweight options—across 8 muscle groups and 26 sub-muscle targets. Build 7.4.0 is an installable Progressive Web App (PWA) with Resend-powered account email, Paddle-powered one-time Strata+ access, and a private owner dashboard.
+STRATA is an evidence-informed workout index with server-backed, email-verified accounts, a private Strata+ studio, and weekly, community, and monthly workout planning. It includes 200 resistance-training exercises—25 per muscle group, including 50 bodyweight options—across 8 muscle groups and 26 sub-muscle targets. Build 7.4.1 is an installable Progressive Web App (PWA) with Resend-powered account email, Paddle-powered one-time Strata+ access, and a private owner dashboard.
 
-**Build 7.4.0 is the guided-training release.** Strata+ is organized around Today, Plan, Progress, and Explore; fresh members can preview a simple starter week, and returning members get one clear Start or Resume action. Catalog-backed exercise guidance, optional post-workout check-ins, conservative like-for-like progression, and approval-only plan adaptations connect planning to completed work without claiming to measure recovery or silently changing a plan. This archive has not been deployed. See [release readiness](docs/release-readiness.md) and [migration and rollback instructions](docs/release-7.4.0.md).
+**Build 7.4.1 is the responsive-integrity release.** It preserves the guided Today, Plan, Progress, and Explore training loop while correcting text containment, control spacing, mobile navigation, sticky-header opacity, and narrow-screen layouts across Plan, Strata+, Train, setup, account, public information, installation, and administration. This archive has not been deployed. See [release readiness](docs/release-readiness.md) and [deployment and rollback instructions](docs/release-7.4.1.md).
 
 STRATA also includes a login-free local weekly planner, account-synced plans, structured community-plan sharing, a deterministic 31-day workspace, community ratings, printable exports, and a private administrator help desk. Strata+ is **$5.99 USD as a one-time purchase with no subscription**. Paddle is the merchant of record, and the server grants access only after verifying a signed matching webhook.
 
@@ -28,7 +28,7 @@ Copy `.env.example` to `.env` and fill in the required values when testing email
 
 ## Project structure
 
-Build 7.4.0 separates browser files from private server code while preserving every public URL used by visitors, Paddle, Render, and installed PWAs:
+Build 7.4.1 separates browser files from private server code while preserving every public URL used by visitors, Paddle, Render, and installed PWAs:
 
 ```text
 server.js          Stable npm/Render bootstrap
@@ -93,7 +93,7 @@ Account APIs, authentication routes, health checks, personalized pages, the admi
 
 ## Public pricing, support, and policies
 
-Build 7.4.0 has public, mobile-friendly pages at `/pricing`, `/contact`, `/policies`, `/terms`, `/privacy`, and `/refunds`. The Policies directory is the single public entry point for legal documents and the founder story. The published refund window is 14 calendar days after purchase. Support is available through the Contact form and at `stratafitness.official@gmail.com`.
+Build 7.4.1 has public, mobile-friendly pages at `/pricing`, `/contact`, `/policies`, `/terms`, `/privacy`, and `/refunds`. The Policies directory is the single public entry point for legal documents and the founder story. The published refund window is 14 calendar days after purchase. Support is available through the Contact form and at `stratafitness.official@gmail.com`.
 
 Paddle receives payment information; STRATA does not receive or store full payment-card or bank-account details. Do not change the displayed price independently of the live Paddle catalog. Before accepting payments, make sure the public operator details match the identity required by Paddle and applicable law rather than inventing missing legal information.
 

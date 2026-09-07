@@ -1,5 +1,15 @@
 # Changelog
 
+## 7.4.1 — Responsive content integrity
+
+- Rebuilt planner library cards around intrinsic content height so long exercise names, metadata, FitScores, and Add/Guide/Video controls stay in their own card instead of colliding with the next result.
+- Made planner headings, day selectors, scheduled exercises, move controls, save errors, filters, and touch targets resilient from the 300 px desktop sidebar through compact phone and tablet layouts.
+- Kept long Strata+ recommendation names readable, restored visible exercise-detail controls and context, and stopped the comparison tray from covering the mobile navigation.
+- Gave narrow workout titles, set progress, logging formats, timers, save actions, check-ins, dialogs, and adaptation choices enough dedicated space to wrap without clipping.
+- Corrected the weekly-setup mobile navigation and replaced translucent compact headers with opaque surfaces across setup, account, public information, and administration pages.
+- Hardened public cards and actions against long account names, email addresses, server messages, identifiers, translated labels, and other dynamic content without masking it with ellipses.
+- Added real-Chromium responsive regressions, card-text containment checks, and a live 18-route matrix at 320, 339, 360, 390, 430, 600, 700, and 768 px; planner geometry is additionally checked through 1440 px.
+
 ## 7.4.0 — A calmer, guided training loop
 
 - Reorganized Strata+ around four clear destinations—Today, Plan, Progress, and Explore—so the next workout remains primary while advanced tools stay available without dashboard clutter.
