@@ -6,22 +6,28 @@ const {createHmac}=require("node:crypto");
 const {
   DEFAULT_PRODUCT_ID,
   DEFAULT_PRICE_ID,
+  STRATA_PLUS_TRIAL_MS,
   getPaymentConfig,
   verifyPaddleSignature,
   createPaddleTransaction,
   fetchPaddleTransaction,
   cancelPaddleTransaction,
   validateCheckoutTransaction,
+  validateCheckoutRecoveryTransaction,
   findPaddleCheckoutTransaction,
   fetchPaddleIpv4Cidrs,
   isPaddleWebhookAddress,
   validateCompletedTransaction,
+  validateSubscription,
+  createCustomerPortalSession,
   fullRevocationFromAdjustment
 }=require("../src/payments");
 
 const API_KEY="pdl_live_apikey_01fixture0000000000000000_fixture_secret_123";
 const WEBHOOK_SECRET="pdl_ntfset_server_only_fixture";
 const CLIENT_TOKEN="live_client_side_fixture_123456";
+const RECURRING_PRICE_ID="pri_01monthlyfixture00000000000000";
+const SUBSCRIPTION_ID="sub_01m1ky8j916ybyacs836dxbz8x";
 const NOW_SECONDS=1_788_393_600;
 
 function liveEnv(overrides={}) {
@@ -32,7 +38,7 @@ function liveEnv(overrides={}) {
     PADDLE_API_KEY:API_KEY,
     PADDLE_WEBHOOK_SECRET:WEBHOOK_SECRET,
     PADDLE_PRODUCT_ID:DEFAULT_PRODUCT_ID,
-    PADDLE_PRICE_ID:DEFAULT_PRICE_ID,
+    PADDLE_PRICE_ID:RECURRING_PRICE_ID,
     ...overrides
   };
 }
@@ -54,7 +60,7 @@ function completedTransaction(overrides={}) {
     id:"txn_01m1ky8j916ybyacs836dxbz8x",
     status:"completed",
     customer_id:"ctm_01m1ky8j916ybyacs836dxbz8x",
-    subscription_id:null,
+    subscription_id:SUBSCRIPTION_ID,
     collection_mode:"automatic",
     origin:"api",
     currency_code:"USD",
@@ -63,12 +69,12 @@ function completedTransaction(overrides={}) {
     items:[{
       quantity:1,
       price:{
-        id:DEFAULT_PRICE_ID,
+        id:RECURRING_PRICE_ID,
         product_id:DEFAULT_PRODUCT_ID,
-        billing_cycle:null
+        billing_cycle:{interval:"month",frequency:1}
       }
     }],
-    details:{totals:{subtotal:"599",discount:"0",tax:"0",total:"599",grand_total:"599"}}
+    details:{totals:{subtotal:"99",discount:"0",tax:"0",total:"99",grand_total:"99"}}
   };
   return {...base,...overrides};
 }
@@ -85,8 +91,28 @@ function checkoutTransaction(overrides={}) {
     custom_data:{strata_user_id:"user-1",strata_checkout_id:"checkout-1",strata_version:1},
     items:[{
       quantity:1,
-      price:{id:DEFAULT_PRICE_ID,product_id:DEFAULT_PRODUCT_ID,billing_cycle:null}
+      price:{id:RECURRING_PRICE_ID,product_id:DEFAULT_PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}
     }]
+  };
+  return {...base,...overrides};
+}
+
+function subscription(overrides={}) {
+  const base={
+    id:SUBSCRIPTION_ID,
+    status:"active",
+    customer_id:"ctm_01m1ky8j916ybyacs836dxbz8x",
+    transaction_id:"txn_01m1ky8j916ybyacs836dxbz8x",
+    collection_mode:"automatic",
+    custom_data:{strata_user_id:"user-1",strata_version:1},
+    billing_cycle:{interval:"month",frequency:1},
+    items:[{
+      quantity:1,
+      recurring:true,
+      price:{id:RECURRING_PRICE_ID,product_id:DEFAULT_PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}
+    }],
+    scheduled_change:null,
+    current_billing_period:{starts_at:"2026-09-01T00:00:00Z",ends_at:"2026-10-01T00:00:00Z"}
   };
   return {...base,...overrides};
 }
@@ -129,7 +155,8 @@ test("live configuration is fail-closed and serializes browser-safe fields only"
     {PADDLE_WEBHOOK_SECRET:"short"},
     {PADDLE_WEBHOOK_SECRET:"pdl_ntfset_replace-with-your-endpoint-secret"},
     {PADDLE_PRODUCT_ID:"pro_invalid"},
-    {PADDLE_PRICE_ID:"pri_invalid"}
+    {PADDLE_PRICE_ID:"pri_invalid"},
+    {PADDLE_PRICE_ID:DEFAULT_PRICE_ID}
   ]) {
     const config=getPaymentConfig(liveEnv(overrides));
     assert.equal(config.configured,false,JSON.stringify(overrides));
@@ -142,8 +169,9 @@ test("live configuration is fail-closed and serializes browser-safe fields only"
   assert.equal(configured.enabled,true);
   assert.equal(configured.clientToken,CLIENT_TOKEN);
   assert.equal(configured.productId,DEFAULT_PRODUCT_ID);
-  assert.equal(configured.priceId,DEFAULT_PRICE_ID);
-  assert.deepEqual(configured.price,{amount:"5.99",currency:"USD"});
+  assert.equal(configured.priceId,RECURRING_PRICE_ID);
+  assert.deepEqual(configured.price,{amount:"0.99",currency:"USD",interval:"month",frequency:1});
+  assert.equal(STRATA_PLUS_TRIAL_MS,30*60*1000);
   assert.ok(Object.isFrozen(configured));
 
   const serialized=JSON.stringify(configured);
@@ -235,7 +263,7 @@ test("transaction creation fixes catalog and account metadata on the server",asy
 
   const body=JSON.parse(calls[0].options.body);
   assert.deepEqual(body,{
-    items:[{price_id:DEFAULT_PRICE_ID,quantity:1}],
+    items:[{price_id:RECURRING_PRICE_ID,quantity:1}],
     collection_mode:"automatic",
     custom_data:{
       strata_user_id:"user-server-owned",
@@ -254,6 +282,7 @@ test("checkout transaction recovery validates the durable account and checkout r
   const config=getPaymentConfig(liveEnv());
   const expected={userId:"user-1",checkoutId:"checkout-1"};
   assert.deepEqual(validateCheckoutTransaction(checkoutTransaction(),config,expected),{ok:true});
+  assert.deepEqual(validateCheckoutRecoveryTransaction(checkoutTransaction(),config,expected),{ok:true});
 
   const cases=[
     ["invalid transaction",{id:"not-a-transaction"},"transaction"],
@@ -267,13 +296,22 @@ test("checkout transaction recovery validates the durable account and checkout r
     ["wrong metadata version",{custom_data:{strata_user_id:"user-1",strata_checkout_id:"checkout-1",strata_version:2}},"metadata"],
     ["extra item",{items:[...checkoutTransaction().items,...checkoutTransaction().items]},"items"],
     ["wrong quantity",{items:[{...checkoutTransaction().items[0],quantity:2}]},"quantity"],
-    ["wrong price",{items:[{quantity:1,price:{id:"pri_01wrong00000000000000000000",product_id:DEFAULT_PRODUCT_ID,billing_cycle:null}}]},"price"],
-    ["wrong product",{items:[{quantity:1,price:{id:DEFAULT_PRICE_ID,product_id:"pro_01wrong00000000000000000000",billing_cycle:null}}]},"product"],
-    ["recurring price",{items:[{quantity:1,price:{id:DEFAULT_PRICE_ID,product_id:DEFAULT_PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}}]},"product"]
+    ["wrong price",{items:[{quantity:1,price:{id:"pri_01wrong00000000000000000000",product_id:DEFAULT_PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}}]},"price"],
+    ["wrong product",{items:[{quantity:1,price:{id:RECURRING_PRICE_ID,product_id:"pro_01wrong00000000000000000000",billing_cycle:{interval:"month",frequency:1}}}]},"product"],
+    ["one-time price",{items:[{quantity:1,price:{id:RECURRING_PRICE_ID,product_id:DEFAULT_PRODUCT_ID,billing_cycle:null}}]},"billing_cycle"],
+    ["annual price",{items:[{quantity:1,price:{id:RECURRING_PRICE_ID,product_id:DEFAULT_PRODUCT_ID,billing_cycle:{interval:"year",frequency:1}}}]},"billing_cycle"]
   ];
   for(const [label,overrides,reason] of cases) {
     assert.deepEqual(validateCheckoutTransaction(checkoutTransaction(overrides),config,expected),{ok:false,reason},label);
   }
+});
+
+test("checkout recovery accepts a completed transaction only with its original durable identity",()=>{
+  const config=getPaymentConfig(liveEnv()),identity={userId:"user-1",checkoutId:"checkout-1"};
+  const completed=completedTransaction({custom_data:{strata_user_id:"user-1",strata_checkout_id:"checkout-1",strata_version:1}});
+  assert.deepEqual(validateCheckoutRecoveryTransaction(completed,config,identity),{ok:true});
+  assert.deepEqual(validateCheckoutRecoveryTransaction(completedTransaction({custom_data:{strata_user_id:"user-2",strata_checkout_id:"checkout-1",strata_version:1}}),config,identity),{ok:false,reason:"account"});
+  assert.deepEqual(validateCheckoutRecoveryTransaction(completedTransaction({custom_data:{strata_user_id:"user-1",strata_checkout_id:"other",strata_version:1}}),config,identity),{ok:false,reason:"checkout"});
 });
 
 test("checkout transaction recovery searches Paddle pages and returns only an exact durable match",async()=>{
@@ -311,7 +349,7 @@ test("checkout transaction recovery searches Paddle pages and returns only an ex
   assert.equal(firstUrl.searchParams.get("created_at[LTE]"),"2026-09-05T10:05:00.000Z");
   assert.equal(firstUrl.searchParams.get("origin"),"api");
   assert.equal(firstUrl.searchParams.get("collection_mode"),"automatic");
-  assert.equal(firstUrl.searchParams.get("subscription_id"),"null");
+  assert.equal(firstUrl.searchParams.has("subscription_id"),false,"recovery must include transactions that completed before the retry");
   assert.equal(firstUrl.searchParams.get("order_by"),"created_at[ASC]");
   assert.equal(firstUrl.searchParams.get("per_page"),"30");
   assert.equal(calls[0].options.headers.Authorization,`Bearer ${API_KEY}`);
@@ -492,9 +530,10 @@ test("transaction creation fails closed with sanitized errors",async(t)=>{
       ["another account",{custom_data:{strata_user_id:"user-2",strata_checkout_id:"checkout-1",strata_version:1}}],
       ["another checkout",{custom_data:{strata_user_id:"user-1",strata_checkout_id:"checkout-2",strata_version:1}}],
       ["wrong metadata version",{custom_data:{strata_user_id:"user-1",strata_checkout_id:"checkout-1",strata_version:2}}],
-      ["wrong price",{items:[{quantity:1,price:{id:"pri_01wrong00000000000000000000",product_id:DEFAULT_PRODUCT_ID,billing_cycle:null}}]}],
-      ["wrong product",{items:[{quantity:1,price:{id:DEFAULT_PRICE_ID,product_id:"pro_01wrong00000000000000000000",billing_cycle:null}}]}],
-      ["recurring price",{items:[{quantity:1,price:{id:DEFAULT_PRICE_ID,product_id:DEFAULT_PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}}]}]
+      ["wrong price",{items:[{quantity:1,price:{id:"pri_01wrong00000000000000000000",product_id:DEFAULT_PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}}]}],
+      ["wrong product",{items:[{quantity:1,price:{id:RECURRING_PRICE_ID,product_id:"pro_01wrong00000000000000000000",billing_cycle:{interval:"month",frequency:1}}}]}],
+      ["one-time price",{items:[{quantity:1,price:{id:RECURRING_PRICE_ID,product_id:DEFAULT_PRODUCT_ID,billing_cycle:null}}]}],
+      ["annual price",{items:[{quantity:1,price:{id:RECURRING_PRICE_ID,product_id:DEFAULT_PRODUCT_ID,billing_cycle:{interval:"year",frequency:1}}}]}]
     ];
     for(const [label,overrides] of cases) {
       await t.test(label,async()=>{
@@ -554,25 +593,98 @@ test("transaction reconciliation fails closed with sanitized provider errors",as
   }
 });
 
-test("completed one-time transactions validate at full price or a zero total",()=>{
+test("completed initial subscription transactions validate against the recurring catalog",()=>{
   const config=getPaymentConfig(liveEnv());
   assert.deepEqual(validateCompletedTransaction(completedTransaction(),config),{ok:true});
 
   const promoted=completedTransaction({
     discount_id:"dsc_01m1ky8j916ybyacs836dxbz8x",
-    details:{totals:{subtotal:"599",discount:"599",tax:"0",total:"0",grand_total:"0"}}
+    details:{totals:{subtotal:"99",discount:"99",tax:"0",total:"0",grand_total:"0"}}
   });
   assert.deepEqual(validateCompletedTransaction(promoted,config),{ok:true});
 });
 
-test("incomplete, recurring, or mismatched transactions never validate",async(t)=>{
+test("subscription snapshots enforce ownership, monthly cadence, catalog, and lifecycle",async(t)=>{
+  const config=getPaymentConfig(liveEnv());
+  const identity={userId:"user-1",transactionId:"txn_01m1ky8j916ybyacs836dxbz8x",requireTransaction:true};
+  const valid=validateSubscription(subscription({scheduled_change:{action:"cancel",effective_at:"2026-10-01T00:00:00Z"}}),config,identity);
+  assert.deepEqual(valid,{
+    ok:true,entitled:true,subscriptionId:SUBSCRIPTION_ID,
+    customerId:"ctm_01m1ky8j916ybyacs836dxbz8x",status:"active",
+    priceId:RECURRING_PRICE_ID,productId:DEFAULT_PRODUCT_ID,
+    scheduledChangeAction:"cancel",scheduledChangeAt:Date.parse("2026-10-01T00:00:00Z"),
+    currentPeriodEndsAt:Date.parse("2026-10-01T00:00:00Z")
+  });
+  for(const status of ["active","trialing","past_due","paused","canceled"]){
+    const snapshot=subscription({status,...(["paused","canceled"].includes(status)?{current_billing_period:null}:{})});
+    assert.equal(validateSubscription(snapshot,config,identity).ok,true,status);
+  }
+  const changedCatalog=subscription({items:[{quantity:1,recurring:true,price:{id:"pri_01anothermonthly000000000000",product_id:DEFAULT_PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}}]});
+  assert.deepEqual(validateSubscription(changedCatalog,config,identity),{
+    ok:true,entitled:false,subscriptionId:SUBSCRIPTION_ID,
+    customerId:"ctm_01m1ky8j916ybyacs836dxbz8x",status:"active",
+    priceId:"pri_01anothermonthly000000000000",productId:DEFAULT_PRODUCT_ID,
+    scheduledChangeAction:null,scheduledChangeAt:null,currentPeriodEndsAt:Date.parse("2026-10-01T00:00:00Z")
+  });
+  const cases=[
+    ["wrong account",subscription({custom_data:{strata_user_id:"user-2",strata_version:1}}),"account"],
+    ["wrong transaction",subscription({transaction_id:"txn_01other00000000000000000000"}),"transaction"],
+    ["one-time cadence",subscription({billing_cycle:null}),"billing_cycle"],
+    ["annual item",subscription({items:[{quantity:1,recurring:true,price:{id:RECURRING_PRICE_ID,product_id:DEFAULT_PRODUCT_ID,billing_cycle:{interval:"year",frequency:1}}}]}),"billing_cycle"],
+    ["manual collection",subscription({collection_mode:"manual"}),"collection"],
+    ["invalid status",subscription({status:"deleted"}),"status"],
+    ["missing period",subscription({current_billing_period:null}),"billing_period"],
+    ["invalid scheduled change",subscription({scheduled_change:{action:"cancel",effective_at:"not-a-date"}}),"scheduled_change"]
+  ];
+  for(const [name,data,reason] of cases)await t.test(name,()=>assert.deepEqual(validateSubscription(data,config,identity),{ok:false,reason}));
+});
+
+test("customer portal links are temporary, account-bound Paddle HTTPS URLs",async()=>{
+  const config=getPaymentConfig(liveEnv()),calls=[];
+  const customerId="ctm_01m1ky8j916ybyacs836dxbz8x";
+  const validPayload={data:{
+    customer_id:customerId,
+    urls:{
+      general:{overview:"https://customer-portal.paddle.com/cpl_overviewfixture"},
+      subscriptions:[{id:SUBSCRIPTION_ID,cancel_subscription:"https://customer-portal.paddle.com/cpl_cancelfixture",update_subscription_payment_method:"https://customer-portal.paddle.com/cpl_paymentfixture"}]
+    }
+  }};
+  const links=await createCustomerPortalSession(config,{customerId,subscriptionId:SUBSCRIPTION_ID},async(url,options)=>{
+    calls.push({url,options});return {ok:true,json:async()=>validPayload};
+  });
+  assert.deepEqual(links,{
+    overviewUrl:"https://customer-portal.paddle.com/cpl_overviewfixture",
+    cancelUrl:"https://customer-portal.paddle.com/cpl_cancelfixture",
+    updatePaymentMethodUrl:"https://customer-portal.paddle.com/cpl_paymentfixture"
+  });
+  assert.equal(calls[0].url,`https://api.paddle.com/customers/${customerId}/portal-sessions`);
+  assert.deepEqual(JSON.parse(calls[0].options.body),{subscription_ids:[SUBSCRIPTION_ID]});
+  assert.equal(calls[0].options.headers.Authorization,`Bearer ${API_KEY}`);
+
+  for(const payload of [
+    {...validPayload,data:{...validPayload.data,customer_id:"ctm_01other00000000000000000000"}},
+    {...validPayload,data:{...validPayload.data,urls:{...validPayload.data.urls,general:{overview:"https://attacker.example/cpl_overviewfixture"}}}},
+    {...validPayload,data:{...validPayload.data,urls:{...validPayload.data.urls,subscriptions:[{...validPayload.data.urls.subscriptions[0],id:"sub_01other00000000000000000000"}]}}}
+  ]){
+    await assert.rejects(
+      createCustomerPortalSession(config,{customerId,subscriptionId:SUBSCRIPTION_ID},async()=>({ok:true,json:async()=>payload})),
+      (error)=>error.status===502&&error.code==="PADDLE_PORTAL_INVALID_RESPONSE"
+    );
+  }
+  await assert.rejects(
+    createCustomerPortalSession(config,{customerId:"ctm_wrong",subscriptionId:SUBSCRIPTION_ID},async()=>{throw new Error("must not run");}),
+    TypeError
+  );
+});
+
+test("incomplete, one-time, annual, or mismatched transactions never validate",async(t)=>{
   const config=getPaymentConfig(liveEnv());
   const cases=[
     ["missing data",null,"status"],
     ["wrong status",completedTransaction({status:"paid"}),"status"],
     ["invalid transaction",completedTransaction({id:"txn_01m1ky8j916ybyacs836dxbz8"}),"transaction"],
     ["non-API origin",completedTransaction({origin:"web"}),"origin"],
-    ["subscription",completedTransaction({subscription_id:"sub_01m1ky8j916ybyacs836dxbz8x"}),"subscription"],
+    ["missing subscription",completedTransaction({subscription_id:null}),"subscription"],
     ["manual collection",completedTransaction({collection_mode:"manual"}),"collection"],
     ["missing collection",completedTransaction({collection_mode:undefined}),"collection"],
     ["missing metadata",completedTransaction({custom_data:{strata_user_id:"user-1"}}),"metadata"],
@@ -583,7 +695,8 @@ test("incomplete, recurring, or mismatched transactions never validate",async(t)
     ["fractional quantity",completedTransaction({items:[{...completedTransaction().items[0],quantity:1.5}]}),"quantity"],
     ["wrong price",completedTransaction({items:[{quantity:1,price:{...completedTransaction().items[0].price,id:"pri_attacker"}}]}),"price"],
     ["wrong product",completedTransaction({items:[{quantity:1,price:{...completedTransaction().items[0].price,product_id:"pro_attacker"}}]}),"product"],
-    ["recurring price",completedTransaction({items:[{quantity:1,price:{...completedTransaction().items[0].price,billing_cycle:{interval:"month",frequency:1}}}]}),"recurring"]
+    ["one-time price",completedTransaction({items:[{quantity:1,price:{...completedTransaction().items[0].price,billing_cycle:null}}]}),"billing_cycle"],
+    ["annual price",completedTransaction({items:[{quantity:1,price:{...completedTransaction().items[0].price,billing_cycle:{interval:"year",frequency:1}}}]}),"billing_cycle"]
   ];
   for(const [name,data,reason] of cases) {
     await t.test(name,()=>assert.deepEqual(validateCompletedTransaction(data,config),{ok:false,reason}));
@@ -620,6 +733,22 @@ test("live Paddle webhook CIDRs are fetched privately and parsed",async()=>{
   assert.equal(request.url,"https://api.paddle.com/ips");
   assert.equal(request.options.headers.Authorization,`Bearer ${API_KEY}`);
   assert.deepEqual(cidrs,["34.232.58.13/32","10.20.0.0/16"]);
+});
+
+test("Paddle webhook source ranges fail closed on malformed networks",async()=>{
+  const config=getPaymentConfig(liveEnv());
+  for(const ipv4_cidrs of [
+    [],
+    ["34.232.58.999/32"],
+    ["34.232.58.13/33"],
+    ["34.232.58.13/not-a-prefix"],
+    ["2001:db8::/32"]
+  ]){
+    await assert.rejects(
+      fetchPaddleIpv4Cidrs(config,async()=>({ok:true,json:async()=>({data:{ipv4_cidrs}})})),
+      /invalid IP allowlist/
+    );
+  }
 });
 
 test("webhook source matching supports exact and broader live CIDRs",()=>{

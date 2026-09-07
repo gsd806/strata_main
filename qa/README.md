@@ -2,19 +2,21 @@
 
 ## Fast checks
 
-Install Chromium once after `npm install`; both `npm run check` and `npm run test:e2e` require it:
+Install the maintained browser engines once after `npm install`; Linux CI and the complete three-engine compatibility matrix require all of them:
 
 ```bash
-npx playwright install chromium
+npx playwright install chromium firefox webkit
 ```
 
-Run the release audit, module-architecture and static-boundary checks, correctness-focused linter, coverage-gated Node suite, all four browser-free runtime smokes, performance regression check, and high-risk browser E2E suite:
+Run the release audit, module-architecture and static-boundary checks, correctness-focused linter, coverage-gated Node suite, all browser-free runtime smokes, performance regression check, and high-risk browser E2E suite:
 
 ```bash
 npm run check
 ```
 
-`npm run qa` remains an alias for the same full check. The runtime smokes execute the homepage, discovery, and weekly-planner scripts against a small fake DOM, then start a real local server to verify the PWA routes, headers, icons, manifest, versioned-cache lifecycle, private-data exclusions, protected-page gating, and build status. The planner smoke also exercises desktop catalog pagination, unique-card expansion, and focus transfer after **Load more**. These checks catch initialization, rendering, and deployment regressions, but they do not replace the real-browser audit.
+`npm run qa` remains an alias for the same full check. The runtime smokes execute the Account, Strata+, planner, and workout scripts against a small fake DOM, then start a real local server to verify PWA routes, headers, icons, manifest, versioned-cache lifecycle, private-data exclusions, protected-page gating, and build status. The planner smoke also exercises desktop catalog pagination, unique-card expansion, and focus transfer after **Load more**. These checks catch initialization, rendering, and deployment regressions, but they do not replace the real-browser audit.
+
+The E2E command uses isolated local applications and provider fakes. Most risk-focused journeys run in Chromium. Linux CI runs the focused compatibility matrix in Chromium, Firefox, and WebKit for axe serious/critical checks, keyboard navigation, copy-day behavior, and 200% text reflow. Local Darwin runs default to Chromium and WebKit because Playwright Firefox cannot use its headless framebuffer in the Codex app sandbox; use `STRATA_E2E_ENGINE=firefox npm run test:e2e` to request that diagnostic explicitly. No path contacts production Paddle, Resend, or Turso services.
 
 To run the coverage-gated Node suite by itself:
 

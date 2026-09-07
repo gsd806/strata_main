@@ -10,7 +10,7 @@ The script starts an isolated SQLite application, creates a real account through
 
 The tracked paths are intentionally small and high-value:
 
-- `GET /healthz`, including the storage probe;
+- `GET /healthz`, the compatibility alias for the storage-backed readiness probe;
 - `GET /api/status`, the public runtime/configuration boundary;
 - authenticated `GET /api/plan`, which composes session, plan, access, trial, deletion, and admin state;
 - CSRF-protected `PUT /api/plan`, including validation and compare-and-swap persistence;
@@ -30,7 +30,25 @@ The command reports median and p95 latency and exits nonzero when either exceeds
 | Plan lookup | 5 ms | 20 ms |
 | Plan compare-and-swap | 10 ms | 35 ms |
 
+`/livez` is intentionally absent because it performs no storage work and is not a useful proxy for application readiness. The benchmark also does not exercise account email, Paddle checkout/subscription/portal calls, Turso network latency, image transfer, browser rendering, or service-worker installation. Build 7.5.0's request logger is quiet in the isolated test environment, so console transport does not distort these application-path samples. Capture separate hosted evidence before using the result for capacity or provider decisions.
+
 ## Recorded baseline
+
+The Build 7.5.0 source candidate passed every checked-in budget on the local Darwin arm64 host under Node 25.8.2. Each path used eight warm-ups followed by 40 measured samples:
+
+| Operation | Observed median | Observed p95 |
+| --- | ---: | ---: |
+| Health endpoint | 0.370 ms | 0.596 ms |
+| Status endpoint | 0.310 ms | 0.956 ms |
+| Authenticated plan endpoint | 0.320 ms | 0.445 ms |
+| Authenticated plan-save endpoint | 0.494 ms | 0.799 ms |
+| Session lookup | 0.008 ms | 0.011 ms |
+| Plan lookup | 0.004 ms | 0.006 ms |
+| Plan compare-and-swap | 0.042 ms | 0.051 ms |
+
+This source-candidate capture used isolated local HTTP, SQLite, and fixture-backed storage. It is regression evidence for the selected code paths, not a production claim or a measurement of hosted Turso, Resend, Paddle, Internet, or multi-user behavior. The supported runtime and CI target remain Node 24, so promotion still requires a green Node 24 CI result.
+
+### Historical Build 6.9.9.007 baseline
 
 A Build 6.9.9.007 pre-release run on 2026-09-06 used the locally installed Node 24.20.0 binary directly on Darwin arm64, 40 measured samples, eight warmups, and the 500-account storage fixture. The application child process used the same binary through `process.execPath`. The capture command was `node scripts/performance-check.js --json` after `node --version` confirmed `v24.20.0`:
 
@@ -48,4 +66,4 @@ This is one captured run, not a universal expected value. A second Node 24 check
 
 Use `STRATA_PERF_SAMPLES` to select 10–500 measured samples and `npm run performance -- --json` to produce machine-readable evidence. Compare runs made with the same Node version, storage mode, hardware class, sample count, and background load. A single local result is evidence of a regression in this code path, not a claim about production network latency or Turso service behavior.
 
-Before optimizing a path, capture the JSON output and a profiler or query-plan explanation. After changing it, rerun the same command under the same conditions, keep correctness tests enabled, and report both the before and after distributions. Do not loosen a budget to make an unexplained regression green.
+Before optimizing a path, capture the JSON output and a profiler or query-plan explanation. After changing it, rerun the same command under the same conditions, keep correctness tests enabled, and report both the before and after distributions. Do not loosen a budget to make an unexplained regression green. The latest candidate result belongs in [release readiness](release-readiness.md); the older baseline above remains for historical comparison rather than being relabeled as Build 7.5.0 evidence.

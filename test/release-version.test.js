@@ -7,6 +7,7 @@ const os=require("node:os");
 const path=require("node:path");
 
 const {
+  DEFAULT_MANIFEST,
   ReleaseVersionError,
   auditRelease,
   parseArguments,
@@ -15,6 +16,12 @@ const {
   runRelease,
   validateVersion
 }=require("../scripts/release-version");
+
+test("the release manifest covers every versioned offline-workout surface",()=>{
+  for(const relative of ["public/pages/workout-offline.html","public/scripts/workout-offline.js","test/workout-offline.test.js"]){
+    assert.ok(DEFAULT_MANIFEST.textFiles.includes(relative),`${relative} must advance with the public build`);
+  }
+});
 
 const FIXTURE_MANIFEST={
   textFiles:["README.md","public/page.html"],

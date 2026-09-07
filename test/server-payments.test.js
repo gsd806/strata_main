@@ -12,7 +12,7 @@ const { DatabaseSync } = require("node:sqlite");
 const PROJECT_ROOT=join(__dirname,"..");
 
 const PRODUCT_ID="pro_01m1ky8j916ybyacs836dxbz8x";
-const PRICE_ID="pri_01m1kyc2zd313d7a3ssmg02424";
+const PRICE_ID="pri_01monthlyfixture00000000000000";
 const CLIENT_TOKEN="live_browser_token_for_server_payment_test";
 const API_KEY="pdl_live_apikey_01serverpaymentfixture0000_fixture_secret_123";
 const WEBHOOK_SECRET="pdl_ntfset_live_server_payment_test_secret";
@@ -71,6 +71,19 @@ async function startFakePaddle() {
       res.end(JSON.stringify(transaction?{data:transaction}:{error:{detail:"not found"}}));
       return;
     }
+    const portalMatch=requestUrl.pathname.match(/^\/customers\/(ctm_[a-z0-9]+)\/portal-sessions$/);
+    if(req.method==="POST"&&portalMatch){
+      const subscriptionId=body?.subscription_ids?.[0];
+      res.writeHead(201,{"Content-Type":"application/json"});
+      res.end(JSON.stringify({data:{
+        customer_id:portalMatch[1],
+        urls:{
+          general:{overview:"https://customer-portal.paddle.com/cpl_overviewfixture"},
+          subscriptions:[{id:subscriptionId,cancel_subscription:"https://customer-portal.paddle.com/cpl_cancelfixture",update_subscription_payment_method:"https://customer-portal.paddle.com/cpl_paymentfixture"}]
+        }
+      }}));
+      return;
+    }
     if (req.method!=="POST"||requestUrl.pathname!=="/transactions") {
       res.writeHead(404,{"Content-Type":"application/json"});
       res.end(JSON.stringify({error:{detail:"not found"}}));
@@ -91,7 +104,7 @@ async function startFakePaddle() {
       custom_data:body?.custom_data||null,
       items:[{
         quantity:Number(body?.items?.[0]?.quantity||0),
-        price:{id:body?.items?.[0]?.price_id||null,product_id:PRODUCT_ID,billing_cycle:null}
+        price:{id:body?.items?.[0]?.price_id||null,product_id:PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}
       }]
     };
     paddleTransactions.set(id,transaction);
@@ -219,6 +232,8 @@ function eventId(label,sequence) {
   return `evt_${safe}${String(sequence).padStart(24-safe.length,"0")}`;
 }
 
+function subscriptionId(transactionId){return `sub_${String(transactionId).slice(4)}`;}
+
 function completedEvent({id,transactionId,userId}) {
   const occurredAt=new Date().toISOString();
   return {
@@ -229,17 +244,34 @@ function completedEvent({id,transactionId,userId}) {
     data:{
       id:transactionId,
       status:"completed",
-      customer_id:"ctm_000000000000000000000001",
-      subscription_id:null,
+      customer_id:"ctm_00000000000000000000000001",
+      subscription_id:subscriptionId(transactionId),
       collection_mode:"automatic",
       origin:"api",
       updated_at:occurredAt,
-      custom_data:{strata_user_id:userId,strata_version:1},
+      custom_data:{strata_user_id:userId,strata_checkout_id:paddleTransactions.get(transactionId)?.custom_data?.strata_checkout_id,strata_version:1},
       items:[{
         quantity:1,
-        price:{id:PRICE_ID,product_id:PRODUCT_ID,billing_cycle:null}
+        price:{id:PRICE_ID,product_id:PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}
       }],
-      details:{totals:{subtotal:"599",discount:"599",tax:"0",total:"0"}}
+      details:{totals:{subtotal:"99",discount:"99",tax:"0",total:"0"}}
+    }
+  };
+}
+
+function subscriptionEvent({id,transactionId,userId,status="active",sequence=0,scheduledChange=null,eventType="subscription.created",priceId=PRICE_ID,customerId="ctm_00000000000000000000000001"}){
+  const occurredAt=new Date(Date.now()+sequence*1_000).toISOString();
+  return {
+    event_id:id,event_type:eventType,occurred_at:occurredAt,notification_id:`ntf_${id.slice(4)}`,
+    data:{
+      id:subscriptionId(transactionId),status,customer_id:customerId,
+      ...(eventType==="subscription.created"?{transaction_id:transactionId}:{}),
+      collection_mode:"automatic",custom_data:{strata_user_id:userId,strata_version:1},
+      billing_cycle:{interval:"month",frequency:1},
+      items:[{quantity:1,recurring:true,price:{id:priceId,product_id:PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}}],
+      scheduled_change:scheduledChange,
+      current_billing_period:["active","trialing","past_due"].includes(status)?{starts_at:"2026-09-01T00:00:00Z",ends_at:"2026-10-01T00:00:00Z"}:null,
+      updated_at:occurredAt
     }
   };
 }
@@ -301,7 +333,7 @@ test.after(async() => {
   if (runtimeDir) rmSync(runtimeDir,{recursive:true,force:true});
 });
 
-test("live one-time checkout grants and revokes the Discovery entitlement securely",async() => {
+test("live monthly checkout grants, manages, updates, and revokes Strata+ securely",async() => {
   const pricing=await request("/pricing");
   assert.equal(pricing.response.status,200);
   const csp=pricing.response.headers.get("content-security-policy")||"";
@@ -323,7 +355,7 @@ test("live one-time checkout grants and revokes the Discovery entitlement secure
     productId:PRODUCT_ID,
     priceId:PRICE_ID,
     clientToken:CLIENT_TOKEN,
-    price:{amount:"5.99",currency:"USD"}
+    price:{amount:"0.99",currency:"USD",interval:"month",frequency:1}
   });
   for (const publicValue of [pricing.data,JSON.stringify(status.data),JSON.stringify(config.data)]) {
     assert.doesNotMatch(publicValue,new RegExp(API_KEY));
@@ -393,9 +425,104 @@ test("live one-time checkout grants and revokes the Discovery entitlement secure
   const rejectedSource=await signedWebhook(completion,{source:"203.0.113.9"});
   assert.equal(rejectedSource.response.status,403);
   assert.equal((await request("/api/me",{headers:{Cookie:account.cookie}})).data.user.discovery.active,false);
-  const granted=await signedWebhook(completion);
+  const recorded=await signedWebhook(completion);
+  assert.equal(recorded.response.status,200);
+  assert.equal(recorded.data.outcome,"subscription-payment-recorded");
+  assert.equal((await request("/api/me",{headers:{Cookie:account.cookie}})).data.user.discovery.active,false,"the transaction alone cannot grant recurring access");
+  const duplicateBarrier=await checkout(account);
+  assert.equal(duplicateBarrier.response.status,409);
+  assert.equal(duplicateBarrier.data.code,"CHECKOUT_PENDING_CONFIRMATION");
+
+  const createdSubscription=subscriptionEvent({
+    id:eventId("subcreate",1),transactionId:prepared.data.transactionId,userId:account.user.id,sequence:1
+  });
+  const granted=await signedWebhook(createdSubscription);
   assert.equal(granted.response.status,200);
-  assert.equal(granted.data.outcome,"granted");
+  assert.equal(granted.data.outcome,"subscription-created");
+  const paidTrial=await request("/api/discovery/trial",{
+    method:"POST",
+    headers:{Cookie:account.cookie,Origin:BASE,"X-CSRF-Token":account.csrfToken,"Content-Type":"application/json"},
+    body:"{}"
+  });
+  assert.equal(paidTrial.response.status,409,"a paid account cannot consume or layer a trial");
+  assert.equal(paidTrial.data.code,"DISCOVERY_ALREADY_ACTIVE");
+
+  const subscriptionStatus=await request("/api/billing/subscription",{headers:{Cookie:account.cookie}});
+  assert.equal(subscriptionStatus.response.status,200);
+  assert.equal(subscriptionStatus.response.headers.get("cache-control"),"private, no-store");
+  assert.deepEqual(subscriptionStatus.data.subscription,{
+    id:subscriptionId(prepared.data.transactionId),status:"active",active:true,pastDue:false,
+    scheduledChange:null,currentPeriodEndsAt:Date.parse("2026-10-01T00:00:00Z")
+  });
+  {
+    const db=new DatabaseSync(join(runtimeDir,"strata.sqlite"));
+    db.prepare("UPDATE paddle_subscriptions SET current_period_ends_at=? WHERE subscription_id=?").run(Date.now()-1,subscriptionId(prepared.data.transactionId));
+    db.close();
+  }
+  assert.equal((await request("/api/me",{headers:{Cookie:account.cookie}})).data.user.discovery.active,false,"an expired cached provider period must fail closed");
+  assert.equal((await request("/api/billing/subscription",{headers:{Cookie:account.cookie}})).data.subscription.active,false,"subscription summary must match effective entitlement");
+  {
+    const db=new DatabaseSync(join(runtimeDir,"strata.sqlite"));
+    db.prepare("UPDATE paddle_subscriptions SET current_period_ends_at=? WHERE subscription_id=?").run(Date.parse("2026-10-01T00:00:00Z"),subscriptionId(prepared.data.transactionId));
+    db.close();
+  }
+  const managed=await request("/api/billing/portal",{
+    method:"POST",headers:{Cookie:account.cookie,Origin:BASE,"X-CSRF-Token":account.csrfToken,"Content-Type":"application/json"},body:"{}"
+  });
+  assert.equal(managed.response.status,200);
+  assert.equal(managed.response.headers.get("cache-control"),"private, no-store");
+  assert.deepEqual({overviewUrl:managed.data.overviewUrl,cancelUrl:managed.data.cancelUrl,updatePaymentMethodUrl:managed.data.updatePaymentMethodUrl},{
+    overviewUrl:"https://customer-portal.paddle.com/cpl_overviewfixture",
+    cancelUrl:"https://customer-portal.paddle.com/cpl_cancelfixture",
+    updatePaymentMethodUrl:"https://customer-portal.paddle.com/cpl_paymentfixture"
+  });
+
+  const scheduledCancel=await signedWebhook(subscriptionEvent({
+    id:eventId("subcancel",2),transactionId:prepared.data.transactionId,userId:account.user.id,eventType:"subscription.updated",sequence:2,
+    scheduledChange:{action:"cancel",effective_at:"2026-10-01T00:00:00Z"}
+  }));
+  assert.equal(scheduledCancel.data.outcome,"subscription-updated");
+  const scheduledMe=await request("/api/me",{headers:{Cookie:account.cookie}});
+  assert.equal(scheduledMe.data.user.discovery.active,true,"cancel-at-period-end remains entitled while Paddle reports active");
+  assert.equal(scheduledMe.data.user.discovery.subscription.scheduledChange.action,"cancel");
+
+  const pastDue=await signedWebhook(subscriptionEvent({
+    id:eventId("subdue",3),transactionId:prepared.data.transactionId,userId:account.user.id,eventType:"subscription.updated",status:"past_due",sequence:3
+  }));
+  assert.equal(pastDue.data.outcome,"subscription-updated");
+  const pastDueMe=await request("/api/me",{headers:{Cookie:account.cookie}});
+  assert.equal(pastDueMe.data.user.discovery.active,true);
+  assert.equal(pastDueMe.data.user.discovery.subscription.pastDue,true);
+
+  const paused=await signedWebhook(subscriptionEvent({
+    id:eventId("subpause",4),transactionId:prepared.data.transactionId,userId:account.user.id,eventType:"subscription.updated",status:"paused",sequence:4
+  }));
+  assert.equal(paused.data.outcome,"subscription-updated");
+  assert.equal((await request("/api/me",{headers:{Cookie:account.cookie}})).data.user.discovery.active,false,"paused subscriptions lose access");
+  const pausedReplacement=await checkout(account);
+  assert.equal(pausedReplacement.response.status,409,"a paused subscription must be managed instead of duplicated");
+  assert.equal(pausedReplacement.data.code,"SUBSCRIPTION_ACTIVE");
+  const resumed=await signedWebhook(subscriptionEvent({
+    id:eventId("subresume",5),transactionId:prepared.data.transactionId,userId:account.user.id,eventType:"subscription.updated",sequence:5
+  }));
+  assert.equal(resumed.data.outcome,"subscription-updated");
+  const wrongCustomer=await signedWebhook(subscriptionEvent({
+    id:eventId("subctm",6),transactionId:prepared.data.transactionId,userId:account.user.id,eventType:"subscription.updated",sequence:6,
+    customerId:"ctm_00000000000000000000000099"
+  }));
+  assert.equal(wrongCustomer.data.outcome,"rejected:customer","subscription updates cannot replace the verified customer link");
+  const staleCancel=await signedWebhook(subscriptionEvent({
+    id:eventId("substale",6),transactionId:prepared.data.transactionId,userId:account.user.id,eventType:"subscription.updated",status:"canceled",sequence:3
+  }));
+  assert.equal(staleCancel.data.outcome,"subscription-stale","out-of-order cancellation cannot override newer state");
+  assert.equal((await request("/api/me",{headers:{Cookie:account.cookie}})).data.user.discovery.active,true);
+
+  const invalidTimestamp=subscriptionEvent({
+    id:eventId("subtime",7),transactionId:prepared.data.transactionId,userId:account.user.id,eventType:"subscription.updated",sequence:7
+  });
+  invalidTimestamp.occurred_at="not-a-provider-timestamp";
+  const rejectedTimestamp=await signedWebhook(invalidTimestamp);
+  assert.equal(rejectedTimestamp.response.status,400,"malformed ordering data must not advance subscription state");
 
   const unlocked=await request("/api/discovery",{headers:{Cookie:account.cookie}});
   assert.equal(unlocked.response.status,200);
@@ -423,6 +550,7 @@ test("live one-time checkout grants and revokes the Discovery entitlement secure
   const database=new DatabaseSync(join(runtimeDir,"strata.sqlite"),{readOnly:true});
   assert.equal(database.prepare("SELECT COUNT(*) AS count FROM paddle_webhook_events WHERE event_id=?").get(completion.event_id).count,1);
   assert.equal(database.prepare("SELECT COUNT(*) AS count FROM paddle_purchases WHERE transaction_id=?").get(prepared.data.transactionId).count,1);
+  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM paddle_subscriptions WHERE subscription_id=?").get(subscriptionId(prepared.data.transactionId)).count,1);
   database.close();
 
   const invalidAccount=await signup({
@@ -454,6 +582,20 @@ test("live one-time checkout grants and revokes the Discovery entitlement secure
   assert.equal(pendingResult.response.status,200);
   assert.equal(pendingResult.data.outcome,"adjustment-recorded");
   assert.equal((await request("/api/me",{headers:{Cookie:account.cookie}})).data.user.discovery.active,true);
+
+  const wrongAdjustmentTransaction=adjustmentEvent({
+    id:eventId("adjidentity",6),adjustmentId:pendingRefund.data.id,
+    transactionId:invalidPrepared.data.transactionId,type:"full",status:"approved",sequence:6
+  });
+  const wrongAdjustmentResult=await signedWebhook(wrongAdjustmentTransaction);
+  assert.equal(wrongAdjustmentResult.response.status,200);
+  assert.equal(wrongAdjustmentResult.data.outcome,"rejected:adjustment-transaction");
+  {
+    const db=new DatabaseSync(join(runtimeDir,"strata.sqlite"),{readOnly:true});
+    assert.equal(db.prepare("SELECT transaction_id FROM paddle_adjustments WHERE adjustment_id=?").get(pendingRefund.data.id).transaction_id,prepared.data.transactionId);
+    assert.equal(db.prepare("SELECT access_revoked_at FROM paddle_purchases WHERE transaction_id=?").get(invalidPrepared.data.transactionId).access_revoked_at,null);
+    db.close();
+  }
 
   const partialRefund=adjustmentEvent({
     id:eventId("partial",4),
@@ -525,9 +667,15 @@ test("completed webhook trust boundaries reject mismatches and keep an existing 
     transactionId:prepared.data.transactionId,
     userId:account.user.id
   });
-  const granted=await signedWebhook(valid);
-  assert.equal(granted.response.status,200);
-  assert.equal(granted.data.outcome,"granted");
+  const recorded=await signedWebhook(valid);
+  assert.equal(recorded.response.status,200);
+  assert.equal(recorded.data.outcome,"subscription-payment-recorded");
+  assert.equal((await request("/api/discovery",{headers:{Cookie:account.cookie}})).response.status,402,"a completed transaction alone is not entitlement proof");
+  const linked=await signedWebhook(subscriptionEvent({
+    id:eventId("boundsub",sequence++),transactionId:prepared.data.transactionId,userId:account.user.id,sequence
+  }));
+  assert.equal(linked.data.outcome,"subscription-created");
+  assert.equal((await request("/api/discovery",{headers:{Cookie:account.cookie}})).response.status,200);
   const replay=await signedWebhook(valid);
   assert.equal(replay.data.outcome,"replayed","the exact event ID must be processed once");
 
@@ -536,11 +684,11 @@ test("completed webhook trust boundaries reject mismatches and keep an existing 
     transactionId:prepared.data.transactionId,
     userId:account.user.id
   });
-  laterCompletion.data.customer_id="ctm_000000000000000000000099";
+  laterCompletion.data.customer_id="ctm_00000000000000000000000099";
   laterCompletion.data.updated_at=new Date(Date.now()+60_000).toISOString();
   const alreadyProcessed=await signedWebhook(laterCompletion);
   assert.equal(alreadyProcessed.response.status,200);
-  assert.equal(alreadyProcessed.data.outcome,"granted");
+  assert.equal(alreadyProcessed.data.outcome,"rejected:subscription-link");
 
   const db=database({readOnly:true});
   const purchase=db.prepare("SELECT customer_id,completed_at FROM paddle_purchases WHERE transaction_id=?").get(prepared.data.transactionId);
@@ -584,7 +732,7 @@ test("concurrent checkout requests create only one Paddle transaction",async() =
     status:"ready"
   }));
   assert.equal(paymentFailed.response.status,200);
-  assert.equal(paymentFailed.data.outcome,"updated","a failed attempt may leave a one-time checkout ready for retry");
+  assert.equal(paymentFailed.data.outcome,"updated","a failed initial subscription payment may leave checkout ready for retry");
   const retry=await checkout(account);
   assert.equal(retry.response.status,200);
   assert.equal(retry.data.reused,true);
@@ -637,7 +785,7 @@ test("checkout retry recovers a transaction after Paddle returns a malformed cre
   assert.ok(recoveryUrl.searchParams.get("created_at[LTE]"));
   assert.equal(recoveryUrl.searchParams.get("origin"),"api");
   assert.equal(recoveryUrl.searchParams.get("collection_mode"),"automatic");
-  assert.equal(recoveryUrl.searchParams.get("subscription_id"),"null");
+  assert.equal(recoveryUrl.searchParams.has("subscription_id"),false,"recovery includes transactions that completed before the retry");
   assert.equal(recoveryUrl.searchParams.get("order_by"),"created_at[ASC]");
 });
 
@@ -655,12 +803,18 @@ test("completed checkout recovery reports entitlement only after durable access 
   );
   assert.ok(entitledRemote);
   entitledRemote.status="completed";
-  entitledRemote.customer_id="ctm_000000000000000000000002";
+  entitledRemote.customer_id="ctm_00000000000000000000000002";
+  entitledRemote.subscription_id=subscriptionId(entitledRemote.id);
   entitledRemote.updated_at=new Date().toISOString();
 
   const completedRecovery=await checkout(entitled);
   assert.equal(completedRecovery.response.status,409);
-  assert.equal(completedRecovery.data.code,"ALREADY_ENTITLED");
+  assert.equal(completedRecovery.data.code,"CHECKOUT_PENDING_CONFIRMATION");
+  assert.equal((await request("/api/me",{headers:{Cookie:entitled.cookie}})).data.user.discovery.active,false);
+  const linkedRecovery=await signedWebhook(subscriptionEvent({
+    id:eventId("recoverlink",80),transactionId:entitledRemote.id,userId:entitled.user.id,sequence:80,customerId:entitledRemote.customer_id
+  }));
+  assert.equal(linkedRecovery.data.outcome,"subscription-created");
   assert.equal((await request("/api/me",{headers:{Cookie:entitled.cookie}})).data.user.discovery.active,true);
 
   const revoked=await signup({
@@ -677,7 +831,8 @@ test("completed checkout recovery reports entitlement only after durable access 
   );
   assert.ok(revokedRemote);
   revokedRemote.status="completed";
-  revokedRemote.customer_id="ctm_000000000000000000000003";
+  revokedRemote.customer_id="ctm_00000000000000000000000003";
+  revokedRemote.subscription_id=subscriptionId(revokedRemote.id);
   revokedRemote.updated_at=new Date().toISOString();
   const now=Date.now();
   {
@@ -691,6 +846,13 @@ test("completed checkout recovery reports entitlement only after durable access 
     db.close();
   }
 
+  const awaitingTerminalState=await checkout(revoked);
+  assert.equal(awaitingTerminalState.response.status,409);
+  assert.equal(awaitingTerminalState.data.code,"CHECKOUT_PENDING_CONFIRMATION","a completed recurring transaction cannot be replaced before its subscription state arrives");
+  const terminal=await signedWebhook(subscriptionEvent({
+    id:eventId("recovercancel",81),transactionId:revokedRemote.id,userId:revoked.user.id,status:"canceled",sequence:81,customerId:revokedRemote.customer_id
+  }));
+  assert.equal(terminal.data.outcome,"subscription-created");
   const replacement=await checkout(revoked);
   assert.equal(replacement.response.status,201,"a completed but revoked recovery must proceed to a new checkout");
   assert.notEqual(replacement.data.transactionId,revokedRemote.id);

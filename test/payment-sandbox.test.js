@@ -12,6 +12,7 @@ const {
 
 const PRODUCT="pro_01sandbox00000000000000000";
 const PRICE="pri_01sandbox00000000000000000";
+const LIVE_PRICE="pri_01monthlyfixture00000000000000";
 const TRANSACTION="txn_01sandbox00000000000000000";
 function sandboxEnv(overrides={}){
   return {NODE_ENV:"test",PADDLE_ENVIRONMENT:"sandbox",PADDLE_CHECKOUT_ENABLED:"true",
@@ -20,7 +21,7 @@ function sandboxEnv(overrides={}){
 }
 function liveEnv(overrides={}){
   return sandboxEnv({NODE_ENV:"production",PADDLE_ENVIRONMENT:"live",PADDLE_CLIENT_TOKEN:"live_01client0000000000000000000",
-    PADDLE_API_KEY:"pdl_live_apikey_01fixture000000000000000_secret_fixture",PADDLE_PRODUCT_ID:DEFAULT_PRODUCT_ID,PADDLE_PRICE_ID:DEFAULT_PRICE_ID,...overrides});
+    PADDLE_API_KEY:"pdl_live_apikey_01fixture000000000000000_secret_fixture",PADDLE_PRODUCT_ID:DEFAULT_PRODUCT_ID,PADDLE_PRICE_ID:LIVE_PRICE,...overrides});
 }
 
 test("explicit sandbox config selects isolated Paddle endpoint and exposes only browser-safe config",async()=>{
@@ -29,7 +30,7 @@ test("explicit sandbox config selects isolated Paddle endpoint and exposes only 
   const transaction=await createPaddleTransaction(config,{userId:"member-1",checkoutId:"claim-1"},async(url,options)=>{
     requests.push({url,options});
     const body=JSON.parse(options.body);
-    return {ok:true,json:async()=>({data:{id:TRANSACTION,status:"ready",origin:"api",collection_mode:"automatic",custom_data:body.custom_data,items:[{quantity:1,price:{id:PRICE,product_id:PRODUCT,billing_cycle:null}}]}})};
+    return {ok:true,json:async()=>({data:{id:TRANSACTION,status:"ready",origin:"api",collection_mode:"automatic",custom_data:body.custom_data,items:[{quantity:1,price:{id:PRICE,product_id:PRODUCT,billing_cycle:{interval:"month",frequency:1}}}]}})};
   });
   assert.equal(transaction.transactionId,TRANSACTION);
   assert.equal(requests[0].url,`${SANDBOX_API_BASE}/transactions`);
@@ -60,27 +61,29 @@ test("sandbox configuration fails closed for mixed credentials, missing catalog,
   const invalid=getPaymentConfig(sandboxEnv({PADDLE_ENVIRONMENT:"sandobx"}));assert.equal(webhookSecretFor(invalid),"");
 });
 
-test("live stays the default and does not accept sandbox credentials",async()=>{
-  const env=liveEnv();delete env.PADDLE_ENVIRONMENT;delete env.PADDLE_PRODUCT_ID;delete env.PADDLE_PRICE_ID;
+test("live stays the default, requires a recurring price, and rejects sandbox credentials",async()=>{
+  const env=liveEnv();delete env.PADDLE_ENVIRONMENT;delete env.PADDLE_PRODUCT_ID;
   const config=getPaymentConfig(env);assert.equal(config.environment,"live");assert.equal(config.enabled,true);
-  assert.equal(config.productId,DEFAULT_PRODUCT_ID);assert.equal(config.priceId,DEFAULT_PRICE_ID);
+  assert.equal(config.productId,DEFAULT_PRODUCT_ID);assert.equal(config.priceId,LIVE_PRICE);
   await fetchPaddleTransaction(config,TRANSACTION,async(url)=>{
     assert.equal(url,`${LIVE_API_BASE}/transactions/${TRANSACTION}`);return {ok:true,json:async()=>({data:{id:TRANSACTION,status:"ready"}})};
   });
   assert.equal(getPaymentConfig(liveEnv({PADDLE_CLIENT_TOKEN:sandboxEnv().PADDLE_CLIENT_TOKEN})).enabled,false);
   assert.equal(getPaymentConfig(liveEnv({PADDLE_API_KEY:sandboxEnv().PADDLE_API_KEY})).enabled,false);
+  assert.equal(getPaymentConfig(liveEnv({PADDLE_PRICE_ID:""})).enabled,false);
+  assert.equal(getPaymentConfig(liveEnv({PADDLE_PRICE_ID:DEFAULT_PRICE_ID})).enabled,false,"the retired one-time price must fail closed");
   assert.equal(getPaymentConfig(liveEnv({PADDLE_CHECKOUT_ENABLED:"false"})).enabled,false);
   assert.notEqual(webhookSecretFor(getPaymentConfig(liveEnv({PADDLE_CHECKOUT_ENABLED:"false"}))),"","existing payment webhooks remain enabled when new checkout is paused");
 });
 
-async function runPricing(config,{environmentApi=true}={}){
+async function runPricing(config,{environmentApi=true,user={id:"u-1",email:"member@example.test",discovery:{active:false,trial:{eligible:false}}}}={}){
   const nodes=new Map(),calls=[];
   function node(id){if(!nodes.has(id))nodes.set(id,{id,hidden:false,disabled:false,classList:{toggle(){}},setAttribute(){},addEventListener(){},focus(){},textContent:""});return nodes.get(id);}
   const paddle={Initialize:options=>calls.push(["initialize",options.token]),Checkout:{open(){}}};
   if(environmentApi)paddle.Environment={set:environment=>calls.push(["environment",environment])};
   const context={document:{getElementById:node},navigator:{onLine:true},location:{search:""},window:{addEventListener(){}},
     URLSearchParams,requestAnimationFrame:fn=>fn(),Paddle:paddle,
-    fetch:async path=>({ok:true,json:async()=>path==="/api/billing/config"?config:{user:{id:"u-1",email:"member@example.test",discovery:{active:false,trial:{eligible:false}}},csrfToken:"csrf"}})};
+    fetch:async path=>({ok:true,json:async()=>path==="/api/billing/config"?config:{user,csrfToken:"csrf"}})};
   vm.runInNewContext(readFileSync(join(__dirname,"..","public","scripts","pricing.js"),"utf8"),context);
   await new Promise(setImmediate);
   return {calls,nodes};
@@ -99,7 +102,20 @@ test("pricing preserves live behavior and refuses mixed client tokens and sandbo
   const config=publicPaymentConfig(getPaymentConfig(liveEnv()));
   const live=await runPricing(config);assert.deepEqual(live.calls,[["initialize",config.clientToken]]);
   assert.doesNotMatch(live.nodes.get("purchaseStatus").textContent,/TEST MODE/);
-  for(const change of [{environment:"sandbox"},{clientToken:sandboxEnv().PADDLE_CLIENT_TOKEN},{environment:"invalid"}]){
+  for(const change of [
+    {environment:"sandbox"},
+    {clientToken:sandboxEnv().PADDLE_CLIENT_TOKEN},
+    {productId:"pro_01differentlivecatalog000000"},
+    {priceId:DEFAULT_PRICE_ID},
+    {environment:"invalid"}
+  ]){
     const blocked=await runPricing({...config,...change});assert.deepEqual(blocked.calls,[]);assert.equal(blocked.nodes.get("buyDiscovery").disabled,true);
   }
+});
+
+test("pricing names a scheduled pause and its paid-access boundary",async()=>{
+  const config=publicPaymentConfig(getPaymentConfig(liveEnv())),effectiveAt=Date.now()+7*24*60*60*1000;
+  const user={id:"u-1",email:"member@example.test",discovery:{active:true,accessType:"paid",trial:{eligible:false},subscription:{id:"sub-active",status:"active",active:true,pastDue:false,currentPeriodEndsAt:Date.now()+30*24*60*60*1000,scheduledChange:{action:"pause",effectiveAt}}}};
+  const result=await runPricing(config,{user});
+  assert.match(result.nodes.get("purchaseStatus").textContent,/remains active until[\s\S]*scheduled pause takes effect and paid access stops/i);
 });

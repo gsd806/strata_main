@@ -11,7 +11,7 @@ The checked-in `render.yaml` defines the supported Render service shape:
 - Node 24 selected by `.node-version`;
 - `npm ci --omit=dev --no-audit --no-fund` for production dependencies;
 - `npm start` as the process command;
-- `/healthz` as the storage-aware health check; and
+- `/healthz` as the compatibility alias for the storage-aware readiness check; and
 - secret values entered in the host rather than committed to the repository.
 
 Local development uses SQLite. Production refuses to start without Turso, because Render's local filesystem is ephemeral and must not become the durable account store.
@@ -32,7 +32,7 @@ Public asset representations are cached for a process lifetime with a 16 MiB cap
 
 ```bash
 npm install
-npx playwright install chromium
+npx playwright install chromium firefox webkit
 npm run check
 npm start
 ```
@@ -46,18 +46,22 @@ The default address is `http://127.0.0.1:4173`. Keep the Turso variables blank t
 3. Store the database URL as `TURSO_DATABASE_URL`.
 4. Deploy from the repository's Render Blueprint, or reproduce the Web Service settings in `render.yaml` exactly.
 5. Do not configure `STRATA_DATA_DIR` or a Render disk in production.
-6. Deploy, then verify both `/api/status` and `/healthz`.
+6. Run the production configuration preflight, deploy, then verify `/api/status`, `/livez`, and `/readyz`.
 
 Fixed runtime settings include `NODE_ENV=production`, `HOST=0.0.0.0`, `TRUST_PROXY=true`, and the public HTTPS `APP_BASE_URL`. Only enable `TRUST_PROXY` behind the configured trusted reverse proxy; a directly exposed Node process must not trust arbitrary forwarding headers.
 
-The server applies additive schema setup on startup and checks foreign-key behavior. Do not delete or replace a production database as an upgrade step. After a deployment, create or use a test account, save a plan, redeploy, and confirm that the same account and plan remain available.
+The server applies additive schema setup through an ordered migration ledger on startup and checks foreign-key behavior. The monthly-subscription migration adds a subscription link to existing purchase records and a lean subscription-state table without rewriting completed, unrevoked lifetime purchases. Do not delete or replace a production database as an upgrade step. Back up Turso before promotion, inspect the migration result, then create or use a test account, save a plan, redeploy, and confirm that the same account and plan remain available.
 
 Operational endpoints:
 
 - `/api/status` reports build and provider-readiness booleans without returning secrets.
-- `/healthz` runs a live store probe and returns `200` only when storage is reachable.
+- `/livez` is process-only and returns only `{ "ok": true }` when the Node process can answer.
+- `/readyz` runs a store probe and returns only `{ "ok": true }` with `200` when storage is reachable.
+- `/healthz` remains a compatibility alias for `/readyz`, including for the checked-in Render health check.
 
-A `404` or HTML response from those endpoints normally means the project was deployed as a static site or the wrong service. A successful status response with a `503` health check points to Turso connectivity or credentials.
+A `404` or HTML response from those endpoints normally means the project was deployed as a static site or the wrong service. Successful liveness with `503` readiness points to storage connectivity or credentials; do not route normal traffic to that instance.
+
+Every response includes a validated incoming or server-generated `X-Request-ID`. Normal request logs are one-line structured JSON with timestamp, method, path without query data, status, duration, and completion state. Values under sensitive field names are redacted, request bodies and raw query strings are not logged, and test logging is quiet. Keep provider and platform logs under access control anyway; redaction is a defense, not permission to log secrets.
 
 ## Resend account email
 
@@ -77,21 +81,27 @@ Test the complete flow with a non-owner address: sign up, receive and submit the
 
 `ADMIN_EMAIL` identifies the one account eligible to claim the empty primary-owner binding after email verification. The binding is stored by immutable user ID, so changing the environment variable alone does not transfer ownership. Keep that account recoverable and never expose the configured address through readiness APIs.
 
-`SUPPORT_EMAIL` is the reply destination for the Contact and help-desk workflows. The same Resend configuration sends mail; no Gmail API or separate administrator password is needed.
+`SUPPORT_EMAIL` is the notification destination for new Contact and help-desk requests. `EMAIL_REPLY_TO` controls the reply-to address on mail sent through the same Resend configuration; no Gmail API or separate administrator password is needed.
 
 After owner setup, verify password step-up, the 30-minute elevation expiry, session rotation, primary-owner self-protection, support responses, and the redacted audit trail.
 
-## Paddle live checkout
+## Member account controls
 
-Paddle is the merchant of record for the one-time Strata+ purchase. The current public amount and catalog identifiers must stay aligned with the live catalog and `render.yaml`.
+`GET /api/account/sessions` lists only the signed-in member's active sessions and exposes opaque public identifiers plus creation, expiry, and current-session state. `POST /api/account/sessions/revoke` and `POST /api/account/sessions/revoke-others` are CSRF-protected, account-scoped mutations; the current session cannot be removed through the selective route. `POST /api/account/export` is also authenticated, CSRF-protected, account-scoped, rate-limited, and returned with private `no-store` attachment headers. Workout history uses stable keyset pages so the response is not buffered or silently capped; because the download does not hold a long database transaction, concurrent account changes can be reflected progressively. Exercise these controls after deployment, confirm another browser is actually signed out, and inspect an export for expected account data and the documented secret/provider/admin exclusions without placing the download in deployment logs or support tickets.
+
+## Paddle monthly subscription
+
+Paddle is the merchant of record for the $0.99 USD per month Strata+ subscription. The public amount, USD currency, monthly frequency, and catalog identifiers must stay aligned with the live catalog. Build 7.5.0 deliberately does not contain a replacement recurring price ID: `PADDLE_PRICE_ID` is a secret-style `sync: false` value in `render.yaml`, and checkout remains unavailable until the operator supplies the new monthly price.
 
 Required configuration:
 
-- `PADDLE_PRODUCT_ID` and `PADDLE_PRICE_ID` for the active one-time USD price;
+- `PADDLE_PRODUCT_ID` and an explicit `PADDLE_PRICE_ID` for a quantity-one, automatically collected, $0.99 USD monthly price;
 - `PADDLE_CLIENT_TOKEN`, a live browser-safe client token;
-- `PADDLE_API_KEY`, a private live server key with transaction-write access;
+- `PADDLE_API_KEY`, a private live server key with transaction creation/read and customer-portal access;
 - `PADDLE_WEBHOOK_SECRET`, the notification destination's signing secret; and
 - `PADDLE_CHECKOUT_ENABLED`, the launch/rollback switch.
+
+The application rejects the retired one-time live price ID even if it is supplied explicitly. It also fails closed for an absent or malformed recurring price, environment-mismatched credentials, incomplete secrets, or production sandbox configuration. Do not enable checkout to work around this guard. Create the actual monthly catalog item in Paddle, enter its exact ID in the deployment environment, and then run the preflight.
 
 Create or reuse a live notification destination at:
 
@@ -99,11 +109,15 @@ Create or reuse a live notification destination at:
 https://stratafitness.online/api/paddle/webhook
 ```
 
-Subscribe to the transaction lifecycle events used by the application, `transaction.completed`, and adjustment creation/update events. Reusing the destination preserves its signing secret; deleting and recreating it requires an intentional secret rotation in Render.
+Subscribe to `transaction.completed`, `subscription.created`, `subscription.updated`, the transaction lifecycle events used by checkout reconciliation, and adjustment creation/update events. Reusing the destination preserves its signing secret; deleting and recreating it requires an intentional secret rotation in Render.
 
-STRATA verifies `Paddle-Signature` over the exact raw request body before parsing JSON. A completed event grants access only when the transaction was created by STRATA and its transaction, product, price, account custom data, and completion state all match server-side records. Browser redirects and client tokens never grant entitlement. Event IDs, transaction state, and adjustments are stored so retries and replays remain idempotent.
+STRATA verifies `Paddle-Signature` over the exact raw request body before parsing JSON. A completed transaction is accepted only when it was created by STRATA and its transaction, subscription, customer, product, price, account custom data, quantity, automatic collection, monthly cycle, and completion state match server-side records. Interrupted checkout creation may also reconcile through an authenticated Paddle API read, which applies the same transaction validator and cannot fabricate subscription state. Paid access additionally requires the linked Paddle subscription to match, be `active`, `trialing`, or `past_due`, and have a verified future current-period end; a missing or expired bound fails closed, while `paused` and `canceled` deny access. A scheduled cancellation or pause keeps access only until its effective timestamp, never beyond the current-period end, even if the provider status update is delayed. Browser redirects and client tokens never grant entitlement. Event IDs, event occurrence times, transaction state, subscription state, and adjustments make duplicates, replays, and out-of-order deliveries safe.
 
-Keep `PADDLE_CHECKOUT_ENABLED=false` for a new or unverified setup. Enable it only after the domain/default payment link is approved and a live end-to-end transaction reaches the matching account. Verify another browser session sees the entitlement, then process the intended test refund or adjustment and confirm access is revoked when required.
+Qualifying completed, unrevoked purchases made under the earlier one-time offering remain grandfathered lifetime access and do not require a fabricated subscription. The new app trial is separate: each eligible account can start it once for 30 minutes without a card. It ends automatically and never creates or converts into a Paddle subscription.
+
+`GET /api/billing/subscription` returns an authenticated, private `no-store` summary for the Account page. Members manage an existing monthly subscription through `POST /api/billing/portal`, which additionally requires CSRF and is account-scoped. The server requests a temporary Paddle customer-portal session, validates that every returned URL belongs to `customer-portal.paddle.com` and the stored customer/subscription pair, returns it with `no-store`, and never persists it. Cancellation and refund are separate actions. Account deletion does not cancel a Paddle subscription, refund a charge, or erase Paddle's merchant-of-record records; complete the intended billing action before deletion.
+
+Keep `PADDLE_CHECKOUT_ENABLED=false` for a new or unverified setup. Enable it only after the domain/default payment link is approved and a live end-to-end monthly transaction plus subscription event reaches the matching account. Verify another browser session sees the entitlement, open the Paddle portal, schedule a cancellation, confirm access remains through the effective period, and verify the eventual canceled state removes access. Then process the intended test refund or adjustment and confirm access is revoked when required.
 
 If checkout creation, webhook delivery, or entitlement granting fails, disable the switch and redeploy. That stops new purchases without deleting existing transactions or account entitlements.
 
@@ -117,23 +131,29 @@ Before deployment:
 
 ```bash
 npm ci
-npx playwright install --with-deps chromium
+npx playwright install --with-deps chromium firefox webkit
 npm run check
 npm audit --omit=dev
+npm run preflight:production
 ```
 
-`npm run check` verifies release metadata and architecture policy, statically checks typed domain boundaries, runs the correctness-focused linter, enforces coverage floors over the Node suite, executes browser-free runtime QA, checks endpoint/storage performance budgets, and runs the isolated high-risk Chromium journeys. Use `npm run qa:ui` with the environment documented in `../qa/README.md` for the broader real-browser accessibility and responsive-layout pass.
+`npm run check` verifies release metadata and architecture policy, statically checks typed domain boundaries, runs the correctness-focused linter, enforces coverage floors over the Node suite, executes browser-free runtime QA, checks endpoint/storage performance budgets, and runs the isolated high-risk browser journeys. Linux CI runs the E2E compatibility matrix in Chromium, Firefox, and WebKit with focused axe checks, keyboard navigation, and 200% text sizing. Local Darwin runs default to Chromium and WebKit because Playwright Firefox cannot use its headless framebuffer in the Codex app sandbox; run `STRATA_E2E_ENGINE=firefox npm run test:e2e` when that diagnostic is available. Use `npm run qa:ui` with the environment documented in `../qa/README.md` for the broader authenticated Chromium layout pass.
+
+`npm run preflight:production` reads the candidate environment and fails on non-production runtime settings, an unsafe public URL, missing durable Turso values, insecure cookies, ambiguous proxy configuration, an enabled test bypass, an invalid administrator address, incomplete Resend configuration, incomplete or mismatched Paddle configuration, or reused secrets. It validates shape and coherence only; it does not call Turso, Resend, or Paddle and cannot prove that a credential is accepted.
 
 After deployment:
 
-1. Check `/api/status` and `/healthz`.
+1. Check `/api/status`, `/livez`, `/readyz`, and the compatibility `/healthz` alias.
 2. Confirm account, protected-page, service-worker, and manifest responses have the expected cache policy.
 3. Complete a signup/login and plan-save round trip.
 4. Exercise provider flows after changing Resend or Paddle configuration.
-5. Confirm GitHub Actions is green before tagging or announcing a release.
+5. Run `STRATA_SMOKE_BASE_URL=https://your-host.example STRATA_EXPECTED_BUILD=7.5.0 npm run smoke:deploy` to check status/build/provider flags, durable Turso reporting, storage readiness, the public home and manifest, security headers, and signed-out private-route handling.
+6. Confirm GitHub Actions is green before tagging or announcing a release.
+
+The deployment smoke is read-only and does not create an account, send email, buy a subscription, process a webhook, or mutate production data. Complete authorized provider-backed smoke separately and record its result; never describe local provider fakes or configuration-shape checks as live credential evidence.
 
 ## Production limits
 
-Free Render services can sleep and take time to wake. The installed PWA may show its public offline explanation during a cold start, but private data and writes still require the live server. Free services and Turso/Resend/Paddle plans also have usage limits; select appropriate tiers and monitoring before relying on the service for real users.
+Free Render services can sleep and take time to wake. The installed PWA may show its public offline explanation or a generic continuation shell for an already-authorized device workout during a cold start, but authentication, new private reads, entitlement, Plan changes, and sync still require the live server. Free services and Turso/Resend/Paddle plans also have usage limits; select appropriate tiers and monitoring before relying on the service for real users.
 
 The current administrator model has one password-stepped-up owner and no MFA or delegated roles. Support has no attachments or real-time chat. Treat these as operating limits rather than silently broadening privileges or storing new sensitive content.

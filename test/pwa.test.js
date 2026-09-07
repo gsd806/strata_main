@@ -24,7 +24,7 @@ function pngDimensions(file) {
 function serviceWorkerHarness({cacheKeys=[]}={}) {
   const listeners={},precache=[],deletedCaches=[],cachePuts=[],lifecycle={claimed:false,skipped:false},offlineResponse={kind:"offline"};
   const networkResponse={kind:"network",ok:true,type:"basic",clone(){return this;}};
-  const pageResponses=new Map(["install","pricing","contact","policies","terms","privacy","refunds","planner"].map((name)=>[`/${name}.html`,{kind:name}]));
+  const pageResponses=new Map(["install","pricing","contact","policies","terms","privacy","refunds","planner","workout-offline"].map((name)=>[`/${name}.html`,{kind:name}]));
   let networkFails=false;
   const cache={
     async addAll(urls){precache.push(...urls);},
@@ -95,9 +95,9 @@ test("release version, cache keys, asset URLs, and catalog claims stay aligned",
   const exercises=JSON.parse(read("data/exercises.json"));
   const version=BUILD,versionPattern=escapeRegExp(version);
   const serviceWorker=read("service-worker.js");
-  const pages=["index.html","account.html","verify-email.html","forgot-password.html","reset-password.html","delete-account.html","admin.html","planner.html","discover.html","install.html","offline.html","pricing.html","contact.html","policies.html","terms.html","privacy.html","refunds.html"];
+  const pages=["index.html","account.html","verify-email.html","forgot-password.html","reset-password.html","delete-account.html","admin.html","planner.html","discover.html","onboarding.html","workout.html","workout-offline.html","install.html","offline.html","pricing.html","contact.html","policies.html","terms.html","privacy.html","refunds.html"];
 
-  assert.equal(version,"7.4.1");
+  assert.equal(version,"7.5.0");
   assert.match(serviceWorker,new RegExp(`const BUILD="${versionPattern}";`));
   assert.match(serviceWorker,/const CACHE_PREFIX="strata-static-";/);
   assert.match(serviceWorker,/const STATIC_CACHE=`\$\{CACHE_PREFIX\}\$\{BUILD\}`;/);
@@ -106,7 +106,7 @@ test("release version, cache keys, asset URLs, and catalog claims stay aligned",
 
   for(const page of pages){
     const html=read(`pages/${page}`);
-    if(page!=="admin.html")assert.match(html,new RegExp(`Build ${versionPattern}`),`${page} visible build label`);
+    if(page!=="admin.html")assert.match(html,new RegExp(`Build ${versionPattern}`,"i"),`${page} visible build label`);
     const localAssets=[...html.matchAll(/(?:src|href)="([^"]+\.(?:js|css)(?:\?[^"]*)?)"/g)]
       .map((match)=>new URL(match[1],"https://strata.test"))
       .filter((url)=>url.origin==="https://strata.test");
@@ -177,7 +177,7 @@ test("manifest has complete install metadata and correctly sized icons",()=>{
 });
 
 test("every ordinary app page exposes consistent PWA and mobile metadata",()=>{
-  const appPages=["index.html","account.html","verify-email.html","forgot-password.html","planner.html","discover.html","install.html","pricing.html","contact.html","policies.html","terms.html","privacy.html","refunds.html"];
+  const appPages=["index.html","account.html","verify-email.html","forgot-password.html","planner.html","discover.html","onboarding.html","workout.html","install.html","pricing.html","contact.html","policies.html","terms.html","privacy.html","refunds.html"];
   for(const page of appPages) {
     const html=read(`pages/${page}`);
     assert.match(html,/<meta\s+name="viewport"\s+content="[^"]*width=device-width[^"]*viewport-fit=cover[^"]*"\s*\/>/i,`${page} viewport`);
@@ -185,7 +185,7 @@ test("every ordinary app page exposes consistent PWA and mobile metadata",()=>{
     assert.match(html,/<meta\s+name="apple-mobile-web-app-capable"\s+content="yes"\s*\/>/i,`${page} iOS app mode`);
     assert.match(html,/<link\s+rel="manifest"\s+href="\/manifest\.webmanifest"\s*\/>/i,`${page} manifest`);
     assert.match(html,/<link\s+rel="apple-touch-icon"\s+href="\/icons\/apple-touch-icon\.png"\s*\/>/i,`${page} Apple icon`);
-    assert.match(html,/<script\s+src="\/pwa\.js\?v=[^"]+"><\/script>/i,`${page} PWA registration`);
+    assert.match(html,/<script\s+src="\/pwa\.js\?v=[^"]+"[^>]*><\/script>/i,`${page} PWA registration`);
     if(page!=="install.html")assert.match(html,/href="\/install(?:\.html)?"/,`${page} install guide link`);
   }
   const offline=read("pages/offline.html");
@@ -195,6 +195,12 @@ test("every ordinary app page exposes consistent PWA and mobile metadata",()=>{
   assert.match(offline,/href="\/planner\.html"[^>]*>[\s\S]*?Offline planner[\s\S]*?week kept on this device/);
   assert.match(offline,/href="\/policies"[^>]*>[\s\S]*?Cached reference/);
   assert.match(offline,new RegExp(`src="/offline\\.js\\?v=${escapeRegExp(BUILD)}"`));
+
+  const workoutOffline=read("pages/workout-offline.html");
+  assert.match(workoutOffline,/name="viewport"[^>]*viewport-fit=cover/i);
+  assert.match(workoutOffline,/This shell contains no cached account page or private API response/i);
+  assert.match(workoutOffline,/id="syncWorkout"[^>]*>Review &amp; sync</i);
+  assert.doesNotMatch(workoutOffline,/src="\/pwa\.js/i,"the cached recovery shell must not register another worker");
 });
 
 test("bearer-link pages stay mobile friendly but do not initialize the PWA",()=>{
@@ -228,6 +234,7 @@ test("service worker precaches only public assets and never handles account APIs
   assert.equal(harness.lifecycle.skipped,true,"the installed worker must activate without waiting for old tabs to close");
   assert.equal(new Set(harness.precache).size,harness.precache.length,"precache entries must stay unique");
   assert.ok(harness.precache.includes("/offline.html"));
+  assert.ok(harness.precache.includes("/workout-offline.html"));
   assert.ok(harness.precache.includes("/install.html"));
   assert.ok(harness.precache.includes("/manifest.webmanifest"));
   assert.ok(harness.precache.includes(`/exercises.json?v=${BUILD}`));
@@ -236,18 +243,21 @@ test("service worker precaches only public assets and never handles account APIs
   assert.ok(harness.precache.includes(`/product-nav.css?v=${BUILD}`));
   assert.ok(harness.precache.includes(`/pricing.js?v=${BUILD}`));
   assert.ok(harness.precache.includes(`/offline.js?v=${BUILD}`));
+  assert.ok(harness.precache.includes(`/workout-offline.js?v=${BUILD}`));
+  assert.ok(harness.precache.includes(`/workout-offline.css?v=${BUILD}`));
+  for(const asset of ["/fonts/manrope-latin.woff2","/fonts/dm-mono-400-latin.woff2","/fonts/dm-mono-500-latin.woff2","/images/hero-training.jpg","/images/training-story.jpg"])assert.ok(harness.precache.includes(asset),`${asset} must remain self-hosted and installable`);
   assert.ok(harness.precache.some((url)=>url.includes("strata-512.png")));
   assert.ok(!harness.precache.some((url)=>url.includes("strata-layers.jpg")),"The lazy homepage artwork must not become an eager PWA install download");
 
   const paths=harness.precache.map((entry)=>new URL(entry,"https://strata.test").pathname);
-  const privateHtml=["/","/index.html","/account.html","/verify-email","/verify-email.html","/forgot-password","/forgot-password.html","/reset-password","/reset-password.html","/delete-account","/delete-account.html","/admin","/admin.html","/discover.html"];
+  const privateHtml=["/","/index.html","/account.html","/verify-email","/verify-email.html","/forgot-password","/forgot-password.html","/reset-password","/reset-password.html","/delete-account","/delete-account.html","/admin","/admin.html","/discover.html","/onboarding.html","/workout.html"];
   for(const forbidden of privateHtml)assert.ok(!paths.includes(forbidden),`${forbidden} must not be precached`);
   assert.ok(!paths.some((entry)=>entry.startsWith("/api/")||entry.startsWith("/auth/")||entry==="/healthz"),"account and health routes must not be precached");
 
-  for(const endpoint of ["/api/status","/api/me","/api/verification-status","/api/verify-email","/api/resend-verification","/api/password-reset/request","/api/password-reset/status","/api/password-reset/complete","/api/account/password-reset/request","/api/account/delete/request","/api/account/delete/cancel","/api/account/delete/status","/api/account/delete/complete","/api/admin/session","/api/admin/elevate","/api/admin/overview","/api/admin/users","/api/admin/users/example-user/actions","/api/admin/support","/api/admin/support/example-ticket","/api/admin/audit","/api/billing/config","/api/billing/checkout","/api/paddle/webhook","/auth/login","/auth/signup","/auth/verify-email","/auth/resend-verification","/auth/password-reset/request","/auth/password-reset/complete","/auth/account-delete/complete","/healthz"]) {
+  for(const endpoint of ["/api/status","/api/me","/api/verification-status","/api/verify-email","/api/resend-verification","/api/password-reset/request","/api/password-reset/status","/api/password-reset/complete","/api/account/password-reset/request","/api/account/delete/request","/api/account/delete/cancel","/api/account/delete/status","/api/account/delete/complete","/api/admin/session","/api/admin/elevate","/api/admin/overview","/api/admin/users","/api/admin/users/example-user/actions","/api/admin/support","/api/admin/support/example-ticket","/api/admin/audit","/api/billing/config","/api/billing/checkout","/api/paddle/webhook","/auth/login","/auth/signup","/auth/verify-email","/auth/resend-verification","/auth/password-reset/request","/auth/password-reset/complete","/auth/account-delete/complete","/healthz","/livez","/readyz"]) {
     assert.equal(dispatchServiceWorkerFetch(harness.listeners.fetch,endpoint),undefined,`${endpoint} must bypass the service worker`);
   }
-  for(const privatePage of ["/index.html","/account.html","/verify-email","/verify-email.html","/forgot-password","/forgot-password.html","/reset-password","/reset-password.html","/delete-account","/delete-account.html","/admin","/admin.html","/discover.html"]) {
+  for(const privatePage of ["/index.html","/account.html","/verify-email","/verify-email.html","/forgot-password","/forgot-password.html","/reset-password","/reset-password.html","/delete-account","/delete-account.html","/admin","/admin.html","/discover.html","/onboarding.html","/workout.html"]) {
     assert.equal(dispatchServiceWorkerFetch(harness.listeners.fetch,privatePage),undefined,`${privatePage} must bypass runtime asset caching`);
   }
   assert.equal(dispatchServiceWorkerFetch(harness.listeners.fetch,"/styles.css",{method:"POST"}),undefined,"writes must never be intercepted");
@@ -270,7 +280,7 @@ test("service worker activation removes stale STRATA caches without touching unr
   assert.equal(harness.lifecycle.claimed,true,"the current worker must claim pages after cleanup");
 });
 
-test("private navigations are network-first and fall back to the non-sensitive offline page",async()=>{
+test("private navigations are network-first and use only purpose-built non-sensitive fallbacks",async()=>{
   const harness=serviceWorkerHarness();
   const online=dispatchServiceWorkerFetch(harness.listeners.fetch,"/planner.html",{mode:"navigate"});
   assert.equal(await online,harness.networkResponse);
@@ -280,6 +290,10 @@ test("private navigations are network-first and fall back to the non-sensitive o
   for(const page of ["/forgot-password","/reset-password","/delete-account","/admin"]) {
     const actionPage=dispatchServiceWorkerFetch(harness.listeners.fetch,page,{mode:"navigate"});
     assert.equal(await actionPage,harness.offlineResponse,`${page} must use only the non-sensitive offline fallback`);
+  }
+  for(const page of ["/workout","/workout/","/workout.html"]){
+    const workout=dispatchServiceWorkerFetch(harness.listeners.fetch,page,{mode:"navigate"});
+    assert.equal(await workout,harness.pageResponses.get("/workout-offline.html"),`${page} must use only the generic workout recovery shell`);
   }
 });
 

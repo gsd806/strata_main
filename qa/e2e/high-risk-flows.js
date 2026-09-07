@@ -12,7 +12,7 @@ const {chromium}=require("playwright");
 
 const PROJECT_ROOT=join(__dirname,"..","..");
 const PRODUCT_ID="pro_01m1ky8j916ybyacs836dxbz8x";
-const PRICE_ID="pri_01m1kyc2zd313d7a3ssmg02424";
+const PRICE_ID="pri_01monthlyfixture00000000000000";
 const CLIENT_TOKEN="live_e2e_browser_token_1234567890";
 const API_KEY="pdl_live_apikey_e2e_123456789012345678901234567890";
 const WEBHOOK_SECRET="pdl_ntfset_e2e_12345678901234567890";
@@ -106,7 +106,7 @@ async function handleProviderRequest(req,res){
       custom_data:body?.custom_data||null,
       items:[{
         quantity:Number(body?.items?.[0]?.quantity||0),
-        price:{id:body?.items?.[0]?.price_id||null,product_id:PRODUCT_ID,billing_cycle:null}
+        price:{id:body?.items?.[0]?.price_id||null,product_id:PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}
       }]
     };
     paddleTransactions.set(id,transaction);
@@ -344,9 +344,34 @@ function completedEvent(transaction,userId){
     data:{
       ...transaction,
       status:"completed",
-      customer_id:"ctm_000000000000000000000001",
+      customer_id:"ctm_01m1ky8j916ybyacs836dxbz8x",
+      subscription_id:`sub_${String(transaction.id).slice(4)}`,
       updated_at:occurredAt,
       custom_data:{...transaction.custom_data,strata_user_id:userId,strata_version:1}
+    }
+  };
+}
+
+function subscriptionEvent(transaction,userId){
+  eventSequence+=1;
+  const occurredAt=new Date().toISOString();
+  return{
+    event_id:`evt_${String(eventSequence).padStart(24,"0")}`,
+    event_type:"subscription.created",
+    occurred_at:occurredAt,
+    notification_id:`ntf_${String(eventSequence).padStart(24,"0")}`,
+    data:{
+      id:`sub_${String(transaction.id).slice(4)}`,
+      status:"active",
+      customer_id:"ctm_01m1ky8j916ybyacs836dxbz8x",
+      transaction_id:transaction.id,
+      collection_mode:"automatic",
+      custom_data:{strata_user_id:userId,strata_version:1},
+      billing_cycle:{interval:"month",frequency:1},
+      items:[{quantity:1,recurring:true,price:{id:PRICE_ID,product_id:PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}}],
+      scheduled_change:null,
+      current_billing_period:{starts_at:"2026-09-01T00:00:00Z",ends_at:"2026-10-01T00:00:00Z"},
+      updated_at:occurredAt
     }
   };
 }
@@ -476,7 +501,7 @@ test("security-sensitive browser journeys",{timeout:120_000},async(t)=>{
     await Promise.all([primary.context.close(),secondary.context.close()]);
   });
 
-  await t.test("signed Paddle completion grants durable browser entitlement and replay is idempotent",async()=>{
+  await t.test("signed Paddle payment and subscription grant durable browser entitlement and replay is idempotent",async()=>{
     const email="payment-e2e@example.test";
     const account=await createVerifiedAccount({name:"Payment E2E",email,errors:pageErrors});
     const unpaidBeforeCheckout=await account.page.evaluate(async()=>await (await fetch("/api/me",{credentials:"same-origin"})).json());
@@ -516,10 +541,18 @@ test("security-sensitive browser journeys",{timeout:120_000},async(t)=>{
     await account.page.waitForFunction(()=>globalThis.document.querySelector("#saveStatus")?.textContent==="Saved");
 
     const webhook=signedWebhook(completedEvent(transaction,checkout.userId));
-    const granted=await sendBrowserWebhook(account.page,webhook);
-    assert.deepEqual(granted,{status:200,data:{ok:true,outcome:"granted"}});
+    const recorded=await sendBrowserWebhook(account.page,webhook);
+    assert.deepEqual(recorded,{status:200,data:{ok:true,outcome:"subscription-payment-recorded"}});
     const replayed=await sendBrowserWebhook(account.page,webhook);
     assert.deepEqual(replayed,{status:200,data:{ok:true,outcome:"replayed"}});
+
+    const pending=await account.page.evaluate(async()=>await (await fetch("/api/me",{credentials:"same-origin"})).json());
+    assert.equal(pending.user.discovery.active,false,"A completed recurring payment must not grant access before the matching subscription snapshot.");
+    const subscription=signedWebhook(subscriptionEvent(transaction,checkout.userId));
+    const granted=await sendBrowserWebhook(account.page,subscription);
+    assert.deepEqual(granted,{status:200,data:{ok:true,outcome:"subscription-created"}});
+    const subscriptionReplay=await sendBrowserWebhook(account.page,subscription);
+    assert.deepEqual(subscriptionReplay,{status:200,data:{ok:true,outcome:"replayed"}});
 
     const me=await account.page.evaluate(async()=>await (await fetch("/api/me",{credentials:"same-origin"})).json());
     assert.equal(me.user.discovery.active,true);

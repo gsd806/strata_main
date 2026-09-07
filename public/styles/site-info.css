@@ -79,6 +79,7 @@ a { color:inherit; }
 .policy-content ul { padding-left:22px; }
 .policy-content li+li { margin-top:8px; }
 .policy-content a,.contact-email { color:var(--orange-text); text-decoration-thickness:1px; text-underline-offset:4px; overflow-wrap:anywhere; }
+.policy-content a.button-dark { color:#fff; }
 .plain-note { color:var(--muted); font-size:13px; line-height:1.65; }
 
 .policy-hub-content { max-width:none; }
@@ -101,6 +102,7 @@ a { color:inherit; }
 .policy-support-band p:not(.card-kicker) { color:rgba(255,255,255,.68); }
 .policy-support-band a:not(.button) { color:var(--accent); }
 .policy-support-band .button { margin-top:8px; }
+.policy-support-band a.button-dark { color:var(--ink); background:var(--accent); }
 
 .policy-founder { display:grid; grid-template-columns:minmax(270px,.72fr) minmax(0,1.28fr); gap:clamp(46px,7vw,86px); align-items:stretch; margin-top:clamp(72px,9vw,112px); padding-top:clamp(64px,8vw,96px); border-top:1px solid var(--ink); scroll-margin-top:100px; }
 .policy-founder-mark { position:relative; min-height:440px; display:flex; flex-direction:column; justify-content:flex-end; overflow:hidden; padding:32px; color:#fff; border:1px solid #0a0c09; border-radius:18px; background:radial-gradient(circle at 65% 22%,rgba(212,245,120,.2),transparent 30%),linear-gradient(150deg,#26321c,#10110f 68%); box-shadow:var(--shadow); }

@@ -13,7 +13,7 @@ Please include:
 - the affected route, feature, build, or commit;
 - the security impact and who could be affected;
 - minimal, repeatable steps or a proof of concept;
-- relevant sanitized request and response details; and
+- relevant sanitized request and response details, including an `X-Request-ID` when available; and
 - a safe way to contact you about follow-up questions.
 
 Do not send passwords, session cookies, reset links, verification codes, API keys, database tokens, full payment details, or personal data. Redact secrets from logs and screenshots. If a live secret was exposed, revoke or rotate it through the owning provider instead of emailing it.
@@ -26,6 +26,6 @@ Use accounts and data you control. Avoid privacy violations, social engineering,
 
 ## In scope
 
-Useful reports include authentication or authorization bypasses, session or CSRF weaknesses, unsafe account-state changes, sensitive-data exposure, injection, forged or replayed payment events, PWA caching of private data, and dependency vulnerabilities with a demonstrated STRATA impact.
+Useful reports include authentication or authorization bypasses, session or CSRF weaknesses, unsafe account-state changes, account-export or session-revocation isolation failures, sensitive-data exposure, injection, forged, replayed, or out-of-order payment/subscription events, cross-account offline-workout drafts, PWA caching of private data, and dependency vulnerabilities with a demonstrated STRATA impact.
 
 Feature requests, general support, FitScore methodology questions, and issues without a security impact should use the normal Contact page or GitHub issue tracker.

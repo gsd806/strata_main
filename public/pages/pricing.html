@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="description" content="Strata+ pricing: $5.99 USD as a one-time purchase with no recurring subscription." />
+    <meta name="description" content="Strata+ is a $0.99 USD monthly subscription after one free 30-minute, no-card trial." />
     <meta name="theme-color" content="#10110f" />
     <meta name="application-name" content="STRATA" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -13,13 +13,11 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icons/strata-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/site-info.css?v=7.4.1" />
-    <link rel="stylesheet" href="/product-signals.css?v=7.4.1" />
-    <link rel="stylesheet" href="/experience.css?v=7.4.1" />
-    <script src="/motion.js?v=7.4.1"></script>
+    <link rel="stylesheet" href="/fonts.css?v=7.5.0" />
+    <link rel="stylesheet" href="/site-info.css?v=7.5.0" />
+    <link rel="stylesheet" href="/product-signals.css?v=7.5.0" />
+    <link rel="stylesheet" href="/experience.css?v=7.5.0" />
+    <script src="/motion.js?v=7.5.0"></script>
   </head>
   <body class="pricing-page">
     <a class="skip-link" href="#main">Skip to pricing</a>
@@ -31,10 +29,10 @@
     <main id="main">
       <section class="info-hero" aria-labelledby="pageTitle">
         <div class="info-container info-hero-grid">
-          <div><p class="eyebrow">Strata+ access · No subscription</p><h1 id="pageTitle">TRY IT FREE.<br /><em>ONE PRICE TO KEEP.</em></h1></div>
+          <div><p class="eyebrow">Strata+ · Monthly subscription</p><h1 id="pageTitle">TRY IT FREE.<br /><em>KEEP IT MONTHLY.</em></h1></div>
           <div>
-            <p class="info-lede">Start with one 10-day trial—no card, no renewal. Strata+ connects your saved Plan to guided workouts, private history, explicit post-session check-ins, and review-first progression suggestions. Keep it with one $5.99 USD purchase if it earns a place in your training.</p>
-            <div class="hero-facts" aria-label="Strata+ purchase facts"><span><strong>10 days</strong>Free trial</span><span><strong>$5.99 USD</strong>One payment</span><span><strong>14 days</strong>Refund window</span></div>
+            <p class="info-lede">Start with one free 30-minute trial—no card and no automatic conversion. Strata+ connects your saved Plan to guided workouts, private history, explicit post-session check-ins, and review-first progression suggestions. Continue only by explicitly subscribing for $0.99 USD per month. It renews monthly until canceled.</p>
+            <div class="hero-facts" aria-label="Strata+ subscription facts"><span><strong>30 minutes</strong>Free, no-card trial</span><span><strong>$0.99 USD</strong>Per month</span><span><strong>Cancel</strong>Through Paddle</span></div>
           </div>
         </div>
       </section>
@@ -42,14 +40,14 @@
       <section class="info-main" aria-label="STRATA plans">
         <div class="info-container pricing-grid">
           <article class="price-card" aria-labelledby="discoveryPlanTitle">
-            <p class="card-kicker">Strata+ · One-time access</p>
+            <p class="card-kicker">Strata+ · Monthly access</p>
             <h2 class="sr-only" id="discoveryPlanTitle">Strata+</h2>
-            <div class="price" aria-label="$5.99 USD, one-time purchase"><strong>$5.99</strong><span>USD</span></div>
-            <p class="price-subtitle">One-time purchase. No recurring subscription.</p>
+            <div class="price" aria-label="$0.99 USD per month"><strong>$0.99</strong><span>USD / month</span></div>
+            <p class="price-subtitle">A recurring monthly subscription. Renews every month until canceled.</p>
             <ol class="access-path" aria-label="How Strata+ access works">
               <li><span>01</span><div><strong>Create an account</strong><small>Your account’s synced weekly Plan stays free even if you do not keep Strata+.</small></div></li>
-              <li><span>02</span><div><strong>Try every Strata+ tool</strong><small>One 10-day trial, with no card and no automatic charge.</small></div></li>
-              <li><span>03</span><div><strong>Keep it only if it helps</strong><small>Pay $5.99 USD once. This is not a subscription.</small></div></li>
+              <li><span>02</span><div><strong>Try every Strata+ tool</strong><small>One 30-minute trial, with no card and no automatic charge.</small></div></li>
+              <li><span>03</span><div><strong>Subscribe only if it helps</strong><small>Choose checkout explicitly, then pay $0.99 USD each month until you cancel.</small></div></li>
             </ol>
             <ul class="feature-list">
               <li>A focused Today path that surfaces the next planned session or workout to resume</li>
@@ -64,15 +62,16 @@
               <div class="button-row purchase-actions">
                 <a class="button button-dark" id="purchaseSignup" href="/account.html?mode=signup&amp;next=pricing">Create account to start trial <span aria-hidden="true">→</span></a>
                 <a class="button button-light" id="purchaseLogin" href="/account.html?mode=login&amp;next=pricing">Already have an account? Sign in</a>
-                <button class="button button-dark" id="trialDiscovery" type="button" aria-describedby="purchaseStatus" hidden disabled>Try Strata+ free for 10 days <span aria-hidden="true">→</span></button>
-                <button class="button button-dark" id="buyDiscovery" type="button" aria-describedby="purchaseStatus" hidden disabled>Buy Strata+ · $5.99 USD <span aria-hidden="true">→</span></button>
+                <button class="button button-dark" id="trialDiscovery" type="button" aria-describedby="purchaseStatus" hidden disabled>Try Strata+ free for 30 minutes <span aria-hidden="true">→</span></button>
+                <button class="button button-dark" id="buyDiscovery" type="button" aria-describedby="purchaseStatus" hidden disabled>Subscribe · $0.99 USD / month <span aria-hidden="true">→</span></button>
                 <a class="button button-dark" id="openDiscovery" href="/discover.html" hidden>Open Strata+ <span aria-hidden="true">→</span></a>
+                <a class="button button-light" id="manageSubscription" href="/account.html#accountBilling" hidden>Manage subscription <span aria-hidden="true">→</span></a>
                 <button class="button button-light" id="checkAccess" type="button" aria-describedby="purchaseStatus" hidden>Check access <span aria-hidden="true">↻</span></button>
               </div>
-              <p class="purchase-status" id="purchaseStatus" role="status" aria-live="polite" aria-atomic="true" tabindex="-1">Sign in to start your free 10-day trial or buy Strata+ once for $5.99 USD.</p>
+              <p class="purchase-status" id="purchaseStatus" role="status" aria-live="polite" aria-atomic="true" tabindex="-1">Sign in to start your free 30-minute trial or explicitly subscribe for $0.99 USD per month.</p>
             </div>
             <noscript><p class="purchase-status purchase-status-warn">JavaScript is required to open secure Paddle checkout. You can still create an account, then return to this page.</p></noscript>
-            <p class="checkout-note"><strong>Secure checkout:</strong> Paddle is the merchant of record and handles payment details, applicable tax, receipts, and refunds. STRATA does not receive or store your full card number. Strata+ unlocks after STRATA securely confirms the completed transaction. See the <a href="/refunds">14-day refund policy</a>.</p>
+            <p class="checkout-note"><strong>Secure subscription:</strong> Paddle is the merchant of record and handles payment details, applicable tax, recurring charges, receipts, cancellation, and refunds. STRATA does not receive or store your full card number. Strata+ unlocks after STRATA securely confirms the subscription. Manage or cancel it from Account; cancellation stops future renewals as shown by Paddle. See the <a href="/refunds">14-day refund policy</a>.</p>
           </article>
 
           <article class="free-card" aria-labelledby="freeTitle">
@@ -86,14 +85,14 @@
             </ul>
             <p class="tier-boundary"><strong>What Strata+ adds:</strong> personalization, guided training and logging, private history, progression suggestions, community discovery, and the 31-day view. Your manual Plan is not taken away when access ends.</p>
             <a class="button button-light" href="/planner.html">Open free planner <span aria-hidden="true">→</span></a>
-            <p class="plain-note">Questions before buying? <a class="contact-email" href="/contact">Contact STRATA</a> or review the <a class="contact-email" href="/terms">Terms of Service</a>.</p>
+            <p class="plain-note">Questions before subscribing? <a class="contact-email" href="/contact">Contact STRATA</a> or review the <a class="contact-email" href="/terms">Terms of Service</a>.</p>
           </article>
         </div>
 
-        <div class="info-container decision-strip" aria-label="Purchase assurances" data-reveal>
-          <article><span>01 / Try first</span><strong>No card for the trial.</strong><p>The eligible 10-day trial starts only when you choose it and never converts into an automatic charge.</p></article>
+        <div class="info-container decision-strip" aria-label="Subscription assurances" data-reveal>
+          <article><span>01 / Try first</span><strong>No card for the trial.</strong><p>The eligible 30-minute trial starts only when you choose it and never converts into an automatic charge.</p></article>
           <article><span>02 / See the total</span><strong>Checkout stays explicit.</strong><p>Paddle shows applicable tax and the final total before payment, then handles the receipt as merchant of record.</p></article>
-          <article><span>03 / Reconsider</span><strong>A clear refund window.</strong><p>A paid Strata+ purchase may be refunded within 14 calendar days after purchase. <a href="/refunds">Read the policy</a>.</p></article>
+          <article><span>03 / Stay in control</span><strong>Manage renewal anytime.</strong><p>Open Account to manage payment or request cancellation through Paddle. Cancellation and refunds are separate actions. <a href="/refunds">Read the policy</a>.</p></article>
         </div>
         <div class="signal-consent-host" data-product-signals-consent-host></div>
       </section>
@@ -103,12 +102,12 @@
       <div class="info-container info-footer-grid">
         <div><a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>STRATA</span></a><p class="footer-tagline">Make every working set intentional.</p></div>
         <nav class="footer-nav" aria-label="Footer navigation"><a href="/">Rankings</a><a href="/discover.html">Strata+</a><a href="/pricing">Pricing</a><a href="/contact">Contact</a><a href="/policies">Policies</a><a href="/install">Install</a></nav>
-        <p class="footer-meta">© 2026 Strata Index<br />Build 7.4.1</p>
+        <p class="footer-meta">© 2026 Strata Index<br />Build 7.5.0</p>
       </div>
     </footer>
     <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
-    <script src="/pwa.js?v=7.4.1"></script>
-    <script src="/product-signals.js?v=7.4.1"></script>
-    <script src="/pricing.js?v=7.4.1"></script>
+    <script src="/pwa.js?v=7.5.0"></script>
+    <script src="/product-signals.js?v=7.5.0"></script>
+    <script src="/pricing.js?v=7.5.0"></script>
   </body>
 </html>

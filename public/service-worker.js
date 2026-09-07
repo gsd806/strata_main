@@ -1,15 +1,17 @@
 "use strict";
 
-const BUILD="7.4.1";
+const BUILD="7.5.0";
 const CACHE_PREFIX="strata-static-";
 // Every release refreshes this complete versioned set before the worker takes control.
 const STATIC_CACHE=`${CACHE_PREFIX}${BUILD}`;
 const PRECACHE_URLS=[
-  "/experience.css?v=7.4.1",
-  "/product-signals.css?v=7.4.1",
-  "/product-signals.js?v=7.4.1",
-  "/motion.js?v=7.4.1",
+  "/experience.css?v=7.5.0",
+  "/fonts.css?v=7.5.0",
+  "/product-signals.css?v=7.5.0",
+  "/product-signals.js?v=7.5.0",
+  "/motion.js?v=7.5.0",
   "/offline.html",
+  "/workout-offline.html",
   "/install.html",
   "/pricing.html",
   "/contact.html",
@@ -18,33 +20,45 @@ const PRECACHE_URLS=[
   "/privacy.html",
   "/refunds.html",
   "/planner.html",
-  "/workout.css?v=7.4.1",
-  "/workout.js?v=7.4.1",
-  "/workout-core.js?v=7.4.1",
-  "/onboarding.css?v=7.4.1",
-  "/product-nav.css?v=7.4.1",
-  "/onboarding.js?v=7.4.1",
-  "/onboarding-core.js?v=7.4.1",
-  "/install.css?v=7.4.1",
-  "/install.js?v=7.4.1",
-  "/offline.js?v=7.4.1",
-  "/site-info.css?v=7.4.1",
-  "/pricing.js?v=7.4.1",
-  "/contact.js?v=7.4.1",
-  "/pwa.js?v=7.4.1",
-  "/styles.css?v=7.4.1",
-  "/app.js?v=7.4.1",
-  "/account.css?v=7.4.1",
-  "/account.js?v=7.4.1",
-  "/account-recovery.js?v=7.4.1",
-  "/planner.css?v=7.4.1",
-  "/planner.js?v=7.4.1",
-  "/discover.css?v=7.4.1",
-  "/discovery-core.js?v=7.4.1",
-  "/preview-core.js?v=7.4.1",
-  "/monthly-plan-core.js?v=7.4.1",
-  "/discover.js?v=7.4.1",
-  "/exercises.json?v=7.4.1",
+  "/workout.css?v=7.5.0",
+  "/workout.js?v=7.5.0",
+  "/workout-core.js?v=7.5.0",
+  "/workout-offline.css?v=7.5.0",
+  "/workout-offline.js?v=7.5.0",
+  "/onboarding.css?v=7.5.0",
+  "/product-nav.css?v=7.5.0",
+  "/onboarding.js?v=7.5.0",
+  "/onboarding-core.js?v=7.5.0",
+  "/activation-core.js?v=7.5.0",
+  "/activation-handoff.js?v=7.5.0",
+  "/activation-home.js?v=7.5.0",
+  "/plan-insights-core.js?v=7.5.0",
+  "/install.css?v=7.5.0",
+  "/install.js?v=7.5.0",
+  "/offline.js?v=7.5.0",
+  "/site-info.css?v=7.5.0",
+  "/pricing.js?v=7.5.0",
+  "/contact.js?v=7.5.0",
+  "/pwa.js?v=7.5.0",
+  "/styles.css?v=7.5.0",
+  "/app.js?v=7.5.0",
+  "/account.css?v=7.5.0",
+  "/account.js?v=7.5.0",
+  "/account-recovery.js?v=7.5.0",
+  "/planner.css?v=7.5.0",
+  "/planner.js?v=7.5.0",
+  "/discover.css?v=7.5.0",
+  "/discovery-core.js?v=7.5.0",
+  "/preview-core.js?v=7.5.0",
+  "/monthly-plan-core.js?v=7.5.0",
+  "/discover.js?v=7.5.0",
+  "/training-block-core.js?v=7.5.0",
+  "/exercises.json?v=7.5.0",
+  "/fonts/manrope-latin.woff2",
+  "/fonts/dm-mono-400-latin.woff2",
+  "/fonts/dm-mono-500-latin.woff2",
+  "/images/hero-training.jpg",
+  "/images/training-story.jpg",
   "/manifest.webmanifest",
   "/icons/strata-icon.svg",
   "/icons/strata-192.png",
@@ -66,7 +80,7 @@ const PUBLIC_HTML_FALLBACKS=new Map([
 ]);
 
 function bypassNetwork(pathname) {
-  return pathname.startsWith("/api/") || pathname.startsWith("/auth/") || pathname==="/healthz";
+  return pathname.startsWith("/api/") || pathname.startsWith("/auth/") || pathname==="/healthz" || pathname==="/livez" || pathname==="/readyz";
 }
 
 self.addEventListener("install",(event) => {
@@ -94,6 +108,13 @@ async function navigationResponse(request,url) {
     if (pageKey==="/pricing" && url.searchParams.has("_ptxn")) {
       const offline=await cache.match("/offline.html");
       return offline || new Response("STRATA is offline.",{status:503,headers:{"Content-Type":"text/plain; charset=utf-8"}});
+    }
+    // This is a generic shell, never the personalized workout page. It can
+    // read only a previously authorized, account-scoped device draft and must
+    // re-check identity/access before handing the draft back for server sync.
+    if (pageKey==="/workout") {
+      const workout=await cache.match("/workout-offline.html");
+      if (workout) return workout;
     }
     const publicFallback=PUBLIC_HTML_FALLBACKS.get(pageKey);
     if (publicFallback) {

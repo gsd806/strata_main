@@ -4,6 +4,8 @@ const Core=globalThis.StrataDiscovery;
 if(!Core)throw new Error("The Strata+ engine did not load.");
 const Monthly=globalThis.StrataMonthlyPlan;
 if(!Monthly)throw new Error("The Strata+ monthly-plan engine did not load.");
+const BlockCore=globalThis.StrataTrainingBlock;
+if(!BlockCore)throw new Error("The Strata+ training-block engine did not load.");
 const GROUP_LABELS={chest:"Chest",back:"Back",shoulders:"Shoulders",arms:"Arms",legs:"Legs",glutes:"Glutes",calves:"Calves",core:"Core"};
 const PREFERENCE_OPTIONS={stable:"Stable setup","long-range":"Long-range friendly","simple-setup":"Simple setup",compound:"Compound lifts",isolation:"Isolation work"};
 const LIMITATION_OPTIONS={"no-overhead":"Avoid overhead positions","no-deep-knee":"Avoid deep knee flexion","no-unsupported-hinge":"Avoid unsupported hinges","no-floor":"Avoid floor exercises","no-unilateral":"Avoid unilateral work"};
@@ -28,7 +30,7 @@ const FEATURE_CONFIG=Object.freeze({
   monthly:{panelId:"monthlyPlan",headingId:"monthlyPlanTitle",label:"Build a 31-day plan"},
   session:{panelId:"sessionBuilder",headingId:"sessionBuilderTitle",label:"Build a session"}
 });
-const state={exercises:[],methodology:null,sources:[],limited:new Set(),preferences:null,user:null,csrfToken:"",aggregate:new Map(),userRatings:new Map(),ratingsRefreshedAt:0,ratingsRefreshPromise:null,ratingSaving:new Set(),compare:[],shortlist:[],collection:"all",query:"",group:"all",equipment:"all",pattern:"all",level:"all",sort:"personal",recommendations:[],activeExercise:null,activeFeature:null,explorerLimit:EXPLORER_DESKTOP_PAGE_SIZE,weeklyPlan:null,weeklyPlanUpdatedAt:0,workouts:[],workoutHistoryAvailable:false,workoutHistoryHasMore:false,trainingBlock:null,trainingBlockRevision:0,progressionSuggestion:null,session:null,sessionSaving:false,sessionDayInitialized:false,monthlyPlan:null,monthlyPlanUpdatedAt:0,monthlySchedule:null,monthlySource:"muscle-schedule",communityPlans:[],communityLoaded:false,communityLoading:false,communityError:"",communityNextOffset:0,communityQuery:"",communityPendingId:null,communityAppliedId:null,communityAppliedUpdatedAt:0};
+const state={exercises:[],methodology:null,sources:[],limited:new Set(),preferences:null,user:null,csrfToken:"",aggregate:new Map(),userRatings:new Map(),ratingsRefreshedAt:0,ratingsRefreshPromise:null,ratingSaving:new Set(),compare:[],shortlist:[],collection:"all",query:"",group:"all",equipment:"all",pattern:"all",level:"all",sort:"personal",recommendations:[],activeExercise:null,activeFeature:null,explorerLimit:EXPLORER_DESKTOP_PAGE_SIZE,weeklyPlan:null,weeklyPlanUpdatedAt:0,workouts:[],workoutHistoryAvailable:false,workoutHistoryHasMore:false,trainingBlock:null,trainingBlockRevision:0,trainingBlockAction:null,progressionSuggestion:null,session:null,sessionSaving:false,sessionDayInitialized:false,monthlyPlan:null,monthlyPlanUpdatedAt:0,monthlySchedule:null,monthlySource:"muscle-schedule",communityPlans:[],communityLoaded:false,communityLoading:false,communityError:"",communityNextOffset:0,communityQuery:"",communityPendingId:null,communityAppliedId:null,communityAppliedUpdatedAt:0};
 let workspaceGeneration=0,workspaceReady=false,workspaceRevalidating=false;
 const el=(id)=>document.getElementById(id);
 
@@ -680,15 +682,53 @@ function normalizeTrainingBlock(data){
   const lightWeek=Number.isInteger(Number(raw.lightWeek))&&Number(raw.lightWeek)>=2&&Number(raw.lightWeek)<=weeks?Number(raw.lightWeek):null;
   return{version:Number(raw.version)||1,title:String(raw.title||"My training block"),goal:String(raw.goal||state.preferences?.goal||"balanced"),weeks,currentWeek:Math.max(1,Math.min(weeks,Math.round(Number(raw.currentWeek)||1))),lightWeek,startDate:String(raw.startDate||localIsoDate()),status:["active","completed"].includes(raw.status)?raw.status:"active",progressionRule:["reps-then-load","reps-only","time"].includes(raw.progressionRule)?raw.progressionRule:"reps-then-load",milestones:Array.isArray(raw.milestones)?raw.milestones:[],revision:Math.max(0,Math.round(Number(raw.revision)||0)),updatedAt:Number(raw.updatedAt??data?.updatedAt)||0};
 }
+function trainingBlockPhase(block,timeline){
+  if(block.status==="completed")return"Completed";
+  if(timeline.beforeStart)return"Starts soon";
+  if(timeline.afterEnd)return"Review due";
+  if(block.lightWeek===timeline.week)return"Lighter-week reminder";
+  return"Active";
+}
+function renderTrainingBlockEvidence(review){
+  const node=el("trainingBlockEvidence"),records=review.performance.records.map((item)=>({...item,type:"Logged high"})),recordKeys=new Set(records.map((item)=>`${item.exerciseId}:${item.date}:${item.after}`)),improvements=review.performance.improvements.filter((item)=>!recordKeys.has(`${item.exerciseId}:${item.date}:${item.after}`)).map((item)=>({...item,type:"Repeat improvement"})),items=[...records,...improvements].slice(0,4);
+  node.innerHTML=items.length?items.map((item)=>`<article><strong>${escapeHtml(item.type)} · ${escapeHtml(exerciseName(item.exerciseId))}</strong><p>${escapeHtml(item.before)} → ${escapeHtml(item.after)} · ${escapeHtml(readableDate(item.date))}</p></article>`).join(""):`<p class="training-block-empty">No comparable improvement or new logged high is supported by the loaded workouts for this block week.</p>`;
+  const signals=el("trainingBlockSignals"),parts=[];
+  if(review.skipped.available)parts.push(`<span>${review.skipped.count} explicitly skipped</span>`);
+  if(review.replaced.available)parts.push(`<span>${review.replaced.count} explicitly replaced</span>`);
+  signals.innerHTML=parts.join("");signals.hidden=!parts.length;
+  el("trainingBlockSignalNote").textContent=parts.length?"Counts come only from explicit fields in saved workout records.":"Skipped and replaced counts appear only when a saved workout explicitly records them.";
+}
+function renderTrainingBlockReview(){
+  const root=el("trainingBlockReview"),block=state.trainingBlock;if(!root)return;
+  root.hidden=!block;if(!block)return;
+  const review=BlockCore.weekReview({block,weeklyPlan:state.weeklyPlan,workouts:state.workouts,exercises:state.exercises}),timeline=review.timeline,historyReady=state.workoutHistoryAvailable;
+  el("trainingBlockReviewRange").textContent=timeline.valid?`${BlockCore.formatDate(timeline.weekStart)}–${BlockCore.formatDate(timeline.weekEnd)} · calendar-derived`:"Check the saved start date";
+  el("trainingBlockReviewTitle").textContent=`WEEK ${timeline.week} REVIEW`;el("trainingBlockReviewPhase").textContent=trainingBlockPhase(block,timeline);
+  el("trainingBlockWorkoutCount").textContent=historyReady?`${review.completedWorkouts} / ${review.plannedWorkouts}`:`— / ${review.plannedWorkouts}`;
+  el("trainingBlockSetCount").textContent=historyReady?`${review.completedSets} / ${review.plannedSets}`:`— / ${review.plannedSets}`;el("trainingBlockWeekCount").textContent=`${timeline.week} / ${timeline.weeks}`;
+  el("trainingBlockMuscles").innerHTML=review.muscles.length?review.muscles.map((muscle)=>`<div class="training-block-muscle"><strong>${escapeHtml(muscle.label)}</strong><span>${muscle.planned}<small>planned</small></span><span>${historyReady?muscle.completed:"—"}<small>logged</small></span></div>`).join(""):'<p class="training-block-empty">No working sets are in the saved weekly Plan yet.</p>';
+  if(historyReady)renderTrainingBlockEvidence(review);else{el("trainingBlockEvidence").innerHTML='<p class="training-block-empty">Workout history is unavailable, so Strata+ is not making progress, skip, or replacement claims.</p>';el("trainingBlockSignals").hidden=true;el("trainingBlockSignalNote").textContent="Reconnect to review only verified saved workout evidence.";}
+  el("trainingBlockNextDecision").textContent=historyReady?review.nextDecision:"Reconnect before deciding from this week’s workout history.";
+  el("trainingBlockCarry").disabled=!review.actions.carry||!historyReady;el("trainingBlockLighter").disabled=!review.actions.lighter;el("trainingBlockFinish").disabled=!review.actions.finish;
+  if(block.status==="completed")el("trainingBlockReviewStatus").textContent="Saved. This block is complete; the weekly Plan and workout history are unchanged.";
+  else if(state.workoutHistoryHasMore)el("trainingBlockReviewStatus").textContent="Reviewing the 100 most recent sessions. Nothing changes until you confirm an action.";
+  else el("trainingBlockReviewStatus").textContent="Nothing changes until you review and confirm an action.";
+}
 function renderTrainingBlock(){
   const block=state.trainingBlock,status=el("trainingBlockStatus");if(!status)return;
-  if(!block){el("trainingBlockWeeks").value="6";renderTrainingBlockWeekOptions(1);el("trainingBlockStartDate").value=localIsoDate();el("trainingBlockState").value="active";el("trainingBlockLighterWeek").checked=true;status.textContent="Review the suggested start date. Nothing changes until you save.";return;}
-  el("trainingBlockWeeks").value=String(block.weeks);renderTrainingBlockWeekOptions(block.currentWeek);el("trainingBlockStartDate").value=block.startDate;el("trainingBlockState").value=block.status;el("trainingBlockLighterWeek").checked=block.lightWeek!==null;
-  status.textContent=block.status==="completed"?`Saved. Completed · ${block.weeks}-week block${block.lightWeek?` · week ${block.lightWeek} marked lighter`:""}.`:`Saved. Active · week ${block.currentWeek} of ${block.weeks}${block.lightWeek?` · week ${block.lightWeek} marked lighter`:" · no lighter week selected"}.`;
+  el("trainingBlockCurrentWeek").disabled=true;el("trainingBlockState").disabled=true;
+  if(!block){el("trainingBlockWeeks").value="6";el("trainingBlockStartDate").value=localIsoDate();el("trainingBlockState").value="active";renderTrainingBlockWeekOptions(1,"");status.textContent="Review the suggested start date. Nothing changes until you save.";renderTrainingBlockReview();return;}
+  const timeline=BlockCore.deriveWeek(block);el("trainingBlockWeeks").value=String(block.weeks);el("trainingBlockStartDate").value=block.startDate;el("trainingBlockState").value=block.status;renderTrainingBlockWeekOptions(timeline.week,block.lightWeek);
+  status.textContent=block.status==="completed"?`Saved. Completed · ${block.weeks}-week block${block.lightWeek?` · week ${block.lightWeek} marked lighter`:""}.`:`Saved. Active · date-derived week ${timeline.week} of ${block.weeks}${block.lightWeek?` · week ${block.lightWeek} marked lighter`:" · no lighter week selected"}.`;
+  renderTrainingBlockReview();
 }
-function renderTrainingBlockWeekOptions(selected=1){
-  const weeks=Math.max(4,Math.min(8,Math.round(Number(el("trainingBlockWeeks")?.value)||6))),select=el("trainingBlockCurrentWeek");if(!select)return;
-  const current=Math.max(1,Math.min(weeks,Math.round(Number(selected)||1)));select.innerHTML=Array.from({length:weeks},(_,index)=>`<option value="${index+1}">Week ${index+1}</option>`).join("");select.value=String(current);
+function renderTrainingBlockWeekOptions(selected=1,selectedLight=el("trainingBlockLighterWeek")?.value){
+  const weeks=Math.max(4,Math.min(8,Math.round(Number(el("trainingBlockWeeks")?.value)||6))),select=el("trainingBlockCurrentWeek"),lighter=el("trainingBlockLighterWeek");if(!select||!lighter)return;
+  const current=Math.max(1,Math.min(weeks,Math.round(Number(selected)||1))),light=Number(selectedLight);
+  select.innerHTML=Array.from({length:weeks},(_,index)=>`<option value="${index+1}">Week ${index+1}</option>`).join("");select.value=String(current);
+  lighter.innerHTML='<option value="">No lighter week</option>'+Array.from({length:Math.max(0,weeks-1)},(_,index)=>`<option value="${index+2}">Week ${index+2}</option>`).join("");lighter.value=Number.isInteger(light)&&light>=2&&light<=weeks?String(light):"";
+  const start=el("trainingBlockStartDate").value,timeline=BlockCore.deriveWeek({weeks,startDate:start});
+  if(timeline.valid){select.value=String(timeline.week);el("trainingBlockWeekHelp").textContent=timeline.beforeStart?`Starts ${BlockCore.formatDate(timeline.startDate)}`:`${BlockCore.formatDate(timeline.weekStart)}–${BlockCore.formatDate(timeline.weekEnd)}`;}
 }
 function adaptationChangeLabel(change){
   if(typeof change==="string"&&change.trim())return change.trim();
@@ -719,10 +759,10 @@ function renderProgression(){
 function clearPrivateWorkspace(){
   workspaceGeneration+=1;workspaceReady=false;
   state.exercises=[];state.methodology=null;state.sources=[];state.limited=new Set();state.preferences=null;state.user=null;state.csrfToken="";state.aggregate=new Map();state.userRatings=new Map();state.ratingsRefreshedAt=0;state.ratingsRefreshPromise=null;state.ratingSaving=new Set();state.compare=[];state.shortlist=[];state.collection="all";state.query="";state.group="all";state.equipment="all";state.pattern="all";state.level="all";state.sort="personal";state.recommendations=[];state.activeExercise=null;state.explorerLimit=EXPLORER_DESKTOP_PAGE_SIZE;
-  state.weeklyPlan=null;state.weeklyPlanUpdatedAt=0;state.workouts=[];state.workoutHistoryAvailable=false;state.workoutHistoryHasMore=false;state.trainingBlock=null;state.trainingBlockRevision=0;state.progressionSuggestion=null;state.session=null;state.sessionSaving=false;state.sessionDayInitialized=false;state.monthlyPlan=null;state.monthlyPlanUpdatedAt=0;state.monthlySchedule=null;state.monthlySource="muscle-schedule";state.communityPlans=[];state.communityLoaded=false;state.communityLoading=false;state.communityError="";state.communityNextOffset=0;state.communityQuery="";state.communityPendingId=null;state.communityAppliedId=null;state.communityAppliedUpdatedAt=0;
+  state.weeklyPlan=null;state.weeklyPlanUpdatedAt=0;state.workouts=[];state.workoutHistoryAvailable=false;state.workoutHistoryHasMore=false;state.trainingBlock=null;state.trainingBlockRevision=0;state.trainingBlockAction=null;state.progressionSuggestion=null;state.session=null;state.sessionSaving=false;state.sessionDayInitialized=false;state.monthlyPlan=null;state.monthlyPlanUpdatedAt=0;state.monthlySchedule=null;state.monthlySource="muscle-schedule";state.communityPlans=[];state.communityLoaded=false;state.communityLoading=false;state.communityError="";state.communityNextOffset=0;state.communityQuery="";state.communityPendingId=null;state.communityAppliedId=null;state.communityAppliedUpdatedAt=0;
   const main=document.querySelector("main");if(main){main.hidden=true;main.inert=true;main.setAttribute("aria-busy","true");}
   el("userName").textContent="Checking account…";el("compareTray").hidden=true;el("compareNames").textContent="Choose 2–4 exercises";el("toast").textContent="";el("featureStatus").textContent="";
-  el("progressionCard").hidden=true;el("battleResults").hidden=true;el("battleResults").innerHTML="";el("communityPlanGrid").innerHTML="";el("sessionResults").innerHTML="";
+  el("progressionCard").hidden=true;el("trainingBlockReview").hidden=true;el("battleResults").hidden=true;el("battleResults").innerHTML="";el("communityPlanGrid").innerHTML="";el("sessionResults").innerHTML="";
   if(el("detailContent"))el("detailContent").innerHTML="";if(el("communityApplySummary"))el("communityApplySummary").innerHTML="";
   document.querySelectorAll("dialog").forEach((dialog)=>{if(dialog.open)dialog.close();});document.body.classList.remove("dialog-open");
 }
@@ -731,7 +771,7 @@ function revealPrivateWorkspace(){
   workspaceReady=true;
 }
 function dashboardUnavailable(message="Workout history could not be loaded. Your plan is still ready."){
-  state.workouts=[];state.workoutHistoryAvailable=false;state.workoutHistoryHasMore=false;renderWeeklyPulse();renderProgress();
+  state.workouts=[];state.workoutHistoryAvailable=false;state.workoutHistoryHasMore=false;renderWeeklyPulse();renderProgress();renderTrainingBlockReview();
   if(el("todayPreviousValue"))el("todayPreviousValue").textContent="History unavailable";
   if(el("todayPreviousDetail"))el("todayPreviousDetail").textContent=message;
 }
@@ -782,30 +822,49 @@ async function loadMemberDashboard(generation=workspaceGeneration){
   if(!sameUser||(history&&(!historyCsrf||historyCsrf!==identityCsrf))||(training&&(!trainingCsrf||trainingCsrf!==identityCsrf))){dashboardAccountChanged();return;}
   state.csrfToken=identityCsrf||state.csrfToken;
   if(history&&Array.isArray(history.workouts)&&typeof history.hasMore==="boolean"){
-    state.workouts=safeWorkoutList(history.workouts);state.workoutHistoryAvailable=true;state.workoutHistoryHasMore=history.hasMore===true;renderWeeklyPulse();renderProgress();
+    state.workouts=safeWorkoutList(history.workouts);state.workoutHistoryAvailable=true;state.workoutHistoryHasMore=history.hasMore===true;renderWeeklyPulse();renderProgress();renderTrainingBlockReview();
   }else dashboardUnavailable();
   state.progressionSuggestion=normalizeProgression(training,completedWorkouts()[0]?.id||"");renderProgression();
   if(training){
     state.trainingBlock=normalizeTrainingBlock(training);state.trainingBlockRevision=state.trainingBlock?.revision||0;renderTrainingBlock();
   }
 }
+async function persistTrainingBlock(blockInput){
+  const expectedUserId=String(state.user?.id||""),expectedCsrf=state.csrfToken;
+  const result=await api("/api/training-block",{method:"PUT",body:JSON.stringify({block:blockInput,expectedRevision:state.trainingBlockRevision,expectedUserId})}),block=normalizeTrainingBlock(result);
+  if(!block)throw Object.assign(new Error("The saved training block response was incomplete."),{code:"INVALID_RESPONSE"});await confirmDashboardIdentity(expectedUserId,expectedCsrf);
+  state.trainingBlock=block;state.trainingBlockRevision=block.revision;renderTrainingBlock();return block;
+}
+function reconcileTrainingBlockSave(error,target="trainingBlockStatus"){
+  if(redirectedOrChangedAccount(error))return true;
+  if(error.code==="TRAINING_BLOCK_CHANGED"&&error.payload?.block){state.trainingBlock=normalizeTrainingBlock(error.payload);state.trainingBlockRevision=state.trainingBlock?.revision||0;renderTrainingBlock();el(target).textContent="Couldn't save — Retry. This block changed elsewhere; the latest saved version is loaded.";return true;}
+  el(target).textContent=saveRetryMessage(error);return false;
+}
 async function saveTrainingBlock(event){
   event.preventDefault();const form=event.currentTarget;if(form.dataset.saving==="true")return;
-  const weeks=Number(el("trainingBlockWeeks").value),lighterWeek=el("trainingBlockLighterWeek").checked,startDate=el("trainingBlockStartDate").value,status=el("trainingBlockState").value,currentWeek=status==="completed"?weeks:Number(el("trainingBlockCurrentWeek").value),button=el("trainingBlockSave");
-  if(!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(startDate)){el("trainingBlockStatus").textContent="Choose the date this block starts before saving.";el("trainingBlockStartDate").focus();return;}
+  const weeks=Number(el("trainingBlockWeeks").value),lightWeek=Number(el("trainingBlockLighterWeek").value)||null,startDate=el("trainingBlockStartDate").value,status=el("trainingBlockState").value,button=el("trainingBlockSave"),timeline=BlockCore.deriveWeek({weeks,startDate});
+  if(!timeline.valid){el("trainingBlockStatus").textContent="Choose a valid date for this block before saving.";el("trainingBlockStartDate").focus();return;}
   form.dataset.saving="true";form.setAttribute("aria-busy","true");button.disabled=true;button.textContent="Saving…";el("trainingBlockStatus").textContent="Saving…";
-  const expectedUserId=String(state.user?.id||""),expectedCsrf=state.csrfToken;
   try{
-    const current=state.trainingBlock,milestones=current?.weeks===weeks?(current.milestones||[]):[],blockInput={title:current?.title||`My ${weeks}-week block`,goal:current?.goal||state.preferences?.goal||"balanced",weeks,currentWeek,lightWeek:lighterWeek?weeks:null,startDate,status,progressionRule:current?.progressionRule||"reps-then-load",...(milestones.length?{milestones}:{})};
-    const result=await api("/api/training-block",{method:"PUT",body:JSON.stringify({block:blockInput,expectedRevision:state.trainingBlockRevision,expectedUserId})}),block=normalizeTrainingBlock(result);
-    if(!block)throw Object.assign(new Error("The saved training block response was incomplete."),{code:"INVALID_RESPONSE"});await confirmDashboardIdentity(expectedUserId,expectedCsrf);
-    state.trainingBlock=block;state.trainingBlockRevision=block.revision;renderTrainingBlock();showToast("Saved. Training block updated.");
-  }catch(error){
-    if(redirectedOrChangedAccount(error))return;
-    if(error.code==="TRAINING_BLOCK_CHANGED"&&error.payload?.block){state.trainingBlock=normalizeTrainingBlock(error.payload);state.trainingBlockRevision=state.trainingBlock?.revision||0;renderTrainingBlock();el("trainingBlockStatus").textContent="Couldn't save — Retry. This block changed elsewhere; the latest saved version is loaded.";}
-    else el("trainingBlockStatus").textContent=saveRetryMessage(error);
-  }
+    const current=state.trainingBlock,milestones=current?.weeks===weeks?(current.milestones||[]):[],currentWeek=status==="completed"?weeks:timeline.week,blockInput={title:current?.title||`My ${weeks}-week block`,goal:current?.goal||state.preferences?.goal||"balanced",weeks,currentWeek,lightWeek,startDate,status,progressionRule:current?.progressionRule||"reps-then-load",...(milestones.length?{milestones}:{})};
+    await persistTrainingBlock(blockInput);showToast("Saved. Training block updated.");
+  }catch(error){reconcileTrainingBlockSave(error);}
   finally{form.dataset.saving="false";form.setAttribute("aria-busy","false");button.disabled=false;button.textContent="Save training block";}
+}
+function openTrainingBlockAction(action){
+  try{
+    const proposal=BlockCore.actionProposal(state.trainingBlock,action);state.trainingBlockAction=proposal;
+    el("trainingBlockActionTitle").textContent=proposal.title.toUpperCase();el("trainingBlockActionDescription").textContent=proposal.description;el("trainingBlockActionConfirm").textContent=proposal.confirmLabel;el("trainingBlockActionError").hidden=true;el("trainingBlockActionError").textContent="";openDialog(el("trainingBlockActionDialog"),el("trainingBlockActionCancel"));
+  }catch(error){el("trainingBlockReviewStatus").textContent=error.message;}
+}
+async function confirmTrainingBlockAction(){
+  const proposal=state.trainingBlockAction,dialog=el("trainingBlockActionDialog"),button=el("trainingBlockActionConfirm");if(!proposal||dialog.dataset.busy==="true")return;
+  const controls=[...dialog.querySelectorAll("button")];dialog.dataset.busy="true";dialog.setAttribute("aria-busy","true");controls.forEach((control)=>{control.disabled=true;});button.textContent="Saving…";el("trainingBlockActionError").hidden=true;
+  try{
+    await persistTrainingBlock(proposal.block);closeDialog("trainingBlockActionDialog");el("trainingBlockStatus").textContent=`Saved. ${proposal.confirmLabel}.`;el("trainingBlockReviewStatus").textContent=`Saved. ${proposal.confirmLabel}. Your weekly Plan is unchanged.`;showToast(`Saved. ${proposal.confirmLabel}.`);
+  }catch(error){
+    const reconciled=reconcileTrainingBlockSave(error,"trainingBlockReviewStatus");if(reconciled){state.trainingBlockAction=null;if(dialog.open)closeDialog("trainingBlockActionDialog");}else{el("trainingBlockActionError").textContent=saveRetryMessage(error);el("trainingBlockActionError").hidden=false;}
+  }finally{dialog.dataset.busy="false";dialog.setAttribute("aria-busy","false");controls.forEach((control)=>{control.disabled=false;});button.textContent=state.trainingBlockAction?.confirmLabel||"Confirm action";}
 }
 async function acceptProgression(){
   const suggestion=state.progressionSuggestion,button=el("progressionAccept");if(!suggestion||button.disabled)return;
@@ -813,7 +872,7 @@ async function acceptProgression(){
   button.disabled=true;el("progressionDismiss").disabled=true;button.textContent="Saving…";el("progressionStatus").textContent="Saving…";
   try{
     const result=await api(`/api/training/adaptations/${encodeURIComponent(suggestion.id)}`,{method:"POST",body:JSON.stringify({decision:"accept",expectedPlanUpdatedAt:suggestion.expectedPlanUpdatedAt})});resolvedAdaptation(result,suggestion,"accepted",{requirePlan:true});const nextPlan=Monthly.normalizeWeeklyPlan(result.plan,state.exercises);await confirmDashboardIdentity(expectedUserId,expectedCsrf);
-    state.weeklyPlan=nextPlan;state.weeklyPlanUpdatedAt=Number(result.planUpdatedAt);renderWeeklyPulse();
+    state.weeklyPlan=nextPlan;state.weeklyPlanUpdatedAt=Number(result.planUpdatedAt);renderWeeklyPulse();renderTrainingBlockReview();
     state.progressionSuggestion={...suggestion,applied:true};renderProgression();showToast("Saved. Your weekly Plan was updated.");
   }catch(error){if(redirectedOrChangedAccount(error))return;if(await reconcileAdaptationError(error,{accepting:true}))return;button.disabled=false;el("progressionDismiss").disabled=false;button.textContent="Accept change";el("progressionStatus").textContent=saveRetryMessage(error);}
 }
@@ -897,7 +956,7 @@ function resetSessionPreview(message="Choose your brief, then build a session.")
   if(!sessionBuilderAvailable())return;
   state.session=null;el("sessionResults").setAttribute("aria-busy","false");el("sessionResults").innerHTML='<div class="session-empty-state"><div><h3 id="sessionResultsTitle">YOUR SESSION WILL APPEAR HERE.</h3><p>Strata+ will prioritize personal fit, useful exercise order, and a practical amount of work for the time selected.</p></div></div>';el("sessionStatus").textContent=message;el("sessionAddAll").hidden=true;el("sessionAddAll").disabled=true;el("sessionOpenPlan").hidden=true;
 }
-function syncSessionPlanViews({invalidateSession=false}={}){renderWeeklyPulse();populateSessionDay();updateMonthlySourceButtons();if(invalidateSession)resetSessionPreview("Your weekly plan changed. Build the session again to refresh its exercise picks.");else updateSessionAddButton();}
+function syncSessionPlanViews({invalidateSession=false}={}){renderWeeklyPulse();renderTrainingBlockReview();populateSessionDay();updateMonthlySourceButtons();if(invalidateSession)resetSessionPreview("Your weekly plan changed. Build the session again to refresh its exercise picks.");else updateSessionAddButton();}
 async function refreshSessionConflict(error){
   const latest=error?.payload?.plan?error.payload:await api("/api/plan");
   state.weeklyPlan=Monthly.normalizeWeeklyPlan(latest.plan,state.exercises);state.weeklyPlanUpdatedAt=Number(latest.planUpdatedAt)||0;syncSessionPlanViews();
@@ -1093,11 +1152,18 @@ function lockFormControls(form){
 
 const monthlyPlanForm=el("monthlyPlanForm");
 el("trainingBlockForm")?.addEventListener("submit",saveTrainingBlock);
-el("trainingBlockWeeks")?.addEventListener("change",()=>{renderTrainingBlockWeekOptions(el("trainingBlockCurrentWeek").value);if(el("trainingBlockState").value==="completed")el("trainingBlockCurrentWeek").value=el("trainingBlockWeeks").value;el("trainingBlockStatus").textContent="Unsaved changes";});
-el("trainingBlockCurrentWeek")?.addEventListener("change",()=>{if(el("trainingBlockState").value==="completed"&&el("trainingBlockCurrentWeek").value!==el("trainingBlockWeeks").value)el("trainingBlockState").value="active";el("trainingBlockStatus").textContent="Unsaved changes";});
-el("trainingBlockState")?.addEventListener("change",()=>{if(el("trainingBlockState").value==="completed")el("trainingBlockCurrentWeek").value=el("trainingBlockWeeks").value;el("trainingBlockStatus").textContent="Unsaved changes";});
-el("trainingBlockStartDate")?.addEventListener("input",()=>{el("trainingBlockStatus").textContent="Unsaved changes";});
-el("trainingBlockLighterWeek")?.addEventListener("change",()=>{el("trainingBlockStatus").textContent="Unsaved changes";});
+function refreshTrainingBlockDraft({startsNew=false}={}){
+  if(startsNew&&el("trainingBlockState").value==="completed")el("trainingBlockState").value="active";
+  renderTrainingBlockWeekOptions(el("trainingBlockCurrentWeek").value,el("trainingBlockLighterWeek").value);el("trainingBlockStatus").textContent="Unsaved changes · review, then save";
+}
+el("trainingBlockWeeks")?.addEventListener("change",()=>refreshTrainingBlockDraft({startsNew:true}));
+el("trainingBlockStartDate")?.addEventListener("input",()=>refreshTrainingBlockDraft({startsNew:true}));
+el("trainingBlockLighterWeek")?.addEventListener("change",()=>{el("trainingBlockStatus").textContent="Unsaved changes · review, then save";});
+el("trainingBlockCarry")?.addEventListener("click",()=>openTrainingBlockAction("carry"));
+el("trainingBlockLighter")?.addEventListener("click",()=>openTrainingBlockAction("lighter"));
+el("trainingBlockFinish")?.addEventListener("click",()=>openTrainingBlockAction("finish"));
+el("trainingBlockActionConfirm")?.addEventListener("click",()=>{void confirmTrainingBlockAction();});
+el("trainingBlockActionDialog")?.addEventListener("close",()=>{if(el("trainingBlockActionDialog").dataset.busy!=="true")state.trainingBlockAction=null;});
 el("progressionAccept")?.addEventListener("click",()=>{void acceptProgression();});
 el("progressionDismiss")?.addEventListener("click",()=>{void dismissProgression();});
 el("sessionBuilderForm")?.addEventListener("submit",(event)=>{event.preventDefault();if(!state.sessionSaving)generateSession({announce:true});});

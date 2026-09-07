@@ -83,16 +83,22 @@ test("training journeys use real browser controls and isolated local fixtures",{
     await page.selectOption("#quickPreviewGoal","hypertrophy");await page.selectOption("#quickPreviewGroup","chest");await page.selectOption("#quickPreviewEquipment","Dumbbells");await page.selectOption("#quickPreviewLevel","Intermediate");await submit.click();
     await page.locator("#quickPreviewResults .preview-result").first().waitFor({state:"visible"});
     assert.equal(await page.locator("#quickPreviewResults .preview-result").count(),3);
-    assert.match(await page.locator("#quickPreviewSummary").textContent(),/Build muscle · Chest · Dumbbells · Intermediate/);
+    assert.equal((await page.locator("#quickPreviewSummary").textContent())?.trim(),"3-day week ready");
+    assert.match(await page.locator("#quickWeekMeta").textContent(),/^3 training days · \d+ movements · 35 minutes per session$/);
+    assert.equal(await page.locator("#quickWeekGrid .quick-week-day").count(),7,"The preview must show every day before signup.");
+    assert.equal(await page.locator("#quickWeekGrid .quick-week-day:not(.is-recovery)").count(),3,"The selected three-day schedule must remain visible.");
     assert.equal(await page.locator(".preview-reasons").count(),3);
     assert.equal(await page.locator(".preview-tradeoff").count(),3);
     assert.equal(await page.locator(".preview-scores").count(),3);
     assert.equal(await page.locator("#quickPreviewSummary").evaluate((node)=>node===globalThis.document.activeElement),true,"generated preview should move focus to its result summary");
     const consent=page.locator("#productSignalsConsent");await consent.waitFor({state:"visible"});
     assert.equal(await consent.evaluate((node)=>globalThis.getComputedStyle(node).position),"relative","optional signal consent must stay inline instead of covering the preview");
-    const client=await page.evaluate(()=>({overflow:globalThis.document.documentElement.scrollWidth-globalThis.document.documentElement.clientWidth,stored:Object.values(globalThis.localStorage)}));
+    const client=await page.evaluate(()=>({overflow:globalThis.document.documentElement.scrollWidth-globalThis.document.documentElement.clientWidth,intent:JSON.parse(globalThis.localStorage.getItem("strata_activation_intent_v1"))}));
     assert.ok(client.overflow<=1,`guest preview overflows 320px by ${client.overflow}px`);
-    assert.ok(!client.stored.some((value)=>value.includes("Dumbbells")||value.includes("hypertrophy")),"preview choices must not be saved");
+    assert.equal(client.intent.profile.goal,"hypertrophy");
+    assert.deepEqual(client.intent.profile.equipment,["Dumbbells"]);
+    assert.equal(client.intent.profile.level,"Intermediate");
+    assert.equal(client.intent.profile.availability.length,3,"The private device draft must preserve the selected schedule for explicit account handoff.");
     await context.close();
   });
   await t.test("free planning supports rest toggles, replacement, undo, templates and portable imports",async()=>{
@@ -202,7 +208,7 @@ test("training journeys use real browser controls and isolated local fixtures",{
 
     const firstCreate=firstTab.waitForResponse(response=>new URL(response.url()).pathname==="/api/workouts"&&response.request().method()==="POST");
     await firstTab.click("#startWorkout");assert.equal((await firstCreate).status(),201);
-    await firstTab.waitForFunction(()=>globalThis.document.querySelector("#saveStatus")?.textContent==="Saved to your account");
+    await firstTab.waitForFunction(()=>globalThis.document.querySelector("#saveStatus")?.textContent==="Synced");
 
     const secondCreate=secondTab.waitForResponse(response=>new URL(response.url()).pathname==="/api/workouts"&&response.request().method()==="POST");
     await secondTab.click("#startWorkout");const conflict=await secondCreate;assert.equal(conflict.status(),409);
@@ -214,6 +220,45 @@ test("training journeys use real browser controls and isolated local fixtures",{
     assert.equal(await secondTab.locator('#recoveryList [data-recover]').count(),0,"an untouched rejected start leaves no duplicate recovery draft");
     const history=await context.request.get("/api/workouts?limit=20"),saved=await history.json();
     assert.equal(saved.workouts.filter(workout=>workout.status==="active").length,1);
+    await context.close();
+  });
+
+  await t.test("Workout Memory searches beyond recent history, restores exact sets, and keeps all changes explicit",async()=>{
+    const {context,page}=await newPage({viewport:{width:390,height:844},reducedMotion:"reduce"});
+    const user=await signup(context,"workout-memory");await activatePlus(context);
+    const firstExercise=CATALOG.find(item=>item.equipment==="Barbell / Smith"&&!/seconds|sec|min/i.test(item.reps));
+    const secondExercise=CATALOG.find(item=>item.id!==firstExercise.id&&item.equipment!=="Bodyweight"&&!/seconds|sec|min/i.test(item.reps));
+    const current=await accountPlan(context),week=fixtureWeek();
+    week.days.Monday=[{instanceId:"memory-plan-first",exerciseId:firstExercise.id,sets:2,reps:"8–12"},{instanceId:"memory-plan-second",exerciseId:secondExercise.id,sets:1,reps:"8–12"}];
+    const seeded=await context.request.put("/api/plan",{headers:{Origin:baseUrl,"X-CSRF-Token":current.csrfToken,"X-Strata-User":user.id},data:{plan:week,expectedPlanUpdatedAt:current.planUpdatedAt,expectedUserId:user.id}});assert.equal(seeded.status(),200,await seeded.text());
+    const csrf=(await accountPlan(context)).csrfToken,past={id:"memory-completed-session",title:"Previous Monday",planDay:"Monday",date:"2026-09-01",status:"completed",startedAt:Date.now()-604800000,completedAt:Date.now()-604799000,elapsedSeconds:1000,restEndsAt:null,entries:[{id:"memory-past-entry",exerciseId:firstExercise.id,planInstanceId:"memory-plan-first",measurement:"reps",loadType:"external",unit:"kg",prescribedReps:"8–12",note:"",effortType:"rir",supersetGroup:"",replacedFromExerciseId:"",sets:[{reps:10,weight:42.5,seconds:null,completed:true,effort:2},{reps:9,weight:42.5,seconds:null,completed:true,effort:1.5}]}]};
+    const pastSave=await context.request.post("/api/workouts",{headers:{Origin:baseUrl,"X-CSRF-Token":csrf,"X-Strata-User":user.id},data:{workout:past}});assert.equal(pastSave.status(),201,await pastSave.text());
+    for(let index=0;index<20;index+=1){
+      const startedAt=past.startedAt+2_000+index*1_000,distractor={id:`memory-newer-${index}`,title:`Newer unrelated ${index}`,planDay:"Tuesday",date:"2026-09-02",status:"completed",startedAt,completedAt:startedAt+500,elapsedSeconds:500,restEndsAt:null,entries:[{id:`memory-newer-entry-${index}`,exerciseId:secondExercise.id,planInstanceId:"memory-plan-second",measurement:"reps",loadType:"external",unit:"kg",prescribedReps:"8–12",note:"",effortType:"none",supersetGroup:"",replacedFromExerciseId:"",sets:[{reps:8,weight:20+index,seconds:null,completed:true,effort:null}]}]};
+      const distractorSave=await context.request.post("/api/workouts",{headers:{Origin:baseUrl,"X-CSRF-Token":csrf,"X-Strata-User":user.id},data:{workout:distractor}});assert.equal(distractorSave.status(),201,await distractorSave.text());
+    }
+    const memoryRequests=[];page.on("request",(request)=>{const url=new URL(request.url());if(url.pathname==="/api/workouts"&&url.searchParams.get("memory")==="1")memoryRequests.push(url.search);});
+    await goto(page,"/workout.html?day=Monday");await page.locator("#startWorkout").waitFor({state:"visible"});await page.click("#startWorkout");await page.locator("#sessionPanel").waitFor({state:"visible"});
+    let cards=page.locator("#sessionEntries [data-entry]"),first=cards.nth(0),second=cards.nth(1);
+    await page.waitForFunction(()=>globalThis.document.querySelector("#sessionEntries [data-entry] .memory-previous")?.textContent?.includes("2026-09-01"));
+    assert.ok(memoryRequests.some((search)=>search.includes("limit=100")&&search.includes("offset=0")),"Workout Memory must search beyond the 20-row visible history page.");
+    const mobileLayout=await page.evaluate(()=>({overflow:globalThis.document.documentElement.scrollWidth-globalThis.document.documentElement.clientWidth,targets:[...globalThis.document.querySelectorAll(".set-actions button,.workout-memory button,.exercise-actions button")].map((node)=>node.getBoundingClientRect().height)}));assert.ok(mobileLayout.overflow<=1,`Workout Memory overflows 390px by ${mobileLayout.overflow}px`);assert.ok(mobileLayout.targets.every((height)=>height>=44),`Workout controls need 44px targets: ${mobileLayout.targets.join(", ")}`);
+    assert.match(await first.locator(".workout-memory").textContent(),/Previous comparable · 2026-09-01[\s\S]*42.5 kg[\s\S]*Today’s suggested target/);
+    await first.locator("[data-use-last]").click();assert.equal(await first.locator('[data-set="0"] [data-actual="weight"]').inputValue(),"42.5");assert.equal(await first.locator('[data-set="1"] [data-actual="reps"]').inputValue(),"9");
+    await first.locator("[data-add-set]").click();first=page.locator("#sessionEntries [data-entry]").nth(0);assert.equal(await first.locator("[data-set]").count(),3);await first.locator('[data-remove-set="2"]').click();
+    first=page.locator("#sessionEntries [data-entry]").nth(0);await first.locator('[data-duplicate-set="0"]').click();first=page.locator("#sessionEntries [data-entry]").nth(0);assert.equal(await first.locator('[data-set="1"] [data-complete]').getAttribute("aria-pressed"),"false");await first.locator('[data-remove-set="1"]').click();
+    first=page.locator("#sessionEntries [data-entry]").nth(0);await first.locator('[data-format="effortType"]').selectOption("rpe");first=page.locator("#sessionEntries [data-entry]").nth(0);await first.locator('[data-set="0"] [data-actual="effort"]').fill("8.5");await first.locator("[data-entry-note]").fill("Bench notch 3; controlled lowering.");
+    await first.locator(".advanced-tools summary").click();await first.locator("[data-warmup-load]").fill("100");await first.locator("[data-calc-warmup]").click();assert.match(await first.locator("[data-warmup-result]").textContent(),/40% · 40 kg × 8[\s\S]*80% · 80 kg × 3/);await first.locator("[data-plate-target]").fill("100");await first.locator("[data-calc-plates]").click();assert.match(await first.locator("[data-plate-result]").textContent(),/per side/);
+    await first.locator("[data-toggle-superset]").click();cards=page.locator("#sessionEntries [data-entry]");assert.equal(await cards.filter({has:page.locator(".superset-badge")}).count(),2);
+    second=cards.nth(1);const originalPlan=(await accountPlan(context)).plan;await second.locator("[data-open-swap]").click();await page.locator("#swapDialog").waitFor({state:"visible"});assert.equal(await page.locator("#swapTitle").evaluate((node)=>node===globalThis.document.activeElement),true);assert.match(await page.locator("#swapComparison").textContent(),/Current[\s\S]*Alternative[\s\S]*FitScore[\s\S]*stability/i);
+    await page.click("#reviewPlanSwap");await page.locator("#planSwapReview").waitFor({state:"visible"});assert.deepEqual((await accountPlan(context)).plan,originalPlan,"Reviewing a proposal must not change Plan");await page.click("#cancelPlanSwap");
+    const workoutOnlyId=await page.locator("#swapExercise").inputValue();await page.click("#swapWorkoutOnly");await page.locator("#swapDialog").waitFor({state:"hidden"});assert.deepEqual((await accountPlan(context)).plan,originalPlan,"Workout-only replacement must leave Plan unchanged");await page.waitForFunction(()=>globalThis.document.querySelectorAll('#sessionEntries [data-entry]')[1]?.querySelector('[data-open-swap]')===globalThis.document.activeElement);
+    cards=page.locator("#sessionEntries [data-entry]");second=cards.nth(1);assert.match(await second.textContent(),/Replaced .* for this session/);assert.ok(workoutOnlyId);
+    await second.locator("[data-open-swap]").click();const lastingChoice=await page.locator("#swapExercise option").evaluateAll((options,original)=>options.map((option)=>option.value).find((value)=>value!==original),originalPlan.days.Monday[1].exerciseId);assert.ok(lastingChoice);await page.locator("#swapExercise").selectOption(lastingChoice);const approvedId=await page.locator("#swapExercise").inputValue();await page.click("#reviewPlanSwap");
+    const planSaving=page.waitForResponse(response=>new URL(response.url()).pathname==="/api/plan"&&response.request().method()==="PUT");await page.click("#approvePlanSwap");const planSaved=await planSaving;assert.equal(planSaved.status(),200,await planSaved.text());await page.locator("#swapDialog").waitFor({state:"hidden"});
+    assert.equal((await accountPlan(context)).plan.days.Monday[1].exerciseId,approvedId,"Only explicit approval changes the saved Plan");
+    await page.waitForFunction(()=>globalThis.document.querySelector("#saveStatus")?.textContent==="Synced");const active=(await (await context.request.get("/api/workouts?limit=20")).json()).workouts.find(item=>item.status==="active");const stored=(await (await context.request.get(`/api/workouts/${active.id}`)).json()).workout;
+    assert.equal(stored.entries[0].note,"Bench notch 3; controlled lowering.");assert.equal(stored.entries[0].effortType,"rpe");assert.equal(stored.entries[0].sets[0].effort,8.5);assert.ok(stored.entries.every(entry=>entry.supersetGroup));
     await context.close();
   });
 
@@ -236,10 +281,10 @@ test("training journeys use real browser controls and isolated local fixtures",{
     const exerciseGuide=entry.locator('.exercise-guide');await exerciseGuide.locator('summary').click();
     assert.match(await exerciseGuide.textContent(),/Set up[\s\S]*Purpose[\s\S]*Technique cues[\s\S]*Common mistake[\s\S]*Same target · other equipment/);
     await entry.locator('[data-actual="weight"]').fill("40");await entry.locator('[data-actual="reps"]').fill("8");await entry.locator('[data-complete="0"]').click();
-    await page.waitForFunction(()=>globalThis.document.querySelector("#saveStatus")?.textContent==="Saved to your account");
+    await page.waitForFunction(()=>globalThis.document.querySelector("#saveStatus")?.textContent==="Synced");
     assert.equal(await page.locator("#sessionProgress").getAttribute("value"),"100");
     assert.equal(await page.locator("#timerToggle").textContent(),"Pause");await page.click("#timerToggle");
-    await page.waitForFunction(()=>globalThis.document.querySelector("#saveStatus")?.textContent==="Saved to your account");
+    await page.waitForFunction(()=>globalThis.document.querySelector("#saveStatus")?.textContent==="Synced");
     await goto(page,"/account.html");await page.locator("#signedInCard").waitFor({state:"visible"});
     await page.waitForFunction(()=>globalThis.document.querySelector("#accountPrimaryLabel")?.textContent==="Continue workout");
     assert.match(await page.locator("#accountPrimaryAction").getAttribute("href"),/^\/workout\.html#resume=/);
@@ -249,9 +294,8 @@ test("training journeys use real browser controls and isolated local fixtures",{
     await page.reload({waitUntil:"domcontentloaded"});const resume=page.locator('#historyList [data-history]').first();await resume.waitFor({state:"visible"});
     assert.equal(await page.locator('#recoveryList [data-recover]').count(),0,"A clean saved active session must not also appear as recovery");
     assert.equal(await page.getByRole("button",{name:"Resume",exact:true}).count(),1,"A clean active session has exactly one Resume surface");
-    await page.click("#startWorkout");await page.locator("#workoutToast.is-visible").waitFor();
-    assert.match(await page.locator("#workoutToast").textContent(),/already have a workout in progress/i);assert.equal(duplicateStarts,0,"Starting again must not orphan the saved active session");
-    assert.equal(await resume.evaluate(node=>globalThis.document.activeElement===node),true);await resume.click();
+    assert.equal(await page.locator("#startWorkout").isHidden(),true,"An active session must not expose a redundant Start action");
+    await resume.click();assert.equal(duplicateStarts,0,"Resuming must not create or orphan another account session");
     await page.locator("#sessionPanel").waitFor({state:"visible"});
     assert.equal(await entry.locator('[data-actual="weight"]').inputValue(),"40");assert.equal(await entry.locator('[data-actual="reps"]').inputValue(),"8");
     assert.equal(await entry.locator('[data-complete="0"]').getAttribute("aria-pressed"),"true");
@@ -282,7 +326,7 @@ test("training journeys use real browser controls and isolated local fixtures",{
     const creating=page.waitForResponse(response=>new URL(response.url()).pathname==="/api/workouts"&&response.request().method()==="POST");
     await page.click("#startWorkout");const created=await creating;assert.equal(created.status(),201,await created.text());const workoutId=(await created.json()).workout.id;
     const entry=page.locator("#sessionEntries [data-entry]").first();await entry.locator('[data-actual="weight"]').first().fill("30");await entry.locator('[data-actual="reps"]').first().fill("8");await entry.locator('[data-complete="0"]').click();
-    await page.waitForFunction(()=>globalThis.document.querySelector("#saveStatus")?.textContent==="Saved to your account");
+    await page.waitForFunction(()=>globalThis.document.querySelector("#saveStatus")?.textContent==="Synced");
     await page.click("#finishWorkout");await page.locator("#finishDialog").waitFor({state:"visible"});await page.click('#finishDialog button[value="finish"]');await page.locator("#celebration").waitFor({state:"visible"});
     await page.selectOption("#checkInDifficulty","4");await page.selectOption("#checkInEnergy","2");await page.selectOption("#checkInComfort","4");await page.selectOption("#checkInEnjoyment","3");
     const checkInSaving=page.waitForResponse(response=>new URL(response.url()).pathname===`/api/workouts/${workoutId}/check-in`&&response.request().method()==="POST");
@@ -307,7 +351,7 @@ test("training journeys use real browser controls and isolated local fixtures",{
     const creating=page.waitForResponse(response=>new URL(response.url()).pathname==="/api/workouts"&&response.request().method()==="POST");
     await page.click("#startWorkout");const created=await creating;assert.equal(created.status(),201,await created.text());
     const first=await created.json();assert.equal(created.request().headers()["x-strata-user"],user.id);
-    await page.waitForFunction(()=>globalThis.document.querySelector("#saveStatus")?.textContent==="Saved to your account");
+    await page.waitForFunction(()=>globalThis.document.querySelector("#saveStatus")?.textContent==="Synced");
     const entry=page.locator("#sessionEntries [data-entry]").first();
     const blockWorkoutSave=route=>route.request().method()==="PUT"?route.abort():route.continue();await page.route(`**/api/workouts/${first.workout.id}`,blockWorkoutSave);
     await entry.locator('[data-actual="weight"]').fill("25");await entry.locator('[data-actual="reps"]').fill("9");await entry.locator('[data-complete="0"]').click();
@@ -320,7 +364,7 @@ test("training journeys use real browser controls and isolated local fixtures",{
     assert.equal(await entry.locator('[data-actual="weight"]').inputValue(),"25");assert.equal(await entry.locator('[data-actual="reps"]').inputValue(),"9");assert.equal(await entry.locator('[data-complete="0"]').getAttribute("aria-pressed"),"true");
     const saving=page.waitForResponse(response=>new URL(response.url()).pathname===`/api/workouts/${first.workout.id}`&&response.request().method()==="PUT");await page.click("#saveNow");
     const saved=await saving;assert.equal(saved.status(),200,await saved.text());assert.equal(saved.request().postDataJSON().expectedRevision,first.workout.revision);
-    await page.waitForFunction(()=>globalThis.document.querySelector("#saveStatus")?.textContent==="Saved to your account");
+    await page.waitForFunction(()=>globalThis.document.querySelector("#saveStatus")?.textContent==="Synced");
     await page.click("#finishWorkout");await page.click('#finishDialog button[value="finish"]');await page.locator("#celebration").waitFor({state:"visible"});
     const persisted=await context.request.get(`/api/workouts/${first.workout.id}`);assert.equal(persisted.status(),200);const completed=(await persisted.json()).workout;
     assert.equal(completed.status,"completed");assert.equal(completed.entries[0].sets[0].weight,25);assert.equal(completed.entries[0].sets[0].reps,9);

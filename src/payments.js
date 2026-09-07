@@ -1,10 +1,20 @@
 // @ts-check
 "use strict";
 
-const { createHmac,timingSafeEqual } = require("node:crypto");
+const {
+  createCustomerPortalSession:createPortalSession,
+  validateCompletedTransaction,
+  validateSubscription
+}=require("./paddle-subscriptions");
+const {
+  verifyPaddleSignature,
+  fetchPaddleIpv4Cidrs:fetchWebhookIpv4Cidrs,
+  isPaddleWebhookAddress
+}=require("./paddle-webhooks");
 
 const DEFAULT_PRODUCT_ID="pro_01m1ky8j916ybyacs836dxbz8x";
 const DEFAULT_PRICE_ID="pri_01m1kyc2zd313d7a3ssmg02424";
+const STRATA_PLUS_TRIAL_MS=30*60*1000;
 const LIVE_API_BASE="https://api.paddle.com";
 const SANDBOX_API_BASE="https://sandbox-api.paddle.com";
 const TRANSACTION_STATUSES=new Set(["draft","ready","billed","paid","completed","canceled","past_due"]);
@@ -20,6 +30,18 @@ function clean(value) { return String(value||"").trim(); }
 function validId(value,prefix) { return new RegExp(`^${prefix}_[a-z0-9]{20,}$`).test(value); }
 /** @param {unknown} value */
 function placeholderCredential(value) { return /replace[-_ ]?with|<[^>]+>|your[-_ ]?(?:private|secret|key)/i.test(String(value||"")); }
+/** @param {unknown} value @param {string|undefined} nodeEnv */
+function validPaddleEnvironment(value,nodeEnv) { const environment=clean(value).toLowerCase();return ["live","sandbox"].includes(environment)&&!(environment==="sandbox"&&nodeEnv==="production"); }
+/** @param {unknown} value @param {boolean} [sandbox] */
+function validPaddleProductId(value,sandbox=false) { const id=clean(value);return validId(id,"pro")&&(!sandbox||id!==DEFAULT_PRODUCT_ID); }
+/** @param {unknown} value */
+function validPaddlePriceId(value) { const id=clean(value);return validId(id,"pri")&&id!==DEFAULT_PRICE_ID; }
+/** @param {unknown} value @param {boolean} [sandbox] */
+function validPaddleClientToken(value,sandbox=false) { const token=clean(value);return token.startsWith(sandbox?"test_":"live_")&&token.length>=20&&(sandbox||!/sandbox|sdbx/i.test(token))&&!placeholderCredential(token); }
+/** @param {unknown} value @param {boolean} [sandbox] */
+function validPaddleApiKey(value,sandbox=false) { const key=clean(value);return key.startsWith(sandbox?"pdl_sdbx_apikey_":"pdl_live_apikey_")&&key.length>=40&&(sandbox||!/sandbox|sdbx/i.test(key))&&!placeholderCredential(key); }
+/** @param {unknown} value */
+function validPaddleWebhookSecret(value) { const secret=clean(value);return secret.startsWith("pdl_ntfset_")&&secret.length>=20&&!placeholderCredential(secret); }
 /** @param {number} milliseconds */
 function timeoutSignal(milliseconds) { return typeof globalThis.AbortSignal?.timeout==="function"?globalThis.AbortSignal.timeout(milliseconds):undefined; }
 /** @param {number} milliseconds @returns {Pick<RequestInit,"signal">} */
@@ -34,17 +56,22 @@ function getPaymentConfig(env=process.env) {
   const sandbox=requestedEnvironment==="sandbox";
   const environment=sandbox?"sandbox":"live";
   // Sandbox entitlements must never be written to a production application.
-  const environmentAllowed=["live","sandbox"].includes(requestedEnvironment)&&!(sandbox&&env.NODE_ENV==="production");
+  const environmentAllowed=validPaddleEnvironment(requestedEnvironment,env.NODE_ENV);
   const productId=clean(env.PADDLE_PRODUCT_ID)||(sandbox?"":DEFAULT_PRODUCT_ID);
-  const priceId=clean(env.PADDLE_PRICE_ID)||(sandbox?"":DEFAULT_PRICE_ID);
+  // A recurring price has a different Paddle catalog ID from the retired
+  // one-time price. Require the deployment to supply that ID explicitly;
+  // tests may keep the stable fixture ID without enabling a live checkout.
+  const priceId=clean(env.PADDLE_PRICE_ID);
   const clientToken=clean(env.PADDLE_CLIENT_TOKEN);
   const apiKey=clean(env.PADDLE_API_KEY);
   const webhookSecret=clean(env.PADDLE_WEBHOOK_SECRET);
   const requestedEnabled=clean(env.PADDLE_CHECKOUT_ENABLED).toLowerCase()==="true";
-  const validClientToken=clientToken.startsWith(sandbox?"test_":"live_")&&clientToken.length>=20&&(sandbox||!/sandbox|sdbx/i.test(clientToken))&&!placeholderCredential(clientToken);
-  const validApiKey=apiKey.startsWith(sandbox?"pdl_sdbx_apikey_":"pdl_live_apikey_")&&apiKey.length>=40&&(sandbox||!/sandbox|sdbx/i.test(apiKey))&&!placeholderCredential(apiKey);
-  const validWebhookSecret=webhookSecret.startsWith("pdl_ntfset_")&&webhookSecret.length>=20&&!placeholderCredential(webhookSecret);
-  const validCatalog=validId(productId,"pro")&&validId(priceId,"pri")&&(!sandbox||(productId!==DEFAULT_PRODUCT_ID&&priceId!==DEFAULT_PRICE_ID));
+  const validClientToken=validPaddleClientToken(clientToken,sandbox);
+  const validApiKey=validPaddleApiKey(apiKey,sandbox);
+  const validWebhookSecret=validPaddleWebhookSecret(webhookSecret);
+  // The previous live price is a one-time catalog item. It must never be
+  // accepted for new recurring checkouts, even when supplied explicitly.
+  const validCatalog=validPaddleProductId(productId,sandbox)&&validPaddlePriceId(priceId);
   const configured=environmentAllowed&&validClientToken&&validApiKey&&validWebhookSecret&&validCatalog;
   /** @type {string[]} */
   const missing=[];
@@ -62,7 +89,7 @@ function getPaymentConfig(env=process.env) {
     productId,
     priceId,
     clientToken:environmentAllowed&&validClientToken?clientToken:"",
-    price:{amount:"5.99",currency:"USD"},
+    price:{amount:"0.99",currency:"USD",interval:"month",frequency:1},
     requestedEnabled,
     configured,
     enabled:requestedEnabled&&configured,
@@ -93,46 +120,6 @@ function publicPaymentConfig(config) {
 /** @param {import("./domain-types").PaymentConfig} config */
 function webhookSecretFor(config) {
   return secretsByConfig.get(config)?.webhookSecret||"";
-}
-
-/** @param {unknown} header @returns {{timestamp:number,signatures:string[]}|null} */
-function parseSignatureHeader(header) {
-  /** @type {Record<"ts"|"h1",string[]>} */
-  const values={ts:[],h1:[]};
-  for (const segment of clean(header).split(";")) {
-    const separator=segment.indexOf("=");
-    if (separator<1) continue;
-    const key=segment.slice(0,separator).trim();
-    const value=segment.slice(separator+1).trim();
-    if ((key==="ts"||key==="h1")&&value) values[key].push(value);
-  }
-  const timestampText=values.ts[0]||"";
-  if (values.ts.length!==1||!/^\d+$/.test(timestampText)||!values.h1.length) return null;
-  const timestamp=Number(timestampText);
-  if (!Number.isSafeInteger(timestamp)) return null;
-  return {timestamp,signatures:values.h1};
-}
-
-/**
- * @param {string|Buffer} rawBody
- * @param {unknown} header
- * @param {string} secret
- * @param {{now?:number,toleranceSeconds?:number}} options
- */
-function verifyPaddleSignature(rawBody,header,secret,{now=Math.floor(Date.now()/1000),toleranceSeconds=5}={}) {
-  if (!secret) return false;
-  const parsed=parseSignatureHeader(header);
-  if (!parsed) return false;
-  const nowSeconds=now>10_000_000_000?Math.floor(now/1000):Math.floor(now);
-  if (Math.abs(nowSeconds-parsed.timestamp)>toleranceSeconds) return false;
-  const body=Buffer.isBuffer(rawBody)?rawBody:Buffer.from(String(rawBody));
-  const prefix=Buffer.from(`${parsed.timestamp}:`);
-  const expected=createHmac("sha256",secret).update(Buffer.concat([prefix,body])).digest();
-  return parsed.signatures.some((candidate) => {
-    if (!/^[a-f0-9]{64}$/i.test(candidate)) return false;
-    const actual=Buffer.from(candidate,"hex");
-    return actual.length===expected.length&&timingSafeEqual(actual,expected);
-  });
 }
 
 /**
@@ -188,6 +175,13 @@ function validTransactionId(value) {
   return /^txn_[a-z0-9]{26}$/.test(id)?id:"";
 }
 
+/** @param {unknown} value */
+function monthlyCycle(value) {
+  if(!value||typeof value!=="object")return false;
+  const cycle=/** @type {{interval?:unknown;frequency?:unknown}} */(value);
+  return cycle.interval==="month"&&Number(cycle.frequency)===1;
+}
+
 /** @param {string} message @param {string} code */
 function paddleTransactionError(message,code) {
   return Object.assign(new Error(message),{status:502,code});
@@ -197,7 +191,7 @@ function paddleTransactionError(message,code) {
  * @param {import("./domain-types").PaymentConfig} config
  * @param {unknown} transactionId
  * @param {{method?:string,body?:unknown,fetchImpl?:import("./domain-types").FetchLike}} options
- * @returns {Promise<import("./domain-types").PaddleTransactionResult>}
+ * @returns {Promise<import("./domain-types").PaddleFetchedTransactionResult>}
  */
 async function paddleTransactionRequest(config,transactionId,{method="GET",body,fetchImpl=globalThis.fetch}={}) {
   const secrets=secretsByConfig.get(config);
@@ -272,7 +266,27 @@ function validateCheckoutTransaction(data,config,{userId,checkoutId,priceId=conf
   const item=/** @type {import("./domain-types").PaddleItemData} */(data.items[0]||{}),price=item.price||{};
   if (Number(item.quantity)!==1) return {ok:false,reason:"quantity"};
   if (price.id!==priceId) return {ok:false,reason:"price"};
-  if (price.product_id!==productId||price.billing_cycle!=null) return {ok:false,reason:"product"};
+  if (price.product_id!==productId) return {ok:false,reason:"product"};
+  if (!monthlyCycle(price.billing_cycle)) return {ok:false,reason:"billing_cycle"};
+  return {ok:true};
+}
+
+/**
+ * A provider transaction can become completed between checkout creation and
+ * crash recovery. At that point Paddle attaches the subscription ID, so the
+ * stricter initial-transaction validator and durable checkout identity both
+ * have to be applied instead of assuming subscription_id is still null.
+ * @param {import("./domain-types").PaddleTransactionData|null|undefined} data
+ * @param {import("./domain-types").PaymentConfig} config
+ * @param {import("./domain-types").CheckoutIdentity} identity
+ * @returns {import("./domain-types").ValidationResult}
+ */
+function validateCheckoutRecoveryTransaction(data,config,{userId,checkoutId,priceId=config?.priceId,productId=config?.productId}={}) {
+  if(data?.status!=="completed")return validateCheckoutTransaction(data,config,{userId,checkoutId,priceId,productId});
+  const completed=validateCompletedTransaction(data,{...config,priceId:String(priceId||""),productId:String(productId||"")});
+  if(!completed.ok)return completed;
+  if(clean(data.custom_data?.strata_user_id)!==clean(userId))return {ok:false,reason:"account"};
+  if(clean(data.custom_data?.strata_checkout_id)!==clean(checkoutId))return {ok:false,reason:"checkout"};
   return {ok:true};
 }
 
@@ -280,7 +294,7 @@ function validateCheckoutTransaction(data,config,{userId,checkoutId,priceId=conf
  * @param {import("./domain-types").PaymentConfig} config
  * @param {import("./domain-types").CheckoutRecoveryIdentity} identity
  * @param {import("./domain-types").FetchLike} fetchImpl
- * @returns {Promise<import("./domain-types").PaddleTransactionResult|null>}
+ * @returns {Promise<import("./domain-types").PaddleFetchedTransactionResult|null>}
  */
 async function findPaddleCheckoutTransaction(config,{userId,checkoutId,createdAt,priceId=config?.priceId,productId=config?.productId}={},fetchImpl=globalThis.fetch) {
   const secrets=secretsByConfig.get(config);
@@ -296,7 +310,6 @@ async function findPaddleCheckoutTransaction(config,{userId,checkoutId,createdAt
   base.searchParams.set("created_at[LTE]",new Date(windowEnd).toISOString());
   base.searchParams.set("origin","api");
   base.searchParams.set("collection_mode","automatic");
-  base.searchParams.set("subscription_id","null");
   base.searchParams.set("order_by","created_at[ASC]");
   base.searchParams.set("per_page","30");
   let pageUrl=new URL(base);
@@ -323,7 +336,7 @@ async function findPaddleCheckoutTransaction(config,{userId,checkoutId,createdAt
     const match=payload.data.find((transaction)=>{
       const transactionTime=Date.parse(clean(transaction?.created_at));
       return Number.isFinite(transactionTime)&&transactionTime>=windowStart&&transactionTime<=windowEnd
-        &&validateCheckoutTransaction(transaction,config,{userId,checkoutId,priceId,productId}).ok;
+        &&validateCheckoutRecoveryTransaction(transaction,config,{userId,checkoutId,priceId,productId}).ok;
     });
     if (match) return {transactionId:validTransactionId(match.id),status:clean(match.status),data:match};
     const pagination=payload?.meta?.pagination;
@@ -351,68 +364,19 @@ async function findPaddleCheckoutTransaction(config,{userId,checkoutId,createdAt
  * @returns {Promise<string[]>}
  */
 async function fetchPaddleIpv4Cidrs(config,fetchImpl=globalThis.fetch) {
-  const secrets=secretsByConfig.get(config);
-  if (!secrets?.apiKey) throw new Error("Paddle IP verification is not configured.");
-  let response;
-  try {
-    response=await fetchImpl(`${secrets.apiBase}/ips`,{
-      headers:{Authorization:`Bearer ${secrets.apiKey}`,"Paddle-Version":"1"},
-      ...requestSignal(3_000)
-    });
-  } catch {
-    throw new Error("Paddle IP verification is temporarily unavailable.");
-  }
-  if (!response?.ok) throw new Error("Paddle IP verification is temporarily unavailable.");
-  /** @type {{data?:{ipv4_cidrs?:unknown}}|null} */
-  let payload;
-  try { payload=await response.json(); } catch { payload=null; }
-  const cidrs=payload?.data?.ipv4_cidrs;
-  if (!Array.isArray(cidrs)||!cidrs.length||!cidrs.every((value)=>/^\d{1,3}(?:\.\d{1,3}){3}\/\d{1,2}$/.test(value))) {
-    throw new Error("Paddle returned an invalid IP allowlist.");
-  }
-  return [...new Set(cidrs)];
-}
-
-/** @param {unknown} value @returns {number|null} */
-function ipv4Number(value) {
-  const parts=String(value||"").replace(/^::ffff:/i,"").split(".");
-  if (parts.length!==4||parts.some((part)=>!/^\d{1,3}$/.test(part)||Number(part)>255)) return null;
-  return parts.reduce((result,part)=>((result<<8)|Number(part))>>>0,0);
-}
-
-/** @param {unknown} address @param {readonly string[]} cidrs */
-function isPaddleWebhookAddress(address,cidrs) {
-  const candidate=ipv4Number(address);
-  if (candidate===null||!Array.isArray(cidrs)) return false;
-  return cidrs.some((cidr) => {
-    const [networkText,bitsText]=String(cidr).split("/");
-    const network=ipv4Number(networkText),bits=Number(bitsText);
-    if (network===null||!Number.isInteger(bits)||bits<0||bits>32) return false;
-    const mask=bits===0?0:(0xffffffff<<(32-bits))>>>0;
-    return (candidate&mask)===(network&mask);
-  });
+  return fetchWebhookIpv4Cidrs(secretsByConfig.get(config),fetchImpl);
 }
 
 /**
- * @param {import("./domain-types").PaddleTransactionData|null|undefined} data
+ * Create short-lived, account-bound Paddle customer-portal links. These URLs
+ * are returned directly and deliberately never persisted.
  * @param {import("./domain-types").PaymentConfig} config
- * @returns {import("./domain-types").ValidationResult}
+ * @param {{customerId:unknown;subscriptionId:unknown}} identity
+ * @param {import("./domain-types").FetchLike} fetchImpl
+ * @returns {Promise<import("./domain-types").PaddlePortalLinks>}
  */
-function validateCompletedTransaction(data,config) {
-  if (!data||data.status!=="completed") return {ok:false,reason:"status"};
-  if (!validTransactionId(data.id)) return {ok:false,reason:"transaction"};
-  if (data.origin!=="api") return {ok:false,reason:"origin"};
-  if (data.subscription_id!=null) return {ok:false,reason:"subscription"};
-  if (data.collection_mode!=="automatic") return {ok:false,reason:"collection"};
-  if (data.custom_data?.strata_version!==1) return {ok:false,reason:"metadata"};
-  if (!Array.isArray(data.items)||data.items.length!==1) return {ok:false,reason:"items"};
-  const item=/** @type {import("./domain-types").PaddleItemData} */(data.items[0]||{});
-  const price=item.price||{};
-  if (Number(item.quantity)!==1) return {ok:false,reason:"quantity"};
-  if (price.id!==config.priceId) return {ok:false,reason:"price"};
-  if (price.product_id!==config.productId) return {ok:false,reason:"product"};
-  if (price.billing_cycle!=null) return {ok:false,reason:"recurring"};
-  return {ok:true};
+async function createCustomerPortalSession(config,{customerId,subscriptionId},fetchImpl=globalThis.fetch) {
+  return createPortalSession(secretsByConfig.get(config),{customerId,subscriptionId},fetchImpl);
 }
 
 /**
@@ -430,9 +394,16 @@ function fullRevocationFromAdjustment(data) {
 module.exports={
   DEFAULT_PRODUCT_ID,
   DEFAULT_PRICE_ID,
+  STRATA_PLUS_TRIAL_MS,
   LIVE_API_BASE,
   SANDBOX_API_BASE,
   getPaymentConfig,
+  validPaddleEnvironment,
+  validPaddleProductId,
+  validPaddlePriceId,
+  validPaddleClientToken,
+  validPaddleApiKey,
+  validPaddleWebhookSecret,
   publicPaymentConfig,
   webhookSecretFor,
   verifyPaddleSignature,
@@ -440,9 +411,12 @@ module.exports={
   fetchPaddleTransaction,
   cancelPaddleTransaction,
   validateCheckoutTransaction,
+  validateCheckoutRecoveryTransaction,
   findPaddleCheckoutTransaction,
   fetchPaddleIpv4Cidrs,
   isPaddleWebhookAddress,
   validateCompletedTransaction,
+  validateSubscription,
+  createCustomerPortalSession,
   fullRevocationFromAdjustment
 };

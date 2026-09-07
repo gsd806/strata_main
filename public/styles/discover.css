@@ -1052,14 +1052,45 @@ html{overflow-x:clip}:where(a,button,input,select){touch-action:manipulation}.st
 #trainingBlockForm { display:grid; grid-template-columns:minmax(160px,.6fr) minmax(0,1.4fr); gap:12px; margin-top:20px; }
 #trainingBlockForm > label { min-height:82px; display:grid; align-content:center; gap:8px; padding:12px; border:1px solid var(--line); color:var(--muted); font-size:.75rem; }
 #trainingBlockForm select,#trainingBlockForm input[type="date"] { width:100%; min-height:44px; border:0; color:var(--ink); background:transparent; }
-#trainingBlockForm .training-block-check { grid-template-columns:auto minmax(0,1fr); align-items:center; }
-.training-block-check { grid-column:1/-1; }
-.training-block-check input { width:20px; height:20px; accent-color:#657a22; }
-.training-block-check span { display:grid; gap:4px; }
-.training-block-check strong { color:var(--ink); font-size:.875rem; }
-.training-block-check small { line-height:1.45; }
+#trainingBlockForm select:disabled { color:#596056; opacity:1; cursor:not-allowed; }
+#trainingBlockForm label > small { line-height:1.4; }
+#trainingBlockForm label[for="trainingBlockLighterWeek"] { grid-column:1/-1; }
 .training-block-actions { grid-column:1/-1; display:flex; align-items:center; gap:14px; }
 .training-block-actions span { color:var(--muted); font-size:.75rem; line-height:1.45; }
+.training-block-review { margin-top:14px; padding:28px; border:1px solid #30342d; border-radius:14px; color:var(--studio-text); background:#161814; }
+.training-block-review[hidden] { display:none; }
+.training-block-review-head { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; padding-bottom:22px; border-bottom:1px solid var(--studio-line); }
+.training-block-review-head h3 { margin:8px 0 0; font:700 clamp(1.75rem,3vw,2.7rem)/1 var(--body); letter-spacing:-.045em; }
+.training-block-review-head > span { flex:none; min-height:32px; display:inline-flex; align-items:center; padding:6px 11px; border:1px solid #59634b; border-radius:999px; color:var(--accent); font:500 .6875rem/1.2 var(--mono); text-transform:uppercase; }
+.training-block-review-metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); border-left:1px solid var(--studio-line); }
+.training-block-review-metrics > div { min-width:0; padding:20px; border-right:1px solid var(--studio-line); border-bottom:1px solid var(--studio-line); }
+.training-block-review-metrics span,.training-block-next span { display:block; color:var(--studio-muted); text-transform:uppercase; font:500 .625rem/1.4 var(--mono); letter-spacing:.06em; }
+.training-block-review-metrics strong { display:block; margin:10px 0 5px; color:var(--accent); font:700 clamp(1.5rem,3vw,2.25rem)/1 var(--body); overflow-wrap:anywhere; }
+.training-block-review-metrics small { color:var(--studio-muted); font-size:.6875rem; }
+.training-block-review-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:12px; }
+.training-block-review-grid > section { min-width:0; padding:22px; border:1px solid var(--studio-line); border-radius:10px; background:#121410; }
+.training-block-review-grid h4 { margin:7px 0 17px; font:700 1.15rem/1.2 var(--body); letter-spacing:-.02em; }
+.training-block-review-grid .kicker { color:var(--accent); }
+.training-block-muscles { display:grid; gap:8px; }
+.training-block-muscle { display:grid; grid-template-columns:minmax(90px,1fr) repeat(2,minmax(58px,.55fr)); align-items:center; gap:10px; min-width:0; padding:11px 12px; border:1px solid #33372f; border-radius:7px; }
+.training-block-muscle > strong { min-width:0; overflow-wrap:anywhere; font-size:.8125rem; }
+.training-block-muscle > span { display:grid; gap:3px; color:var(--studio-text); font:600 .875rem var(--body); text-align:right; }
+.training-block-muscle small { color:var(--studio-muted); font:400 .5625rem var(--mono); text-transform:uppercase; }
+.training-block-evidence { display:grid; gap:8px; }
+.training-block-evidence article { padding:12px; border:1px solid #33372f; border-radius:7px; }
+.training-block-evidence strong { display:block; color:var(--studio-text); font-size:.8125rem; }
+.training-block-evidence p { margin:5px 0 0; color:var(--studio-muted); font-size:.75rem; line-height:1.5; }
+.training-block-empty { margin:0; color:var(--studio-muted); font-size:.8125rem; line-height:1.6; }
+.training-block-signals { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.training-block-signals span { padding:8px 10px; border:1px solid #485040; border-radius:999px; color:#d9ddd3; font-size:.6875rem; }
+.training-block-signal-note { margin:12px 0 0; color:#8f9689; font:400 .625rem/1.55 var(--mono); }
+.training-block-next { display:grid; gap:7px; margin-top:12px; padding:18px 20px; border-left:3px solid var(--accent); background:#20241c; }
+.training-block-next strong { color:var(--studio-text); font-size:1rem; line-height:1.5; }
+.training-block-review-actions { display:flex; flex-wrap:wrap; gap:9px; margin-top:18px; }
+.training-block-review-actions .small-button { color:var(--studio-text); border-color:#59634b; }
+.training-block-review-actions button:disabled { opacity:.45; cursor:not-allowed; }
+#trainingBlockReviewStatus { min-height:20px; margin:12px 0 0; color:var(--studio-muted); font-size:.75rem; line-height:1.5; }
+.training-block-action-dialog .community-confirm-mark { color:var(--accent); border-color:#59634b; }
 .context-tools { display:grid; grid-template-columns:minmax(220px,.5fr) minmax(0,1.5fr); gap:28px; margin-top:14px; padding:28px; border:1px solid var(--line); border-radius:14px; background:#e8e7df; }
 .context-tools nav { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
 .context-tools nav a { position:relative; min-height:112px; display:flex; flex-direction:column; gap:7px; padding:18px 46px 18px 18px; border:1px solid var(--line); border-radius:10px; background:var(--white); text-decoration:none; }
@@ -1093,6 +1124,7 @@ html{overflow-x:clip}:where(a,button,input,select){touch-action:manipulation}.st
   .today-support-grid,.plan-overview-grid { grid-template-columns:minmax(0,1fr); }
   .progression-card { grid-template-columns:minmax(0,1fr) minmax(250px,.65fr); }
   .progress-metric-grid,.plus-studio .explore-workspace .explore-tool-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .training-block-review-grid { grid-template-columns:minmax(0,1fr); }
   .plus-studio .explore-tool-grid .feature-block:last-child { grid-column:1/-1; }
 }
 @media(max-width:680px) {
@@ -1111,6 +1143,14 @@ html{overflow-x:clip}:where(a,button,input,select){touch-action:manipulation}.st
   #trainingBlockForm,.context-tools nav { grid-template-columns:minmax(0,1fr); }
   .training-block-actions { flex-direction:column; align-items:stretch; }
   .training-block-actions .button { width:100%; }
+  .training-block-review { padding:20px; }
+  .training-block-review-head { flex-direction:column; gap:14px; }
+  .training-block-review-metrics { grid-template-columns:minmax(0,1fr); }
+  .training-block-review-actions { display:grid; grid-template-columns:minmax(0,1fr); }
+  .training-block-review-actions button { width:100%; }
+  .training-block-muscle { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .training-block-muscle > strong { grid-column:1/-1; }
+  .training-block-muscle > span { text-align:left; }
   .progress-metric-grid { grid-template-columns:minmax(0,1fr); }
   .progress-metric-grid article { min-height:145px; }
   .progress-metric-grid strong { margin-top:20px; }

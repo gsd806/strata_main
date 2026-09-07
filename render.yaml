@@ -14,6 +14,8 @@ services:
         value: 0.0.0.0
       - key: TRUST_PROXY
         value: "true"
+      - key: SECURE_COOKIES
+        value: "true"
       - key: APP_BASE_URL
         value: https://stratafitness.online
       - key: ADMIN_EMAIL
@@ -39,7 +41,7 @@ services:
       - key: PADDLE_PRODUCT_ID
         value: pro_01m1ky8j916ybyacs836dxbz8x
       - key: PADDLE_PRICE_ID
-        value: pri_01m1kyc2zd313d7a3ssmg02424
+        sync: false
       - key: PADDLE_CLIENT_TOKEN
         sync: false
       - key: PADDLE_API_KEY

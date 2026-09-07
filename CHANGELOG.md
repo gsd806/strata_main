@@ -1,5 +1,19 @@
 # Changelog
 
+## 7.5.0 — Training Memory and operational trust
+
+- Preserved the complete guest-generated week through account creation, verification, and onboarding, then required an explicit claim, compare, or keep decision before replacing either the device preview or an existing account Plan.
+- Rebuilt the workout logger around Training Memory: exact prior comparable sets and dates, reviewable targets, set add/copy/remove controls, private notes, RIR or RPE, warm-up and plate calculators, and explicit superset groups.
+- Added explainable in-workout exercise swaps with separate “this workout only” and revision-checked Plan-proposal paths; neither path silently rewrites the saved week.
+- Added an account-scoped offline continuation shell for a workout already opened while authorized. It stores a bounded device draft, never caches private pages or API responses, and rechecks the account, access, and server revision before handing a draft back for sync.
+- Made training blocks operational with date-derived weeks, planned-versus-completed workout and set evidence, muscle coverage, logged improvements, explicit skips/replacements, one next decision, and reviewed carry, lighter-week, or finish actions.
+- Added explainable planner balance signals and a copy-day review that previews merge or replace behavior, creates fresh exercise identities, and refuses stale Plan revisions.
+- Changed Strata+ to a $0.99 USD monthly recurring subscription and added one optional free 30-minute app trial. The trial needs no card, ends automatically, never converts automatically, and remains limited to one use per account; qualifying earlier lifetime buyers remain grandfathered without renewal.
+- Hardened Paddle subscription state around signed, replay-safe, ordered events, exact account/catalog/customer/transaction matching, time-bounded entitlement, scheduled cancellation or pause, equal-timestamp downgrade resistance, adjustment-to-transaction binding, and short-lived portal links that are validated but never persisted.
+- Added structured redacted request logs and request IDs, distinct liveness/readiness checks, production preflight that shares the runtime provider validators, post-deploy smoke tools, and an ordered SQLite/Turso migration ledger.
+- Added account-owned active-session review, selective or all-other-session revocation, and a CSRF-protected JSON export of account training and support data without exposing credentials, tokens, IP/device fingerprints, provider customer IDs, administrator records, or aggregate signals.
+- Added Chromium, Firefox, and WebKit compatibility journeys for CI, focused axe checks, keyboard navigation, 200% text zoom, and self-hosted Manrope, DM Mono, and homepage photography so normal rendering no longer depends on Google Fonts or Unsplash requests.
+
 ## 7.4.1 — Responsive content integrity
 
 - Rebuilt planner library cards around intrinsic content height so long exercise names, metadata, FitScores, and Add/Guide/Video controls stay in their own card instead of colliding with the next result.

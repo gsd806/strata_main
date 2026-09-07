@@ -8,6 +8,7 @@ const {join}=require("node:path");
 const PROJECT_ROOT=join(__dirname,"..");
 const readPublic=(...parts)=>fs.readFileSync(join(PROJECT_ROOT,"public",...parts),"utf8");
 const readPrivateData=(name)=>fs.readFileSync(join(PROJECT_ROOT,"src","data",name),"utf8");
+const localDateOffset=(offset=0)=>{const date=new Date();date.setDate(date.getDate()+offset);return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;};
 const exercises=JSON.parse(readPublic("data","exercises.json"));
 const discovery=JSON.parse(readPrivateData("discovery-data.json"));
 
@@ -42,15 +43,15 @@ const document={
   body:new Element("body"),
   getElementById(id){return elements.get(id)||null;},
   querySelector(selector){return selector==="main"?mainElement:null;},
-  querySelectorAll(selector){if(selector==="dialog")return [elements.get("detailDialog"),elements.get("communityApplyDialog")];return [];},
+  querySelectorAll(selector){if(selector==="dialog")return [elements.get("detailDialog"),elements.get("communityApplyDialog"),elements.get("trainingBlockActionDialog")];return [];},
   addEventListener(){},
   createElement(){return new Element("created");}
 };
 const weeklyPlan={version:1,restDay:"Sunday",days:Object.fromEntries(["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].map((day)=>[day,day==="Monday"?[{instanceId:"runtime-plan-item",exerciseId:"flat-dumbbell-press",sets:3,reps:"8–12"}]:[]]))};
 const response={user:{id:"u1",name:"Runtime Audit",email:"audit@example.test",discovery:{active:true}},csrfToken:"csrf",exercises,methodology:discovery.methodology,sources:discovery.sources,limitedConfidenceExercises:discovery.limitedConfidenceExercises,preferences:{version:1,goal:"hypertrophy",level:"Intermediate",days:4,equipment:[...new Set(exercises.map((exercise)=>exercise.equipment))],preferences:["stable","long-range"],limitations:[]},ratings:{aggregates:[],user:[]},weeklyPlan,weeklyPlanUpdatedAt:1_700_000_000_100};
 const communityPlan={id:"11111111-1111-4111-8111-111111111111",title:"Runtime <Week>",description:"A shared smoke-test plan.",authorName:"Other Member",plan:weeklyPlan,createdAt:1_700_000_000_000,updatedAt:1_700_000_000_000};
-const workoutSummary={id:"runtime-workout",title:"Monday workout",planDay:"Monday",date:new Date().toISOString().slice(0,10),status:"completed",startedAt:1_700_000_000_000,completedAt:1_700_001_800_000,elapsedSeconds:1800,totalSets:3,completedSets:3,exerciseCount:1,exerciseSummaries:[{exerciseId:"flat-dumbbell-press",measurement:"reps",loadType:"external",unit:"kg",completedSets:3,totalReps:24,maxReps:8,maxWeight:20,volume:480,totalSeconds:0,maxSeconds:null}]};
-const trainingBlock={version:1,title:"Runtime block",goal:"hypertrophy",weeks:6,currentWeek:2,lightWeek:6,startDate:"2026-09-01",status:"active",progressionRule:"reps-then-load",milestones:[],revision:3,updatedAt:1_700_000_000_500};
+const workoutSummary={id:"runtime-workout",title:"Monday workout",planDay:"Monday",date:localDateOffset(),status:"completed",startedAt:1_700_000_000_000,completedAt:1_700_001_800_000,elapsedSeconds:1800,totalSets:3,completedSets:3,exerciseCount:1,exerciseSummaries:[{exerciseId:"flat-dumbbell-press",measurement:"reps",loadType:"external",unit:"kg",completedSets:3,totalReps:24,maxReps:8,maxWeight:20,volume:480,totalSeconds:0,maxSeconds:null}]};
+const trainingBlock={version:1,title:"Runtime block",goal:"hypertrophy",weeks:6,currentWeek:2,lightWeek:6,startDate:localDateOffset(-7),status:"active",progressionRule:"reps-then-load",milestones:[],revision:3,updatedAt:1_700_000_000_500};
 const adaptation={id:"adapt-runtime",sourceWorkoutId:"runtime-workout",status:"pending",kind:"reduce_sets",title:"Reduce one set of Flat Dumbbell Press",explanation:"Your optional check-in supported a lower next-session dose.",change:{day:"Monday",instanceId:"runtime-plan-item",exerciseId:"flat-dumbbell-press",fromSets:3,toSets:2},requiresApproval:true,expectedPlanUpdatedAt:response.weeklyPlanUpdatedAt,createdAt:1_700_000_000_600,resolvedAt:null};
 const fetches=[],requests=[],navigations=[];let discoveryAttempts=0,planSaveRevision=1_700_000_000_300;
 const context={console,document,window:{location:{replace(path){navigations.push(path);}}},location:{},navigator:{},requests,fetch:async(path,options={})=>{
@@ -73,6 +74,7 @@ context.globalThis=context;
 vm.createContext(context);
 vm.runInContext(readPublic("scripts","discovery-core.js"),context,{filename:"discovery-core.js"});
 vm.runInContext(readPublic("scripts","monthly-plan-core.js"),context,{filename:"monthly-plan-core.js"});
+vm.runInContext(readPublic("scripts","training-block-core.js"),context,{filename:"training-block-core.js"});
 vm.runInContext(readPublic("scripts","discover.js"),context,{filename:"discover.js"});
 assert.equal(vm.runInContext("state.activeFeature",context),"today","feature navigation must initialize before discovery data resolves");
 assert.equal(vm.runInContext('Object.keys(FEATURE_CONFIG).filter((name)=>featurePanel(name).hidden).length',context),10,"only the default workspace should remain visible during discovery loading");
@@ -143,12 +145,8 @@ assert.equal(vm.runInContext('Object.keys(FEATURE_CONFIG).filter((name)=>feature
   const progressionFormatted=/Monday · Flat Dumbbell Press · 3 → 2 sets/.test(elements.get("progressionChange").textContent)&&!/\[object Object\]/.test(elements.get("progressionChange").textContent);
   elements.get("trainingBlockWeeks").value="8";await elements.get("trainingBlockWeeks").emit("change");
   const rebuiltBlockWeeks=(elements.get("trainingBlockCurrentWeek").innerHTML.match(/<option/g)||[]).length===8;
-  elements.get("trainingBlockState").value="completed";await elements.get("trainingBlockState").emit("change");
-  const completedAligned=elements.get("trainingBlockCurrentWeek").value==="8";
-  elements.get("trainingBlockCurrentWeek").value="2";await elements.get("trainingBlockCurrentWeek").emit("change");
-  const resumedActive=elements.get("trainingBlockState").value==="active";
-  elements.get("trainingBlockLighterWeek").checked=true;
-  const blockControlsWorked=rebuiltBlockWeeks&&completedAligned&&resumedActive;
+  elements.get("trainingBlockLighterWeek").value="8";await elements.get("trainingBlockLighterWeek").emit("change");
+  const blockControlsWorked=rebuiltBlockWeeks&&elements.get("trainingBlockCurrentWeek").disabled===true&&elements.get("trainingBlockCurrentWeek").value==="2"&&(elements.get("trainingBlockLighterWeek").innerHTML.match(/<option/g)||[]).length===8;
   vm.runInContext('globalThis.trainingBlockSavePromise=saveTrainingBlock({preventDefault(){},currentTarget:el("trainingBlockForm")});',context);
   await context.trainingBlockSavePromise;
   vm.runInContext("globalThis.progressionApplyPromise=acceptProgression();",context);
@@ -184,7 +182,8 @@ assert.equal(vm.runInContext('Object.keys(FEATURE_CONFIG).filter((name)=>feature
     weeklyPulse:/planned movement/.test(elements.get("weeklyPulseDetail").textContent)&&/^width:\d+(?:\.\d+)?%$/.test(elements.get("weeklyPulseBar").attributes.style),
     todayComparable,
     progressRendered,
-    trainingBlockSaved:Boolean(blockRequest&&blockRequest.options.headers["X-CSRF-Token"]==="csrf"&&blockBody.expectedRevision===3&&blockBody.expectedUserId==="u1"&&blockBody.block.weeks===8&&blockBody.block.currentWeek===2&&blockBody.block.status==="active"&&blockBody.block.lightWeek===8&&blockBody.block.startDate==="2026-09-01"),
+    trainingBlockSaved:Boolean(blockRequest&&blockRequest.options.headers["X-CSRF-Token"]==="csrf"&&blockBody.expectedRevision===3&&blockBody.expectedUserId==="u1"&&blockBody.block.weeks===8&&blockBody.block.currentWeek===2&&blockBody.block.status==="active"&&blockBody.block.lightWeek===8&&blockBody.block.startDate===trainingBlock.startDate),
+    trainingBlockReview:!elements.get("trainingBlockReview").hidden&&elements.get("trainingBlockWorkoutCount").textContent==="1 / 1"&&/Chest/.test(elements.get("trainingBlockMuscles").innerHTML)&&!/explicitly skipped|explicitly replaced/.test(elements.get("trainingBlockSignals").innerHTML),
     blockControlsWorked,
     progressionFormatted,
     progressionAccepted:Boolean(adaptationRequest&&adaptationBody.decision==="accept"&&adaptationBody.expectedPlanUpdatedAt===response.weeklyPlanUpdatedAt)
@@ -213,6 +212,6 @@ assert.equal(vm.runInContext('Object.keys(FEATURE_CONFIG).filter((name)=>feature
   assert.equal(result.unknownHashFeature,"library");
   assert.equal(result.battleSlots,4);
   assert.ok(result.battleRows>=10);
-  for(const key of ["discoveryFetch","battleBuilder","battleTable","battleVisible","battleStatus","detailOpen","bodyLocked","scoreAudit","evidence","alternatives","ratings","ratingDraftPreserved","communityFetch","communityRendered","communitySevenDayPreview","communityConfirmation","communityApplied","communityPlanLink","sessionGenerated","sessionOptions","sessionAdded","sessionPlanRevision","sessionPlanLink","sessionConflictHandled","weeklyPulse","todayComparable","progressRendered","trainingBlockSaved","blockControlsWorked","progressionFormatted","progressionAccepted","dismissRaceSafe","focusPrivacyCleared","focusAccountSafe"])assert.equal(result[key],true,key);
+  for(const key of ["discoveryFetch","battleBuilder","battleTable","battleVisible","battleStatus","detailOpen","bodyLocked","scoreAudit","evidence","alternatives","ratings","ratingDraftPreserved","communityFetch","communityRendered","communitySevenDayPreview","communityConfirmation","communityApplied","communityPlanLink","sessionGenerated","sessionOptions","sessionAdded","sessionPlanRevision","sessionPlanLink","sessionConflictHandled","weeklyPulse","todayComparable","progressRendered","trainingBlockSaved","trainingBlockReview","blockControlsWorked","progressionFormatted","progressionAccepted","dismissRaceSafe","focusPrivacyCleared","focusAccountSafe"])assert.equal(result[key],true,key);
   console.log(JSON.stringify(result,null,2));
 })().catch(error=>{console.error(error);process.exitCode=1;});

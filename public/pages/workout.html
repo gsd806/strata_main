@@ -5,16 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#10110f" />
   <meta name="description" content="Train with your STRATA plan. Record actual sets, resume a session, and see your progress." />
+  <meta name="application-name" content="STRATA" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="STRATA" />
   <title>Workout Room — STRATA</title>
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" href="/icons/strata-icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/workout.css?v=7.4.1" />
-  <link rel="stylesheet" href="/product-signals.css?v=7.4.1" />
-  <script src="/motion.js?v=7.4.1"></script>
+  <link rel="stylesheet" href="/fonts.css?v=7.5.0" />
+  <link rel="stylesheet" href="/workout.css?v=7.5.0" />
+  <link rel="stylesheet" href="/product-signals.css?v=7.5.0" />
+  <script src="/motion.js?v=7.5.0"></script>
 </head>
 <body class="workout-page">
   <a class="skip-link" href="#workoutTitle">Skip to workout</a>
@@ -43,7 +45,7 @@
         <div class="start-bottom"><p id="startHint" class="muted"></p><div class="start-actions"><button class="button secondary" type="button" id="chooseScheduledDay" hidden>Choose a scheduled day <span aria-hidden="true">→</span></button><a class="button secondary" id="openPlannerFromEmpty" href="/planner.html" hidden>Add exercises to my week <span aria-hidden="true">↗</span></a><button class="button primary" type="button" id="startWorkout">Start working out <span aria-hidden="true">↗</span></button></div></div>
       </section>
       <section class="session" id="sessionPanel" aria-labelledby="sessionTitle" hidden>
-        <div class="session-heading"><div><p class="eyebrow" id="sessionDate"></p><h2 id="sessionTitle" tabindex="-1"></h2><p class="muted">Log actual values. Planned reps are a guide, not a completed result.</p></div><div class="session-clock"><span>Time since start</span><strong id="sessionElapsed">0:00</strong></div></div>
+        <div class="session-heading"><div><p class="eyebrow" id="sessionDate"></p><h2 id="sessionTitle" tabindex="-1"></h2><p class="muted">See the last comparable work, choose today’s target, then log what you actually do. Nothing changes your Plan without approval.</p></div><div class="session-clock"><span>Time since start</span><strong id="sessionElapsed">0:00</strong></div></div>
         <div class="session-tools panel">
           <div class="progress-summary"><svg class="progress-ring" viewBox="0 0 64 64" role="img" id="progressRing" aria-label="0 percent complete"><circle class="ring-track" cx="32" cy="32" r="26"/><circle class="ring-value" id="ringValue" cx="32" cy="32" r="26" pathLength="100"/></svg><div><strong id="progressCount">0 sets</strong><span id="progressLabel">Take it one set at a time.</span><progress id="sessionProgress" max="100" value="0" class="sr-only" aria-label="Completed sets"></progress></div><button class="button quiet compact next-set" id="nextSet" type="button">Next set <span aria-hidden="true">↓</span></button></div>
           <div class="rest-control"><div class="rest-timer"><div class="timer-readout"><span>Rest timer</span><strong id="restClock" role="timer" aria-label="Rest timer">1:30</strong></div><label class="sr-only" for="restDuration">Rest duration in seconds</label><select id="restDuration"><option value="30">30 sec</option><option value="60">60 sec</option><option value="90" selected>90 sec</option><option value="120">2 min</option><option value="180">3 min</option><option value="300">5 min</option></select><button class="button secondary compact" id="timerToggle" type="button">Start rest</button><button class="button quiet compact" id="timerReset" type="button">Reset</button></div><label class="auto-rest"><input id="autoRest" type="checkbox" checked /> <span>Start rest automatically after a completed set</span></label></div>
@@ -77,14 +79,15 @@
     <div class="signal-consent-host" data-product-signals-consent-host></div>
     <noscript><div class="panel">Enable JavaScript to log sessions and load workout history. Your week remains available in <a href="/planner.html">Plan</a>.</div></noscript>
   </main>
-  <footer>STRATA · Build 7.4.1 <span>Plan with purpose. Train with intent.</span><a href="/policies">Policies</a></footer>
+  <footer>STRATA · Build 7.5.0 <span>Plan with purpose. Train with intent.</span><a href="/policies">Policies</a><a href="/install.html">Install app</a></footer>
   <dialog id="finishDialog" aria-labelledby="finishDialogTitle"><form method="dialog"><p class="eyebrow">Close out your session</p><h2 id="finishDialogTitle">Finish this workout?</h2><p id="finishDialogMessage"></p><p>Only checked sets count toward your history and progress. Unfinished sets stay in the session for reference.</p><div class="actions"><button class="button secondary" value="cancel">Keep training</button><button class="button primary" value="finish">Finish and save</button></div></form></dialog>
   <dialog id="detailDialog" aria-labelledby="detailTitle"><div class="section-heading"><h2 id="detailTitle"></h2><button class="button quiet compact" type="button" id="closeDetail" aria-label="Close session details">Close ×</button></div><div id="detailBody"></div></dialog>
+  <dialog id="swapDialog" aria-labelledby="swapTitle" aria-describedby="swapBoundary"><div class="section-heading"><div><p class="eyebrow">Exercise replacement</p><h2 id="swapTitle" tabindex="-1">Choose a comparable movement.</h2></div><button class="button quiet compact" type="button" id="closeSwap" aria-label="Close exercise replacement">Close ×</button></div><p id="swapBoundary">Choose a catalog-backed alternative and review the target, equipment, FitScore, and stability trade-off. No workout or Plan changes until you use one of the actions below.</p><label class="field">Alternative exercise<select id="swapExercise"></select></label><div class="swap-comparison" id="swapComparison" role="status" aria-live="polite"></div><p class="inline-error" id="swapError" role="alert" hidden></p><div class="swap-actions"><button class="button secondary" type="button" id="swapWorkoutOnly">Use for this workout only</button><button class="button primary" type="button" id="reviewPlanSwap">Review change to Plan</button></div><section class="plan-swap-review" id="planSwapReview" hidden aria-labelledby="planSwapTitle"><p class="eyebrow">Plan proposal · not applied</p><h3 id="planSwapTitle">Review the lasting change.</h3><p id="planSwapSummary"></p><p>This updates the matching exercise in your saved weekly Plan and this active workout. Sets and written rep targets stay the same.</p><div class="actions"><button class="button primary" type="button" id="approvePlanSwap">Approve Plan &amp; workout change</button><button class="button quiet" type="button" id="cancelPlanSwap">Keep Plan unchanged</button></div></section></dialog>
   <div class="toast" id="workoutToast" role="status" aria-live="polite"></div>
-  <script src="/workout-core.js?v=7.4.1"></script>
-  <script src="/discovery-core.js?v=7.4.1"></script>
-  <script src="/product-signals.js?v=7.4.1" defer></script>
-  <script src="/workout.js?v=7.4.1" defer></script>
-  <script src="/pwa.js?v=7.4.1" defer></script>
+  <script src="/workout-core.js?v=7.5.0"></script>
+  <script src="/discovery-core.js?v=7.5.0"></script>
+  <script src="/product-signals.js?v=7.5.0" defer></script>
+  <script src="/workout.js?v=7.5.0" defer></script>
+  <script src="/pwa.js?v=7.5.0" defer></script>
 </body>
 </html>

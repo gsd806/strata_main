@@ -13,6 +13,7 @@ const {
   directSignupAllowed
 }=require("./email");
 const {cleanText}=require("./plans");
+const {createAccountSelfService}=require("./account-self-service");
 
 const scryptAsync=promisify(scrypt);
 const SESSION_SECONDS=60*60*24*7;
@@ -37,6 +38,7 @@ const API_ROUTES=new Set([
   "/api/signup","/api/login","/api/verification-status","/api/verify-email","/api/resend-verification",
   "/api/password-reset/request","/api/account/password-reset/request","/api/password-reset/status","/api/password-reset/complete",
   "/api/account/delete/request","/api/account/delete/cancel","/api/account/delete/status","/api/account/delete/complete",
+  "/api/account/sessions","/api/account/sessions/revoke","/api/account/sessions/revoke-others","/api/account/export",
   "/api/me","/api/logout"
 ]);
 
@@ -73,7 +75,7 @@ function createAuthService({
   if(!store||!emailConfig||typeof trustedAuthOrigin!=="function"||typeof rateAllowed!=="function"||!http||typeof getUserPayload!=="function"){
     throw new TypeError("Auth service requires store, email configuration, request guards, HTTP helpers, and a user-payload resolver.");
   }
-  const {json,bodyJson,bodyForm,redirect}=http;
+  const {json,bodyJson,bodyForm,redirect,securityHeaders}=http;
 
   function accountRateAllowed(req,input) {
     return rateAllowed(req,"auth-network",400)&&
@@ -173,6 +175,7 @@ function createAuthService({
     const expectedUser=req.headers["x-strata-user"];
     return (expectedUser===undefined||expectedUser===String(session?.id))&&safeTokenEqual(req.headers["x-csrf-token"],session?.csrf_token);
   }
+  const accountSelfService=createAccountSelfService({store,http:{json,bodyJson,securityHeaders},requireSession,validCsrf,rateAllowed,logger});
 
   function validateRegistration(input){
     const name=cleanText(input.name,40),email=normalizeEmail(input.email),password=String(input.password||"");
@@ -673,6 +676,7 @@ function createAuthService({
 
   async function handleApi(req,res,url){
     if(!API_ROUTES.has(url.pathname))return false;
+    if(await accountSelfService.handleApi(req,res,url))return true;
     if(url.pathname==="/api/signup"&&req.method==="POST"){
       if(!trustedAuthOrigin(req)){json(res,403,{error:"Cross-origin request rejected."});return true;}
       try{

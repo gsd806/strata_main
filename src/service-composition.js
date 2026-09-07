@@ -19,7 +19,7 @@ function composeServices({
   let admin;
   const auth=createAuthService({
     store,emailConfig,exerciseIds,isUniqueViolation,trustedAuthOrigin,rateAllowed,
-    http:{json:http.json,bodyJson:http.bodyJson,bodyForm:http.bodyForm,redirect:http.redirect},
+    http:{json:http.json,bodyJson:http.bodyJson,bodyForm:http.bodyForm,redirect:http.redirect,securityHeaders:http.securityHeaders},
     getUserPayload,
     claimAdminForLogin:async(user)=>admin?admin.maybeClaimAdminForLogin(user):user,
     reconcileCheckoutCreationBeforeDeletion,

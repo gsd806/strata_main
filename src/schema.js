@@ -2,6 +2,8 @@
 
 const {PRODUCT_SIGNAL_TABLE,PRODUCT_SIGNAL_SQL}=require("./product-signals-schema");
 const {TRAINING_LOOP_SCHEMA,TRAINING_LOOP_SQL}=require("./training-loop-schema");
+const {BILLING_SCHEMA,BILLING_SQL,BILLING_DELETION_BLOCKER,activeEntitlement,withEntitlementClock}=require("./billing-schema");
+const {ACCOUNT_SELF_SERVICE_SQL}=require("./account-self-service-schema");
 
 // Central catalog shared by the local SQLite and Turso adapters.
 const WORKOUT_ACTIVE_INDEX="CREATE UNIQUE INDEX IF NOT EXISTS workouts_one_active_per_user ON workouts(user_id) WHERE CASE WHEN json_valid(workout_json) THEN json_extract(workout_json,'$.status') END='active'";
@@ -147,54 +149,7 @@ const SCHEMA = [
     PRIMARY KEY(user_id,exercise_id)
   )`,
   "CREATE INDEX IF NOT EXISTS ratings_exercise_id ON ratings(exercise_id)",
-  `CREATE TABLE IF NOT EXISTS paddle_purchases (
-    transaction_id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    price_id TEXT NOT NULL,
-    product_id TEXT NOT NULL,
-    customer_id TEXT,
-    paddle_status TEXT NOT NULL,
-    completed_at INTEGER,
-    access_revoked_at INTEGER,
-    revocation_reason TEXT,
-    created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
-  )`,
-  "CREATE INDEX IF NOT EXISTS paddle_purchases_user_id ON paddle_purchases(user_id)",
-  `CREATE TABLE IF NOT EXISTS paddle_checkout_claims (
-    user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    price_id TEXT NOT NULL,
-    claim_id TEXT NOT NULL,
-    transaction_id TEXT,
-    expires_at INTEGER NOT NULL,
-    created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
-  )`,
-  "CREATE UNIQUE INDEX IF NOT EXISTS paddle_checkout_claims_claim_id ON paddle_checkout_claims(claim_id)",
-  "CREATE UNIQUE INDEX IF NOT EXISTS paddle_checkout_claims_transaction_id ON paddle_checkout_claims(transaction_id)",
-  `CREATE TABLE IF NOT EXISTS discovery_trials (
-    user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    started_at INTEGER NOT NULL,
-    expires_at INTEGER NOT NULL,
-    CHECK(expires_at > started_at)
-  )`,
-  `CREATE TABLE IF NOT EXISTS paddle_adjustments (
-    adjustment_id TEXT PRIMARY KEY,
-    transaction_id TEXT NOT NULL REFERENCES paddle_purchases(transaction_id) ON DELETE CASCADE,
-    action TEXT NOT NULL,
-    type TEXT,
-    status TEXT NOT NULL,
-    occurred_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
-  )`,
-  "CREATE INDEX IF NOT EXISTS paddle_adjustments_transaction_id ON paddle_adjustments(transaction_id)",
-  `CREATE TABLE IF NOT EXISTS paddle_webhook_events (
-    event_id TEXT PRIMARY KEY,
-    notification_id TEXT,
-    event_type TEXT NOT NULL,
-    occurred_at INTEGER NOT NULL,
-    processed_at INTEGER NOT NULL
-  )`,
+  ...BILLING_SCHEMA,
   `CREATE TABLE IF NOT EXISTS support_tickets (
     id TEXT PRIMARY KEY,
     reference TEXT NOT NULL UNIQUE,
@@ -258,6 +213,8 @@ const SCHEMA = [
 ];
 
 const SQL = {
+  ...ACCOUNT_SELF_SERVICE_SQL,
+  ...BILLING_SQL,
   ping:"SELECT 1 AS ok",
   userByEmail:"SELECT * FROM users WHERE email = ?",
   userById:"SELECT id,name,email,created_at,email_verified_at,auth_version,suspended_at FROM users WHERE id = ?",
@@ -309,9 +266,7 @@ const SQL = {
   completePasswordResetDeleteSessions:"DELETE FROM sessions WHERE user_id=(SELECT user_id FROM account_action_requests WHERE token_hash=? AND purpose='password_reset' AND consumed_at=?) RETURNING token_hash",
   completePasswordResetDeleteStagedActions:"DELETE FROM account_action_deliveries WHERE user_id=(SELECT user_id FROM account_action_requests WHERE token_hash=? AND purpose='password_reset' AND consumed_at=?) RETURNING request_id",
   completePasswordResetDeleteActions:"DELETE FROM account_action_requests WHERE user_id=(SELECT user_id FROM account_action_requests WHERE token_hash=? AND purpose='password_reset' AND consumed_at=?) RETURNING request_id",
-  pendingPurchasesForUser:"SELECT COUNT(*) AS pending_count FROM paddle_purchases WHERE user_id=? AND paddle_status<>'canceled' AND completed_at IS NULL AND access_revoked_at IS NULL",
-  unsettledPurchasesForUser:"SELECT transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at FROM paddle_purchases WHERE user_id=? AND paddle_status<>'canceled' AND completed_at IS NULL AND access_revoked_at IS NULL ORDER BY created_at",
-  deleteUserWithAction:"DELETE FROM users WHERE id=(SELECT user_id FROM account_action_requests WHERE token_hash=? AND purpose='account_delete' AND delivery_state='sent' AND consumed_at IS NULL AND expires_at>?) AND NOT EXISTS (SELECT 1 FROM admin_principal ap WHERE ap.user_id=users.id) AND NOT EXISTS (SELECT 1 FROM paddle_purchases p WHERE p.user_id=users.id AND p.paddle_status<>'canceled' AND p.completed_at IS NULL AND p.access_revoked_at IS NULL) AND NOT EXISTS (SELECT 1 FROM paddle_checkout_claims c WHERE c.user_id=users.id AND c.expires_at>?) RETURNING id,email",
+  deleteUserWithAction:`DELETE FROM users WHERE id=(SELECT user_id FROM account_action_requests WHERE token_hash=? AND purpose='account_delete' AND delivery_state='sent' AND consumed_at IS NULL AND expires_at>?) AND NOT EXISTS (SELECT 1 FROM admin_principal ap WHERE ap.user_id=users.id) AND NOT EXISTS (SELECT 1 FROM paddle_purchases p WHERE p.user_id=users.id AND ${BILLING_DELETION_BLOCKER}) AND NOT EXISTS (SELECT 1 FROM paddle_checkout_claims c WHERE c.user_id=users.id AND c.expires_at>?) RETURNING id,email`,
   deleteVerificationSendsForDeletedUser:"DELETE FROM email_verification_sends WHERE challenge_id IN (SELECT challenge_id FROM signup_verifications WHERE user_id=? OR email=?) AND NOT EXISTS (SELECT 1 FROM users WHERE id=?)",
   deleteVerificationsForDeletedUser:"DELETE FROM signup_verifications WHERE (user_id=? OR email=?) AND NOT EXISTS (SELECT 1 FROM users WHERE id=?)",
   deleteActionSendsForDeletedUser:"DELETE FROM account_action_sends WHERE email_hash=? AND NOT EXISTS (SELECT 1 FROM users WHERE id=?)",
@@ -346,29 +301,9 @@ const SQL = {
   ratingAggregates:"SELECT exercise_id,COUNT(*) AS rating_count,AVG(comfort) AS comfort,AVG(pump) AS pump,AVG(enjoyment) AS enjoyment,AVG(stability) AS stability,AVG(setup) AS setup,AVG(overall) AS overall FROM ratings GROUP BY exercise_id",
   ratingAggregate:"SELECT exercise_id,COUNT(*) AS rating_count,AVG(comfort) AS comfort,AVG(pump) AS pump,AVG(enjoyment) AS enjoyment,AVG(stability) AS stability,AVG(setup) AS setup,AVG(overall) AS overall FROM ratings WHERE exercise_id=? GROUP BY exercise_id",
   upsertRating:"INSERT INTO ratings(user_id,exercise_id,comfort,pump,enjoyment,stability,setup,overall,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,exercise_id) DO UPDATE SET comfort=excluded.comfort,pump=excluded.pump,enjoyment=excluded.enjoyment,stability=excluded.stability,setup=excluded.setup,overall=excluded.overall,updated_at=excluded.updated_at",
-  insertPendingPurchase:"INSERT INTO paddle_purchases(transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at) SELECT ?,u.id,?,?,NULL,?,NULL,NULL,NULL,?,? FROM users u WHERE u.id=? AND u.suspended_at IS NULL AND NOT EXISTS (SELECT 1 FROM account_action_requests a WHERE a.user_id=u.id AND a.purpose='account_delete' AND a.delivery_state='sent' AND a.consumed_at IS NULL AND a.expires_at>?) AND NOT EXISTS (SELECT 1 FROM paddle_purchases p WHERE p.user_id=u.id AND p.paddle_status<>'canceled' AND p.completed_at IS NULL AND p.access_revoked_at IS NULL) RETURNING transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at",
-  checkoutCreationForUser:"SELECT user_id,price_id,claim_id,transaction_id,expires_at,created_at,updated_at FROM paddle_checkout_claims WHERE user_id=?",
-  claimCheckoutCreation:"INSERT INTO paddle_checkout_claims(user_id,price_id,claim_id,transaction_id,expires_at,created_at,updated_at) SELECT u.id,?,?,NULL,?,?,? FROM users u WHERE u.id=? AND u.suspended_at IS NULL AND NOT EXISTS (SELECT 1 FROM account_action_requests a WHERE a.user_id=u.id AND a.purpose='account_delete' AND a.delivery_state='sent' AND a.consumed_at IS NULL AND a.expires_at>?) ON CONFLICT(user_id) DO UPDATE SET price_id=excluded.price_id,claim_id=excluded.claim_id,transaction_id=NULL,expires_at=excluded.expires_at,created_at=excluded.created_at,updated_at=excluded.updated_at WHERE paddle_checkout_claims.expires_at<=? AND paddle_checkout_claims.transaction_id IS NULL RETURNING user_id,price_id,claim_id,transaction_id,expires_at,created_at,updated_at",
-  recordCheckoutCreationTransaction:"UPDATE paddle_checkout_claims SET transaction_id=?,updated_at=MAX(updated_at,?) WHERE user_id=? AND claim_id=? AND (transaction_id IS NULL OR transaction_id=?) RETURNING user_id,price_id,claim_id,transaction_id,expires_at,created_at,updated_at",
-  extendCheckoutCreation:"UPDATE paddle_checkout_claims SET expires_at=MAX(expires_at,?),updated_at=MAX(updated_at,?) WHERE user_id=? AND claim_id=? RETURNING user_id,price_id,claim_id,transaction_id,expires_at,created_at,updated_at",
-  releaseCheckoutCreation:"DELETE FROM paddle_checkout_claims WHERE user_id=? AND claim_id=? AND transaction_id IS ? RETURNING claim_id",
-  purchaseByTransaction:"SELECT transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at FROM paddle_purchases WHERE transaction_id=?",
-  pendingPurchaseForUser:"SELECT transaction_id,user_id,price_id,product_id,customer_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at FROM paddle_purchases WHERE user_id=? AND price_id=? AND paddle_status IN ('draft','ready') AND completed_at IS NULL AND access_revoked_at IS NULL ORDER BY created_at DESC LIMIT 1",
-  completePurchase:"UPDATE paddle_purchases SET customer_id=COALESCE(customer_id,?),paddle_status='completed',completed_at=COALESCE(completed_at,?),updated_at=MAX(updated_at,?) WHERE transaction_id=?",
-  updatePurchaseStatus:"UPDATE paddle_purchases SET paddle_status=?,updated_at=? WHERE transaction_id=? AND paddle_status<>'completed' AND updated_at<=?",
-  upsertAdjustment:"INSERT INTO paddle_adjustments(adjustment_id,transaction_id,action,type,status,occurred_at,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(adjustment_id) DO UPDATE SET action=excluded.action,type=excluded.type,status=excluded.status,occurred_at=excluded.occurred_at,updated_at=excluded.updated_at WHERE excluded.occurred_at>=paddle_adjustments.occurred_at RETURNING adjustment_id",
-  revokePurchase:"UPDATE paddle_purchases SET access_revoked_at=?,revocation_reason=?,updated_at=MAX(updated_at,?) WHERE transaction_id=? AND access_revoked_at IS NULL",
-  hasDiscoveryAccess:"SELECT 1 AS active FROM paddle_purchases WHERE user_id=? AND (? IS NULL OR price_id=?) AND paddle_status='completed' AND completed_at IS NOT NULL AND access_revoked_at IS NULL LIMIT 1",
-  discoveryTrial:"SELECT user_id,started_at,expires_at FROM discovery_trials WHERE user_id=?",
-  activeDiscoveryTrial:"SELECT user_id,started_at,expires_at FROM discovery_trials WHERE user_id=? AND expires_at>?",
-  startDiscoveryTrial:"INSERT OR IGNORE INTO discovery_trials(user_id,started_at,expires_at) SELECT id,?,? FROM users WHERE id=? AND suspended_at IS NULL RETURNING user_id,started_at,expires_at",
-  discoveryAccessSummary:"SELECT COUNT(*) AS purchase_count,COALESCE(SUM(CASE WHEN paddle_status='completed' AND completed_at IS NOT NULL AND access_revoked_at IS NULL THEN 1 ELSE 0 END),0) AS active_purchase_count,COALESCE(SUM(CASE WHEN paddle_status<>'canceled' AND completed_at IS NULL AND access_revoked_at IS NULL THEN 1 ELSE 0 END),0) AS pending_purchase_count,MAX(CASE WHEN paddle_status='completed' AND access_revoked_at IS NULL THEN completed_at ELSE NULL END) AS latest_active_purchase_at,MAX(completed_at) AS latest_completed_at,MAX(access_revoked_at) AS latest_revoked_at FROM paddle_purchases WHERE user_id=? AND (? IS NULL OR price_id=?)",
-  adjustmentById:"SELECT adjustment_id,transaction_id,action,type,status,occurred_at,updated_at FROM paddle_adjustments WHERE adjustment_id=?",
-  webhookEvent:"SELECT event_id,notification_id,event_type,occurred_at,processed_at FROM paddle_webhook_events WHERE event_id=?",
-  recordWebhookEvent:"INSERT INTO paddle_webhook_events(event_id,notification_id,event_type,occurred_at,processed_at) VALUES(?,?,?,?,?) ON CONFLICT(event_id) DO NOTHING RETURNING event_id",
-  adminOverview:"SELECT (SELECT COUNT(*) FROM users) AS total_users,(SELECT COUNT(*) FROM users WHERE email_verified_at IS NOT NULL) AS verified_users,(SELECT COUNT(*) FROM users WHERE suspended_at IS NOT NULL) AS suspended_users,(SELECT COUNT(*) FROM sessions s JOIN users u ON u.id=s.user_id AND u.auth_version=s.auth_version WHERE s.expires_at>? AND u.suspended_at IS NULL) AS active_sessions,(SELECT COUNT(DISTINCT user_id) FROM paddle_purchases WHERE paddle_status='completed' AND completed_at IS NOT NULL AND access_revoked_at IS NULL) AS discovery_users,(SELECT COUNT(*) FROM paddle_purchases WHERE paddle_status<>'canceled' AND completed_at IS NULL AND access_revoked_at IS NULL) AS pending_payments,(SELECT COUNT(*) FROM account_action_requests WHERE purpose='account_delete' AND delivery_state='sent' AND consumed_at IS NULL AND expires_at>?) AS pending_deletions,(SELECT COUNT(*) FROM support_tickets WHERE status<>'resolved') AS open_support",
-  adminUserById:"SELECT u.id,u.name,u.email,u.created_at,u.email_verified_at,u.auth_version,u.suspended_at,p.plan_json,(SELECT COUNT(*) FROM sessions s WHERE s.user_id=u.id AND s.auth_version=u.auth_version AND s.expires_at>?) AS active_session_count,(SELECT COUNT(*) FROM ratings r WHERE r.user_id=u.id) AS rating_count,(SELECT COUNT(*) FROM paddle_purchases pp WHERE pp.user_id=u.id) AS purchase_count,(SELECT COUNT(*) FROM paddle_purchases pp WHERE pp.user_id=u.id AND pp.paddle_status='completed' AND pp.completed_at IS NOT NULL AND pp.access_revoked_at IS NULL) AS active_purchase_count,(SELECT COUNT(*) FROM paddle_purchases pp WHERE pp.user_id=u.id AND pp.paddle_status<>'canceled' AND pp.completed_at IS NULL AND pp.access_revoked_at IS NULL) AS pending_purchase_count,(SELECT MAX(pp.updated_at) FROM paddle_purchases pp WHERE pp.user_id=u.id) AS latest_purchase_at,(SELECT pp.transaction_id FROM paddle_purchases pp WHERE pp.user_id=u.id ORDER BY pp.updated_at DESC,pp.transaction_id DESC LIMIT 1) AS transaction_id,(SELECT pp.paddle_status FROM paddle_purchases pp WHERE pp.user_id=u.id ORDER BY pp.updated_at DESC,pp.transaction_id DESC LIMIT 1) AS transaction_status,(SELECT request_id FROM account_action_requests a WHERE a.user_id=u.id AND a.purpose='account_delete' AND a.delivery_state='sent' AND a.consumed_at IS NULL AND a.expires_at>? LIMIT 1) AS deletion_request_id,(SELECT expires_at FROM account_action_requests a WHERE a.user_id=u.id AND a.purpose='account_delete' AND a.delivery_state='sent' AND a.consumed_at IS NULL AND a.expires_at>? LIMIT 1) AS deletion_expires_at FROM users u LEFT JOIN plans p ON p.user_id=u.id WHERE u.id=?",
-  adminUsers:"SELECT u.id,u.name,u.email,u.created_at,u.email_verified_at,u.suspended_at,(SELECT COUNT(*) FROM sessions s WHERE s.user_id=u.id AND s.auth_version=u.auth_version AND s.expires_at>?) AS active_session_count,(SELECT COUNT(*) FROM paddle_purchases pp WHERE pp.user_id=u.id) AS purchase_count,(SELECT COUNT(*) FROM paddle_purchases pp WHERE pp.user_id=u.id AND pp.paddle_status='completed' AND pp.completed_at IS NOT NULL AND pp.access_revoked_at IS NULL) AS active_purchase_count,(SELECT COUNT(*) FROM paddle_purchases pp WHERE pp.user_id=u.id AND pp.paddle_status<>'canceled' AND pp.completed_at IS NULL AND pp.access_revoked_at IS NULL) AS pending_purchase_count,(SELECT MAX(pp.updated_at) FROM paddle_purchases pp WHERE pp.user_id=u.id) AS latest_purchase_at,(SELECT pp.transaction_id FROM paddle_purchases pp WHERE pp.user_id=u.id ORDER BY pp.updated_at DESC,pp.transaction_id DESC LIMIT 1) AS transaction_id,(SELECT pp.paddle_status FROM paddle_purchases pp WHERE pp.user_id=u.id ORDER BY pp.updated_at DESC,pp.transaction_id DESC LIMIT 1) AS transaction_status,(SELECT expires_at FROM account_action_requests a WHERE a.user_id=u.id AND a.purpose='account_delete' AND a.delivery_state='sent' AND a.consumed_at IS NULL AND a.expires_at>? LIMIT 1) AS deletion_expires_at FROM users u WHERE (?='' OR lower(u.name) LIKE ? ESCAPE '\\' OR lower(u.email) LIKE ? ESCAPE '\\' OR lower(u.id) LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM paddle_purchases pp WHERE pp.user_id=u.id AND lower(pp.transaction_id) LIKE ? ESCAPE '\\')) ORDER BY u.created_at DESC,u.id DESC LIMIT ? OFFSET ?",
+  adminOverview:withEntitlementClock(`SELECT (SELECT COUNT(*) FROM users) AS total_users,(SELECT COUNT(*) FROM users WHERE email_verified_at IS NOT NULL) AS verified_users,(SELECT COUNT(*) FROM users WHERE suspended_at IS NOT NULL) AS suspended_users,(SELECT COUNT(*) FROM sessions s JOIN users u ON u.id=s.user_id AND u.auth_version=s.auth_version WHERE s.expires_at>? AND u.suspended_at IS NULL) AS active_sessions,(SELECT COUNT(DISTINCT user_id) FROM paddle_purchases WHERE ${activeEntitlement()}) AS discovery_users,(SELECT COUNT(*) FROM paddle_purchases WHERE paddle_status<>'canceled' AND completed_at IS NULL AND access_revoked_at IS NULL) AS pending_payments,(SELECT COUNT(*) FROM account_action_requests WHERE purpose='account_delete' AND delivery_state='sent' AND consumed_at IS NULL AND expires_at>?) AS pending_deletions,(SELECT COUNT(*) FROM support_tickets WHERE status<>'resolved') AS open_support`),
+  adminUserById:withEntitlementClock(`SELECT u.id,u.name,u.email,u.created_at,u.email_verified_at,u.auth_version,u.suspended_at,p.plan_json,(SELECT COUNT(*) FROM sessions s WHERE s.user_id=u.id AND s.auth_version=u.auth_version AND s.expires_at>?) AS active_session_count,(SELECT COUNT(*) FROM ratings r WHERE r.user_id=u.id) AS rating_count,(SELECT COUNT(*) FROM paddle_purchases pp WHERE pp.user_id=u.id) AS purchase_count,(SELECT COUNT(*) FROM paddle_purchases pp WHERE pp.user_id=u.id AND ${activeEntitlement("pp")}) AS active_purchase_count,(SELECT COUNT(*) FROM paddle_purchases pp WHERE pp.user_id=u.id AND pp.paddle_status<>'canceled' AND pp.completed_at IS NULL AND pp.access_revoked_at IS NULL) AS pending_purchase_count,(SELECT MAX(pp.updated_at) FROM paddle_purchases pp WHERE pp.user_id=u.id) AS latest_purchase_at,(SELECT pp.transaction_id FROM paddle_purchases pp WHERE pp.user_id=u.id ORDER BY pp.updated_at DESC,pp.transaction_id DESC LIMIT 1) AS transaction_id,(SELECT pp.paddle_status FROM paddle_purchases pp WHERE pp.user_id=u.id ORDER BY pp.updated_at DESC,pp.transaction_id DESC LIMIT 1) AS transaction_status,(SELECT request_id FROM account_action_requests a WHERE a.user_id=u.id AND a.purpose='account_delete' AND a.delivery_state='sent' AND a.consumed_at IS NULL AND a.expires_at>? LIMIT 1) AS deletion_request_id,(SELECT expires_at FROM account_action_requests a WHERE a.user_id=u.id AND a.purpose='account_delete' AND a.delivery_state='sent' AND a.consumed_at IS NULL AND a.expires_at>? LIMIT 1) AS deletion_expires_at FROM users u LEFT JOIN plans p ON p.user_id=u.id WHERE u.id=?`),
+  adminUsers:withEntitlementClock(`SELECT u.id,u.name,u.email,u.created_at,u.email_verified_at,u.suspended_at,(SELECT COUNT(*) FROM sessions s WHERE s.user_id=u.id AND s.auth_version=u.auth_version AND s.expires_at>?) AS active_session_count,(SELECT COUNT(*) FROM paddle_purchases pp WHERE pp.user_id=u.id) AS purchase_count,(SELECT COUNT(*) FROM paddle_purchases pp WHERE pp.user_id=u.id AND ${activeEntitlement("pp")}) AS active_purchase_count,(SELECT COUNT(*) FROM paddle_purchases pp WHERE pp.user_id=u.id AND pp.paddle_status<>'canceled' AND pp.completed_at IS NULL AND pp.access_revoked_at IS NULL) AS pending_purchase_count,(SELECT MAX(pp.updated_at) FROM paddle_purchases pp WHERE pp.user_id=u.id) AS latest_purchase_at,(SELECT pp.transaction_id FROM paddle_purchases pp WHERE pp.user_id=u.id ORDER BY pp.updated_at DESC,pp.transaction_id DESC LIMIT 1) AS transaction_id,(SELECT pp.paddle_status FROM paddle_purchases pp WHERE pp.user_id=u.id ORDER BY pp.updated_at DESC,pp.transaction_id DESC LIMIT 1) AS transaction_status,(SELECT expires_at FROM account_action_requests a WHERE a.user_id=u.id AND a.purpose='account_delete' AND a.delivery_state='sent' AND a.consumed_at IS NULL AND a.expires_at>? LIMIT 1) AS deletion_expires_at FROM users u WHERE (?='' OR lower(u.name) LIKE ? ESCAPE '\\' OR lower(u.email) LIKE ? ESCAPE '\\' OR lower(u.id) LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM paddle_purchases pp WHERE pp.user_id=u.id AND lower(pp.transaction_id) LIKE ? ESCAPE '\\')) ORDER BY u.created_at DESC,u.id DESC LIMIT ? OFFSET ?`),
   adminUserCount:"SELECT COUNT(*) AS total FROM users u WHERE (?='' OR lower(u.name) LIKE ? ESCAPE '\\' OR lower(u.email) LIKE ? ESCAPE '\\' OR lower(u.id) LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM paddle_purchases pp WHERE pp.user_id=u.id AND lower(pp.transaction_id) LIKE ? ESCAPE '\\'))",
   adminPrincipal:"SELECT ap.slot,ap.user_id,ap.configured_email,ap.bound_at,u.name,u.email,u.email_verified_at,u.suspended_at,u.auth_version FROM admin_principal ap JOIN users u ON u.id=ap.user_id WHERE ap.slot='primary'",
   insertAdminPrincipal:"INSERT INTO admin_principal(slot,user_id,configured_email,bound_at) SELECT 'primary',id,?,? FROM users WHERE id=? AND email=? COLLATE NOCASE AND email_verified_at IS NOT NULL AND suspended_at IS NULL ON CONFLICT(slot) DO NOTHING RETURNING slot,user_id,configured_email,bound_at",

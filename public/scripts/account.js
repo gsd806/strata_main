@@ -16,6 +16,7 @@ const authFields={
 let navigating=false;
 let currentCsrfToken="";
 let dashboardRequest=0;
+let sessionListRequest=0;
 const WEEKDAYS=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 
 function safeNext(raw,exerciseId){
@@ -169,6 +170,7 @@ function showRequestedPanel(){
 
 function showAccess(sessionError=""){
   dashboardRequest+=1;
+  sessionListRequest+=1;
   document.body?.classList.remove("account-signed-in");
   currentCsrfToken="";
   el("accountLoading").hidden=true;
@@ -381,8 +383,70 @@ function renderDashboardUnavailable(){
   el("accountPrimaryAction").href="/planner.html";el("accountPrimaryLabel").textContent="Open My Plan";
 }
 
+function subscriptionFor(user){
+  const subscription=user?.discovery?.subscription;
+  return subscription&&typeof subscription==="object"&&subscription.id?subscription:null;
+}
+
+function grandfatheredAccess(user){
+  const discovery=user?.discovery||{},accessType=String(discovery.accessType||"");
+  return discovery.active===true&&!subscriptionFor(user)&&["lifetime","paid"].includes(accessType);
+}
+
+function billingDate(value){
+  const timestamp=Number(value),date=new Date(timestamp);
+  return Number.isFinite(timestamp)&&timestamp>0&&!Number.isNaN(date.getTime())?new Intl.DateTimeFormat(undefined,{dateStyle:"medium"}).format(date):"the date Paddle shows";
+}
+
+function accountAccessSummary(user,pending=false){
+  const discovery=user?.discovery||{},subscription=subscriptionFor(user),status=String(subscription?.status||"");
+  const trialActive=discovery.active===true&&discovery.accessType==="trial";
+  if(trialActive){
+    const expiresAt=Number(discovery.trial?.expiresAt),remaining=Math.max(0,expiresAt-Date.now());
+    return{state:"Trial",detail:remaining>=60000?`${Math.ceil(remaining/60000)} min remaining`:`${Math.ceil(remaining/1000)} sec remaining`,message:"Your free 30-minute trial ends automatically and will never convert into a paid subscription."};
+  }
+  if(subscription){
+    if(status==="paused")return{state:"Paused",detail:"Paid access inactive",message:"Your monthly subscription is paused and Strata+ paid access is inactive. Manage it in Paddle to review the available next steps."};
+    if(status==="canceled")return{state:"Canceled",detail:"No future renewals",message:"Your monthly subscription is canceled and will not renew. Your free Rankings and weekly Plan remain available."};
+    if(subscription.active!==true)return{state:"Inactive",detail:"Paid access inactive",message:"The last verified billing period or scheduled access window has ended. Open Paddle to review the subscription state."};
+    if(subscription.scheduledChange?.action==="cancel")return{state:"Canceling",detail:`Access through ${billingDate(subscription.scheduledChange.effectiveAt)}`,message:`Your $0.99 USD monthly subscription is scheduled to cancel on ${billingDate(subscription.scheduledChange.effectiveAt)}. Access remains active until then and will not renew afterward.`};
+    if(subscription.scheduledChange?.action==="pause")return{state:"Pausing",detail:`Access through ${billingDate(subscription.scheduledChange.effectiveAt)}`,message:`Your $0.99 USD monthly subscription is scheduled to pause on ${billingDate(subscription.scheduledChange.effectiveAt)}. Access remains active until then and stops when the pause takes effect.`};
+    if(subscription.pastDue===true||status==="past_due")return{state:"Past due",detail:"Update payment method",message:"Your monthly payment is past due. Strata+ remains available for now; update payment in Paddle to avoid interruption."};
+    if(subscription.active===true)return{state:"Active",detail:`$0.99/month · renews ${billingDate(subscription.currentPeriodEndsAt)}`,message:`Your $0.99 USD monthly subscription is active and renews on ${billingDate(subscription.currentPeriodEndsAt)} unless canceled.`};
+    return{state:"Inactive",detail:"Review billing status",message:"Your monthly subscription is not providing paid access. Open Paddle to review its current state."};
+  }
+  if(grandfatheredAccess(user))return{state:"Lifetime",detail:"Grandfathered · no renewal",message:"Your prior lifetime Strata+ purchase is grandfathered. It stays active without a monthly subscription or recurring charge."};
+  if(pending)return{state:"Pending",detail:"Checkout needs attention",message:"A Strata+ subscription checkout is pending. Open Pricing to finish checkout or check confirmation."};
+  return{state:"Free",detail:"Rankings and Plan included",message:"The exercise index and weekly planner are free. Strata+ is available as a $0.99 USD monthly subscription."};
+}
+
+function renderAccountBilling(user){
+  const section=el("accountBilling"),subscription=subscriptionFor(user),grandfathered=grandfatheredAccess(user);
+  section.hidden=!subscription&&!grandfathered;
+  el("accountBillingStatus").textContent="";el("accountBillingStatus").classList.remove("bad");
+  if(section.hidden)return;
+  const manage=el("accountManageSubscription"),update=el("accountUpdatePayment"),cancel=el("accountCancelSubscription");
+  manage.hidden=grandfathered;update.hidden=true;cancel.hidden=true;
+  if(grandfathered){
+    el("accountBillingTitle").textContent="LIFETIME ACCESS";el("accountBillingBadge").textContent="Grandfathered";
+    el("accountBillingDetail").textContent="Your prior lifetime purchase remains active under its original terms. It has no monthly renewal and does not need a subscription.";return;
+  }
+  const status=String(subscription.status||""),scheduled=subscription.scheduledChange;
+  el("accountBillingTitle").textContent="MONTHLY SUBSCRIPTION";
+  el("accountBillingBadge").textContent=status==="paused"?"Paused":status==="canceled"?"Canceled":subscription.active!==true?"Inactive":scheduled?.action==="cancel"?"Canceling":scheduled?.action==="pause"?"Pausing":status==="past_due"?"Past due":status.charAt(0).toUpperCase()+status.slice(1);
+  if(status==="paused")el("accountBillingDetail").textContent="Paid access is inactive while this subscription is paused. Open Paddle to review resumption or cancellation options.";
+  else if(status==="canceled")el("accountBillingDetail").textContent="This subscription is canceled, paid access is inactive, and there are no future renewals. Your free Plan remains available.";
+  else if(subscription.active!==true)el("accountBillingDetail").textContent="Paid access is inactive because the last verified billing period or scheduled access window has ended. Open Paddle to review its current state.";
+  else if(scheduled?.action==="cancel")el("accountBillingDetail").textContent=`Cancellation takes effect ${billingDate(scheduled.effectiveAt)}. Access remains available until then, with no renewal afterward.`;
+  else if(scheduled?.action==="pause")el("accountBillingDetail").textContent=`The subscription pauses ${billingDate(scheduled.effectiveAt)}. Access remains available until then and stops when the pause takes effect.`;
+  else if(status==="past_due")el("accountBillingDetail").textContent="Paddle could not collect the latest monthly payment. Update the payment method to avoid losing Strata+ access.";
+  else el("accountBillingDetail").textContent=`$0.99 USD per month. The next renewal is ${billingDate(subscription.currentPeriodEndsAt)} unless you cancel.`;
+  update.hidden=status!=="past_due";
+  cancel.hidden=status==="canceled"||scheduled?.action==="cancel";
+}
+
 function showChangedAccount(){
-  dashboardRequest+=1;currentCsrfToken="";document.body?.classList.remove("account-signed-in");
+  dashboardRequest+=1;sessionListRequest+=1;currentCsrfToken="";document.body?.classList.remove("account-signed-in");
   el("signedInCard").hidden=true;el("accountAccess").hidden=true;el("accountLoading").hidden=false;
   el("accountLoadingTitle").textContent="ACCOUNT CHANGED.";
   el("accountLoadingMessage").textContent="The signed-in account changed in another tab. Reload to open the current account without mixing private training data.";
@@ -390,6 +454,43 @@ function showChangedAccount(){
 }
 
 function accountBoundaryChanged(error){return error?.status===401||error?.code==="account-changed";}
+
+function sessionDate(value){
+  const date=new Date(Number(value));
+  return Number.isFinite(Number(value))&&!Number.isNaN(date.getTime())?new Intl.DateTimeFormat(undefined,{dateStyle:"medium",timeStyle:"short"}).format(date):"Unknown time";
+}
+
+function showAccountControlStatus(id,message,{error=false,focus=false}={}){
+  const status=el(id);status.textContent=message;status.classList.remove("bad");if(error)status.classList.add("bad");
+  if(focus)status.focus({preventScroll:false});
+}
+
+function renderAccountSessions(sessions){
+  const list=el("accountSessionList"),others=sessions.filter((session)=>session?.current!==true);
+  list.innerHTML=sessions.map((session)=>{
+    const current=session?.current===true,id=escapeHtml(session?.id||"");
+    return `<li><div><strong>${current?"This session":"Other session"}</strong><small>Signed in ${escapeHtml(sessionDate(session?.createdAt))} · Expires ${escapeHtml(sessionDate(session?.expiresAt))}</small></div>${current?'<span class="account-current-session">Current</span>':`<button type="button" data-revoke-session="${id}" aria-label="Sign out session created ${escapeHtml(sessionDate(session?.createdAt))}">Sign out</button>`}</li>`;
+  }).join("")||'<li class="account-session-loading">No active sessions were found. Refresh this page before making account changes.</li>';
+  list.setAttribute("aria-busy","false");
+  const revokeAll=el("accountRevokeOtherSessions");revokeAll.disabled=others.length===0;revokeAll.hidden=others.length===0;
+}
+
+async function loadAccountSessions(user){
+  const request=++sessionListRequest,list=el("accountSessionList");
+  list.setAttribute("aria-busy","true");list.innerHTML='<li class="account-session-loading">Checking active sessions…</li>';
+  el("accountRevokeOtherSessions").disabled=true;
+  try{
+    const result=await readJson("/api/account/sessions",{cache:"no-store"});
+    if(request!==sessionListRequest)return;
+    if(String(result.userId||"")!==String(user?.id||"")||!Array.isArray(result.sessions))throw Object.assign(new Error("The signed-in account changed."),{code:"account-changed"});
+    renderAccountSessions(result.sessions);showAccountControlStatus("accountSessionStatus","");
+  }catch(error){
+    if(request!==sessionListRequest)return;
+    if(accountBoundaryChanged(error)){showChangedAccount();return;}
+    list.setAttribute("aria-busy","false");list.innerHTML='<li class="account-session-loading">Active sessions could not be loaded. Nothing was changed.</li>';
+    showAccountControlStatus("accountSessionStatus","Could not load signed-in sessions. Refresh to try again.",{error:true});
+  }
+}
 
 async function loadAccountDashboard(user){
   const request=++dashboardRequest;
@@ -446,21 +547,15 @@ function showSignedIn(user,csrfToken=""){
   el("accountAdminAction").hidden=user?.isAdmin!==true;
   const discoveryActive=user?.discovery?.active===true;
   const discoveryPending=Number(user?.discovery?.pendingPurchaseCount||0)>0;
+  const subscription=subscriptionFor(user),access=accountAccessSummary(user,discoveryPending);
   const discoveryAction=el("accountDiscoveryAction");
-  discoveryAction.href=discoveryActive?"/discover.html":"/pricing";
-  discoveryAction.textContent=discoveryActive?"Open Strata+ studio →":discoveryPending?"Check Strata+ purchase →":"Unlock Strata+ →";
-  el("accountDiscoveryStatus").textContent=discoveryActive
-    ?"Strata+ is unlocked on this account."
-    :discoveryPending
-      ?"A Strata+ checkout is pending. Open Pricing to finish checkout or check confirmation."
-      :"The exercise index and weekly planner are free. Strata+ is available as a $5.99 USD one-time purchase.";
-  const trialActive=discoveryActive&&user?.discovery?.accessType==="trial";
-  const trialExpiresAt=Number(user?.discovery?.trial?.expiresAt);
-  const trialDays=trialActive&&Number.isFinite(trialExpiresAt)?Math.max(1,Math.ceil((trialExpiresAt-Date.now())/86400000)):0;
-  el("accountAccessState").textContent=trialActive?"Trial":discoveryActive?"Unlocked":discoveryPending?"Pending":"Free";
-  el("accountAccessDetail").textContent=trialActive
-    ?`${trialDays} ${trialDays===1?"day":"days"} remaining`
-    :discoveryActive?"One-time access confirmed":discoveryPending?"Checkout needs attention":"Rankings and Plan included";
+  const managedInactive=Boolean(subscription)&&!discoveryActive&&subscription?.status!=="canceled";
+  discoveryAction.href=discoveryActive?"/discover.html":managedInactive?"#accountBilling":"/pricing";
+  discoveryAction.textContent=discoveryActive?"Open Strata+ studio →":managedInactive?"Manage Strata+ billing →":subscription?.status==="canceled"?"Restart Strata+ →":discoveryPending?"Check Strata+ subscription →":"Unlock Strata+ →";
+  el("accountDiscoveryStatus").textContent=access.message;
+  el("accountAccessState").textContent=access.state;
+  el("accountAccessDetail").textContent=access.detail;
+  renderAccountBilling(user);
   const primaryAction=el("accountPrimaryAction");
   primaryAction.href=planCount>0?(discoveryActive?"/workout.html":"/planner.html"):discoveryActive?"/onboarding.html":"/planner.html";
   el("accountPrimaryLabel").textContent=planCount>0?(discoveryActive?"Start training":"Open your week"):"Build your week";
@@ -470,6 +565,7 @@ function showSignedIn(user,csrfToken=""){
   else showSecurityStatus("");
   el("accountPage").setAttribute("aria-busy","false");
   void loadAccountDashboard(user);
+  void loadAccountSessions(user);
 }
 
 function renderStorageState(node,state,message){
@@ -578,6 +674,81 @@ function securityError(error){
   return Number(error?.status)>=500?"Account email is temporarily unavailable. Please try again in a moment.":error?.message||"The account request could not be completed.";
 }
 
+function selfServiceError(error,action){
+  if(error?.code==="network")return "Could not reach STRATA. Check your connection and try again.";
+  if(error?.status===401)return "Your session expired. Sign in again before continuing.";
+  if(error?.status===403)return "The security check expired. Refresh this page and try again.";
+  if(error?.status===429)return `Too many ${action} requests were made. Wait a moment and try again.`;
+  return error?.message||`The ${action} request could not be completed.`;
+}
+
+async function revokeSessions(path,sessionId,button){
+  if(button.disabled)return;
+  button.disabled=true;setButtonBusy(button,true,"Signing out sessions, please wait");
+  showAccountControlStatus("accountSessionStatus","Updating active sessions…");
+  try{
+    const result=await readJson(path,{method:"POST",headers:{"Content-Type":"application/json","X-CSRF-Token":currentCsrfToken},body:JSON.stringify(sessionId?{sessionId}:{})});
+    if(!Array.isArray(result.sessions))throw Object.assign(new Error("The session response was incomplete."),{code:"invalid-response"});
+    renderAccountSessions(result.sessions);
+    const count=Math.max(0,Number(result.revoked)||0),bulk=path.endsWith("revoke-others");
+    showAccountControlStatus("accountSessionStatus",bulk?`${count} other ${count===1?"session was":"sessions were"} signed out.`:"The selected session was signed out.");
+  }catch(error){
+    if(accountBoundaryChanged(error)){showChangedAccount();return;}
+    showAccountControlStatus("accountSessionStatus",selfServiceError(error,"session"),{error:true,focus:true});
+  }finally{button.disabled=button===el("accountRevokeOtherSessions")?button.hidden:false;setButtonBusy(button,false);}
+}
+
+async function downloadAccountExport(event){
+  const button=event.currentTarget;if(button.disabled)return;
+  button.disabled=true;setButtonBusy(button,true,"Preparing your account export, please wait");
+  showAccountControlStatus("accountExportStatus","Collecting your account data…");
+  try{
+    let response;
+    try{response=await globalThis.fetch("/api/account/export",{method:"POST",credentials:"same-origin",headers:{Accept:"application/json","Content-Type":"application/json","X-CSRF-Token":currentCsrfToken},body:"{}"});}
+    catch(cause){throw Object.assign(new Error("Could not reach STRATA. Check your connection and try again."),{code:"network",cause});}
+    if(!response.ok){const data=String(response.headers?.get?.("content-type")||"").includes("json")?await response.json().catch(()=>null):null;throw Object.assign(new Error(data?.error||"The export request failed."),{status:response.status,code:data?.code});}
+    if(response.headers?.get?.("x-strata-export")!=="account-v1")throw Object.assign(new Error("The export response was incomplete."),{code:"invalid-response"});
+    const blob=await response.blob(),href=URL.createObjectURL(blob),link=document.createElement("a"),disposition=String(response.headers?.get?.("content-disposition")||"");
+    const filename=disposition.match(/filename="(strata-account-export-\d{4}-\d{2}-\d{2}\.json)"/)?.[1]||"strata-account-export-download.json";link.href=href;link.download=filename;
+    link.hidden=true;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(href),0);
+    showAccountControlStatus("accountExportStatus","Your JSON export was downloaded.");
+  }catch(error){
+    if(accountBoundaryChanged(error)){showChangedAccount();return;}
+    showAccountControlStatus("accountExportStatus",selfServiceError(error,"export"),{error:true,focus:true});
+  }finally{button.disabled=false;setButtonBusy(button,false);}
+}
+
+function safePortalUrl(value){
+  try{
+    const url=new URL(String(value||""));
+    return url.protocol==="https:"&&url.hostname==="customer-portal.paddle.com"&&url.pathname.startsWith("/cpl_")&&!url.username&&!url.password?url.href:"";
+  }catch{return "";}
+}
+
+function billingError(error){
+  if(error?.code==="network")return "Could not reach STRATA. Check your connection and try again.";
+  if(error?.code==="SUBSCRIPTION_NOT_FOUND"||error?.status===404)return "No monthly subscription was found for this account. Refresh to check the latest billing state.";
+  if(error?.status===429)return "Too many billing requests were made. Wait a moment and try again.";
+  if(error?.status===401)return "Your session expired. Sign in again before managing billing.";
+  if(error?.status===403)return "The security check expired. Refresh this page before managing billing.";
+  return error?.message||"Subscription management is temporarily unavailable. Please try again.";
+}
+
+async function openBillingPortal(kind,event){
+  const buttons=[el("accountManageSubscription"),el("accountUpdatePayment"),el("accountCancelSubscription")],button=event.currentTarget,status=el("accountBillingStatus");
+  if(button.disabled)return;
+  if(!currentCsrfToken){status.textContent="Your session needs refreshing before billing can be opened.";status.classList.add("bad");status.focus({preventScroll:false});return;}
+  buttons.forEach((control)=>{control.disabled=true;});status.classList.remove("bad");
+  status.textContent=kind==="cancel"?"Preparing Paddle’s secure cancellation page…":kind==="payment"?"Preparing Paddle’s secure payment page…":"Preparing Paddle’s secure subscription portal…";
+  try{
+    const result=await readJson("/api/billing/portal",{method:"POST",headers:{"Content-Type":"application/json","X-CSRF-Token":currentCsrfToken},body:"{}"});
+    const field=kind==="cancel"?"cancelUrl":kind==="payment"?"updatePaymentMethodUrl":"overviewUrl",destination=safePortalUrl(result[field]);
+    if(!destination)throw Object.assign(new Error("Paddle returned an invalid subscription-management link."),{code:"invalid-response"});
+    status.textContent="Opening Paddle’s secure portal…";location.assign(destination);
+  }catch(error){status.textContent=billingError(error);status.classList.add("bad");status.focus({preventScroll:false});}
+  finally{buttons.forEach((control)=>{control.disabled=false;});}
+}
+
 function showSecurityStatus(message,{error=false}={}){
   const status=el("accountSecurityStatus");
   status.textContent=message;
@@ -595,7 +766,7 @@ async function requestSecurityEmail(kind,event){
     const path=kind==="delete"?"/api/account/delete/request":"/api/account/password-reset/request";
     const result=await readJson(path,{method:"POST",headers:{"Content-Type":"application/json","X-CSRF-Token":currentCsrfToken},body:"{}"});
     showSecurityStatus(kind==="delete"
-      ?`A deletion confirmation link was sent to ${result.maskedEmail||"your registered email"}. Nothing is deleted until you open it and type DELETE.`
+      ?`A deletion confirmation link was sent to ${result.maskedEmail||"your registered email"}. Nothing is deleted until you open it and type DELETE. Deletion does not cancel a Paddle subscription or refund a charge.`
       :`A password-reset link was sent to ${result.maskedEmail||"your registered email"}. The link expires after 30 minutes.`);
     if(kind==="delete")el("accountDeleteCancel").hidden=false;
   }catch(error){
@@ -605,6 +776,15 @@ async function requestSecurityEmail(kind,event){
 
 el("accountPasswordReset").addEventListener("click",(event)=>{void requestSecurityEmail("password",event);});
 el("accountDeleteRequest").addEventListener("click",(event)=>{void requestSecurityEmail("delete",event);});
+el("accountManageSubscription").addEventListener("click",(event)=>{void openBillingPortal("overview",event);});
+el("accountUpdatePayment").addEventListener("click",(event)=>{void openBillingPortal("payment",event);});
+el("accountCancelSubscription").addEventListener("click",(event)=>{void openBillingPortal("cancel",event);});
+el("accountSessionList").addEventListener("click",(event)=>{
+  const button=event.target.closest?.("[data-revoke-session]"),sessionId=button?.dataset?.revokeSession;
+  if(button&&sessionId)void revokeSessions("/api/account/sessions/revoke",sessionId,button);
+});
+el("accountRevokeOtherSessions").addEventListener("click",(event)=>{void revokeSessions("/api/account/sessions/revoke-others","",event.currentTarget);});
+el("accountExportData").addEventListener("click",(event)=>{void downloadAccountExport(event);});
 el("accountDeleteCancel").addEventListener("click",async(event)=>{
   const button=event.currentTarget;
   button.disabled=true;

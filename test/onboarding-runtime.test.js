@@ -2,6 +2,7 @@
 
 const test=require("node:test"),assert=require("node:assert/strict"),fs=require("node:fs"),vm=require("node:vm");
 const {join}=require("node:path");
+const Activation=require("../public/scripts/activation-core");
 const ROOT=join(__dirname,".."),GUEST_KEY="strata_guest_plan_v1";
 const DAYS=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 const emptyWeek=()=>({version:1,restDay:"Sunday",days:Object.fromEntries(DAYS.map(day=>[day,[]]))});
@@ -10,7 +11,7 @@ previewWeek.days.Monday=[{instanceId:"preview-one",exerciseId:"bench-press",sets
 const savedPreferences=()=>({version:1,goal:"strength",level:"Intermediate",days:4,equipment:["Barbell"],preferences:["compound"],limitations:["no-floor"]});
 const previewPreferences=()=>({version:1,goal:"strength",level:"Intermediate",days:1,equipment:["Barbell"],preferences:["compound"],limitations:["no-floor"]});
 
-async function setup({guest=false,switchedAccount=false,saveStatus=200,accountFailure=false,noRandomUUID=false,plus=true,fresh=false}={}){
+async function setup({guest=false,switchedAccount=false,saveStatus=200,accountFailure=false,noRandomUUID=false,plus=true,fresh=false,activation=false}={}){
   const html=fs.readFileSync(join(ROOT,"public/pages/onboarding.html"),"utf8");
   const elements=new Map([...html.matchAll(/\bid="([^"]+)"/g)].map(match=>[match[1],{
     id:match[1],value:"",disabled:true,hidden:false,checked:false,textContent:"",innerHTML:"",target:"",rel:"",focused:false,listeners:{},options:[],dataset:{},attributes:{},
@@ -45,6 +46,10 @@ async function setup({guest=false,switchedAccount=false,saveStatus=200,accountFa
       throw new Error(`Unexpected request ${path}`);
     }
   };
+  if(activation){
+    context.StrataActivation=Activation;
+    Activation.writeIntent(context.localStorage,{source:"homepage",profile:{goal:"hypertrophy",level:"Advanced",minutes:20,equipment:["Barbell"],availability:["Tuesday","Thursday"],preferences:["compound"],limitations:["no-floor"],focusGroup:"back"},plan:previewWeek},123);
+  }
   vm.runInNewContext(fs.readFileSync(join(ROOT,"public/scripts/onboarding.js"),"utf8"),context,{filename:"onboarding.js"});
   for(let i=0;i<6;i++)await new Promise(resolve=>setImmediate(resolve));
   const generate=()=>elements.get("setupForm").listeners.submit({preventDefault(){}});
@@ -136,6 +141,18 @@ test("fresh Strata+ setup starts with a one-choice quick path and honest starter
   assert.match(fixture.elements.get("dayChoices").innerHTML,/value="Wednesday" checked/);
   assert.match(fixture.elements.get("dayChoices").innerHTML,/value="Friday" checked/);
   assert.doesNotMatch(fixture.elements.get("equipmentChoices").innerHTML,/checked/);
+});
+
+test("fresh Strata+ setup restores the homepage profile without saving its week",async()=>{
+  const fixture=await setup({fresh:true,activation:true});
+  assert.equal(fixture.elements.get("goal").value,"hypertrophy");
+  assert.equal(fixture.elements.get("level").value,"Advanced");
+  assert.equal(fixture.elements.get("minutes").value,"20");
+  assert.match(fixture.elements.get("equipmentChoices").innerHTML,/value="Barbell" checked/);
+  assert.match(fixture.elements.get("dayChoices").innerHTML,/value="Tuesday" checked/);
+  assert.match(fixture.elements.get("dayChoices").innerHTML,/value="Thursday" checked/);
+  assert.match(fixture.elements.get("accountMode").textContent,/homepage choices survived signup/i);
+  assert.equal(fixture.state.requests.some(request=>request.options.method==="PUT"),false,"restoring a preview cannot write to the account");
 });
 
 test("onboarding starts from the account profile and describes an existing week as a replacement",async()=>{

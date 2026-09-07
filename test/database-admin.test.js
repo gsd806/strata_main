@@ -483,6 +483,14 @@ test("admin overview, user search, detail, and support queries are accurate and 
     await store.completePurchase("txn-paid-user",{customerId:"ctm-paid",completedAt:now+5,updatedAt:now+5});
     assert.ok(await store.suspendUser(paid.id,now+6));
 
+    await store.insertPendingPurchase(pendingPurchase("txn-canceled-subscription",slash.id,now+4));
+    await store.completePurchase("txn-canceled-subscription",{customerId:"ctm-canceled",subscriptionId:"sub_canceled",completedAt:now+5,updatedAt:now+5});
+    await store.createPaddleSubscription({
+      subscriptionId:"sub_canceled",userId:slash.id,transactionId:"txn-canceled-subscription",customerId:"ctm-canceled",
+      status:"canceled",priceId:PRICE_ID,productId:PRODUCT_ID,scheduledChangeAction:null,scheduledChangeAt:null,
+      currentPeriodEndsAt:null,eventOccurredAt:now+6,createdAt:now+6,updatedAt:now+6
+    });
+
     const firstTicket=await store.insertSupportTicket(supportTicket("ticket-new",percent.id,now+7));
     const resolvedTicket=await store.insertSupportTicket(supportTicket("ticket-resolved",null,now+8));
     await store.updateSupportTicket(resolvedTicket.id,{
@@ -502,6 +510,7 @@ test("admin overview, user search, detail, and support queries are accurate and 
     assert.equal(percentList.active_purchase_count,1);
     assert.equal(percentList.pending_purchase_count,1);
     assert.ok(percentList.deletion_expires_at>now);
+    assert.equal(all.users.find((entry)=>entry.id===slash.id).active_purchase_count,0,"admin access counts must exclude terminal subscriptions");
 
     assert.deepEqual((await store.adminUsers("%",10,0,now+10)).users.map((entry)=>entry.id),[percent.id]);
     assert.deepEqual((await store.adminUsers("_",10,0,now+10)).users.map((entry)=>entry.id),[underscore.id,percent.id]);
@@ -519,6 +528,7 @@ test("admin overview, user search, detail, and support queries are accurate and 
     assert.deepEqual(JSON.parse(detail.plan_json),{days:["push","pull"]});
     assert.equal(detail.deletion_request_id,"query-delete");
     assert.equal(await store.adminUserById("missing-user",now+10),null);
+    assert.equal((await store.adminUserById(slash.id,now+10)).active_purchase_count,0);
 
     const forbidden=/password_hash|password_salt|csrf_token|token_hash|code_digest|browser_token|secret/i;
     assert.doesNotMatch(JSON.stringify(all),forbidden);

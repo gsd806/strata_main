@@ -13,13 +13,11 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icons/strata-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/experience.css?v=7.4.1" />
-    <link rel="stylesheet" href="discover.css?v=7.4.1" />
-    <link rel="stylesheet" href="/product-signals.css?v=7.4.1" />
-    <script src="/motion.js?v=7.4.1"></script>
+    <link rel="stylesheet" href="/fonts.css?v=7.5.0" />
+    <link rel="stylesheet" href="/experience.css?v=7.5.0" />
+    <link rel="stylesheet" href="discover.css?v=7.5.0" />
+    <link rel="stylesheet" href="/product-signals.css?v=7.5.0" />
+    <script src="/motion.js?v=7.5.0"></script>
   </head>
   <body class="plus-studio">
     <a class="skip-link" href="#todayWorkspace">Skip to today’s training</a>
@@ -89,8 +87,38 @@
           <div class="workspace-heading"><div><p class="kicker">Plan · make the week workable</p><h2 id="planWorkspaceTitle" tabindex="-1">YOUR WEEK. <em>YOUR TRAINING BLOCK.</em></h2></div><p>Keep day-to-day planning simple, then add structure only when you want it. Strata+ proposes changes; you decide what is saved.</p></div>
           <div class="plan-overview-grid">
             <section class="plan-summary-card" aria-labelledby="planSummaryTitle"><span class="workspace-card-number" aria-hidden="true">01</span><p class="kicker">Current week</p><h3 id="planSummaryTitle">WEEKLY PLAN</h3><p id="planWorkspaceSummary" role="status" aria-live="polite">Loading your saved training days…</p><dl><div><dt>Training days</dt><dd id="planWorkspaceDays">—</dd></div><div><dt>Movements</dt><dd id="planWorkspaceMovements">—</dd></div><div><dt>Working sets</dt><dd id="planWorkspaceSets">—</dd></div></dl><a class="button button-accent" href="/planner.html">Edit weekly plan <span aria-hidden="true">→</span></a></section>
-            <section class="training-block-card" aria-labelledby="trainingBlockTitle"><span class="workspace-card-number" aria-hidden="true">02</span><p class="kicker">Optional structure</p><h3 id="trainingBlockTitle">4–8 WEEK BLOCK</h3><p id="trainingBlockDescription">Set a clear length and optionally mark the final week for a lighter workload review. This does not rewrite your weekly plan.</p><form id="trainingBlockForm"><label for="trainingBlockWeeks">Block length<select id="trainingBlockWeeks" name="weeks"><option value="4">4 weeks</option><option value="5">5 weeks</option><option value="6" selected>6 weeks</option><option value="7">7 weeks</option><option value="8">8 weeks</option></select></label><label for="trainingBlockStartDate">Start date<input id="trainingBlockStartDate" name="startDate" type="date" required /></label><label for="trainingBlockCurrentWeek">Current week<select id="trainingBlockCurrentWeek" name="currentWeek"><option value="1">Week 1</option></select></label><label for="trainingBlockState">Status<select id="trainingBlockState" name="status"><option value="active">Active</option><option value="completed">Completed</option></select></label><label class="training-block-check" for="trainingBlockLighterWeek"><input id="trainingBlockLighterWeek" name="lighterWeek" type="checkbox" checked /><span><strong>Mark the final week as lighter</strong><small>A reminder to review a lower workload; your weekly Plan is not edited.</small></span></label><div class="training-block-actions"><button class="button button-dark" id="trainingBlockSave" type="submit">Save training block</button><span id="trainingBlockStatus" role="status" aria-live="polite">Review the suggested start date. Nothing changes until you save.</span></div></form></section>
+            <section class="training-block-card" aria-labelledby="trainingBlockTitle">
+              <span class="workspace-card-number" aria-hidden="true">02</span><p class="kicker">Optional structure</p><h3 id="trainingBlockTitle">4–8 WEEK BLOCK</h3>
+              <p id="trainingBlockDescription">Choose a start date and length. The current week is calculated from that date; your weekly Plan changes only in Plan.</p>
+              <form id="trainingBlockForm">
+                <label for="trainingBlockWeeks">Block length<select id="trainingBlockWeeks" name="weeks"><option value="4">4 weeks</option><option value="5">5 weeks</option><option value="6" selected>6 weeks</option><option value="7">7 weeks</option><option value="8">8 weeks</option></select></label>
+                <label for="trainingBlockStartDate">Start date<input id="trainingBlockStartDate" name="startDate" type="date" required /></label>
+                <label for="trainingBlockCurrentWeek">Current week <small id="trainingBlockWeekHelp">Calculated from the start date</small><select id="trainingBlockCurrentWeek" name="currentWeek" aria-describedby="trainingBlockWeekHelp" disabled><option value="1">Week 1</option></select></label>
+                <label for="trainingBlockState">Status <small>Finish from the reviewed actions below</small><select id="trainingBlockState" name="status" disabled><option value="active">Active</option><option value="completed">Completed</option></select></label>
+                <label for="trainingBlockLighterWeek">Lighter-week reminder<select id="trainingBlockLighterWeek" name="lighterWeek"><option value="">No lighter week</option></select><small>This is a reminder only. It never changes sets in your weekly Plan.</small></label>
+                <div class="training-block-actions"><button class="button button-dark" id="trainingBlockSave" type="submit">Save training block</button><span id="trainingBlockStatus" role="status" aria-live="polite">Review the suggested start date. Nothing changes until you save.</span></div>
+              </form>
+            </section>
           </div>
+          <section class="training-block-review" id="trainingBlockReview" aria-labelledby="trainingBlockReviewTitle" hidden>
+            <header class="training-block-review-head"><div><p class="kicker" id="trainingBlockReviewRange">Current block week</p><h3 id="trainingBlockReviewTitle">WEEKLY REVIEW</h3></div><span id="trainingBlockReviewPhase">Active</span></header>
+            <div class="training-block-review-metrics" aria-label="Current training-block week">
+              <div><span>Workouts</span><strong id="trainingBlockWorkoutCount">—</strong><small>Completed / planned</small></div>
+              <div><span>Working sets</span><strong id="trainingBlockSetCount">—</strong><small>Logged / planned</small></div>
+              <div><span>Block position</span><strong id="trainingBlockWeekCount">—</strong><small>Calculated from start date</small></div>
+            </div>
+            <div class="training-block-review-grid">
+              <section aria-labelledby="trainingBlockMusclesTitle"><p class="kicker">Actual plan and logs</p><h4 id="trainingBlockMusclesTitle">SETS BY MUSCLE</h4><div class="training-block-muscles" id="trainingBlockMuscles"></div></section>
+              <section aria-labelledby="trainingBlockEvidenceTitle"><p class="kicker">Comparable evidence only</p><h4 id="trainingBlockEvidenceTitle">THIS WEEK’S EVIDENCE</h4><div class="training-block-evidence" id="trainingBlockEvidence"></div><div class="training-block-signals" id="trainingBlockSignals" hidden></div><p class="training-block-signal-note" id="trainingBlockSignalNote">Skipped and replaced counts appear only when a saved workout explicitly records them.</p></section>
+            </div>
+            <div class="training-block-next"><span>One next decision</span><strong id="trainingBlockNextDecision">Review the loaded week before choosing an action.</strong></div>
+            <div class="training-block-review-actions" aria-label="Reviewed training-block actions">
+              <button class="small-button" id="trainingBlockCarry" data-training-block-action="carry" type="button">Carry Plan forward</button>
+              <button class="small-button" id="trainingBlockLighter" data-training-block-action="lighter" type="button">Schedule lighter week</button>
+              <button class="button button-dark" id="trainingBlockFinish" data-training-block-action="finish" type="button">Finish block</button>
+            </div>
+            <p id="trainingBlockReviewStatus" role="status" aria-live="polite">Nothing changes until you review and confirm an action.</p>
+          </section>
           <div class="context-tools"><div><p class="kicker">Only when you need them</p><h3>MORE PLANNING TOOLS</h3></div><nav aria-label="Additional planning tools"><a href="#sessionBuilder" data-feature-target="session"><span>Session builder</span><small>Handle a change in time, focus, or equipment.</small><b aria-hidden="true">→</b></a><a href="#monthlyPlan" data-feature-target="monthly"><span>Dated 31-day schedule</span><small>Export a calendar-style month when dates matter.</small><b aria-hidden="true">→</b></a></nav></div>
         </div>
       </section>
@@ -317,7 +345,7 @@
 
     </main>
 
-    <footer class="build-footer">STRATA · Build 7.4.1 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
+    <footer class="build-footer">STRATA · Build 7.5.0 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
 
     <aside class="compare-tray" id="compareTray" hidden aria-label="Exercise comparison tray">
       <div><span>EXERCISE BATTLE</span><p id="compareNames">Choose 2–4 exercises</p></div>
@@ -337,12 +365,24 @@
         <div class="community-confirm-actions"><button class="small-button" id="communityApplyCancel" data-close-dialog="communityApplyDialog" type="button">Keep my current plan</button><button class="button button-dark" id="communityApplyConfirm" type="button">Replace with this plan <span aria-hidden="true">→</span></button></div>
       </div>
     </dialog>
+    <dialog class="community-apply-dialog training-block-action-dialog" id="trainingBlockActionDialog" aria-labelledby="trainingBlockActionTitle" aria-describedby="trainingBlockActionDescription trainingBlockActionWarning">
+      <div class="community-confirm-head"><p class="kicker">Review block action</p><button class="icon-button" data-close-dialog="trainingBlockActionDialog" type="button" aria-label="Close without changing the training block">×</button></div>
+      <div class="community-confirm-body">
+        <span class="community-confirm-mark" aria-hidden="true">?</span>
+        <h2 id="trainingBlockActionTitle">REVIEW THIS ACTION</h2>
+        <p id="trainingBlockActionDescription">Choose an action from the current training-block review.</p>
+        <p class="community-confirm-warning" id="trainingBlockActionWarning"><strong>Your weekly Plan will not change.</strong> Nothing is saved until you confirm.</p>
+        <p class="community-confirm-error" id="trainingBlockActionError" role="alert" hidden></p>
+        <div class="community-confirm-actions"><button class="small-button" id="trainingBlockActionCancel" data-close-dialog="trainingBlockActionDialog" type="button">Keep reviewing</button><button class="button button-dark" id="trainingBlockActionConfirm" type="button">Confirm action</button></div>
+      </div>
+    </dialog>
     <noscript><div class="no-script-note" role="status"><strong>Strata+ needs JavaScript for personalized tools.</strong> The page content remains available, but saving, filtering, comparing, and plan building require JavaScript.</div></noscript>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=7.4.1"></script>
-    <script src="/product-signals.js?v=7.4.1"></script>
-    <script src="discovery-core.js?v=7.4.1"></script>
-    <script src="monthly-plan-core.js?v=7.4.1"></script>
-    <script src="discover.js?v=7.4.1"></script>
+    <script src="/pwa.js?v=7.5.0"></script>
+    <script src="/product-signals.js?v=7.5.0"></script>
+    <script src="discovery-core.js?v=7.5.0"></script>
+    <script src="monthly-plan-core.js?v=7.5.0"></script>
+    <script src="training-block-core.js?v=7.5.0"></script>
+    <script src="discover.js?v=7.5.0"></script>
   </body>
 </html>

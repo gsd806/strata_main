@@ -2,7 +2,7 @@
 
 (() => {
   const EXPECTED_PRODUCT_ID="pro_01m1ky8j916ybyacs836dxbz8x";
-  const EXPECTED_PRICE_ID="pri_01m1kyc2zd313d7a3ssmg02424";
+  const RETIRED_ONE_TIME_PRICE_ID="pri_01m1kyc2zd313d7a3ssmg02424";
   const el=(id)=>document.getElementById(id);
   const panel=el("purchasePanel");
   const statusNode=el("purchaseStatus");
@@ -11,6 +11,7 @@
   const trialButton=el("trialDiscovery");
   const buyButton=el("buyDiscovery");
   const openLink=el("openDiscovery");
+  const manageLink=el("manageSubscription");
   const checkButton=el("checkAccess");
   const pageReason=new URLSearchParams(location.search).get("reason");
   const trialRequested=new URLSearchParams(location.search).get("trial")==="1";
@@ -42,6 +43,24 @@
     return user?.discovery?.active===true;
   }
 
+  function subscriptionFor(user){
+    const subscription=user?.discovery?.subscription;
+    return subscription&&typeof subscription==="object"&&subscription.id?subscription:null;
+  }
+
+  function paidAccessType(user){
+    return ["subscription","lifetime","paid"].includes(String(user?.discovery?.accessType||""));
+  }
+
+  function paidAccessReady(user){
+    return subscriptionFor(user)?.active===true||paidAccessType(user);
+  }
+
+  function billingDate(value){
+    const timestamp=Number(value),date=new Date(timestamp);
+    return Number.isFinite(timestamp)&&timestamp>0&&!Number.isNaN(date.getTime())?date.toLocaleDateString([],{dateStyle:"medium"}):"the date Paddle shows";
+  }
+
   async function requestJson(path,options={}){
     let response;
     try{
@@ -68,7 +87,11 @@
       environment:String(config.environment||config.mode||"live").toLowerCase(),
       clientToken:String(config.clientToken||config.client_token||config.token||""),
       productId:String(config.productId||config.product_id||config.product||""),
-      priceId:String(config.priceId||config.price_id||config.price||"")
+      priceId:String(config.priceId||config.price_id||(typeof config.price==="string"?config.price:"")||""),
+      price:{
+        amount:String(config.price?.amount||""),currency:String(config.price?.currency||"").toUpperCase(),
+        interval:String(config.price?.interval||"").toLowerCase(),frequency:Number(config.price?.frequency)
+      }
     };
   }
 
@@ -78,11 +101,12 @@
     if(!["live","production","sandbox"].includes(config.environment))throw new Error("Checkout has an unsupported Paddle environment.");
     if(!config.clientToken.startsWith(sandbox?"test_":"live_"))throw new Error("Checkout credentials do not match the Paddle environment.");
     if(sandbox){
-      if(!/^pro_[a-z0-9]{20,}$/.test(config.productId)||!/^pri_[a-z0-9]{20,}$/.test(config.priceId)||config.productId===EXPECTED_PRODUCT_ID||config.priceId===EXPECTED_PRICE_ID)throw new Error("Sandbox checkout requires its own test product and price.");
+      if(!/^pro_[a-z0-9]{20,}$/.test(config.productId)||!/^pri_[a-z0-9]{20,}$/.test(config.priceId)||config.productId===EXPECTED_PRODUCT_ID||config.priceId===RETIRED_ONE_TIME_PRICE_ID)throw new Error("Sandbox checkout requires its own recurring test product and price.");
     }else{
       if(config.productId!==EXPECTED_PRODUCT_ID)throw new Error("The configured Strata+ product does not match this release.");
-      if(config.priceId!==EXPECTED_PRICE_ID)throw new Error("The configured Strata+ price does not match $5.99 live access.");
+      if(!/^pri_[a-z0-9]{20,}$/.test(config.priceId)||config.priceId===RETIRED_ONE_TIME_PRICE_ID)throw new Error("The configured Strata+ price is not the current recurring price.");
     }
+    if(config.price.amount!=="0.99"||config.price.currency!=="USD"||config.price.interval!=="month"||config.price.frequency!==1)throw new Error("Checkout pricing does not match $0.99 USD per month.");
   }
 
   function initializePaddle(){
@@ -95,8 +119,8 @@
     }
     globalThis.Paddle.Initialize({
       token:state.config.clientToken,
-      // STRATA does not know a Paddle customer ID before a first one-time
-      // purchase. An empty object is Paddle's documented safe Retain value;
+      // STRATA does not know a Paddle customer ID before a first subscription.
+      // An empty object is Paddle's documented safe Retain value;
       // never substitute an internal user ID or email here.
       pwCustomer:{},
       eventCallback:(event)=>{void handleCheckoutEvent(event);}
@@ -108,58 +132,75 @@
     const signedIn=Boolean(state.user?.id);
     const active=discoveryIsActive(state.user);
     const trial=state.user?.discovery?.trial;
-    const paid=state.user?.discovery?.accessType==="paid";
-    const trialEligible=signedIn&&!active&&trial?.eligible===true;
+    const subscription=subscriptionFor(state.user),subscriptionStatus=String(subscription?.status||"");
+    const paid=paidAccessType(state.user),trialAccess=active&&state.user?.discovery?.accessType==="trial";
+    const grandfathered=active&&!subscription&&["lifetime","paid"].includes(String(state.user?.discovery?.accessType||""));
+    const trialEligible=signedIn&&!active&&!subscription&&trial?.eligible===true;
     const online=navigator.onLine!==false;
     const checkoutReady=Boolean(state.config&&!state.configError&&state.paddleReady&&online);
+    const paused=subscriptionStatus==="paused",canceled=subscriptionStatus==="canceled";
+    const canSubscribe=signedIn&&(!active||trialAccess)&&!paused;
 
     signupLink.hidden=signedIn;
     loginLink.hidden=signedIn;
-    buyButton.hidden=!signedIn||active;
+    buyButton.hidden=!canSubscribe;
     trialButton.hidden=!trialEligible;
     openLink.hidden=!signedIn||!active;
-    checkButton.hidden=!signedIn||active||!state.awaitingAccess;
+    manageLink.hidden=!signedIn||!subscription;
+    checkButton.hidden=!signedIn||paidAccessReady(state.user)||!state.awaitingAccess;
     buyButton.disabled=state.busy||state.awaitingAccess||state.checkoutOpen||!checkoutReady;
     trialButton.disabled=state.busy||navigator.onLine===false;
     checkButton.disabled=state.busy;
     buyButton.classList.toggle("button-dark",!trialEligible);
     buyButton.classList.toggle("button-light",trialEligible);
-    buyButton.innerHTML=trialEligible?'Skip trial — buy now · $5.99 USD <span aria-hidden="true">→</span>':'Buy Strata+ · $5.99 USD <span aria-hidden="true">→</span>';
+    buyButton.innerHTML=trialAccess?'Subscribe now · $0.99 USD / month <span aria-hidden="true">→</span>':canceled?'Restart Strata+ · $0.99 USD / month <span aria-hidden="true">→</span>':trialEligible?'Skip trial — subscribe · $0.99 USD / month <span aria-hidden="true">→</span>':'Subscribe · $0.99 USD / month <span aria-hidden="true">→</span>';
     panel.setAttribute("aria-busy",String(state.busy||state.awaitingAccess));
 
     if(state.busy&&state.awaitingAccess){setStatus("Your checkout completed. STRATA is securely confirming access…","warn");return;}
     if(state.busy){setStatus("Checking your account and secure checkout…");return;}
+    if(state.awaitingAccess){setStatus("Your subscription checkout completed. Access is still being confirmed; check again before opening another checkout.","warn");return;}
     if(active){
-      if(trial?.active&&!paid){
+      if(trial?.active&&!paid&&!subscription){
         const expiry=new Date(trial.expiresAt).toLocaleString([], {dateStyle:"medium",timeStyle:"short"});
-        setStatus(`Your Strata+ trial is active until ${expiry}. No card was charged and it will not renew automatically.`,"good");
-      }else setStatus("Strata+ is unlocked on this account with no recurring subscription.","good");
+        setStatus(`Your free 30-minute Strata+ trial is active until ${expiry}. No card was charged, it will end automatically, and subscribing still requires your explicit approval.`,"good");
+      }else if(grandfathered){
+        setStatus("Your prior lifetime Strata+ purchase is grandfathered. It stays active with no monthly renewal or recurring charge.","good");
+      }else if(subscription?.scheduledChange?.action==="cancel"){
+        setStatus(`Your monthly subscription remains active until ${billingDate(subscription.scheduledChange.effectiveAt)}, when its cancellation takes effect. It will not renew after that date.`,"warn");
+      }else if(subscription?.scheduledChange?.action==="pause"){
+        setStatus(`Your monthly subscription remains active until ${billingDate(subscription.scheduledChange.effectiveAt)}, when its scheduled pause takes effect and paid access stops.`,"warn");
+      }else if(subscription?.pastDue||subscriptionStatus==="past_due"){
+        setStatus("Your monthly subscription is past due. Strata+ remains available for now; update your payment method from Account to avoid interruption.","warn");
+      }else if(subscription){
+        setStatus(`Your $0.99 USD monthly subscription is active and renews on ${billingDate(subscription.currentPeriodEndsAt)} unless canceled.`,"good");
+      }else setStatus("Strata+ access is active on this account.","good");
       return;
     }
     if(!signedIn){
       const message=trialRequested
-        ? "Sign in or create an account to start your one-time 10-day Strata+ trial. No card is required."
+        ? "Sign in or create an account to start your one free 30-minute Strata+ trial. No card is required."
         : pageReason==="access"||pageReason==="discovery-required"
-          ? "Sign in or create an account, then start a trial or purchase Strata+ to continue."
-          : "Create an account or sign in before starting a trial or purchasing, so access follows you across devices.";
+          ? "Sign in or create an account, then start the free trial or explicitly subscribe for $0.99 USD per month to continue."
+          : "Create an account or sign in before starting the trial or subscribing, so access follows you across devices.";
       setStatus(message);
       return;
     }
+    if(paused){setStatus("Your monthly subscription is paused and paid access is inactive. Open Account to manage it in Paddle.","warn");return;}
+    if(canceled){setStatus("Your previous monthly subscription is canceled and will not renew. You can explicitly start a new subscription whenever you choose.","warn");return;}
     if(!online){setStatus("You are offline. Reconnect before starting a trial or opening secure checkout.","warn");return;}
-    if(trial?.eligible){setStatus("Your account is eligible for one free 10-day Strata+ trial. No card required and no automatic charge.");return;}
+    if(trial?.eligible){setStatus("Your account is eligible for one free 30-minute Strata+ trial. No card required and no automatic charge.");return;}
     if(state.configError){setStatus(state.configError,"error");return;}
     if(state.actionError){setStatus(state.actionError,"error");return;}
-    if(state.awaitingAccess){setStatus("Your checkout completed. STRATA is securely confirming access…","warn");return;}
     if(state.checkoutOpen){setStatus("Secure checkout is open. Complete it with Paddle to unlock Strata+.");return;}
     if(pageReason==="access-revoked"){
-      setStatus("Strata+ access is no longer active, usually because its purchase was refunded or reversed. You may purchase again or contact STRATA if this is unexpected.","warn");
+      setStatus("Strata+ access is no longer active, usually because a subscription ended or a charge was refunded or reversed. You may subscribe again or contact STRATA if this is unexpected.","warn");
       return;
     }
     if(pageReason==="access"||pageReason==="discovery-required"){
-      setStatus("Strata+ requires a $5.99 USD one-time purchase on this account.");
+      setStatus("Strata+ is $0.99 USD per month and renews monthly until canceled.");
       return;
     }
-    if(trial&&trial.eligible===false) setStatus("This account has already used its free trial. One-time Strata+ access is available for $5.99 USD.");
+    if(trial&&trial.eligible===false) setStatus("This account has already used its free trial. Subscribe for $0.99 USD per month; it renews monthly until canceled.");
     else setStatus("Signed in and ready for secure Paddle checkout.");
   }
 
@@ -172,7 +213,7 @@
       const result=await requestJson("/api/discovery/trial",{method:"POST",headers:{"X-CSRF-Token":state.csrfToken},body:"{}"});
       state.user=result.user||await readAccount();
       renderPurchaseState();
-      setStatus("Your 10-day Strata+ trial has started. No card was charged and it will end automatically.","good",{focus:true});
+      setStatus("Your free 30-minute Strata+ trial has started. No card was charged and it will end automatically.","good",{focus:true});
       signal("trial_started");
     }catch(error){
       if(error.status===401){location.assign("/account.html?mode=login&next=pricing");return;}
@@ -227,7 +268,8 @@
   async function openCheckout(){
     if(state.busy||state.awaitingAccess)return;
     if(!state.user?.id){location.assign("/account.html?mode=signup&next=pricing");return;}
-    if(discoveryIsActive(state.user)){renderPurchaseState();return;}
+    const subscription=subscriptionFor(state.user),trialAccess=state.user?.discovery?.accessType==="trial";
+    if((discoveryIsActive(state.user)&&!trialAccess)||subscription?.status==="paused"){renderPurchaseState();return;}
     if(!state.csrfToken){
       setStatus("Your session needs to be refreshed before checkout. Reload this page and try again.","error",{focus:true});
       return;
@@ -285,7 +327,7 @@
     for(let attempt=0;attempt<12;attempt+=1){
       try{
         await readAccount();
-        if(discoveryIsActive(state.user))return true;
+        if(paidAccessReady(state.user))return true;
       }catch{
         // A temporary read failure should not turn a completed checkout into a failure.
       }
@@ -299,10 +341,10 @@
     renderPurchaseState();
     try{
       await readAccount();
-      if(discoveryIsActive(state.user)){
+      if(paidAccessReady(state.user)){
         state.awaitingAccess=false;
-        setStatus("Strata+ is unlocked on this account.","good",{focus});
-        if(state.user?.discovery?.accessType==="paid")signal("upgrade_activated");
+        setStatus(subscriptionFor(state.user)?"Your monthly Strata+ subscription is confirmed.":"Strata+ is unlocked on this account.","good",{focus});
+        signal("upgrade_activated");
       }else{
         state.awaitingAccess=true;
         setStatus("Access is still being confirmed. Wait a moment, then check again. You will not be charged twice.","warn",{focus});
@@ -346,7 +388,7 @@
     state.busy=false;
     state.awaitingAccess=!unlocked;
     renderPurchaseState();
-    if(unlocked){setStatus("Purchase confirmed. Strata+ is now unlocked on this account.","good",{focus:true});signal("upgrade_activated");}
+    if(unlocked){setStatus("Subscription confirmed. Strata+ is now unlocked on this account.","good",{focus:true});signal("upgrade_activated");}
     else setStatus("Paddle completed the checkout, but access is still processing. Wait a moment, then choose Check access. Do not purchase again.","warn",{focus:true});
   }
 

@@ -10,6 +10,14 @@ test("workouts preserve explicit zero load, canonicalize text, and ignore server
   const workout=sanitizeWorkout(value,NOW);
   assert.equal(workout.title,"Strength");assert.equal(workout.revision,undefined);assert.equal(workout.updatedAt,undefined);
   assert.equal(workout.entries[0].sets[0].weight,0);
+  assert.equal(workout.entries[0].note,"");assert.equal(workout.entries[0].effortType,"none");assert.equal(workout.entries[0].sets[0].effort,null);
+});
+
+test("workouts preserve bounded notes, optional effort, grouping and replacement provenance",()=>{
+  const value=workoutFixture();const entry=value.entries[0];
+  entry.planInstanceId="plan-entry-1";entry.note="Bench notch 3\nKeep elbows controlled";entry.effortType="rpe";entry.supersetGroup="superset-1";entry.replacedFromExerciseId="incline-dumbbell-press";entry.sets[0].effort=8.5;
+  const workout=sanitizeWorkout(value,NOW);
+  assert.equal(workout.entries[0].note,entry.note);assert.equal(workout.entries[0].effortType,"rpe");assert.equal(workout.entries[0].sets[0].effort,8.5);assert.equal(workout.entries[0].supersetGroup,"superset-1");assert.equal(workout.entries[0].replacedFromExerciseId,"incline-dumbbell-press");
 });
 
 const invalidCases=[
@@ -42,7 +50,15 @@ const invalidCases=[
   ["missing completion time",(w)=>{w.status="completed";}],
   ["finish with no completed sets",(w)=>{w.status="completed";w.completedAt=NOW;}],
   ["title controls",(w)=>{w.title="Strength\nmalformed";}],
-  ["invalid ID",(w)=>{w.id="../owner";}]
+  ["invalid ID",(w)=>{w.id="../owner";}],
+  ["oversized exercise note",(w)=>{w.entries[0].note="x".repeat(501);}],
+  ["note control characters",(w)=>{w.entries[0].note="safe\u0000unsafe";}],
+  ["invalid effort scale",(w)=>{w.entries[0].effortType="feel";}],
+  ["effort without a scale",(w)=>{w.entries[0].sets[0].effort=8;}],
+  ["out-of-range RIR",(w)=>{w.entries[0].effortType="rir";w.entries[0].sets[0].effort=10.5;}],
+  ["fractional RPE precision",(w)=>{w.entries[0].effortType="rpe";w.entries[0].sets[0].effort=8.25;}],
+  ["invalid superset group",(w)=>{w.entries[0].supersetGroup="group one";}],
+  ["unknown replacement provenance",(w)=>{w.entries[0].replacedFromExerciseId="invented-exercise";}]
 ];
 for (const [name,mutate] of invalidCases) test(`workout validation rejects ${name}`,()=>{
   const value=workoutFixture();mutate(value);assert.throws(()=>sanitizeWorkout(value,NOW),(error)=>error.status===400&&error.code==="INVALID_WORKOUT");
@@ -62,6 +78,8 @@ test("completed summaries exclude unfinished sets, bodyweight and assistance fro
   for (const item of [bodyweight,assisted,timed]) {assert.equal(item.volume,0);assert.equal(item.maxWeight,null);}
   assert.equal(assisted.minAssistance,40);assert.equal(bodyweight.minAssistance,null);assert.equal(timed.minAssistance,null);
   assert.equal(bodyweight.totalReps,15);assert.equal(assisted.totalReps,12);assert.equal(timed.totalSeconds,60);assert.equal(timed.maxSeconds,60);assert.equal(timed.maxReps,null);
+  assert.deepEqual(external.setValues,[{reps:10,weight:20,seconds:null,effort:null,effortType:"none"},{reps:8,weight:22.5,seconds:null,effort:null,effortType:"none"}]);
+  assert.deepEqual(timed.setValues,[{reps:null,weight:null,seconds:60,effort:null,effortType:"none"}]);
 });
 test("summary groups keep kilograms and pounds and load types separate",()=>{
   const workout=workoutFixture();workout.entries[0].sets[0].completed=true;

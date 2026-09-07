@@ -9,7 +9,7 @@ const MIN_GZIP_BYTES=1024;
 
 function securityHeaders() {
   return {
-    "Content-Security-Policy":"default-src 'self'; img-src 'self' https://images.unsplash.com https://*.paddle.com data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self' https://cdn.paddle.com; connect-src 'self' https://*.paddle.com; manifest-src 'self'; worker-src 'self'; frame-src https://*.paddle.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+    "Content-Security-Policy":"default-src 'self'; img-src 'self' https://*.paddle.com data:; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self' https://cdn.paddle.com; connect-src 'self' https://*.paddle.com; manifest-src 'self'; worker-src 'self'; frame-src https://*.paddle.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
     "X-Content-Type-Options":"nosniff",
     "X-Frame-Options":"DENY",
     "Referrer-Policy":"strict-origin-when-cross-origin",

@@ -5,6 +5,9 @@ const { join } = require("node:path");
 const { SCHEMA,SQL,WORKOUT_ACTIVE_INDEX,RECONCILE_DUPLICATE_ACTIVE_WORKOUTS } = require("./schema");
 const { defineStore } = require("./store-contract");
 const {createLocalTrainingMethods,createTursoTrainingMethods,deleteLocalTrainingData,trainingDeletionBatch}=require("./training-loop-store");
+const {createLocalAccountSelfServiceMethods,createTursoAccountSelfServiceMethods}=require("./account-self-service-store");
+const {createLocalBillingMethods,createTursoBillingMethods}=require("./billing-store");
+const {migrateLocalSchema,migrateTursoSchema}=require("./migrations");
 function plainValue(value) {
   return typeof value === "bigint" ? Number(value) : value;
 }
@@ -28,70 +31,6 @@ function plainRow(row,columns) {
 }
 
 function plainRows(rows,columns) { return rows.map((row) => plainRow(row,columns)); }
-
-function localColumnNames(db,table) {
-  return new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((row) => String(row.name)));
-}
-
-function addLocalColumn(db,table,column,declaration) {
-  if (localColumnNames(db,table).has(column)) return;
-  try {
-    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${declaration}`);
-  } catch(error) {
-    // A second process may have completed the same additive migration after
-    // our schema probe. Only suppress the error when the column now exists.
-    if (!localColumnNames(db,table).has(column)) throw error;
-  }
-}
-
-function migrateLocalSchema(db) {
-  addLocalColumn(db,"users","email_verified_at","INTEGER");
-  addLocalColumn(db,"users","auth_version","INTEGER NOT NULL DEFAULT 1");
-  addLocalColumn(db,"users","suspended_at","INTEGER");
-  addLocalColumn(db,"sessions","auth_version","INTEGER NOT NULL DEFAULT 1");
-  // Turso/SQLite require a table rebuild to add a CHECK-constrained column to
-  // a populated table. Runtime validation below preserves the invariant while
-  // keeping this upgrade additive for existing verification rows.
-  addLocalColumn(db,"signup_verifications","purpose","TEXT NOT NULL DEFAULT 'signup'");
-  db.exec("DROP INDEX IF EXISTS signup_verifications_user_id");
-  db.exec("CREATE INDEX IF NOT EXISTS signup_verifications_user_id_idx ON signup_verifications(user_id)");
-  // These legacy indexes have no matching lookup, filter, ordering, cleanup,
-  // or foreign-key enforcement path. Keeping them only adds write overhead.
-  db.exec("DROP INDEX IF EXISTS paddle_purchases_customer_id");
-  db.exec("DROP INDEX IF EXISTS discovery_trials_expires_at");
-  db.exec("DROP INDEX IF EXISTS support_tickets_email");
-  let workoutMigrationOpen=false;
-  try { db.exec("BEGIN IMMEDIATE");workoutMigrationOpen=true;db.exec(RECONCILE_DUPLICATE_ACTIVE_WORKOUTS);db.exec(WORKOUT_ACTIVE_INDEX);db.exec("COMMIT");workoutMigrationOpen=false; }
-  catch(error) { if (workoutMigrationOpen) try { db.exec("ROLLBACK"); } catch { /* Preserve the migration error. */ }throw error; }
-}
-
-async function tursoColumnNames(client,table) {
-  const result=await client.execute(`PRAGMA table_info(${table})`);
-  return new Set(plainRows(result.rows,result.columns).map((row) => String(row.name)));
-}
-
-async function addTursoColumn(client,table,column,declaration) {
-  if ((await tursoColumnNames(client,table)).has(column)) return;
-  try {
-    await client.execute(`ALTER TABLE ${table} ADD COLUMN ${column} ${declaration}`);
-  } catch(error) {
-    if (!(await tursoColumnNames(client,table)).has(column)) throw error;
-  }
-}
-
-async function migrateTursoSchema(client) {
-  await addTursoColumn(client,"users","email_verified_at","INTEGER");
-  await addTursoColumn(client,"users","auth_version","INTEGER NOT NULL DEFAULT 1");
-  await addTursoColumn(client,"users","suspended_at","INTEGER");
-  await addTursoColumn(client,"sessions","auth_version","INTEGER NOT NULL DEFAULT 1");
-  await addTursoColumn(client,"signup_verifications","purpose","TEXT NOT NULL DEFAULT 'signup'");
-  await client.execute("DROP INDEX IF EXISTS signup_verifications_user_id");
-  await client.execute("CREATE INDEX IF NOT EXISTS signup_verifications_user_id_idx ON signup_verifications(user_id)");
-  await client.execute("DROP INDEX IF EXISTS paddle_purchases_customer_id");
-  await client.execute("DROP INDEX IF EXISTS discovery_trials_expires_at");
-  await client.execute("DROP INDEX IF EXISTS support_tickets_email");
-  await client.batch([RECONCILE_DUPLICATE_ACTIVE_WORKOUTS,WORKOUT_ACTIVE_INDEX],"write");
-}
 
 function affectedRows(result) {
   return Number(result?.changes ?? result?.rowsAffected ?? 0);
@@ -191,21 +130,6 @@ function accountActionSendArgs(send,since,maxSends) {
   ];
 }
 
-function accessSummary(row) {
-  const purchaseCount=Number(row?.purchase_count || 0);
-  const activePurchaseCount=Number(row?.active_purchase_count || 0);
-  const pendingPurchaseCount=Number(row?.pending_purchase_count || 0);
-  return {
-    active:activePurchaseCount>0,
-    purchaseCount,
-    activePurchaseCount,
-    pendingPurchaseCount,
-    latestActivePurchaseAt:row?.latest_active_purchase_at ?? null,
-    latestCompletedAt:row?.latest_completed_at ?? null,
-    latestRevokedAt:row?.latest_revoked_at ?? null
-  };
-}
-
 function likePattern(value) {
   return `%${String(value||"").toLowerCase().replace(/[\\%_]/g,(character)=>`\\${character}`)}%`;
 }
@@ -232,10 +156,12 @@ function localStore(root) {
   const db = new DatabaseSync(join(dataDir,"strata.sqlite"),{timeout:5000,enableForeignKeyConstraints:true});
   db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
   for (const statement of SCHEMA) if (statement!==WORKOUT_ACTIVE_INDEX) db.exec(statement);
-  migrateLocalSchema(db);
+  migrateLocalSchema(db,{activeWorkoutIndex:WORKOUT_ACTIVE_INDEX,reconcileActiveWorkouts:RECONCILE_DUPLICATE_ACTIVE_WORKOUTS});
 
   const statements = Object.fromEntries(Object.entries(SQL).map(([name,sql]) => [name,db.prepare(sql)]));
   const trainingMethods=createLocalTrainingMethods({db,statements,plainRow});
+  const accountSelfServiceMethods=createLocalAccountSelfServiceMethods({db,statements,plainRow});
+  const billingMethods=createLocalBillingMethods({db,statements,plainRow});
   return defineStore("local",{
     async ping() { return probeConnection(() => statements.ping.get()); },
     async userByEmail(email) { return plainRow(statements.userByEmail.get(email)); },
@@ -248,6 +174,7 @@ function localStore(root) {
     async session(tokenHash,now) { return plainRow(statements.session.get(tokenHash,now)); },
     async deleteSession(tokenHash) { statements.deleteSession.run(tokenHash); },
     async deleteExpired(now) { statements.deleteExpired.run(now); },
+    ...accountSelfServiceMethods,
     async verificationByTokenHash(tokenHash) { return plainRow(statements.verificationByTokenHash.get(tokenHash)); },
     async insertVerification(verification) {
       statements.insertVerification.run(...verificationInsertArgs(verification));
@@ -454,10 +381,6 @@ function localStore(root) {
         throw error;
       }
     },
-    async pendingPurchasesForUser(userId) {
-      return Number(plainRow(statements.pendingPurchasesForUser.get(userId))?.pending_count||0);
-    },
-    async unsettledPurchasesForUser(userId) { return plainRows(statements.unsettledPurchasesForUser.all(userId)); },
     async activeCheckoutCreationForUser(userId,now) { return plainRow(statements.activeCheckoutCreationForUser.get(userId,now)); },
     async deleteAccount(tokenHash,deletedAt,emailHash) {
       let transactionOpen=false;
@@ -583,51 +506,7 @@ function localStore(root) {
     async incrementProductSignal(eventDay,eventName) { return Boolean(plainRow(statements.incrementProductSignal.get(eventDay,eventName))); },
     async productSignalCounts(sinceDay,throughDay) { return plainRows(statements.productSignalCounts.all(sinceDay,throughDay)); },
     async deleteOldProductSignals(beforeDay) { return affectedRows(statements.deleteOldProductSignals.run(beforeDay)); },
-    async insertPendingPurchase(purchase) {
-      return plainRow(statements.insertPendingPurchase.get(purchase.transactionId,purchase.priceId,purchase.productId,purchase.paddleStatus||"ready",purchase.createdAt,purchase.updatedAt,purchase.userId,purchase.updatedAt));
-    },
-    async checkoutCreationForUser(userId) { return plainRow(statements.checkoutCreationForUser.get(userId)); },
-    async claimCheckoutCreation({userId,priceId,claimId,expiresAt,now}) {
-      return plainRow(statements.claimCheckoutCreation.get(priceId,claimId,expiresAt,now,now,userId,now,now));
-    },
-    async recordCheckoutCreationTransaction(userId,claimId,transactionId,updatedAt) {
-      return plainRow(statements.recordCheckoutCreationTransaction.get(transactionId,updatedAt,userId,claimId,transactionId));
-    },
-    async extendCheckoutCreation(userId,claimId,expiresAt,updatedAt) {
-      return plainRow(statements.extendCheckoutCreation.get(expiresAt,updatedAt,userId,claimId));
-    },
-    async releaseCheckoutCreation(userId,claimId,expectedTransactionId=null) {
-      return Boolean(plainRow(statements.releaseCheckoutCreation.get(userId,claimId,expectedTransactionId)));
-    },
-    async purchaseByTransaction(transactionId) { return plainRow(statements.purchaseByTransaction.get(transactionId)); },
-    async pendingPurchaseForUser(userId,priceId) { return plainRow(statements.pendingPurchaseForUser.get(userId,priceId)); },
-    async completePurchase(transactionId,completion) {
-      statements.completePurchase.run(completion.customerId||null,completion.completedAt,completion.updatedAt,transactionId);
-      return plainRow(statements.purchaseByTransaction.get(transactionId));
-    },
-    async updatePurchaseStatus(transactionId,status,occurredAt) {
-      statements.updatePurchaseStatus.run(status,occurredAt,transactionId,occurredAt);
-      return plainRow(statements.purchaseByTransaction.get(transactionId));
-    },
-    async upsertAdjustment(adjustment) {
-      return Boolean(plainRow(statements.upsertAdjustment.get(adjustment.adjustmentId,adjustment.transactionId,adjustment.action,adjustment.type||null,adjustment.status,adjustment.occurredAt,adjustment.updatedAt)));
-    },
-    async adjustmentById(adjustmentId) { return plainRow(statements.adjustmentById.get(adjustmentId)); },
-    async revokePurchase(transactionId,reason,revokedAt,updatedAt) {
-      statements.revokePurchase.run(revokedAt,reason,updatedAt,transactionId);
-      return plainRow(statements.purchaseByTransaction.get(transactionId));
-    },
-    async hasPaidDiscoveryAccess(userId,priceId=null) { return Boolean(statements.hasDiscoveryAccess.get(userId,priceId,priceId)); },
-    async hasDiscoveryAccess(userId,priceId=null,now=Date.now()) {
-      return Boolean(statements.hasDiscoveryAccess.get(userId,priceId,priceId)||statements.activeDiscoveryTrial.get(userId,now));
-    },
-    async discoveryTrial(userId) { return plainRow(statements.discoveryTrial.get(userId)); },
-    async startDiscoveryTrial(userId,startedAt,expiresAt) { return plainRow(statements.startDiscoveryTrial.get(startedAt,expiresAt,userId)); },
-    async discoveryAccessSummary(userId,priceId=null) { return accessSummary(plainRow(statements.discoveryAccessSummary.get(userId,priceId,priceId))); },
-    async webhookEvent(eventId) { return plainRow(statements.webhookEvent.get(eventId)); },
-    async recordWebhookEvent(event) {
-      return Boolean(plainRow(statements.recordWebhookEvent.get(event.eventId,event.notificationId||null,event.eventType,event.occurredAt,event.processedAt)));
-    },
+    ...billingMethods,
     async adminPrincipal() { return plainRow(statements.adminPrincipal.get()); },
     async claimAdminPrincipal(userId,configuredEmail,boundAt) {
       let transactionOpen=false;
@@ -688,11 +567,11 @@ function localStore(root) {
     },
     async adminElevation(sessionTokenHash,now) { return plainRow(statements.adminElevation.get(sessionTokenHash,now)); },
     async deleteExpiredAdminElevations(now) { return affectedRows(statements.deleteExpiredAdminElevations.run(now)); },
-    async adminOverview(now) { return plainRow(statements.adminOverview.get(now,now)); },
-    async adminUserById(userId,now) { return plainRow(statements.adminUserById.get(now,now,now,userId)); },
+    async adminOverview(now) { return plainRow(statements.adminOverview.get(now,now,now)); },
+    async adminUserById(userId,now) { return plainRow(statements.adminUserById.get(now,now,now,now,userId)); },
     async adminUsers(query,limit,offset,now) {
       const search=adminSearchArgs(query);
-      const users=plainRows(statements.adminUsers.all(now,now,...search,limit,offset));
+      const users=plainRows(statements.adminUsers.all(now,now,now,...search,limit,offset));
       const total=Number(plainRow(statements.adminUserCount.get(...search))?.total||0);
       return {users,total};
     },
@@ -834,7 +713,7 @@ async function tursoStore(url,authToken,tursoClientFactory) {
     throw new Error("Turso foreign key enforcement could not be enabled.");
   }
   for (const statement of SCHEMA) if (statement!==WORKOUT_ACTIVE_INDEX) await client.execute(statement);
-  await migrateTursoSchema(client);
+  await migrateTursoSchema(client,{activeWorkoutIndex:WORKOUT_ACTIVE_INDEX,reconcileActiveWorkouts:RECONCILE_DUPLICATE_ACTIVE_WORKOUTS});
 
   async function first(sql,args=[]) {
     const result = await client.execute({sql,args});
@@ -849,6 +728,8 @@ async function tursoStore(url,authToken,tursoClientFactory) {
   }
 
   const trainingMethods=createTursoTrainingMethods({client,first,run,plainRow});
+  const accountSelfServiceMethods=createTursoAccountSelfServiceMethods({client,first,run,all,plainRow});
+  const billingMethods=createTursoBillingMethods({client,first,run,all,plainRow});
 
   return defineStore("turso",{
     // A successful query is the health signal. Some Turso-compatible row
@@ -868,6 +749,7 @@ async function tursoStore(url,authToken,tursoClientFactory) {
     session:(tokenHash,now) => first(SQL.session,[tokenHash,now]),
     async deleteSession(tokenHash) { await run(SQL.deleteSession,[tokenHash]); },
     async deleteExpired(now) { await run(SQL.deleteExpired,[now]); },
+    ...accountSelfServiceMethods,
     verificationByTokenHash:(tokenHash) => first(SQL.verificationByTokenHash,[tokenHash]),
     async insertVerification(verification) {
       await run(SQL.insertVerification,verificationInsertArgs(verification));
@@ -1010,10 +892,6 @@ async function tursoStore(url,authToken,tursoClientFactory) {
       if (!plainRow(results[1]?.rows?.[0],results[1]?.columns)) throw new Error("Password reset could not be consumed atomically.");
       return user;
     },
-    async pendingPurchasesForUser(userId) {
-      return Number((await first(SQL.pendingPurchasesForUser,[userId]))?.pending_count||0);
-    },
-    unsettledPurchasesForUser:(userId) => all(SQL.unsettledPurchasesForUser,[userId]),
     activeCheckoutCreationForUser:(userId,now) => first(SQL.activeCheckoutCreationForUser,[userId,now]),
     async deleteAccount(tokenHash,deletedAt,emailHash) {
       const action=await first(SQL.accountActionByTokenHash,[tokenHash]);
@@ -1121,65 +999,7 @@ async function tursoStore(url,authToken,tursoClientFactory) {
     },
     productSignalCounts:(sinceDay,throughDay) => all(SQL.productSignalCounts,[sinceDay,throughDay]),
     async deleteOldProductSignals(beforeDay) { return affectedRows(await run(SQL.deleteOldProductSignals,[beforeDay])); },
-    async insertPendingPurchase(purchase) {
-      const result=await run(SQL.insertPendingPurchase,[purchase.transactionId,purchase.priceId,purchase.productId,purchase.paddleStatus||"ready",purchase.createdAt,purchase.updatedAt,purchase.userId,purchase.updatedAt]);
-      return plainRow(result.rows?.[0],result.columns);
-    },
-    checkoutCreationForUser:(userId) => first(SQL.checkoutCreationForUser,[userId]),
-    async claimCheckoutCreation({userId,priceId,claimId,expiresAt,now}) {
-      const result=await run(SQL.claimCheckoutCreation,[priceId,claimId,expiresAt,now,now,userId,now,now]);
-      return plainRow(result.rows?.[0],result.columns);
-    },
-    async recordCheckoutCreationTransaction(userId,claimId,transactionId,updatedAt) {
-      const result=await run(SQL.recordCheckoutCreationTransaction,[transactionId,updatedAt,userId,claimId,transactionId]);
-      return plainRow(result.rows?.[0],result.columns);
-    },
-    async extendCheckoutCreation(userId,claimId,expiresAt,updatedAt) {
-      const result=await run(SQL.extendCheckoutCreation,[expiresAt,updatedAt,userId,claimId]);
-      return plainRow(result.rows?.[0],result.columns);
-    },
-    async releaseCheckoutCreation(userId,claimId,expectedTransactionId=null) {
-      const result=await run(SQL.releaseCheckoutCreation,[userId,claimId,expectedTransactionId]);
-      return Boolean(plainRow(result.rows?.[0],result.columns));
-    },
-    purchaseByTransaction:(transactionId) => first(SQL.purchaseByTransaction,[transactionId]),
-    pendingPurchaseForUser:(userId,priceId) => first(SQL.pendingPurchaseForUser,[userId,priceId]),
-    async completePurchase(transactionId,completion) {
-      await run(SQL.completePurchase,[completion.customerId||null,completion.completedAt,completion.updatedAt,transactionId]);
-      return first(SQL.purchaseByTransaction,[transactionId]);
-    },
-    async updatePurchaseStatus(transactionId,status,occurredAt) {
-      await run(SQL.updatePurchaseStatus,[status,occurredAt,transactionId,occurredAt]);
-      return first(SQL.purchaseByTransaction,[transactionId]);
-    },
-    async upsertAdjustment(adjustment) {
-      const result=await run(SQL.upsertAdjustment,[adjustment.adjustmentId,adjustment.transactionId,adjustment.action,adjustment.type||null,adjustment.status,adjustment.occurredAt,adjustment.updatedAt]);
-      return Boolean(plainRow(result.rows?.[0],result.columns));
-    },
-    adjustmentById:(adjustmentId) => first(SQL.adjustmentById,[adjustmentId]),
-    async revokePurchase(transactionId,reason,revokedAt,updatedAt) {
-      await run(SQL.revokePurchase,[revokedAt,reason,updatedAt,transactionId]);
-      return first(SQL.purchaseByTransaction,[transactionId]);
-    },
-    async hasPaidDiscoveryAccess(userId,priceId=null) { return Boolean(await first(SQL.hasDiscoveryAccess,[userId,priceId,priceId])); },
-    async hasDiscoveryAccess(userId,priceId=null,now=Date.now()) {
-      const [paid,trial]=await Promise.all([
-        first(SQL.hasDiscoveryAccess,[userId,priceId,priceId]),
-        first(SQL.activeDiscoveryTrial,[userId,now])
-      ]);
-      return Boolean(paid||trial);
-    },
-    discoveryTrial:(userId) => first(SQL.discoveryTrial,[userId]),
-    async startDiscoveryTrial(userId,startedAt,expiresAt) {
-      const result=await run(SQL.startDiscoveryTrial,[startedAt,expiresAt,userId]);
-      return plainRow(result.rows?.[0],result.columns);
-    },
-    async discoveryAccessSummary(userId,priceId=null) { return accessSummary(await first(SQL.discoveryAccessSummary,[userId,priceId,priceId])); },
-    webhookEvent:(eventId) => first(SQL.webhookEvent,[eventId]),
-    async recordWebhookEvent(event) {
-      const result=await run(SQL.recordWebhookEvent,[event.eventId,event.notificationId||null,event.eventType,event.occurredAt,event.processedAt]);
-      return Boolean(plainRow(result.rows?.[0],result.columns));
-    },
+    ...billingMethods,
     adminPrincipal:() => first(SQL.adminPrincipal),
     async claimAdminPrincipal(userId,configuredEmail,boundAt) {
       const existing=await first(SQL.adminPrincipal);
@@ -1210,12 +1030,12 @@ async function tursoStore(url,authToken,tursoClientFactory) {
     },
     adminElevation:(sessionTokenHash,now) => first(SQL.adminElevation,[sessionTokenHash,now]),
     async deleteExpiredAdminElevations(now) { return affectedRows(await run(SQL.deleteExpiredAdminElevations,[now])); },
-    adminOverview:(now) => first(SQL.adminOverview,[now,now]),
-    adminUserById:(userId,now) => first(SQL.adminUserById,[now,now,now,userId]),
+    adminOverview:(now) => first(SQL.adminOverview,[now,now,now]),
+    adminUserById:(userId,now) => first(SQL.adminUserById,[now,now,now,now,userId]),
     async adminUsers(query,limit,offset,now) {
       const search=adminSearchArgs(query);
       const [users,count]=await Promise.all([
-        all(SQL.adminUsers,[now,now,...search,limit,offset]),
+        all(SQL.adminUsers,[now,now,now,...search,limit,offset]),
         first(SQL.adminUserCount,search)
       ]);
       return {users,total:Number(count?.total||0)};

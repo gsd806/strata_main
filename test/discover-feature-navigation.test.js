@@ -159,7 +159,7 @@ test("Progress reports bounded log-derived measures without pretending to assess
 
 test("training blocks and adaptations require explicit, concurrency-aware approval",()=>{
   const html=read("pages","discover.html"),script=read("scripts","discover.js");
-  for(const id of ["trainingBlockForm","trainingBlockWeeks","trainingBlockStartDate","trainingBlockCurrentWeek","trainingBlockState","trainingBlockLighterWeek","trainingBlockSave","progressionCard","progressionAccept","progressionDismiss","progressionStatus"]){
+  for(const id of ["trainingBlockForm","trainingBlockWeeks","trainingBlockStartDate","trainingBlockCurrentWeek","trainingBlockState","trainingBlockLighterWeek","trainingBlockSave","trainingBlockReview","trainingBlockWorkoutCount","trainingBlockSetCount","trainingBlockMuscles","trainingBlockEvidence","trainingBlockNextDecision","trainingBlockCarry","trainingBlockLighter","trainingBlockFinish","trainingBlockActionDialog","trainingBlockActionConfirm","progressionCard","progressionAccept","progressionDismiss","progressionStatus"]){
     assert.match(html,new RegExp(`\\bid="${id}"`),id);
   }
   for(const weeks of [4,5,6,7,8])assert.match(html,new RegExp(`<option value="${weeks}"`));
@@ -167,8 +167,10 @@ test("training blocks and adaptations require explicit, concurrency-aware approv
   assert.match(script,/Accepting changes \$\{name\} from \$\{from\} to \$\{to\} sets on \$\{day\} in your saved weekly Plan/);
   assert.match(script,/It remains there until you edit Plan again/);
   assert.doesNotMatch(`${html}\n${script}`,/next-session|next comparable session/i);
-  assert.match(html,/Mark the final week as lighter/);
-  assert.match(html,/A reminder to review a lower workload; your weekly Plan is not edited/);
+  assert.match(html,/The current week is calculated from that date/);
+  assert.match(html,/This is a reminder only\. It never changes sets in your weekly Plan/);
+  assert.match(html,/Skipped and replaced counts appear only when a saved workout explicitly records them/);
+  assert.match(html,/Nothing is saved until you confirm/);
   assert.match(script,/api\("\/api\/training"\)/);
   assert.match(script,/body:JSON\.stringify\(\{block:blockInput,expectedRevision:state\.trainingBlockRevision,expectedUserId\}\)/);
   assert.match(script,/decision:"accept",expectedPlanUpdatedAt:suggestion\.expectedPlanUpdatedAt/);
@@ -179,7 +181,11 @@ test("training blocks and adaptations require explicit, concurrency-aware approv
   assert.match(script,/TRAINING_BLOCK_CHANGED/);
   assert.match(script,/el\("trainingBlockStartDate"\)\.value=localIsoDate\(\)/);
   assert.match(script,/block\.status==="completed"\?`Saved\. Completed/);
-  assert.match(script,/currentWeek=status==="completed"\?weeks/);
+  assert.match(script,/BlockCore\.deriveWeek\(\{weeks,startDate\}\)/);
+  assert.match(script,/currentWeek=status==="completed"\?weeks:timeline\.week/);
+  assert.match(script,/BlockCore\.actionProposal\(state\.trainingBlock,action\)/);
+  assert.match(script,/Your weekly Plan is unchanged/);
+  assert.match(script,/Workout history is unavailable, so Strata\+ is not making progress, skip, or replacement claims/);
   assert.equal((script.match(/select\.innerHTML=Core\.WEEKDAYS/g)||[]).length,1,"session-day options must be rendered once");
   assert.equal((script.match(/if\(previewError\)el\("sessionStatus"\)/g)||[]).length,1,"session preview conflicts must be announced once");
 });

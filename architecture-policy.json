@@ -9,13 +9,15 @@
     },
     "src/server.js": {
       "role": "HTTP composition root",
-      "maxLines": 1200,
+      "maxLines": 800,
       "allowedDependencies": [
         "src/admin.js",
         "src/auth.js",
+        "src/billing.js",
         "src/database.js",
         "src/email.js",
         "src/http.js",
+        "src/observability.js",
         "src/payments.js",
         "src/plans.js",
         "src/product-signals.js",
@@ -29,57 +31,94 @@
     },
     "src/service-composition.js": {
       "role": "Typed auth/admin/support composition",
-      "maxLines": 80,
+      "maxLines": 60,
       "allowedDependencies": []
     },
     "src/auth.js": {
       "role": "Authentication and account lifecycle",
-      "maxLines": 850,
+      "maxLines": 840,
       "allowedDependencies": [
+        "src/account-self-service.js",
         "src/email.js",
         "src/plans.js"
       ]
     },
     "src/admin.js": {
       "role": "Administrative authorization and actions",
-      "maxLines": 300,
+      "maxLines": 280,
       "allowedDependencies": [
         "src/plans.js"
       ]
     },
     "src/support.js": {
       "role": "Public and administrative support workflow",
-      "maxLines": 180,
+      "maxLines": 160,
       "allowedDependencies": [
         "src/email.js",
         "src/plans.js"
       ]
     },
+    "src/account-self-service.js": {
+      "role": "Authenticated session inventory, revocation, and privacy-safe data export",
+      "maxLines": 150,
+      "allowedDependencies": [
+        "src/account-export.js"
+      ]
+    },
+    "src/account-export.js": {
+      "role": "Bounded streaming account export serialization",
+      "maxLines": 120,
+      "allowedDependencies": []
+    },
+    "src/account-self-service-store.js": {
+      "role": "SQLite and Turso account self-service storage parity",
+      "maxLines": 95,
+      "allowedDependencies": [
+        "src/account-self-service-schema.js"
+      ]
+    },
+    "src/account-self-service-schema.js": {
+      "role": "Account self-service query catalog",
+      "maxLines": 55,
+      "allowedDependencies": []
+    },
     "src/database.js": {
       "role": "SQLite and Turso store adapters",
-      "maxLines": 1320,
+      "maxLines": 1200,
       "allowedDependencies": [
+        "src/account-self-service-store.js",
+        "src/billing-store.js",
         "src/schema.js",
         "src/store-contract.js",
+        "src/migrations.js",
         "src/training-loop-store.js"
       ]
     },
     "src/store-contract.js": {
       "role": "Storage boundary contract",
-      "maxLines": 180,
+      "maxLines": 175,
       "allowedDependencies": []
+    },
+    "src/migrations.js": {
+      "role": "Ordered, idempotent SQLite and Turso schema migration ledger",
+      "maxLines": 145,
+      "allowedDependencies": [
+        "src/billing-schema.js"
+      ]
     },
     "src/schema.js": {
       "role": "Shared storage schema and statements",
-      "maxLines": 420,
+      "maxLines": 390,
       "allowedDependencies": [
+        "src/account-self-service-schema.js",
+        "src/billing-schema.js",
         "src/product-signals-schema.js",
         "src/training-loop-schema.js"
       ]
     },
     "src/product-signals-schema.js": {
       "role": "Aggregate product-activity schema and statements",
-      "maxLines": 40,
+      "maxLines": 35,
       "allowedDependencies": []
     },
     "src/product-signals.js": {
@@ -89,7 +128,7 @@
     },
     "src/training-loop-schema.js": {
       "role": "Check-in, training-block, and adaptation storage schema",
-      "maxLines": 80,
+      "maxLines": 70,
       "allowedDependencies": []
     },
     "src/training-loop-store.js": {
@@ -109,22 +148,56 @@
     },
     "src/email.js": {
       "role": "Resend integration and email security",
-      "maxLines": 420,
+      "maxLines": 400,
       "allowedDependencies": []
+    },
+    "src/billing.js": {
+      "role": "Commercial entitlement, checkout, trial, webhook, and reconciliation service",
+      "maxLines": 720,
+      "allowedDependencies": [
+        "src/http.js",
+        "src/payments.js",
+        "src/plans.js"
+      ]
+    },
+    "src/billing-schema.js": {
+      "role": "Commercial entitlement and recurring-subscription schema",
+      "maxLines": 140,
+      "allowedDependencies": []
+    },
+    "src/billing-store.js": {
+      "role": "SQLite and Turso commercial storage parity",
+      "maxLines": 240,
+      "allowedDependencies": [
+        "src/billing-schema.js"
+      ]
     },
     "src/payments.js": {
       "role": "Paddle integration boundary",
-      "maxLines": 480,
+      "maxLines": 430,
+      "allowedDependencies": [
+        "src/paddle-subscriptions.js",
+        "src/paddle-webhooks.js"
+      ]
+    },
+    "src/paddle-subscriptions.js": {
+      "role": "Recurring subscription validation and temporary customer-portal links",
+      "maxLines": 165,
+      "allowedDependencies": []
+    },
+    "src/paddle-webhooks.js": {
+      "role": "Paddle signature and webhook source verification",
+      "maxLines": 150,
       "allowedDependencies": []
     },
     "src/plans.js": {
       "role": "Plan domain validation",
-      "maxLines": 400,
+      "maxLines": 380,
       "allowedDependencies": []
     },
     "src/static-assets.js": {
       "role": "Bounded public asset representations",
-      "maxLines": 80,
+      "maxLines": 65,
       "allowedDependencies": [
         "src/http.js"
       ]
@@ -134,16 +207,21 @@
       "maxLines": 180,
       "allowedDependencies": []
     },
+    "src/observability.js": {
+      "role": "Structured request tracing and redacted operational logging",
+      "maxLines": 90,
+      "allowedDependencies": []
+    },
     "src/workouts.js": {
       "role": "Workout validation, history summaries, and authenticated lifecycle",
-      "maxLines": 240,
+      "maxLines": 230,
       "allowedDependencies": [
         "src/plans.js"
       ]
     },
     "src/setup.js": {
       "role": "Atomic weekly-plan and preference setup",
-      "maxLines": 120,
+      "maxLines": 105,
       "allowedDependencies": [
         "src/plans.js"
       ]

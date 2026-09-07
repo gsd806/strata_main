@@ -23,6 +23,20 @@
     const bodyweight=["Bodyweight","Bench"].includes(exercise.equipment);
     return{measurement:timed?"timed":"reps",loadType:assisted?"assisted":bodyweight?"bodyweight":"external",unit:"kg"};
   }
+  function blankSet(){return{reps:null,weight:null,seconds:null,completed:false,effort:null};}
+  function normalizeWorkout(value){
+    const workout=copy(value);
+    workout.entries=(workout.entries||[]).map((entry)=>({
+      ...entry,
+      planInstanceId:typeof entry.planInstanceId==="string"?entry.planInstanceId:"",
+      note:typeof entry.note==="string"?entry.note:"",
+      effortType:["rir","rpe"].includes(entry.effortType)?entry.effortType:"none",
+      supersetGroup:typeof entry.supersetGroup==="string"?entry.supersetGroup:"",
+      replacedFromExerciseId:typeof entry.replacedFromExerciseId==="string"?entry.replacedFromExerciseId:"",
+      sets:(entry.sets||[]).map((set)=>({...blankSet(),...set,effort:set?.effort??null}))
+    }));
+    return workout;
+  }
   function createWorkout(plan,day,catalog,now=Date.now()){
     const prescriptions=plan?.days?.[day];
     if(!DAYS.includes(day)||!Array.isArray(prescriptions)||!prescriptions.length)throw new Error("Add exercises to this day in Plan first.");
@@ -32,15 +46,23 @@
       const exercise=byId.get(item.exerciseId);
       if(!exercise)throw new Error("This plan contains an unavailable exercise. Review it in Plan.");
       if(!Number.isInteger(item.sets)||item.sets<1||item.sets>10)throw new Error("Each exercise needs 1–10 sets. Review this day in Plan.");
-      return{id:id(),exerciseId:item.exerciseId,...inferFormat(exercise,item.reps),prescribedReps:String(item.reps||exercise.reps||"").trim().slice(0,40),sets:Array.from({length:item.sets},()=>({reps:null,weight:null,seconds:null,completed:false}))};
+      return{id:id(),exerciseId:item.exerciseId,planInstanceId:typeof item.instanceId==="string"?item.instanceId:"",...inferFormat(exercise,item.reps),prescribedReps:String(item.reps||exercise.reps||"").trim().slice(0,40),note:"",effortType:"none",supersetGroup:"",replacedFromExerciseId:"",sets:Array.from({length:item.sets},blankSet)};
     })};
+  }
+  function effortError(entry,set){
+    if(set.effort===null||set.effort===undefined)return "";
+    if(entry.effortType==="none")return "Choose RIR or RPE before recording effort.";
+    if(typeof set.effort!=="number"||!Number.isFinite(set.effort)||Math.abs(set.effort*2-Math.round(set.effort*2))>.000001)return "Effort must use whole or half steps.";
+    if(entry.effortType==="rir"&&(set.effort<0||set.effort>10))return "RIR must be from 0 to 10.";
+    if(entry.effortType==="rpe"&&(set.effort<1||set.effort>10))return "RPE must be from 1 to 10.";
+    return "";
   }
   function actualError(entry,set){
     if(entry.measurement==="timed"){
       if(!Number.isInteger(set.seconds)||set.seconds<1||set.seconds>3600)return "Enter actual time from 1 to 3,600 whole seconds.";
     }else if(!Number.isInteger(set.reps)||set.reps<1||set.reps>1000)return "Enter actual repetitions from 1 to 1,000.";
     if(entry.loadType!=="bodyweight"&&(typeof set.weight!=="number"||!Number.isFinite(set.weight)||set.weight<0||set.weight>1000||Math.abs(set.weight*100-Math.round(set.weight*100))>0.000001))return "Enter an explicit load from 0 to 1,000, using at most 2 decimal places.";
-    return "";
+    return effortError(entry,set);
   }
   function progress(workout){
     const sets=(workout?.entries||[]).flatMap((entry)=>entry.sets);
@@ -57,8 +79,17 @@
   }
   function nextIncompleteSet(workout){
     const entries=Array.isArray(workout?.entries)?workout.entries:[];
-    const counts=progress(workout);
+    const counts=progress(workout),visited=new Set();
     for(let entryIndex=0;entryIndex<entries.length;entryIndex++){
+      const group=entries[entryIndex]?.supersetGroup;
+      if(group){
+        if(visited.has(group))continue;visited.add(group);
+        const members=entries.map((entry,index)=>entry?.supersetGroup===group?index:-1).filter((index)=>index>=0),rounds=Math.max(...members.map((index)=>entries[index].sets.length));
+        for(let setIndex=0;setIndex<rounds;setIndex++)for(const memberIndex of members){
+          if(entries[memberIndex].sets[setIndex]?.completed!==true)return{entryIndex:memberIndex,setIndex,entryId:entries[memberIndex].id,exerciseId:entries[memberIndex].exerciseId,remaining:counts.total-counts.completed};
+        }
+        continue;
+      }
       const sets=Array.isArray(entries[entryIndex]?.sets)?entries[entryIndex].sets:[];
       const setIndex=sets.findIndex((set)=>set?.completed!==true);
       if(setIndex>=0)return{entryIndex,setIndex,entryId:entries[entryIndex].id,exerciseId:entries[entryIndex].exerciseId,remaining:counts.total-counts.completed};
@@ -67,6 +98,24 @@
   }
   function remainingSeconds(deadline,now=Date.now()){
     return Number.isFinite(deadline)?Math.max(0,Math.ceil((deadline-now)/1000)):0;
+  }
+  function timestamp(value){const numeric=Number(value);if(Number.isFinite(numeric))return numeric;const parsed=Date.parse(String(value||""));return Number.isFinite(parsed)?parsed:0;}
+  function offlineAccessUntil(discovery,now=Date.now()){
+    if(discovery?.active!==true)return 0;
+    if(discovery.accessType==="trial")return Math.max(0,timestamp(discovery.trial?.expiresAt));
+    const boundaries=[now+24*60*60*1000],subscription=discovery.subscription;
+    // No subscription row means this is grandfathered lifetime access. A
+    // monthly subscription must carry a current server-verified period.
+    if(!subscription)return boundaries[0];
+    const periodEndsAt=timestamp(subscription.currentPeriodEndsAt);
+    if(periodEndsAt<=now)return 0;
+    boundaries.push(periodEndsAt);
+    if(["cancel","pause"].includes(subscription.scheduledChange?.action)){
+      const scheduledAt=timestamp(subscription.scheduledChange.effectiveAt);
+      if(scheduledAt<=now)return 0;
+      boundaries.push(scheduledAt);
+    }
+    return Math.min(...boundaries);
   }
   function duration(seconds){
     const safe=Math.max(0,Math.floor(Number(seconds)||0));
@@ -77,7 +126,7 @@
     const groups=new Map();
     for(const entry of workout.entries){
       const key=formatKey(entry);
-      if(!groups.has(key))groups.set(key,{exerciseId:entry.exerciseId,measurement:entry.measurement,loadType:entry.loadType,unit:entry.unit,completedSets:0,totalReps:0,maxReps:null,maxWeight:null,volume:0,totalSeconds:0,maxSeconds:null});
+      if(!groups.has(key))groups.set(key,{exerciseId:entry.exerciseId,measurement:entry.measurement,loadType:entry.loadType,unit:entry.unit,completedSets:0,totalReps:0,maxReps:null,maxWeight:null,volume:0,totalSeconds:0,maxSeconds:null,setValues:[]});
       const group=groups.get(key);
       for(const set of entry.sets){
         if(!set.completed||actualError(entry,set))continue;
@@ -94,6 +143,7 @@
           group.maxSeconds=Math.max(group.maxSeconds,set.seconds);
         }
         if(entry.loadType==="external")group.maxWeight=Math.max(group.maxWeight,set.weight);
+        if(group.setValues.length<10)group.setValues.push({reps:set.reps,weight:set.weight,seconds:set.seconds,effort:set.effort??null,effortType:set.effort==null?"none":entry.effortType});
       }
       group.volume=Math.round(group.volume*100)/100;
     }
@@ -118,10 +168,81 @@
     }).sort((a,b)=>a.startedAt-b.startedAt||a.id.localeCompare(b.id));
   }
   function bestInWindow(points){return points.length?Math.max(...points.map((point)=>point.value)):null;}
+  function previousComparable(history,entry,excludeId=""){
+    const key=formatKey(entry),ordered=[...(Array.isArray(history)?history:[])].sort((a,b)=>Number(b.startedAt)-Number(a.startedAt));
+    for(const workout of ordered){
+      if(workout?.id===excludeId||workout?.status!=="completed")continue;
+      const match=(workout.exerciseSummaries||[]).find((item)=>formatKey(item)===key&&Array.isArray(item.setValues)&&item.setValues.length);
+      if(match)return{workoutId:workout.id,date:workout.date,sets:copy(match.setValues),unit:entry.unit,measurement:entry.measurement,loadType:entry.loadType};
+    }
+    return null;
+  }
+  function prescriptionValue(entry){
+    const match=String(entry?.prescribedReps||"").match(/\d+(?:\.\d+)?/);
+    if(!match)return null;
+    let value=Number(match[0]);
+    if(entry.measurement==="timed"&&/\bmins?|minutes?\b/i.test(entry.prescribedReps))value*=60;
+    return Number.isFinite(value)&&value>0?Math.round(value):null;
+  }
+  function suggestedTargets(entry,memory){
+    const source=memory?.sets?.length?"previous":"prescription",fallback=prescriptionValue(entry);
+    const sets=entry.sets.map((_,index)=>{
+      const prior=memory?.sets?.[Math.min(index,memory.sets.length-1)]||{};
+      return{reps:entry.measurement==="reps"?(Number.isInteger(prior.reps)?prior.reps:fallback):null,seconds:entry.measurement==="timed"?(Number.isInteger(prior.seconds)?prior.seconds:fallback):null,weight:entry.loadType!=="bodyweight"&&typeof prior.weight==="number"?prior.weight:null,effort:null};
+    });
+    return{source,sets,explanation:source==="previous"?`Repeat the last comparable set values from ${memory.date}; progress only when the work feels controlled.`:"Start with the low end of the written prescription. STRATA will not guess a load."};
+  }
+  function hasSetValues(entry){return entry.sets.some((set)=>set.completed||set.reps!==null||set.weight!==null||set.seconds!==null||set.effort!==null&&set.effort!==undefined);}
+  function applyTargets(entry,values){
+    if(hasSetValues(entry))throw new Error("Clear this exercise's logged values before applying a saved target.");
+    entry.sets.forEach((set,index)=>{
+      const value=values[Math.min(index,values.length-1)];if(!value)return;
+      set.reps=entry.measurement==="reps"&&Number.isInteger(value.reps)?value.reps:null;
+      set.seconds=entry.measurement==="timed"&&Number.isInteger(value.seconds)?value.seconds:null;
+      set.weight=entry.loadType!=="bodyweight"&&typeof value.weight==="number"?value.weight:null;
+      set.effort=null;
+    });
+  }
+  function addSet(entry){if(entry.sets.length>=10)throw new Error("An exercise can have at most 10 sets.");entry.sets.push(blankSet());return entry.sets.length-1;}
+  function duplicateSet(entry,index){
+    if(entry.sets.length>=10)throw new Error("An exercise can have at most 10 sets.");
+    const source=entry.sets[index];if(!source)throw new Error("Choose a set to duplicate.");
+    entry.sets.splice(index+1,0,{...copy(source),completed:false});return index+1;
+  }
+  function removeSet(entry,index){
+    if(entry.sets.length<=1)throw new Error("Keep at least one set for each exercise.");
+    if(!entry.sets[index])throw new Error("Choose a set to remove.");
+    if(entry.sets[index].completed)throw new Error("Uncheck this set before removing it.");
+    entry.sets.splice(index,1);return Math.max(0,index-1);
+  }
+  function warmupSets(target){
+    const value=Number(target);if(!Number.isFinite(value)||value<=0||value>1000)return[];
+    return[[.4,8],[.6,5],[.8,3]].map(([percent,reps])=>({percent:Math.round(percent*100),load:Math.round(value*percent*2)/2,reps}));
+  }
+  function plateBreakdown(target,bar=20,plates=[25,20,15,10,5,2.5,1.25]){
+    const total=Number(target),barWeight=Number(bar);
+    if(!Number.isFinite(total)||!Number.isFinite(barWeight)||total<barWeight||barWeight<0||total>1000)return{pairs:[],remainder:null,achievable:false};
+    let perSide=(total-barWeight)/2;const pairs=[];
+    for(const plate of [...plates].filter((value)=>Number.isFinite(value)&&value>0).sort((a,b)=>b-a)){
+      const count=Math.floor((perSide+.000001)/plate);if(count){pairs.push({plate,count});perSide-=plate*count;}
+    }
+    const remainder=Math.round(perSide*100)/100;return{pairs,remainder,achievable:remainder<.01};
+  }
+  function swapComparison(reference,candidate){
+    const sameTarget=reference?.sub===candidate?.sub,sameGroup=reference?.group===candidate?.group;
+    const fitDelta=Number(candidate?.score||0)-Number(reference?.score||0),stabilityDelta=Number(candidate?.metrics?.stability||0)-Number(reference?.metrics?.stability||0);
+    return{compatible:sameTarget||sameGroup,target:sameTarget?reference.sub:sameGroup?reference.group:"Different target",fitDelta,stabilityDelta,explanation:`${sameTarget?`Same ${String(reference.sub).toLowerCase()} target`:`Same ${String(reference.group||"training").toLowerCase()} group`} · ${candidate.equipment}. FitScore ${fitDelta===0?"unchanged":`${fitDelta>0?"+":""}${fitDelta}`}; stability ${stabilityDelta===0?"unchanged":`${stabilityDelta>0?"+":""}${stabilityDelta}`}.`};
+  }
+  function planSwapProposal(plan,day,entry,nextExerciseId){
+    const result=copy(plan),items=result?.days?.[day];if(!Array.isArray(items))throw new Error("This workout is no longer linked to that Plan day.");
+    let index=entry.planInstanceId?items.findIndex((item)=>item.instanceId===entry.planInstanceId):-1;
+    if(index<0){const matches=items.map((item,itemIndex)=>item.exerciseId===entry.exerciseId?itemIndex:-1).filter((itemIndex)=>itemIndex>=0);if(matches.length!==1)throw new Error("Open Plan to choose which repeated exercise should change.");index=matches[0];}
+    const before=items[index].exerciseId;items[index].exerciseId=nextExerciseId;return{plan:result,index,before,after:nextExerciseId};
+  }
   function payload(workout){
     const fields=["id","title","planDay","date","status","startedAt","completedAt","elapsedSeconds","restEndsAt","entries"];
-    const result=Object.fromEntries(fields.map((field)=>[field,copy(workout[field])]));
-    result.entries=workout.entries.map((entry)=>({id:entry.id,exerciseId:entry.exerciseId,measurement:entry.measurement,loadType:entry.loadType,unit:entry.unit,prescribedReps:entry.prescribedReps,sets:entry.sets.map((set)=>({reps:set.reps,weight:set.weight,seconds:set.seconds,completed:set.completed}))}));
+    const normalized=normalizeWorkout(workout),result=Object.fromEntries(fields.map((field)=>[field,copy(normalized[field])]));
+    result.entries=normalized.entries.map((entry)=>({id:entry.id,exerciseId:entry.exerciseId,planInstanceId:entry.planInstanceId,measurement:entry.measurement,loadType:entry.loadType,unit:entry.unit,prescribedReps:entry.prescribedReps,note:entry.note.trim(),effortType:entry.effortType,supersetGroup:entry.supersetGroup,replacedFromExerciseId:entry.replacedFromExerciseId,sets:entry.sets.map((set)=>({reps:set.reps,weight:set.weight,seconds:set.seconds,completed:set.completed,effort:set.effort}))}));
     return result;
   }
   function matches(saved,snapshot){
@@ -139,10 +260,12 @@
       if(!["active","completed"].includes(workout.status)||!Number.isFinite(workout.startedAt)||!/^\d{4}-\d{2}-\d{2}$/.test(workout.date))return null;
       for(const entry of workout.entries){
         if(typeof entry.id!=="string"||!/^[a-zA-Z0-9_-]{1,100}$/.test(entry.id)||typeof entry.exerciseId!=="string"||!/^[a-zA-Z0-9_-]{1,100}$/.test(entry.exerciseId)||!["reps","timed"].includes(entry.measurement)||!["external","bodyweight","assisted"].includes(entry.loadType)||!["kg","lb"].includes(entry.unit)||!Array.isArray(entry.sets)||entry.sets.length<1||entry.sets.length>10)return null;
-        if(entry.sets.some((set)=>!set||typeof set.completed!=="boolean"||set.completed&&actualError(entry,set)||["reps","seconds","weight"].some((field)=>set[field]!==null&&(typeof set[field]!=="number"||!Number.isFinite(set[field])||set[field]<0))||set.reps!==null&&(!Number.isInteger(set.reps)||set.reps>1000)||set.seconds!==null&&(!Number.isInteger(set.seconds)||set.seconds>3600)||set.weight!==null&&set.weight>1000))return null;
+        const normalized={...entry,effortType:entry.effortType||"none"};
+        if(entry.note!==undefined&&(typeof entry.note!=="string"||entry.note.length>500||/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/.test(entry.note))||normalized.effortType&&!['none','rir','rpe'].includes(normalized.effortType)||entry.planInstanceId!==undefined&&entry.planInstanceId!==""&&!/^[a-zA-Z0-9_-]{1,100}$/.test(entry.planInstanceId)||entry.supersetGroup!==undefined&&entry.supersetGroup!==""&&!/^[a-zA-Z0-9_-]{1,100}$/.test(entry.supersetGroup)||entry.replacedFromExerciseId!==undefined&&entry.replacedFromExerciseId!==""&&!/^[a-zA-Z0-9_-]{1,100}$/.test(entry.replacedFromExerciseId))return null;
+        if(entry.sets.some((set)=>!set||typeof set.completed!=="boolean"||set.completed&&actualError(normalized,set)||["reps","seconds","weight","effort"].some((field)=>set[field]!==null&&set[field]!==undefined&&(typeof set[field]!=="number"||!Number.isFinite(set[field])||set[field]<0))||set.reps!==null&&(!Number.isInteger(set.reps)||set.reps>1000)||set.seconds!==null&&(!Number.isInteger(set.seconds)||set.seconds>3600)||set.weight!==null&&set.weight>1000||effortError(normalized,set)))return null;
       }
-      return record;
+      return{...record,workout:normalizeWorkout(workout)};
     }catch{return null;}
   }
-  return{DAYS,copy,localDate,today,dayFromSearch,id,inferFormat,createWorkout,actualError,progress,planDaySummary,nextIncompleteSet,remainingSeconds,duration,formatKey,summary,metrics,series,bestInWindow,payload,matches,draftPrefix,readDraft};
+  return{DAYS,copy,localDate,today,dayFromSearch,id,inferFormat,blankSet,normalizeWorkout,createWorkout,effortError,actualError,progress,planDaySummary,nextIncompleteSet,remainingSeconds,offlineAccessUntil,duration,formatKey,summary,metrics,series,bestInWindow,previousComparable,suggestedTargets,hasSetValues,applyTargets,addSet,duplicateSet,removeSet,warmupSets,plateBreakdown,swapComparison,planSwapProposal,payload,matches,draftPrefix,readDraft};
 });

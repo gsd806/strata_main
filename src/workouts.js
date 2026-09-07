@@ -18,6 +18,12 @@ function identifier(value,label) {
   if (typeof value!=="string"||!/^[A-Za-z0-9_-]{1,100}$/.test(value)) throw workoutError(`${label} is invalid.`);
   return value;
 }
+function optionalIdentifier(value,label) { return value==null||value===""?"":identifier(value,label); }
+function note(value) {
+  if (value==null) return "";
+  if (typeof value!=="string"||value.length>500||/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/.test(value)) throw workoutError("Exercise note is invalid.");
+  return value.trim();
+}
 function integer(value,min,max,label) {
   if (!Number.isSafeInteger(value)||value<min||value>max) throw workoutError(`${label} must be a whole number from ${min} to ${max}.`);
   return value;
@@ -32,10 +38,16 @@ function weightValue(value) {
   if (typeof value!=="number"||!Number.isFinite(value)||value<0||value>1000||Math.abs(value*100-Math.round(value*100))>0.0000001) throw workoutError("Weight must be from 0 to 1000, with at most two decimal places.");
   return value;
 }
+function effortValue(value,type) {
+  if (value==null) return null;
+  const min=type==="rpe"?1:0;
+  if (type==="none"||typeof value!=="number"||!Number.isFinite(value)||value<min||value>10||Math.abs(value*2-Math.round(value*2))>0.0000001) throw workoutError(type==="rpe"?"RPE must be from 1 to 10 in whole or half steps.":"RIR must be from 0 to 10 in whole or half steps.");
+  return value;
+}
 function workoutSet(value,entry) {
   const input=object(value,"Set");
   if (typeof input.completed!=="boolean") throw workoutError("Set completion must be true or false.");
-  const set={reps:nullableInteger(input.reps,0,1000,"Repetitions"),weight:weightValue(input.weight),seconds:nullableInteger(input.seconds,0,3600,"Set seconds"),completed:input.completed};
+  const set={reps:nullableInteger(input.reps,0,1000,"Repetitions"),weight:weightValue(input.weight),seconds:nullableInteger(input.seconds,0,3600,"Set seconds"),completed:input.completed,effort:effortValue(input.effort,entry.effortType)};
   if (entry.measurement==="reps"&&set.seconds!==null||entry.measurement==="timed"&&set.reps!==null) throw workoutError("Use repetitions or time for each set, not both.");
   if (set.completed) {
     if (!(entry.measurement==="reps"?set.reps>0:set.seconds>0)) throw workoutError("Completed sets need positive repetitions or time.");
@@ -46,11 +58,13 @@ function workoutSet(value,entry) {
 function workoutEntry(value) {
   const input=object(value,"Exercise");
   const entry={
-    id:identifier(input.id,"Entry ID"),exerciseId:identifier(input.exerciseId,"Exercise ID"),
+    id:identifier(input.id,"Entry ID"),exerciseId:identifier(input.exerciseId,"Exercise ID"),planInstanceId:optionalIdentifier(input.planInstanceId,"Plan exercise ID"),
     measurement:choice(input.measurement,["reps","timed"],"Measurement"),loadType:choice(input.loadType,["external","bodyweight","assisted"],"Load type"),
-    unit:choice(input.unit,["kg","lb"],"Weight unit"),prescribedReps:text(input.prescribedReps,40,"Prescribed repetitions",false)
+    unit:choice(input.unit,["kg","lb"],"Weight unit"),prescribedReps:text(input.prescribedReps,40,"Prescribed repetitions",false),note:note(input.note),
+    effortType:choice(input.effortType??"none",["none","rir","rpe"],"Effort scale"),supersetGroup:optionalIdentifier(input.supersetGroup,"Superset group"),replacedFromExerciseId:optionalIdentifier(input.replacedFromExerciseId,"Replaced exercise")
   };
   if (!EXERCISE_IDS.has(entry.exerciseId)) throw workoutError("This exercise is not in the exercise catalog.");
+  if (entry.replacedFromExerciseId&&!EXERCISE_IDS.has(entry.replacedFromExerciseId)) throw workoutError("The replaced exercise is not in the exercise catalog.");
   if (!Array.isArray(input.sets)||input.sets.length<1||input.sets.length>10) throw workoutError("Each exercise needs 1 to 10 sets.");
   return {...entry,sets:input.sets.map((set)=>workoutSet(set,entry))};
 }
@@ -80,7 +94,7 @@ function summarizeWorkout(workout) {
   const groups=new Map();
   for (const entry of workout.entries) {
     const {exerciseId,measurement,loadType,unit}=entry,key=JSON.stringify([exerciseId,measurement,loadType,unit]);
-    if (!groups.has(key)) groups.set(key,{exerciseId,measurement,loadType,unit,completedSets:0,totalReps:0,maxReps:null,maxWeight:null,minAssistance:null,volume:0,totalSeconds:0,maxSeconds:null});
+    if (!groups.has(key)) groups.set(key,{exerciseId,measurement,loadType,unit,completedSets:0,totalReps:0,maxReps:null,maxWeight:null,minAssistance:null,volume:0,totalSeconds:0,maxSeconds:null,setValues:[]});
     const summary=groups.get(key);
     result.totalSets+=entry.sets.length;
     for (const set of entry.sets) {
@@ -95,13 +109,17 @@ function summarizeWorkout(workout) {
       // Assistance is resistance removed; body mass is not a known external load.
       if (loadType==="external") summary.maxWeight=Math.max(summary.maxWeight||0,set.weight);
       if (loadType==="assisted") summary.minAssistance=summary.minAssistance===null?set.weight:Math.min(summary.minAssistance,set.weight);
+      if (summary.setValues.length<10) summary.setValues.push({reps:set.reps,weight:set.weight,seconds:set.seconds,effort:set.effort,effortType:set.effort===null?"none":entry.effortType});
     }
   }
   result.exerciseSummaries=[...groups.values()].map((summary)=>({...summary,volume:Math.round(summary.volume*100)/100}));
   return result;
 }
-function workoutPayload(row,summary=false) {
-  return row?{...JSON.parse(summary?row.summary_json:row.workout_json),revision:Number(row.revision),updatedAt:Number(row.updated_at)}:null;
+function workoutPayload(row,summary=false,includeMemory=false) {
+  if (!row) return null;
+  const payload={...JSON.parse(summary?row.summary_json:row.workout_json),revision:Number(row.revision),updatedAt:Number(row.updated_at)};
+  if (summary&&!includeMemory) for (const entry of payload.exerciseSummaries||[]) delete entry.setValues;
+  return payload;
 }
 function pagination(value,fallback,min,max) {
   if (value===null) return fallback;
@@ -174,9 +192,10 @@ function createWorkoutService({store,auth,requireAccess,rateAllowed,http}) {
           if (!workout) throw workoutError("Workout not found.",404,"WORKOUT_NOT_FOUND");
           json(res,200,{workout,csrfToken:session.csrf_token});
         } else {
-          const limit=pagination(url.searchParams.get("limit"),20,1,100),offset=pagination(url.searchParams.get("offset"),0,0,10000);
+          const limit=pagination(url.searchParams.get("limit"),20,1,100),offset=pagination(url.searchParams.get("offset"),0,0,10000),memory=url.searchParams.get("memory");
+          if (memory!==null&&memory!=="1") throw workoutError("Workout memory selection is invalid.");
           const rows=await store.workouts(session.id,limit+1,offset);
-          json(res,200,{workouts:rows.slice(0,limit).map((row)=>workoutPayload(row,true)),hasMore:rows.length>limit,csrfToken:session.csrf_token});
+          json(res,200,{workouts:rows.slice(0,limit).map((row)=>workoutPayload(row,true,memory==="1")),hasMore:rows.length>limit,csrfToken:session.csrf_token});
         }
         return true;
       }

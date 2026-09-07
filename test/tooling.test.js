@@ -28,7 +28,7 @@ test("one check command owns the complete pre-release verification sequence",()=
   }
 
   const workflow=read(".github/workflows/ci.yml");
-  assert.match(workflow,/npx playwright install --with-deps chromium/);
+  assert.match(workflow,/npx playwright install --with-deps chromium firefox webkit/);
   assert.match(workflow,/run: npm run check/);
   assert.doesNotMatch(workflow,/run: npm run coverage/,"the release gate already owns coverage");
 });
@@ -47,6 +47,9 @@ test("coverage reports application code and enforces calibrated regression floor
   assert.match(coverageRunner,/--test-coverage-include=public\/scripts\/workout-core\.js/);
   assert.match(coverageRunner,/--test-coverage-include=public\/scripts\/onboarding-core\.js/);
   assert.match(coverageRunner,/--test-coverage-include=public\/scripts\/preview-core\.js/);
+  assert.match(coverageRunner,/--test-coverage-include=public\/scripts\/activation-core\.js/);
+  assert.match(coverageRunner,/--test-coverage-include=public\/scripts\/plan-insights-core\.js/);
+  assert.match(coverageRunner,/--test-coverage-include=public\/scripts\/training-block-core\.js/);
   assert.doesNotMatch(coverageRunner,/public\/scripts\/\*\*\/\*\.js/);
 });
 

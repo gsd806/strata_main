@@ -42,6 +42,16 @@ function placeholderCredential(value) {
   return /replace[-_ ]?with|replace-with|<[^>]+>|your[-_ ]?(?:private|secret|key)/i.test(String(value||""));
 }
 
+function validResendApiKey(value) {
+  const apiKey=clean(value,1000);
+  return apiKey.startsWith("re_")&&apiKey.length>=20&&!placeholderCredential(apiKey);
+}
+
+function validEmailVerificationSecret(value) {
+  const secret=clean(value,4096);
+  return secret.length>=32&&!placeholderCredential(secret);
+}
+
 function directSignupAllowed(config,nodeEnv=process.env.NODE_ENV,explicitTestOverride=process.env.ALLOW_UNVERIFIED_SIGNUP_FOR_TESTS) {
   const runtime=clean(nodeEnv,40).toLowerCase();
   const allowed=clean(explicitTestOverride,20).toLowerCase()==="true";
@@ -58,11 +68,11 @@ function getEmailVerificationConfig(env=process.env) {
   const supportEmail=clean(env.SUPPORT_EMAIL||env.EMAIL_REPLY_TO,320);
   const verificationSecret=clean(env.EMAIL_VERIFICATION_SECRET,4096);
   const appBaseUrl=validAppBaseUrl(env.APP_BASE_URL,clean(env.NODE_ENV,40));
-  const validApiKey=apiKey.startsWith("re_")&&apiKey.length>=20&&!placeholderCredential(apiKey);
+  const validApiKey=validResendApiKey(apiKey);
   const validFrom=Boolean(mailboxAddress(from));
   const validReplyTo=!replyTo||Boolean(mailboxAddress(replyTo));
   const validSupportEmail=!supportEmail||Boolean(mailboxAddress(supportEmail));
-  const validSecret=verificationSecret.length>=32&&!placeholderCredential(verificationSecret);
+  const validSecret=validEmailVerificationSecret(verificationSecret);
   const validBaseUrl=Boolean(appBaseUrl);
   const credentialsValid=validApiKey&&validFrom&&validReplyTo&&validSecret&&validBaseUrl;
   const missing=[];
@@ -361,6 +371,7 @@ module.exports = {
   escapeHtml,
   generateVerificationCode,
   getEmailVerificationConfig,
+  mailboxAddress,
   maskEmail,
   safeDigestEqual,
   sendAccountActionEmail,
@@ -369,5 +380,8 @@ module.exports = {
   sendSupportResponse,
   sendVerificationEmail,
   verificationCodeDigest,
-  verificationEmailHash
+  verificationEmailHash,
+  validAppBaseUrl,
+  validEmailVerificationSecret,
+  validResendApiKey
 };

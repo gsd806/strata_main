@@ -11,6 +11,7 @@ const PROJECT_ROOT=join(__dirname,"..");
 const RELEASE=require(join(PROJECT_ROOT,"package.json"));
 const BUILD=RELEASE.strataBuild||RELEASE.version;
 const BUILD_LABEL=new RegExp(`Build ${BUILD.replace(/\./g,"\\.")}`);
+const {STRATA_PLUS_TRIAL_MS}=require("../src/payments");
 
 let server;
 let runtimeDir;
@@ -66,7 +67,7 @@ test.before(startServer);
 test.after(stopServer);
 
 test("serves rankings and gates private account pages",async()=>{
-  assert.equal(BUILD,"7.4.1");
+  assert.equal(BUILD,"7.5.0");
   const home=await request("/");
   assert.equal(home.response.status,200);
   assert.equal(home.response.headers.get("cache-control"),"private, no-store");
@@ -94,11 +95,16 @@ test("serves rankings and gates private account pages",async()=>{
   assert.equal(billing.data.enabled,false);
   assert.equal(billing.data.clientToken,"");
   assert.match(billing.data.productId,/^pro_/);
-  assert.match(billing.data.priceId,/^pri_/);
+  assert.equal(billing.data.priceId,"","a recurring Paddle price must be explicitly configured");
+  assert.deepEqual(billing.data.price,{amount:"0.99",currency:"USD",interval:"month",frequency:1});
   assert.doesNotMatch(JSON.stringify(billing.data),/pdl_(?:live|sandbox|sdbx)_apikey_|pdl_ntfset_/i);
-  const health=await request("/healthz");
-  assert.equal(health.response.status,200);
-  assert.deepEqual(health.data,{ok:true});
+  for(const endpoint of ["/livez","/readyz","/healthz"]){
+    const health=await request(endpoint,{headers:{"X-Request-ID":"edge-probe-request-1234"}});
+    assert.equal(health.response.status,200,endpoint);
+    assert.deepEqual(health.data,{ok:true},endpoint);
+    assert.equal(health.response.headers.get("x-request-id"),"edge-probe-request-1234",endpoint);
+    assert.deepEqual(Object.keys(health.data),["ok"],`${endpoint} must not expose storage or deployment details`);
+  }
   const malformedCookie=await request("/api/me",{headers:{Cookie:"broken=%E0%A4%A"}});
   assert.equal(malformedCookie.response.status,401);
   const planner=await request("/planner.html",{redirect:"manual"});
@@ -114,7 +120,7 @@ test("serves rankings and gates private account pages",async()=>{
 });
 
 test("serves public pricing, contact, and policy pages at friendly routes",async()=>{
-  const pages={pricing:/ONE PRICE/,contact:/TALK TO/,policies:/PUBLIC POLICIES/,terms:/TERMS OF/,privacy:/PRIVACY/,refunds:/14-DAY/};
+  const pages={pricing:/MONTHLY SUBSCRIPTION/i,contact:/TALK TO/,policies:/PUBLIC POLICIES/,terms:/TERMS OF/,privacy:/PRIVACY/,refunds:/14-DAY/};
   for(const [slug,marker] of Object.entries(pages)) {
     for(const path of [`/${slug}`,`/${slug}/`,`/${slug}.html`]) {
       const page=await request(path);
@@ -189,14 +195,16 @@ test("creates an account with a private default plan",async()=>{
   assert.equal(me.data.user.discovery.trial.eligible,true);
   const missingCsrf=await request("/api/discovery/trial",{method:"POST",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json"},body:"{}"});
   assert.equal(missingCsrf.response.status,403);
-  const trial=await request("/api/discovery/trial",{method:"POST",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":me.data.csrfToken},body:"{}"});
+  const trial=await request("/api/discovery/trial",{method:"POST",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":me.data.csrfToken},body:JSON.stringify({durationMinutes:525_600,expiresAt:Number.MAX_SAFE_INTEGER})});
   assert.equal(trial.response.status,201);
   assert.equal(trial.data.user.discovery.active,true);
   assert.equal(trial.data.user.discovery.accessType,"trial");
   assert.equal(trial.data.user.discovery.trial.active,true);
-  assert.equal(trial.data.user.discovery.trial.expiresAt-trial.data.user.discovery.trial.startedAt,10*24*60*60*1000);
+  assert.equal(trial.data.user.discovery.trial.expiresAt-trial.data.user.discovery.trial.startedAt,STRATA_PLUS_TRIAL_MS,"client input cannot alter the server-owned 30-minute window");
   const repeatedTrial=await request("/api/discovery/trial",{method:"POST",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":me.data.csrfToken},body:"{}"});
   assert.equal(repeatedTrial.response.status,200,"repeating an active trial request is idempotent");
+  assert.equal(repeatedTrial.data.user.discovery.trial.startedAt,trial.data.user.discovery.trial.startedAt,"a replay cannot move the trial start");
+  assert.equal(repeatedTrial.data.user.discovery.trial.expiresAt,trial.data.user.discovery.trial.expiresAt,"a replay cannot extend the trial");
   const trialDiscovery=await request("/api/discovery",{headers:{Cookie:signup.cookie}});
   assert.equal(trialDiscovery.response.status,200);
 
@@ -299,6 +307,47 @@ test("creates an account with a private default plan",async()=>{
   assert.equal(restored.data.plan.days.Monday.length,1);
   assert.equal(restored.data.plan.days.Tuesday.length,1);
   assert.equal(restored.data.plan.days.Monday[0].sets,3);
+});
+
+test("a Strata+ trial is one exact server-owned window across concurrent and expired replays",async()=>{
+  const signup=await request("/api/signup",{method:"POST",headers:{Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({name:"Trial Boundary",email:"trial-boundary@example.test",password:"trial-boundary-password-123"})});
+  assert.equal(signup.response.status,201);
+  const me=await request("/api/me",{headers:{Cookie:signup.cookie}});
+  const headers={Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":me.data.csrfToken};
+  const attempts=await Promise.all([
+    request("/api/discovery/trial",{method:"POST",headers,body:JSON.stringify({durationMinutes:1})}),
+    request("/api/discovery/trial",{method:"POST",headers,body:JSON.stringify({durationMinutes:999_999})})
+  ]);
+  assert.deepEqual(attempts.map(({response})=>response.status).sort(),[200,201]);
+  const windows=attempts.map(({data})=>data.user.discovery.trial);
+  assert.equal(windows[0].startedAt,windows[1].startedAt,"concurrent activation keeps one start timestamp");
+  assert.equal(windows[0].expiresAt,windows[1].expiresAt,"concurrent activation keeps one expiry timestamp");
+  assert.equal(windows[0].expiresAt-windows[0].startedAt,STRATA_PLUS_TRIAL_MS,"the browser cannot shorten or extend the server window");
+
+  const legacyDatabase=new DatabaseSync(join(runtimeDir,"strata.sqlite"));
+  try{legacyDatabase.prepare("UPDATE discovery_trials SET expires_at=? WHERE user_id=?").run(windows[0].startedAt+10*24*60*60*1000,signup.data.user.id);}finally{legacyDatabase.close();}
+  const clampedAccount=await request("/api/me",{headers:{Cookie:signup.cookie}});
+  assert.equal(clampedAccount.data.user.discovery.trial.active,true);
+  assert.equal(clampedAccount.data.user.discovery.trial.expiresAt,windows[0].startedAt+STRATA_PLUS_TRIAL_MS,"legacy longer rows are bounded by the current server policy");
+
+  const expiredAt=Date.now()-1_000,startedAt=expiredAt-STRATA_PLUS_TRIAL_MS;
+  const database=new DatabaseSync(join(runtimeDir,"strata.sqlite"));
+  try{database.prepare("UPDATE discovery_trials SET started_at=?,expires_at=? WHERE user_id=?").run(startedAt,expiredAt,signup.data.user.id);}finally{database.close();}
+  const expiredAccount=await request("/api/me",{headers:{Cookie:signup.cookie}});
+  assert.equal(expiredAccount.data.user.discovery.active,false);
+  assert.equal(expiredAccount.data.user.discovery.trial.active,false);
+  assert.equal(expiredAccount.data.user.discovery.trial.eligible,false);
+  const denied=await request("/api/discovery",{headers:{Cookie:signup.cookie}});
+  assert.equal(denied.response.status,402,"server access closes as soon as the stored expiry passes");
+  const replay=await request("/api/discovery/trial",{method:"POST",headers,body:"{}"});
+  assert.equal(replay.response.status,409);
+  assert.equal(replay.data.code,"TRIAL_ALREADY_USED");
+  const afterReplay=new DatabaseSync(join(runtimeDir,"strata.sqlite"),{readOnly:true});
+  try{
+    const stored=afterReplay.prepare("SELECT started_at,expires_at FROM discovery_trials WHERE user_id=?").get(signup.data.user.id);
+    assert.equal(stored.started_at,startedAt,"an expired replay cannot move the original start");
+    assert.equal(stored.expires_at,expiredAt,"an expired replay cannot extend access");
+  }finally{afterReplay.close();}
 });
 
 test("rejects incorrect passwords and cross-origin writes",async()=>{

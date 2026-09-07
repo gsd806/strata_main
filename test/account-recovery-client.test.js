@@ -95,7 +95,7 @@ test("recovery pages keep guidance, fallback, and retention copy explicit",()=>{
   assert.match(htmlByPage["reset-password"],/id="confirmPasswordToggle"[^>]*type="button"[^>]*aria-controls="confirmPassword"/);
   assert.match(htmlByPage["delete-account"],/copied by somebody else remain as independent copies/i);
   assert.match(htmlByPage["delete-account"],/support records, administrator security logs, and provider records may be retained/i);
-  assert.match(htmlByPage["delete-account"],/Paddle’s merchant-of-record transaction record is not deleted/i);
+  assert.match(htmlByPage["delete-account"],/Paddle’s merchant-of-record records are not deleted/i);
 });
 
 test("forgot-password gives a generic success and blocks a double submission",async()=>{

@@ -24,8 +24,12 @@ test("homepage exposes pricing, contact, and the public policy directory without
   assert.equal((footer.match(/href="\/policies"/g)||[]).length,1,"homepage footer must expose one Policies destination");
   assert.doesNotMatch(footer,/href="\/(?:terms|privacy|refunds)"/,"the policy hub replaces redundant legal links in the homepage footer");
   assert.match(home,/mailto:stratafitness\.official@gmail\.com/i);
-  assert.match(text("index.html"),/\$5\.99 USD/i);
-  assert.match(text("index.html"),/never a subscription/i);
+  assert.match(text("index.html"),/\$0\.99 USD/i);
+  assert.match(text("index.html"),/30 minutes/i);
+  assert.match(text("index.html"),/\$0\.99 USD per month/i);
+  assert.match(text("index.html"),/never auto-converts/i);
+  assert.match(text("index.html"),/renews monthly until canceled/i);
+  assert.doesNotMatch(text("index.html"),/lifetime|one[- ]time|never a subscription/i);
 });
 
 test("the public policies page publishes the founder story without cluttering the homepage",()=>{
@@ -56,12 +60,14 @@ test("core footers use the policy directory instead of repeating every legal pag
 });
 
 test("published Strata+ price and refund promise are exact and consistent",()=>{
-  assert.equal(BUILD,"7.4.1");
+  assert.equal(BUILD,"7.5.0");
   const pricingHtml=read("pricing.html"),pricing=text("pricing.html"),refunds=text("refunds.html"),terms=text("terms.html");
   assert.match(pricing,/Strata\+/);
-  assert.match(pricing,/\$5\.99 USD/i);
-  assert.match(pricing,/one[- ]time/i);
-  assert.match(pricing,/no recurring subscription/i);
+  assert.match(pricing,/\$0\.99 USD/i);
+  assert.match(pricing,/30-minute trial/i);
+  assert.match(pricing,/recurring monthly subscription/i);
+  assert.match(pricing,/renews every month until canceled/i);
+  assert.match(pricing,/no automatic conversion/i);
   assert.match(pricing,/personalized session builder/i);
   assert.match(pricing,/community weekly plans/i);
   assert.match(pricing,/31-day planner/i);
@@ -71,19 +77,25 @@ test("published Strata+ price and refund promise are exact and consistent",()=>{
   assert.match(pricing,/manual Plan is not taken away when access ends/i);
   assert.match(pricingHtml,/href="\/planner\.html">Open free planner/);
   assert.match(pricingHtml,/Create account to start trial/);
-  assert.match(pricingHtml,/free 10-day trial or buy Strata\+ once for \$5\.99 USD/);
+  assert.match(pricingHtml,/free 30-minute trial or explicitly subscribe for \$0\.99 USD per month/);
   assert.match(pricingHtml,/without an account; it stays in that browser[\s\S]*own synced Plan/);
   assert.match(pricingHtml,/href="\/refunds"/);
   assert.match(pricingHtml,/id="buyDiscovery"/);
   assert.match(pricingHtml,/src="https:\/\/cdn\.paddle\.com\/paddle\/v2\/paddle\.js"/);
   assert.match(pricingHtml,new RegExp(`src="/pricing\\.js\\?v=${BUILD.replace(/\./g,"\\.")}"`));
   assert.match(pricing,/Paddle is the merchant of record/i);
-  assert.match(pricing,/unlocks after STRATA securely confirms the completed transaction/i);
-  assert.match(refunds,/14 calendar days after the (?:date of your )?(?:paid )?Strata\+ purchase|14 calendar days after the purchase date/i);
+  assert.match(pricing,/unlocks after STRATA securely confirms the subscription/i);
+  assert.match(refunds,/14 calendar days after an eligible Strata\+ monthly charge/i);
   assert.match(refunds,/original payment method/i);
-  assert.match(terms,/\$5\.99 USD/i);
-  assert.match(terms,/not a subscription/i);
+  assert.match(refunds,/Cancellation does not automatically refund/i);
+  assert.match(refunds,/Deleting a STRATA account is not cancellation and is not a refund/i);
+  assert.match(terms,/\$0\.99 USD/i);
+  assert.match(terms,/runs for 30 consecutive minutes/i);
+  assert.match(terms,/recurring subscription/i);
+  assert.match(terms,/renews monthly at \$0\.99 USD until canceled/i);
+  assert.match(terms,/never converts into a subscription/i);
   assert.match(terms,/Paddle acts as merchant of record/i);
+  assert.match(terms,/lifetime access purchased before this recurring offer remain grandfathered/i);
 });
 
 test("customer-facing product branding is Strata+ while compatibility identifiers stay stable",()=>{
@@ -133,16 +145,21 @@ test("community-plan policies explain publication, privacy, replacement, and rem
   assert.match(terms,/publisher can unpublish their listing/i);
 });
 
-test("public copy describes active secure checkout without overpromising access",()=>{
+test("public copy describes recurring checkout, cancellation, and grandfathered access",()=>{
   const publicCopy=["pricing.html","terms.html","privacy.html","refunds.html"].map(text).join(" ");
-  assert.doesNotMatch(publicCopy,/lifetime access|permanent access/i);
+  assert.match(publicCopy,/\$0\.99 USD per month/i);
+  assert.match(publicCopy,/renews monthly/i);
+  assert.match(publicCopy,/grandfathered/i);
+  assert.doesNotMatch(publicCopy,/permanent access/i);
   assert.doesNotMatch(publicCopy,/prelaunch|until checkout is activated|when paid checkout launches|when purchasing is available/i);
-  assert.match(text("privacy.html"),/Paddle handles checkout and payment information/i);
-  assert.match(text("refunds.html"),/Strata\+ access for the refunded account ends when the refund is processed/i);
+  assert.match(text("privacy.html"),/Paddle handles checkout, recurring payment/i);
+  assert.match(text("privacy.html"),/current billing-period end/i);
+  assert.match(text("refunds.html"),/Refunding the charge may end the paid Strata\+ access/i);
   const pricingClient=fs.readFileSync(path.join(PUBLIC_ROOT,"scripts","pricing.js"),"utf8");
   assert.doesNotMatch(pricingClient,/permanently unlocked/i);
-  assert.match(pricingClient,/unlocked on this account with no recurring subscription/i);
-  assert.match(pricingClient,/Skip trial — buy now/);
+  assert.match(pricingClient,/Skip trial — subscribe · \$0\.99 USD \/ month/);
+  assert.match(pricingClient,/monthly subscription is active and renews on/);
+  assert.match(pricingClient,/previous monthly subscription is canceled and will not renew/);
   assert.match(pricingClient,/error\.code==="CHECKOUT_PREPARING"/);
   assert.doesNotMatch(pricingClient,/error\.status===409/,"a concurrent-checkout response must stay retryable instead of impersonating a completed payment");
 });

@@ -17,7 +17,7 @@ function fakeTursoClientFactory() {
     const sql=typeof statement==="string"?statement:statement.sql;
     const args=typeof statement==="string"?[]:(statement.args||[]);
     const prepared=database.prepare(sql);
-    const returnsRows=/^\s*(?:SELECT|PRAGMA|EXPLAIN)\b/i.test(sql)||/\bRETURNING\b/i.test(sql);
+    const returnsRows=/^\s*(?:SELECT|WITH|PRAGMA|EXPLAIN)\b/i.test(sql)||/\bRETURNING\b/i.test(sql);
     if (returnsRows) {
       const objectRows=prepared.all(...args);
       const columns=prepared.columns().map((column)=>column.name);
@@ -120,6 +120,14 @@ async function parityScenario(store) {
   const activeSession=await store.session("parity-session",1_200);
   const sessionAtExpiry=await store.session("parity-session",10_000);
   const expiredSession=await store.session("expired-session",1_200);
+  await store.insertSession({tokenHash:"other-session-a",userId:user.id,csrfToken:"private-other-a",expiresAt:10_000,createdAt:1_101,authVersion:1});
+  await store.insertSession({tokenHash:"other-session-b",userId:user.id,csrfToken:"private-other-b",expiresAt:10_000,createdAt:1_102,authVersion:1});
+  const accountSessions=await store.accountSessions(user.id,"parity-session",1_200);
+  const currentSessionProtected=await store.revokeAccountSession(user.id,"parity-session","parity-session",1_200);
+  const foreignSessionProtected=await store.revokeAccountSession("not-the-owner","other-session-a","parity-session",1_200);
+  const revokedAccountSession=await store.revokeAccountSession(user.id,"other-session-a","parity-session",1_200);
+  const revokedOtherAccountSessions=await store.revokeOtherAccountSessions(user.id,"parity-session",1_200);
+  const currentAccountSession=await store.session("parity-session",1_200);
 
   const planJson=JSON.stringify({version:1,restDay:"Sunday",days:{}});
   const firstPlan=await store.upsertPlan(user.id,planJson,1_300,0);
@@ -163,6 +171,7 @@ async function parityScenario(store) {
     completedAt:2_000,
     updatedAt:2_000
   });
+  const accountExport=await store.accountExport(user.id);
 
   const revoked=await store.revokeUserSessions(user.id);
   const staleSessionAccepted=await store.insertSession({
@@ -224,6 +233,12 @@ async function parityScenario(store) {
     activeSession,
     sessionAtExpiry,
     expiredSession,
+    accountSessions,
+    currentSessionProtected,
+    foreignSessionProtected,
+    revokedAccountSession,
+    revokedOtherAccountSessions,
+    currentAccountSession,
     firstPlan,
     stalePlan,
     monthlyResult,
@@ -240,6 +255,7 @@ async function parityScenario(store) {
     pending,
     completed,
     replayed,
+    accountExport,
     paidAccess:await store.hasPaidDiscoveryAccess(user.id),
     revoked,
     staleSessionAccepted,
@@ -275,10 +291,26 @@ test("SQLite and Turso adapters expose matching values, mutation results, and se
       "insertUserResult","deleteExpiredResult","monthlyResult","preferencesResult",
       "ratingResult","verificationSendResult","deleteSessionResult"
     ]) assert.equal(localResult[key],undefined,`${key} must have one documented void result across adapters`);
-    assert.equal(localResult.replayed.customer_id,"ctm_original");
-    assert.equal(localResult.replayed.completed_at,1_900);
+    assert.equal(localResult.replayed,null,"a provider completion cannot replace the durable customer identity");
+    assert.equal(localResult.completed.customer_id,"ctm_original");
+    assert.equal(localResult.completed.completed_at,1_900);
     assert.equal(localResult.activeSession.expires_at,10_000);
     assert.equal(localResult.sessionAtExpiry,null,"sessions must expire at the exact stored boundary");
+    assert.deepEqual(localResult.accountSessions.map(({token_hash,created_at,expires_at})=>({token_hash,created_at,expires_at})),[
+      {token_hash:"parity-session",created_at:1_100,expires_at:10_000},
+      {token_hash:"other-session-b",created_at:1_102,expires_at:10_000},
+      {token_hash:"other-session-a",created_at:1_101,expires_at:10_000}
+    ]);
+    assert.equal(localResult.currentSessionProtected,false,"self-service cannot revoke the current session");
+    assert.equal(localResult.foreignSessionProtected,false,"self-service cannot revoke another user's session");
+    assert.equal(localResult.revokedAccountSession,true);
+    assert.equal(localResult.revokedOtherAccountSessions,1);
+    assert.ok(localResult.currentAccountSession,"bulk revocation must preserve the current session");
+    const serializedExport=JSON.stringify(localResult.accountExport);
+    assert.doesNotMatch(serializedExport,/private-|password_hash|password_salt|token_hash|csrf_token|customer_id|admin_note|ip_hash/i);
+    assert.equal(localResult.accountExport.profile.id,"parity-user");
+    assert.equal(localResult.accountExport.ratings[0].exercise_id,"parity-lift");
+    assert.equal(localResult.accountExport.purchases[0].transaction_id,"txn_parity");
     assert.equal(localResult.revoked.revoked,1);
     assert.equal(localResult.staleSessionAccepted,false);
     assert.equal(localResult.resetCompleted.auth_version,2);

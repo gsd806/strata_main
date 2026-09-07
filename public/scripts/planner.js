@@ -1,5 +1,6 @@
 "use strict";
 
+const INSIGHTS=globalThis.StrataPlanInsights;
 const DAYS=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 const GROUPS=["all","chest","back","shoulders","arms","legs","glutes","calves","core"];
 const LIBRARY_DESKTOP_PAGE_SIZE=32;
@@ -15,7 +16,8 @@ const state={
   exercises:[],plan:null,user:null,query:"",group:"all",drag:null,selectedDay:"Monday",
   ready:false,guest:false,guestRaw:null,saveTimer:null,savePromise:null,lastSaveError:null,planUpdatedAt:0,revision:0,savedRevision:0,navigating:false,libraryLimit:LIBRARY_DESKTOP_PAGE_SIZE,
   accountChanged:false,undoRemoval:null,replacement:null,templatePreview:null,draftKey:"",draftValue:"",recoverySource:null,recoveredDrafts:[],draftStorageError:false,
-  conflictDraft:null,conflictLatest:null,conflictReview:false,csrfToken:"",sharedPlans:[],sharedPlansLoaded:false,sharedPlansRequest:0,shareBusy:false,pendingUnpublish:""
+  conflictDraft:null,conflictLatest:null,conflictReview:false,csrfToken:"",sharedPlans:[],sharedPlansLoaded:false,sharedPlansRequest:0,shareBusy:false,pendingUnpublish:"",
+  activationCandidates:[],activationCandidateId:"",activationBusy:false,copyPreview:null,copyTrigger:null
 };
 const el=(id)=>document.getElementById(id);
 const signal=name=>globalThis.StrataSignals?.record?.(name);
@@ -565,6 +567,67 @@ function renderSummary(){
     };
   }
   el("weekSummary").innerHTML=`<div class="summary-stat"><span>Scheduled movements</span><strong>${total}</strong></div><div class="summary-stat"><span>Training days</span><strong>${trainingDays}</strong></div><div class="summary-stat"><span>Working sets</span><strong>${totalSets}</strong></div><div class="summary-stat ${restConflict?"summary-warning":""}"><span>Rest days</span><strong>${restDays().length}${restConflict?" · clear":""}</strong></div><div class="week-distribution" role="img" aria-label="Weekly exercise distribution. ${distribution}">${DAYS.map((day)=>`<div aria-hidden="true"><span>${state.plan.days[day].length}</span><div class="week-bar-track"><i style="height:${Math.max(3,state.plan.days[day].length/peak*100)}%" class="${isRestDay(day)?"is-rest":""}"></i></div><small>${day.slice(0,3)}</small></div>`).join("")}</div><section class="week-readiness ${readiness.tone}" aria-label="Plan guidance"><div><span>${readiness.label}</span><strong>${readiness.title}</strong><p>${readiness.detail}</p></div>${readiness.href?`<a href="${readiness.href}">${readiness.action} <span aria-hidden="true">→</span></a>`:""}</section>`;
+  renderInsights();
+}
+
+function insightRows(entries,emptyMessage){
+  const rows=entries.slice(0,6),peak=Math.max(1,...rows.map((entry)=>Number(entry.sets)||0));
+  return rows.length?rows.map((entry)=>`<div class="insight-row"><span>${escapeHtml(entry.label)}</span><div aria-hidden="true"><i style="width:${Math.max(3,(Number(entry.sets)||0)/peak*100)}%"></i></div><strong>${Number(entry.sets)||0} sets</strong></div>`).join(""):`<p class="insight-empty">${escapeHtml(emptyMessage)}</p>`;
+}
+
+function syncCopyDayOptions(){
+  const source=el("copySourceDay"),target=el("copyTargetDay"),previousSource=source.value,previousTarget=target.value;
+  const defaultSource=state.plan&&DAYS.find((day)=>state.plan.days[day].length)||"Monday";
+  const sourceDay=DAYS.includes(previousSource)?previousSource:defaultSource;
+  source.innerHTML=DAYS.map((day)=>`<option value="${day}"${day===sourceDay?" selected":""}>${day} · ${state.plan?.days?.[day]?.length||0} movements</option>`).join("");
+  const targets=DAYS.filter((day)=>day!==sourceDay),nextDay=DAYS[(DAYS.indexOf(sourceDay)+1)%DAYS.length],targetDay=targets.includes(previousTarget)?previousTarget:nextDay;
+  target.innerHTML=targets.map((day)=>`<option value="${day}"${day===targetDay?" selected":""}>${day} · ${state.plan?.days?.[day]?.length||0} movements${isRestDay(day)?" · recovery day":""}</option>`).join("");
+  el("previewCopyDay").disabled=!state.ready||!state.plan?.days?.[sourceDay]?.length;
+}
+
+function renderInsights(){
+  if(!INSIGHTS||!state.plan){el("planInsights").hidden=true;return;}
+  el("planInsights").hidden=false;
+  const analysis=INSIGHTS.analyzePlan(state.plan,state.exercises),largest=analysis.days.reduce((best,day)=>day.workingSets>best.workingSets?day:best,analysis.days[0]);
+  el("insightMetrics").innerHTML=`<div><span>Planning estimate</span><strong>${analysis.metrics.estimatedMinutes} min</strong><small>sets + transitions</small></div><div><span>Largest day</span><strong>${largest.workingSets?escapeHtml(largest.day):"—"}</strong><small>${largest.workingSets} working sets</small></div><div><span>Primary areas</span><strong>${analysis.muscles.length}</strong><small>catalog groups</small></div><div><span>Equipment setups</span><strong>${analysis.equipment.length}</strong><small>across the week</small></div>`;
+  el("insightMuscles").innerHTML=insightRows(analysis.muscles,"Add movements to see primary-muscle distribution.");
+  el("insightPatterns").innerHTML=insightRows(analysis.patterns,"Add movements to see pattern distribution.");
+  el("insightEquipment").innerHTML=insightRows(analysis.equipment,"Add movements to see equipment concentration.");
+  el("insightAlerts").innerHTML=analysis.alerts.length?analysis.alerts.map((alert)=>`<article class="insight-alert ${escapeHtml(alert.tone)}"><strong>${escapeHtml(alert.title)}</strong><p>${escapeHtml(alert.detail)}</p><span>${escapeHtml(alert.action)}</span></article>`).join(""):'<article class="insight-alert clear"><strong>No obvious structure conflicts</strong><p>The current week has no observable density, duplicate, high-frequency, or recovery-marker flags.</p><span>Review, then train</span></article>';
+  el("insightNextAction").textContent=analysis.nextAction;
+  syncCopyDayOptions();
+}
+
+function openCopyDayPreview(trigger){
+  if(!state.ready||!INSIGHTS||state.accountChanged||state.conflictDraft)return;
+  const sourceDay=el("copySourceDay").value,targetDay=el("copyTargetDay").value,mode=el("copyDayMode").value;
+  try{
+    const preview=INSIGHTS.copyDayPreview(state.plan,sourceDay,targetDay,{mode});
+    const skippedNames=preview.skipped.map((id)=>exerciseById(id)?.name||id),before=state.plan.days[targetDay].length,after=preview.plan.days[targetDay].length;
+    state.copyPreview={...preview,baseRevision:state.revision,basePlan:JSON.stringify(state.plan)};state.copyTrigger=trigger;
+    el("copyDayDialogDescription").textContent=`${sourceDay} → ${targetDay}. This is a preview; your editable week has not changed.`;
+    el("copyDayPreview").innerHTML=`<div class="copy-preview-counts"><div><span>Destination now</span><strong>${before}</strong><small>movements</small></div><div><span>After approval</span><strong>${after}</strong><small>movements</small></div><div><span>New copies</span><strong>${preview.added}</strong><small>new identities</small></div></div><p><strong>${mode==="replace"?"Replace":"Add missing"}:</strong> ${mode==="replace"?`${preview.replaced} destination movement${preview.replaced===1?"":"s"} will be replaced by copies from ${escapeHtml(sourceDay)}.`:`Existing movements stay; matching exercise IDs are not duplicated.`}</p>${skippedNames.length?`<p><strong>Already present:</strong> ${skippedNames.map(escapeHtml).join(", ")}.</p>`:""}${isRestDay(targetDay)?`<p><strong>Recovery marker:</strong> ${escapeHtml(targetDay)} will become a training day.</p>`:""}`;
+    el("confirmCopyDay").checked=false;el("applyCopyDay").disabled=true;el("copyDayStatus").textContent=preview.changed?"No changes applied. Confirm only after reviewing this preview.":"The destination already matches this copy.";
+    el("confirmCopyDay").disabled=!preview.changed;
+    el("copyDayDialog").showModal();requestAnimationFrame(()=>el("copyDayDialogTitle").focus());
+  }catch(error){showToast(error.message||"This day copy could not be previewed.");}
+}
+
+function closeCopyDayPreview(){
+  if(el("copyDayDialog").open)el("copyDayDialog").close();
+}
+
+function applyCopyDayPreview(){
+  const preview=state.copyPreview;
+  if(!preview||!el("confirmCopyDay").checked)return;
+  if(preview.baseRevision!==state.revision||preview.basePlan!==JSON.stringify(state.plan)){
+    el("copyDayStatus").textContent="Your week changed after this preview. Close it and review a fresh copy.";el("applyCopyDay").disabled=true;return;
+  }
+  const targetDay=preview.targetDay,added=preview.added;
+  state.plan=copyPlan(preview.plan);state.undoRemoval=null;state.copyPreview=null;
+  el("copyDayDialog").close();renderWeek();renderLibrary();queueSave();
+  showToast(`${preview.sourceDay} copied to ${targetDay}. ${added} movement${added===1?"":"s"} added; follow the save status for confirmation.`);
+  requestAnimationFrame(()=>el("previewCopyDay").focus());
 }
 
 function hasRestConflict(){return restDays().some(day=>state.plan?.days?.[day]?.length);}
@@ -670,6 +733,93 @@ function planConflictSummary(plan){
   return `<p class="plan-conflict-total">${planMovementCount(plan)} movement${planMovementCount(plan)===1?"":"s"} · ${restDays(plan).length} rest days</p><ul>${rows}</ul>`;
 }
 
+function selectedActivationCandidate(){return state.activationCandidates.find((candidate)=>candidate.id===state.activationCandidateId)||state.activationCandidates[0]||null;}
+function setActivationStatus(message,error=false){const node=el("devicePlanStatus");node.textContent=message;node.dataset.state=error?"error":"";}
+function activationOverview(candidate){
+  const accountCount=planMovementCount(state.plan),deviceCount=planMovementCount(candidate.plan),profile=candidate.profile;
+  return `<div><span>Device source</span><strong>${escapeHtml(candidate.label)}</strong></div><div><span>Device week</span><strong>${deviceCount} movement${deviceCount===1?"":"s"}</strong></div><div><span>Account week</span><strong>${accountCount} movement${accountCount===1?"":"s"}</strong></div>${profile?`<div><span>Goal</span><strong>${escapeHtml(String(profile.goal).replace("-"," "))}</strong></div><div><span>Schedule</span><strong>${profile.availability.length} days · ${profile.minutes} min</strong></div><div><span>Equipment</span><strong>${escapeHtml(profile.equipment.join(", "))}</strong></div>`:""}`;
+}
+function renderActivationCandidate(){
+  const candidate=selectedActivationCandidate();if(!candidate)return false;
+  el("devicePlanOverview").innerHTML=activationOverview(candidate);
+  el("deviceCandidateTitle").textContent=candidate.label;
+  el("deviceAccountPlanSummary").innerHTML=planConflictSummary(state.plan);
+  el("deviceCandidatePlanSummary").innerHTML=planConflictSummary(candidate.plan);
+  el("devicePlanComparison").hidden=true;
+  el("devicePlanConfirmLabel").hidden=true;
+  el("devicePlanConfirm").checked=false;
+  el("claimDevicePlan").disabled=true;
+  el("compareDevicePlan").setAttribute("aria-expanded","false");
+  el("compareDevicePlan").innerHTML='Compare both weeks <span aria-hidden="true">↘</span>';
+  setActivationStatus("No decision has been made. Both copies remain unchanged.");
+  return true;
+}
+function hideActivationPanel(){state.activationCandidates=[];state.activationCandidateId="";el("devicePlanPanel").hidden=true;}
+function offerDevicePlan(){
+  const activation=globalThis.StrataActivation;
+  if(state.guest||!state.user?.id||!state.plan||!activation?.deviceCandidates){hideActivationPanel();return false;}
+  let candidates=[];
+  try{
+    candidates=activation.deviceCandidates(localStorage).flatMap((candidate)=>{
+      try{return[{...candidate,plan:validateWeekPlan(candidate.plan)}];}catch{return[];}
+    }).filter((candidate)=>activation.shouldOffer(localStorage,{userId:state.user.id,accountRevision:state.planUpdatedAt,accountPlan:state.plan,candidate}));
+  }catch{candidates=[];}
+  if(!candidates.length){hideActivationPanel();return false;}
+  state.activationCandidates=candidates;state.activationCandidateId=candidates[0].id;
+  const source=el("devicePlanSource");
+  source.innerHTML=candidates.map((candidate)=>`<option value="${escapeHtml(candidate.id)}">${escapeHtml(candidate.label)} · ${planMovementCount(candidate.plan)} movements</option>`).join("");
+  source.value=state.activationCandidateId;el("devicePlanSourceLabel").hidden=candidates.length<2;
+  renderActivationCandidate();el("devicePlanPanel").hidden=false;
+  focusSoon("#devicePlanTitle");return true;
+}
+function toggleActivationComparison(){
+  const comparison=el("devicePlanComparison"),opening=comparison.hidden;
+  comparison.hidden=!opening;el("devicePlanConfirmLabel").hidden=!opening;
+  el("compareDevicePlan").setAttribute("aria-expanded",String(opening));
+  el("compareDevicePlan").innerHTML=opening?'Hide comparison <span aria-hidden="true">↖</span>':'Compare both weeks <span aria-hidden="true">↘</span>';
+  setActivationStatus(opening?"Comparison open. Review every day before choosing a week.":"Comparison hidden. No decision has been made.");
+  if(opening)focusSoon("#deviceCandidateTitle");
+}
+function storeActivationBackup(candidate,reason){
+  const activation=globalThis.StrataActivation;
+  if(!activation?.backup)throw new Error("The device-week safety tools are unavailable. Reload before choosing a week.");
+  return activation.backup(localStorage,{userId:state.user.id,accountRevision:state.planUpdatedAt,accountPlan:state.plan,candidate,reason});
+}
+function acknowledgeActivation(candidate,decision,accountPlan=state.plan){
+  const activation=globalThis.StrataActivation;
+  activation?.acknowledge?.(localStorage,{userId:state.user.id,accountRevision:state.planUpdatedAt,accountPlan,candidate,decision});
+}
+function keepAccountActivationPlan(){
+  const candidate=selectedActivationCandidate();if(!candidate||state.activationBusy)return false;
+  try{storeActivationBackup(candidate,"keep-account");acknowledgeActivation(candidate,"kept-account");}
+  catch(error){setActivationStatus(error.message||"This browser could not create the safety copy. Export your account week and try again.",true);return false;}
+  hideActivationPanel();showToast("Account week kept. The device week remains in a local safety copy.");focusSoon("#weekTitle");
+  return true;
+}
+async function claimActivationPlan(){
+  const candidate=selectedActivationCandidate();
+  if(!candidate||state.activationBusy||!el("devicePlanConfirm").checked)return false;
+  state.activationBusy=true;for(const id of ["compareDevicePlan","keepAccountPlan","claimDevicePlan","devicePlanSource"])el(id).disabled=true;
+  setActivationStatus("Saving a safety copy, then checking the latest account revision…");
+  try{
+    const devicePlan=validateWeekPlan(candidate.plan);
+    if(!await flushSave({silent:true}))throw new Error("Finish saving or resolving the current account week before replacing it.");
+    storeActivationBackup(candidate,"claim");
+    const result=await api("/api/plan",{method:"PUT",body:JSON.stringify({plan:devicePlan,expectedPlanUpdatedAt:state.planUpdatedAt,expectedUserId:String(state.user.id)})});
+    state.plan=validateWeekPlan(result.plan||devicePlan);state.planUpdatedAt=Number(result.planUpdatedAt)||state.planUpdatedAt;
+    state.revision+=1;state.savedRevision=state.revision;state.lastSaveError=null;state.undoRemoval=null;clearSavedDraft();
+    try{acknowledgeActivation(candidate,"claimed",state.plan);}catch{/* The source week remains local and equality prevents a repeated prompt. */}
+    hideActivationPanel();renderWeek();renderLibrary();setSaveStatus("Saved");showToast("Device week saved to your account. The earlier copies remain in a local safety backup.");focusSoon("#weekTitle");signal("plan_saved");return true;
+  }catch(error){
+    if(error.status===409&&error.code==="PLAN_CHANGED")setActivationStatus("Your account week changed in another tab or device. Nothing was overwritten. Reload to compare the latest account week before trying again.",true);
+    else setActivationStatus(error.message||"The device week could not be saved. Both copies are still available.",true);
+    return false;
+  }finally{
+    state.activationBusy=false;for(const id of ["compareDevicePlan","keepAccountPlan","devicePlanSource"])el(id).disabled=false;
+    el("claimDevicePlan").disabled=!el("devicePlanConfirm").checked;
+  }
+}
+
 function renderPlanConflict(){
   const panel=el("planConflictPanel"),local=state.conflictDraft||state.conflictReview&&state.plan;
   if(!state.conflictLatest||!local){panel.hidden=true;return;}
@@ -739,7 +889,7 @@ function keepLatestPlan(){
   setSaveStatus("Latest account plan kept");
   showToast("The latest account plan was kept. Your unsaved copy was discarded.");
   focusSoon("#weekTitle");
-  offerRecoveredDraft();
+  if(!offerRecoveredDraft())offerDevicePlan();
   return true;
 }
 
@@ -957,6 +1107,12 @@ el("confirmUseTemplate").addEventListener("change",()=>{el("applyWeekTemplate").
 el("applyWeekTemplate").addEventListener("click",useWeekTemplate);
 el("deleteWeekTemplate").addEventListener("click",deleteWeekTemplate);
 el("closeWeekTemplates").addEventListener("click",()=>el("weekTemplatesDialog").close());
+el("copySourceDay").addEventListener("change",syncCopyDayOptions);
+el("previewCopyDay").addEventListener("click",(event)=>openCopyDayPreview(event.currentTarget));
+el("confirmCopyDay").addEventListener("change",(event)=>{el("applyCopyDay").disabled=!event.target.checked||!state.copyPreview?.changed;el("copyDayStatus").textContent=event.target.checked?"Ready to apply this reviewed copy. Nothing changes until you choose Apply reviewed copy.":"No changes applied.";});
+el("applyCopyDay").addEventListener("click",applyCopyDayPreview);
+el("closeCopyDay").addEventListener("click",closeCopyDayPreview);
+el("copyDayDialog").addEventListener("close",()=>{const trigger=state.copyTrigger;state.copyPreview=null;state.copyTrigger=null;requestAnimationFrame(()=>trigger?.focus?.());});
 el("replaceExerciseSearch").addEventListener("input",renderReplacementOptions);
 el("replaceExerciseSelect").addEventListener("change",()=>{el("confirmReplaceExercise").disabled=!el("replaceExerciseSelect").value;});
 el("confirmReplaceExercise").addEventListener("click",confirmReplacement);
@@ -975,6 +1131,11 @@ el("retryPlanSave").addEventListener("click",async(event)=>{
 });
 el("reviewLocalPlan").addEventListener("click",reviewConflictDraft);
 el("keepLatestPlan").addEventListener("click",keepLatestPlan);
+el("devicePlanSource").addEventListener("change",(event)=>{state.activationCandidateId=event.target.value;renderActivationCandidate();});
+el("compareDevicePlan").addEventListener("click",toggleActivationComparison);
+el("devicePlanConfirm").addEventListener("change",(event)=>{el("claimDevicePlan").disabled=!event.target.checked||state.activationBusy;setActivationStatus(event.target.checked?"Ready to replace the account week. The write will check for newer account changes first.":"No decision has been made. Both copies remain unchanged.");});
+el("keepAccountPlan").addEventListener("click",keepAccountActivationPlan);
+el("claimDevicePlan").addEventListener("click",()=>void claimActivationPlan());
 el("shareWeeklyPlan").addEventListener("click",()=>{
   if(el("shareWeeklyPanel").hidden)openSharePanel();else closeSharePanel();
 });
@@ -1018,12 +1179,15 @@ window.addEventListener("beforeunload",(event)=>{if(state.ready&&state.savedRevi
 
 async function init({guestOnly=false}={}){
   setReady(false);
+  if(el("copyDayDialog").open)el("copyDayDialog").close();
+  state.copyPreview=null;state.copyTrigger=null;
+  hideActivationPanel();
   setSaveStatus("Loading plan…");
   el("libraryList").innerHTML='<div class="loading">Loading movements…</div>';
   el("weekSummary").innerHTML="";
   el("weekBoard").innerHTML='<div class="planner-load-state">Loading your weekly plan…</div>';
   try{
-    const exercises=await api("/exercises.json?v=7.4.1");
+    const exercises=await api("/exercises.json?v=7.5.0");
     if(!Array.isArray(exercises))throw new Error("STRATA returned an incomplete exercise library.");
     state.exercises=exercises;
     let result;
@@ -1057,6 +1221,7 @@ async function init({guestOnly=false}={}){
     if(!state.guest){const renderedPlan=state.plan;state.plan=storedAccountPlan;const recovered=offerRecoveredDraft();if(recovered){renderWeek();renderLibrary();return;}state.plan=renderedPlan;}
     if(repairedRest){queueSave();showToast("Scheduled exercises preserved. Conflicting rest markers removed.");}
     handlePendingAdd();
+    if(!state.guest)offerDevicePlan();
   }catch(error){
     state.ready=false;
     el("plannerSearch").disabled=true;el("exportWeeklyPlan").disabled=true;el("shareWeeklyPlan").disabled=true;

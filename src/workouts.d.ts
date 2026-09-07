@@ -26,5 +26,12 @@ export function summarizeWorkout(workout:Record<string,any>):{
     volume:number;
     totalSeconds:number;
     maxSeconds:number|null;
+    setValues:Array<{
+      reps:number|null;
+      weight:number|null;
+      seconds:number|null;
+      effort:number|null;
+      effortType:"none"|"rir"|"rpe";
+    }>;
   }>;
 };

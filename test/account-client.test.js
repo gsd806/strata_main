@@ -28,11 +28,17 @@ class Element{
   focus(){this.focused=true;}
   scrollIntoView(){this.scrolled=true;}
   prepend(node){this.prepended=node;}
+  appendChild(node){this.appended=node;}
+  click(){this.clicked=true;}
+  remove(){this.removed=true;}
   querySelector(selector){return selector==="span"?this.statusText:null;}
 }
 
 function jsonResponse(status,data){
   return {ok:status>=200&&status<300,status,headers:{get:(name)=>name.toLowerCase()==="content-type"?"application/json; charset=utf-8":null},json:async()=>data};
+}
+function exportResponse(data){
+  return{ok:true,status:200,headers:{get:(name)=>({"content-type":"application/json; charset=utf-8","content-disposition":'attachment; filename="strata-account-export-2026-09-08.json"',"x-strata-export":"account-v1"}[name.toLowerCase()]||null)},blob:async()=>new Blob([JSON.stringify(data)],{type:"application/json"})};
 }
 
 function createPage({search="",route}){
@@ -43,18 +49,23 @@ function createPage({search="",route}){
   elements.get("signupMessage").hidden=true;
   elements.get("loginMessage").hidden=true;
   elements.get("storageState").statusText=new Element("storageText");
-  const authGrid=new Element("authGrid"),navigations=[],requests=[],replaced=[],reloads=[];
+  const authGrid=new Element("authGrid"),body=new Element("body"),navigations=[],requests=[],replaced=[],reloads=[],downloads=[],objectUrls=[];
   const location={search,href:`http://strata.test/account.html${search}`,assign:(path)=>navigations.push(path),replace:(path)=>navigations.push(path),reload:()=>reloads.push(true)};
   const document={
+    body,
     getElementById:(id)=>elements.get(id)||null,
-    querySelector:(selector)=>selector===".auth-grid"?authGrid:null
+    querySelector:(selector)=>selector===".auth-grid"?authGrid:null,
+    createElement:(tag)=>{const node=new Element(tag);node.click=()=>downloads.push({href:node.href,download:node.download});return node;}
   };
+  class BrowserURL extends URL{}
+  BrowserURL.createObjectURL=(blob)=>{const value=`blob:strata-${objectUrls.length+1}`;objectUrls.push({value,blob});return value;};
+  BrowserURL.revokeObjectURL=()=>{};
   class FakeFormData{
     constructor(form){this.values=form.values;}
     get(name){return this.values[name]??null;}
   }
   const context={
-    console,document,location,URL,URLSearchParams,FormData:FakeFormData,
+    console,document,location,URL:BrowserURL,URLSearchParams,FormData:FakeFormData,Blob,setTimeout,
     history:{replaceState:(...args)=>replaced.push(args)},
     requestAnimationFrame:(callback)=>callback(),matchMedia:()=>({matches:false}),
     fetch:async(path,options={})=>{requests.push({path,options});return route(path,options,requests);}
@@ -62,7 +73,7 @@ function createPage({search="",route}){
   context.globalThis=context;
   vm.createContext(context);
   vm.runInContext(script,context,{filename:"account.js"});
-  return {elements,requests,navigations,replaced,reloads};
+  return {elements,requests,navigations,replaced,reloads,downloads,objectUrls};
 }
 
 async function settle(){
@@ -98,6 +109,38 @@ test("native forms remain available without the JavaScript enhancement",()=>{
   assert.doesNotMatch(html,/<section class="account-access" id="accountAccess"[^>]*hidden/);
   assert.doesNotMatch(html,/accountRetry/);
   assert.doesNotMatch(script,/accountRetry/);
+});
+
+test("signed-in session and JSON export controls are accessible and CSRF protected",async()=>{
+  assert.match(html,/id="accountSessionsTitle"/);assert.match(html,/id="accountSessionList"[^>]*aria-label="Active signed-in sessions"/);
+  assert.match(html,/id="accountRevokeOtherSessions"[^>]*aria-describedby="accountSessionStatus"/);
+  assert.match(html,/id="accountExportData"[^>]*aria-describedby="accountExportStatus"/);
+  const user=memberFixture({discovery:{active:false,accessType:null,pendingPurchaseCount:0}}),current={id:"session-current",current:true,createdAt:1_700_000_000_000,expiresAt:1_800_000_000_000},other={id:"session-other",current:false,createdAt:1_710_000_000_000,expiresAt:1_810_000_000_000};
+  const page=createPage({route:async(path,options)=>{
+    if(path==="/api/status")return jsonResponse(200,{persistent:true});
+    if(path==="/healthz")return jsonResponse(200,{ok:true});
+    if(path==="/api/me")return jsonResponse(200,{csrfToken:"csrf-self-service",user});
+    if(path==="/api/plan")return jsonResponse(200,{csrfToken:"csrf-self-service",user,plan:planFixture(),planUpdatedAt:0});
+    if(path==="/api/account/sessions"&&(!options.method||options.method==="GET"))return jsonResponse(200,{userId:user.id,sessions:[current,other],otherCount:1});
+    if(path==="/api/account/sessions/revoke-others")return jsonResponse(200,{ok:true,revoked:1,sessions:[current],otherCount:0});
+    if(path==="/api/account/export")return exportResponse({format:"strata-account-export",schemaVersion:1,exportedAt:"2026-09-08T00:00:00.000Z",account:{id:user.id}});
+    throw new Error(`Unexpected route ${path}`);
+  }});
+  await settle();
+  assert.match(page.elements.get("accountSessionList").innerHTML,/This session/);
+  assert.match(page.elements.get("accountSessionList").innerHTML,/data-revoke-session="session-other"/);
+  assert.equal(page.elements.get("accountRevokeOtherSessions").disabled,false);
+  await page.elements.get("accountRevokeOtherSessions").emit("click",{currentTarget:page.elements.get("accountRevokeOtherSessions")});
+  await settle();
+  const revoke=page.requests.find(({path})=>path==="/api/account/sessions/revoke-others");
+  assert.equal(revoke.options.headers["X-CSRF-Token"],"csrf-self-service");assert.equal(revoke.options.body,"{}");
+  assert.match(page.elements.get("accountSessionStatus").textContent,/1 other session/);
+  await page.elements.get("accountExportData").emit("click",{currentTarget:page.elements.get("accountExportData")});
+  await settle();
+  const exported=page.requests.find(({path})=>path==="/api/account/export");
+  assert.equal(exported.options.method,"POST");assert.equal(exported.options.headers["X-CSRF-Token"],"csrf-self-service");
+  assert.deepEqual(page.downloads,[{href:"blob:strata-1",download:"strata-account-export-2026-09-08.json"}]);
+  assert.equal(page.objectUrls.length,1);assert.match(page.elements.get("accountExportStatus").textContent,/downloaded/i);
 });
 
 test("explicit account modes bring the requested form into view on every viewport",async()=>{
@@ -194,26 +237,63 @@ test("failed storage probes are advisory and a login error stays scoped",async()
 });
 
 test("signed-in dashboard distinguishes access and plan states with a useful next action",async()=>{
+  const periodEnd=Date.now()+30*24*60*60*1000,cancelAt=Date.now()+7*24*60*60*1000;
+  const subscription=(status,overrides={})=>({id:`sub-${status}`,status,active:["active","trialing","past_due"].includes(status),pastDue:status==="past_due",scheduledChange:null,currentPeriodEndsAt:periodEnd,...overrides});
   const cases=[
     {
-      name:"paid account with a populated week",planCount:6,workoutDays:3,
-      discovery:{active:true,accessType:"paid",pendingPurchaseCount:0},
-      access:"Unlocked",detail:/one-time access confirmed/i,primary:"Open next workout",href:/^\/workout\.html\?day=/,discoveryAction:"Open Strata+ studio →"
+      name:"active monthly account with a populated week",planCount:6,workoutDays:3,
+      discovery:{active:true,accessType:"subscription",pendingPurchaseCount:0,subscription:subscription("active")},
+      access:"Active",detail:/\$0\.99\/month · renews/i,primary:"Open next workout",href:/^\/workout\.html\?day=/,discoveryAction:"Open Strata+ studio →",billing:/next renewal/i,badge:"Active",cancel:true
+    },
+    {
+      name:"grandfathered lifetime account",planCount:0,workoutDays:0,
+      discovery:{active:true,accessType:"lifetime",pendingPurchaseCount:0,subscription:null},
+      access:"Lifetime",detail:/grandfathered · no renewal/i,primary:"Build your week",href:/^\/onboarding\.html$/,discoveryAction:"Open Strata+ studio →",billing:/prior lifetime purchase remains active/i,badge:"Grandfathered",manage:false
     },
     {
       name:"trial account without a week",planCount:0,workoutDays:0,
-      discovery:{active:true,accessType:"trial",pendingPurchaseCount:0,trial:{expiresAt:Date.now()+3*86400000}},
-      access:"Trial",detail:/3 days remaining/i,primary:"Build your week",href:/^\/onboarding\.html$/,discoveryAction:"Open Strata+ studio →"
+      discovery:{active:true,accessType:"trial",pendingPurchaseCount:0,trial:{expiresAt:Date.now()+25*60000}},
+      access:"Trial",detail:/25 min remaining/i,primary:"Build your week",href:/^\/onboarding\.html$/,discoveryAction:"Open Strata+ studio →",billing:null
+    },
+    {
+      name:"scheduled cancellation",planCount:0,workoutDays:0,
+      discovery:{active:true,accessType:"subscription",pendingPurchaseCount:0,subscription:subscription("active",{scheduledChange:{action:"cancel",effectiveAt:cancelAt}})},
+      access:"Canceling",detail:/Access through/i,primary:"Build your week",href:/^\/onboarding\.html$/,discoveryAction:"Open Strata+ studio →",billing:/Cancellation takes effect/i,badge:"Canceling",cancel:false
+    },
+    {
+      name:"scheduled pause",planCount:0,workoutDays:0,
+      discovery:{active:true,accessType:"subscription",pendingPurchaseCount:0,subscription:subscription("active",{scheduledChange:{action:"pause",effectiveAt:cancelAt}})},
+      access:"Pausing",detail:/Access through/i,primary:"Build your week",href:/^\/onboarding\.html$/,discoveryAction:"Open Strata+ studio →",billing:/subscription pauses/i,badge:"Pausing",cancel:true
+    },
+    {
+      name:"past-due subscription",planCount:0,workoutDays:0,
+      discovery:{active:true,accessType:"subscription",pendingPurchaseCount:0,subscription:subscription("past_due")},
+      access:"Past due",detail:/Update payment method/i,primary:"Build your week",href:/^\/onboarding\.html$/,discoveryAction:"Open Strata+ studio →",billing:/could not collect/i,badge:"Past due",update:true,cancel:true
+    },
+    {
+      name:"expired cached subscription",planCount:0,workoutDays:0,
+      discovery:{active:false,accessType:null,pendingPurchaseCount:0,subscription:subscription("active",{active:false,currentPeriodEndsAt:Date.now()-1})},
+      access:"Inactive",detail:/Paid access inactive/i,primary:"Build your week",href:/^\/planner\.html$/,discoveryAction:"Manage Strata+ billing →",billing:/last verified billing period/i,badge:"Inactive",cancel:true
+    },
+    {
+      name:"paused subscription",planCount:0,workoutDays:0,
+      discovery:{active:false,accessType:null,pendingPurchaseCount:0,subscription:subscription("paused")},
+      access:"Paused",detail:/Paid access inactive/i,primary:"Build your week",href:/^\/planner\.html$/,discoveryAction:"Manage Strata+ billing →",billing:/subscription is paused/i,badge:"Paused",cancel:true
+    },
+    {
+      name:"canceled subscription",planCount:0,workoutDays:0,
+      discovery:{active:false,accessType:null,pendingPurchaseCount:0,subscription:subscription("canceled")},
+      access:"Canceled",detail:/No future renewals/i,primary:"Build your week",href:/^\/planner\.html$/,discoveryAction:"Restart Strata+ →",billing:/no future renewals/i,badge:"Canceled",cancel:false
     },
     {
       name:"pending purchase without a week",planCount:0,workoutDays:0,
       discovery:{active:false,accessType:null,pendingPurchaseCount:1},
-      access:"Pending",detail:/checkout needs attention/i,primary:"Build your week",href:/^\/planner\.html$/,discoveryAction:"Check Strata+ purchase →"
+      access:"Pending",detail:/checkout needs attention/i,primary:"Build your week",href:/^\/planner\.html$/,discoveryAction:"Check Strata+ subscription →",billing:null
     },
     {
       name:"free account with a populated week",planCount:2,workoutDays:2,
       discovery:{active:false,accessType:null,pendingPurchaseCount:0},
-      access:"Free",detail:/rankings and plan included/i,primary:"Open your week",href:/^\/planner\.html$/,discoveryAction:"Unlock Strata+ →"
+      access:"Free",detail:/rankings and plan included/i,primary:"Open your week",href:/^\/planner\.html$/,discoveryAction:"Unlock Strata+ →",billing:null
     }
   ];
   for(const [index,fixture] of cases.entries()){
@@ -241,7 +321,42 @@ test("signed-in dashboard distinguishes access and plan states with a useful nex
     assert.equal(page.elements.get("accountPrimaryLabel").textContent,fixture.primary,fixture.name);
     assert.match(page.elements.get("accountPrimaryAction").href,fixture.href,fixture.name);
     assert.equal(page.elements.get("accountDiscoveryAction").textContent,fixture.discoveryAction,fixture.name);
+    assert.equal(page.elements.get("accountBilling").hidden,fixture.billing===null,fixture.name);
+    if(fixture.billing){
+      assert.match(page.elements.get("accountBillingDetail").textContent,fixture.billing,fixture.name);
+      assert.equal(page.elements.get("accountBillingBadge").textContent,fixture.badge,fixture.name);
+      assert.equal(page.elements.get("accountManageSubscription").hidden,fixture.manage===false,fixture.name);
+      assert.equal(page.elements.get("accountUpdatePayment").hidden,fixture.update!==true,fixture.name);
+      assert.equal(page.elements.get("accountCancelSubscription").hidden,fixture.cancel!==true,fixture.name);
+    }
   }
+});
+
+test("subscription controls use the CSRF-protected Paddle portal and reject unsafe links",async()=>{
+  const user=memberFixture({discovery:{active:true,accessType:"subscription",pendingPurchaseCount:0,subscription:{id:"sub-active",status:"active",active:true,pastDue:false,scheduledChange:null,currentPeriodEndsAt:Date.now()+30*24*60*60*1000}}});
+  let unsafe=false;
+  const page=createPage({route:async(path,options)=>{
+    if(path==="/api/status")return jsonResponse(200,{persistent:true});
+    if(path==="/healthz")return jsonResponse(200,{ok:true});
+    if(path==="/api/me")return jsonResponse(200,{csrfToken:"billing-csrf",user});
+    if(path==="/api/plan")return jsonResponse(200,{csrfToken:"billing-csrf",user,plan:planFixture({Monday:1}),planUpdatedAt:10});
+    if(path==="/api/workouts?limit=100&offset=0")return jsonResponse(200,{workouts:[],hasMore:false,csrfToken:"billing-csrf"});
+    if(path==="/api/billing/portal"){
+      assert.equal(options.method,"POST");assert.equal(options.headers["X-CSRF-Token"],"billing-csrf");assert.equal(options.body,"{}");
+      return jsonResponse(200,{overviewUrl:unsafe?"https://attacker.test/cpl_bad":"https://customer-portal.paddle.com/cpl_overview",cancelUrl:"https://customer-portal.paddle.com/cpl_cancel",updatePaymentMethodUrl:"https://customer-portal.paddle.com/cpl_payment"});
+    }
+    throw new Error(`Unexpected route ${path}`);
+  }});
+  await settle();
+  await page.elements.get("accountManageSubscription").emit("click",{currentTarget:page.elements.get("accountManageSubscription")});
+  await settle();
+  await page.elements.get("accountCancelSubscription").emit("click",{currentTarget:page.elements.get("accountCancelSubscription")});
+  await settle();
+  assert.deepEqual(page.navigations,["https://customer-portal.paddle.com/cpl_overview","https://customer-portal.paddle.com/cpl_cancel"]);
+  unsafe=true;await page.elements.get("accountManageSubscription").emit("click",{currentTarget:page.elements.get("accountManageSubscription")});await settle();
+  assert.equal(page.navigations.length,2,"an off-origin portal URL must never be opened");
+  assert.match(page.elements.get("accountBillingStatus").textContent,/invalid subscription-management link/i);
+  assert.equal(page.elements.get("accountBillingStatus").classList.contains("bad"),true);
 });
 
 test("returning dashboard prioritizes an in-progress workout as the single next action",async()=>{

@@ -41,7 +41,7 @@ test("workout API requires authentication, CSRF, valid bounded input, and JSON",
   assert.equal((await request("/api/workouts",member,"POST","{" )).status,400);
   const invalid=structuredClone(workout);invalid.entries[0].exerciseId="not-an-exercise";
   assert.equal((await request("/api/workouts",member,"POST",{workout:invalid})).status,400);
-  for (const query of ["limit=101","limit=-1","offset=-1","offset=10001","offset=abc"]) assert.equal((await request(`/api/workouts?${query}`,member)).status,400);
+  for (const query of ["limit=101","limit=-1","offset=-1","offset=10001","offset=abc","memory=0"]) assert.equal((await request(`/api/workouts?${query}`,member)).status,400);
   assert.equal((await request("/api/workouts",member,"PATCH",{})).status,405);
   assert.equal((await request("/api/workouts/invalid/path",member)).status,404);
   assert.equal((await request("/api/workouts",member)).data.workouts.length,0);
@@ -70,7 +70,8 @@ test("Strata+ workout logging is idempotent, resumes saved state, and rejects st
   const completed={...winner,status:"completed",completedAt:Date.now(),elapsedSeconds:600,restEndsAt:null};
   const finished=await request(url,owner,"PUT",{workout:completed,expectedRevision:2});assert.equal(finished.status,200);assert.equal(finished.data.workout.revision,3);
   const history=await request("/api/workouts",owner);assert.equal(history.data.workouts.length,1);assert.equal(history.data.hasMore,false);
-  const summary=history.data.workouts[0];assert.equal(summary.completedSets,1);assert.equal(summary.totalSets,2);assert.equal(summary.entries,undefined);assert.equal(summary.exerciseSummaries[0].volume,200);
+  const summary=history.data.workouts[0];assert.equal(summary.completedSets,1);assert.equal(summary.totalSets,2);assert.equal(summary.entries,undefined);assert.equal(summary.exerciseSummaries[0].volume,200);assert.equal(summary.exerciseSummaries[0].setValues,undefined,"ordinary history stays compact");
+  const memory=await request("/api/workouts?memory=1",owner);assert.deepEqual(memory.data.workouts[0].exerciseSummaries[0].setValues,[{reps:10,weight:20,seconds:null,effort:null,effortType:"none"}],"Workout Memory is included only when requested by the training surface");
   assert.equal((await request(url,owner,"DELETE",{expectedRevision:2})).status,409);
   assert.equal((await request(url,owner,"DELETE",{expectedRevision:3})).status,200);assert.equal((await request(url,owner)).status,404);
 });

@@ -39,20 +39,21 @@ function fakeTursoTransport(){
       }
       if(!String(url).endsWith("/v3/cursor"))throw new Error(`Unexpected fake Turso URL: ${url}`);
       const request=JSON.parse(options.body);
-      const remoteStatement=request.batch.steps[0].stmt;
-      const sql=remoteStatement.sql,args=(remoteStatement.args||[]).map(decodeTursoValue);
-      const statement=database.prepare(sql);
-      const rows=statement.all(...args);
-      const columns=statement.columns().map((column)=>({name:column.name,decltype:column.type||""}));
-      if(sql.startsWith("INSERT INTO plans("))planRequests.push({sql,args});
       const output=[JSON.stringify({baton:"fake-turso-session"})];
-      output.push(JSON.stringify({type:"step_begin",step:0,cols:columns}));
-      for(const row of rows){
-        output.push(JSON.stringify({type:"row",step:0,row:columns.map((column)=>encodeTursoValue(row[column.name]))}));
+      for(const [stepIndex,step] of request.batch.steps.entries()){
+        const remoteStatement=step.stmt;
+        if(!remoteStatement||remoteStatement.sql==="ROLLBACK")continue;
+        const sql=remoteStatement.sql,args=(remoteStatement.args||[]).map(decodeTursoValue);
+        const statement=database.prepare(sql);
+        const rows=statement.all(...args);
+        const columns=statement.columns().map((column)=>({name:column.name,decltype:column.type||""}));
+        if(sql.startsWith("INSERT INTO plans("))planRequests.push({sql,args});
+        output.push(JSON.stringify({type:"step_begin",step:stepIndex,cols:columns}));
+        for(const row of rows){
+          output.push(JSON.stringify({type:"row",step:stepIndex,row:columns.map((column)=>encodeTursoValue(row[column.name]))}));
+        }
+        output.push(JSON.stringify({type:"step_end",step:stepIndex,affected_row_count:0}));
       }
-      output.push(JSON.stringify({type:"step_end",step:0,affected_row_count:0}));
-      output.push(JSON.stringify({type:"step_begin",step:1,cols:[]}));
-      output.push(JSON.stringify({type:"step_end",step:1,affected_row_count:0}));
       return new Response(`${output.join("\n")}\n`,{status:200,headers:{"Content-Type":"application/json"}});
     }
   };

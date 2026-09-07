@@ -11,7 +11,7 @@ const {DatabaseSync}=require("node:sqlite");
 
 const PROJECT_ROOT=join(__dirname,"..");
 const PRODUCT_ID="pro_01m1ky8j916ybyacs836dxbz8x";
-const PRICE_ID="pri_01m1kyc2zd313d7a3ssmg02424";
+const PRICE_ID="pri_01monthlyfixture00000000000000";
 const CLIENT_TOKEN="live_browser_token_for_account_recovery_test";
 const API_KEY="pdl_live_apikey_01accountrecoveryfixture0000_secret_123";
 const WEBHOOK_SECRET="pdl_ntfset_live_account_recovery_test_secret";
@@ -254,6 +254,7 @@ async function checkout(account){
 }
 
 let eventSequence=0;
+function subscriptionId(transactionId){return `sub_${String(transactionId).slice(4)}`;}
 function eventId(label){
   eventSequence+=1;
   const safe=String(label).toLowerCase().replace(/[^a-z0-9]/g,"").slice(0,8);
@@ -270,11 +271,28 @@ function completedEvent(transactionId,userId,label="complete"){
     notification_id:`ntf_${id.slice(4)}`,
     data:{
       id:transactionId,status:"completed",
-      customer_id:"ctm_000000000000000000000001",
-      subscription_id:null,collection_mode:"automatic",origin:"api",updated_at:occurredAt,
-      custom_data:{strata_user_id:userId,strata_version:1},
-      items:[{quantity:1,price:{id:PRICE_ID,product_id:PRODUCT_ID,billing_cycle:null}}],
-      details:{totals:{subtotal:"599",discount:"0",tax:"0",total:"599"}}
+      customer_id:"ctm_00000000000000000000000001",
+      subscription_id:subscriptionId(transactionId),collection_mode:"automatic",origin:"api",updated_at:occurredAt,
+      custom_data:{strata_user_id:userId,strata_checkout_id:paddleTransactions.get(transactionId)?.custom_data?.strata_checkout_id,strata_version:1},
+      items:[{quantity:1,price:{id:PRICE_ID,product_id:PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}}],
+      details:{totals:{subtotal:"99",discount:"0",tax:"0",total:"99"}}
+    }
+  };
+}
+
+function subscriptionEvent(transactionId,userId,{label="subscription",status="active",eventType="subscription.created"}={}){
+  const id=eventId(label),occurredAt=new Date(Date.now()+eventSequence*1_000).toISOString();
+  return {
+    event_id:id,event_type:eventType,occurred_at:occurredAt,notification_id:`ntf_${id.slice(4)}`,
+    data:{
+      id:subscriptionId(transactionId),status,customer_id:"ctm_00000000000000000000000001",
+      ...(eventType==="subscription.created"?{transaction_id:transactionId}:{}),
+      collection_mode:"automatic",custom_data:{strata_user_id:userId,strata_version:1},
+      billing_cycle:{interval:"month",frequency:1},
+      items:[{quantity:1,recurring:true,price:{id:PRICE_ID,product_id:PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}}],
+      scheduled_change:null,
+      current_billing_period:["active","trialing","past_due"].includes(status)?{starts_at:"2026-09-01T00:00:00Z",ends_at:"2026-10-01T00:00:00Z"}:null,
+      updated_at:occurredAt
     }
   };
 }
@@ -323,7 +341,7 @@ function paddleTransactionFixture({id,userId,checkoutId,status="ready",priceId=P
     id,status,customer_id:null,subscription_id:null,
     collection_mode:"automatic",origin:"api",created_at:now,updated_at:now,
     custom_data:{strata_user_id:userId,strata_checkout_id:checkoutId,strata_version:1},
-    items:[{quantity:Number(quantity),price:{id:priceId,product_id:productId,billing_cycle:null}}]
+    items:[{quantity:Number(quantity),price:{id:priceId,product_id:productId,billing_cycle:{interval:"month",frequency:1}}}]
   };
 }
 
@@ -374,7 +392,9 @@ test("password recovery is private, preserves account data, and revokes every se
   const transactionId=prepared.data.transactionId;
   const completed=await signedWebhook(completedEvent(transactionId,account.user.id,"recover"));
   assert.equal(completed.response.status,200);
-  assert.equal(completed.data.outcome,"granted");
+  assert.equal(completed.data.outcome,"subscription-payment-recorded");
+  const linked=await signedWebhook(subscriptionEvent(transactionId,account.user.id,{label:"recover-sub"}));
+  assert.equal(linked.data.outcome,"subscription-created");
   const adjustment=await signedWebhook(adjustmentEvent(transactionId,"recoveradj"));
   assert.equal(adjustment.response.status,200);
   assert.equal(adjustment.data.outcome,"adjustment-recorded");
@@ -681,8 +701,13 @@ test("account deletion requires email confirmation, supports cancel, blocks pend
     {cookie:repaired.cookie,csrf:repaired.csrfToken});
   assert.equal(repairedDeleteRequest.response.status,202);
   const repairedToken=actionToken(latestDelivery("Confirm deletion of your STRATA account"));
+  const repairedPending=await jsonRequest("/api/account/delete/complete",{token:repairedToken,confirmation:"DELETE"});
+  assert.equal(repairedPending.response.status,409,"a remotely completed recurring checkout stays blocked until its subscription state is linked");
+  assert.equal(repairedPending.data.code,"PURCHASE_PENDING");
+  const repairedTerminal=await signedWebhook(subscriptionEvent(repairedCheckout.data.transactionId,repaired.user.id,{label:"repaired-canceled",status:"canceled"}));
+  assert.equal(repairedTerminal.data.outcome,"subscription-created");
   const repairedDelete=await jsonRequest("/api/account/delete/complete",{token:repairedToken,confirmation:"DELETE"});
-  assert.equal(repairedDelete.response.status,200,"a valid remotely completed checkout should be repaired before confirmed deletion");
+  assert.equal(repairedDelete.response.status,200,"a verified terminal subscription state should allow deletion");
 
   const email="delete-me@example.test";
   const account=await verifiedSignup({
@@ -699,6 +724,10 @@ test("account deletion requires email confirmation, supports cancel, blocks pend
   assert.equal(firstStatus.response.status,200);
   assert.equal(firstStatus.data.active,true);
   assert.equal((await request("/api/me",{headers:{Cookie:account.cookie}})).data.user.accountDeletion.pending,true);
+  const trialWhileDeleting=await jsonRequest("/api/discovery/trial",{},
+    {cookie:account.cookie,csrf:account.csrfToken});
+  assert.equal(trialWhileDeleting.response.status,409,"a pending account deletion must block trial activation");
+  assert.equal(trialWhileDeleting.data.code,"ACCOUNT_DELETION_PENDING");
 
   const canceled=await jsonRequest("/api/account/delete/cancel",{},
     {cookie:account.cookie,csrf:account.csrfToken});
@@ -723,9 +752,11 @@ test("account deletion requires email confirmation, supports cancel, blocks pend
   assert.equal(blocked.response.status,409,"a fresh pending checkout must block final deletion");
   assert.equal(blocked.data.code,"PURCHASE_PENDING");
 
-  const granted=await signedWebhook(completedEvent(transactionId,account.user.id,"delete"));
-  assert.equal(granted.response.status,200);
-  assert.equal(granted.data.outcome,"granted");
+  const completedPurchase=await signedWebhook(completedEvent(transactionId,account.user.id,"delete"));
+  assert.equal(completedPurchase.response.status,200);
+  assert.equal(completedPurchase.data.outcome,"subscription-payment-recorded");
+  const granted=await signedWebhook(subscriptionEvent(transactionId,account.user.id,{label:"delete-sub"}));
+  assert.equal(granted.data.outcome,"subscription-created");
   assert.equal((await request("/api/me",{headers:{Cookie:account.cookie}})).data.user.discovery.active,true);
 
   const savedPlan=await jsonRequest("/api/plan",{plan:planFixture(),expectedPlanUpdatedAt:0},{cookie:account.cookie,csrf:account.csrfToken,method:"PUT"});
@@ -751,6 +782,16 @@ test("account deletion requires email confirmation, supports cancel, blocks pend
   assert.equal(wrongConfirmation.response.status,400);
   assert.equal(wrongConfirmation.data.code,"DELETE_CONFIRMATION_REQUIRED");
   assert.equal((await request("/api/me",{headers:{Cookie:account.cookie}})).response.status,200);
+
+  const activeSubscriptionDeletion=await jsonRequest("/api/account/delete/complete",{
+    token:deleteToken,confirmation:"DELETE"
+  });
+  assert.equal(activeSubscriptionDeletion.response.status,409,"an account cannot disappear while Paddle may still renew its subscription");
+  assert.equal(activeSubscriptionDeletion.data.code,"SUBSCRIPTION_ACTIVE");
+  const canceledSubscription=await signedWebhook(subscriptionEvent(transactionId,account.user.id,{
+    label:"delete-canceled",status:"canceled",eventType:"subscription.updated"
+  }));
+  assert.equal(canceledSubscription.data.outcome,"subscription-updated");
 
   const deleted=await jsonRequest("/api/account/delete/complete",{
     token:deleteToken,confirmation:"DELETE"

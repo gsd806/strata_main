@@ -1,6 +1,6 @@
 {
   "name": "strata-workout-index",
-  "version": "7.4.1",
+  "version": "7.5.0",
   "private": true,
   "description": "Evidence-informed exercise rankings with Strata+ personalization, session building, community weekly plans, ratings, and 31-day planning.",
   "scripts": {
@@ -16,9 +16,11 @@
     "architecture:check": "node scripts/architecture-report.js",
     "coverage": "node scripts/coverage-check.js",
     "performance": "node scripts/performance-check.js",
+    "preflight:production": "node --env-file-if-exists=.env scripts/config-preflight.js --require-all",
+    "smoke:deploy": "node scripts/deploy-smoke.js --require-all",
     "check": "npm run release:check && npm run architecture:check && npm run typecheck && npm run lint && npm run coverage && npm run qa:runtime && npm run performance && npm run test:e2e",
     "qa": "npm run check",
-    "qa:runtime": "node qa/account-runtime-smoke.js && node qa/discover-runtime-smoke.js && node qa/planner-runtime-smoke.js && node qa/pwa-runtime-smoke.js",
+    "qa:runtime": "node qa/account-runtime-smoke.js && node qa/discover-runtime-smoke.js && node qa/planner-runtime-smoke.js && node qa/workout-runtime-smoke.js && node qa/pwa-runtime-smoke.js",
     "qa:ui": "node qa/ui-audit.js",
     "release:check": "node scripts/release-version.js --check",
     "release:version": "node scripts/release-version.js",
@@ -29,6 +31,7 @@
     "@tursodatabase/serverless": "1.4.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@eslint/js": "10.0.1",
     "@types/node": "24.13.3",
     "eslint": "10.10.0",

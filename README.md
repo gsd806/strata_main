@@ -1,14 +1,14 @@
 # STRATA — Exercise Rankings and Workout Planning
 
-STRATA is an evidence-informed workout index with server-backed, email-verified accounts, a private Strata+ studio, and weekly, community, and monthly workout planning. It includes 200 resistance-training exercises—25 per muscle group, including 50 bodyweight options—across 8 muscle groups and 26 sub-muscle targets. Build 7.4.1 is an installable Progressive Web App (PWA) with Resend-powered account email, Paddle-powered one-time Strata+ access, and a private owner dashboard.
+STRATA is an evidence-informed workout index with server-backed, email-verified accounts, a private Strata+ studio, and weekly, community, and monthly workout planning. It includes 200 resistance-training exercises—25 per muscle group, including 50 bodyweight options—across 8 muscle groups and 26 sub-muscle targets. Build 7.5.0 is an installable Progressive Web App (PWA) with Training Memory, Resend-powered account email, Paddle-powered Strata+ subscriptions, and a private owner dashboard.
 
-**Build 7.4.1 is the responsive-integrity release.** It preserves the guided Today, Plan, Progress, and Explore training loop while correcting text containment, control spacing, mobile navigation, sticky-header opacity, and narrow-screen layouts across Plan, Strata+, Train, setup, account, public information, installation, and administration. This archive has not been deployed. See [release readiness](docs/release-readiness.md) and [deployment and rollback instructions](docs/release-7.4.1.md).
+**Build 7.5.0 is the Training Memory release.** It keeps a guest-generated week intact through account activation, makes previous comparable work useful inside the logger, separates workout-only decisions from reviewed Plan changes, adds bounded offline continuation for an already-open workout, and makes training blocks and weekly review operational. It also strengthens subscription, deployment, observability, accessibility, and browser-compatibility boundaries. See [release readiness](docs/release-readiness.md) and the [7.5.0 release guide](docs/release-7.5.0.md).
 
-STRATA also includes a login-free local weekly planner, account-synced plans, structured community-plan sharing, a deterministic 31-day workspace, community ratings, printable exports, and a private administrator help desk. Strata+ is **$5.99 USD as a one-time purchase with no subscription**. Paddle is the merchant of record, and the server grants access only after verifying a signed matching webhook.
+STRATA also includes a login-free local weekly planner, account-synced plans, structured community-plan sharing, a deterministic 31-day workspace, community ratings, printable exports, and a private administrator help desk. Strata+ is a **$0.99 USD per month recurring subscription** and offers one optional free 30-minute trial per eligible account. The trial requires no card, ends automatically, and never converts into a subscription; subscribing always requires explicit checkout. Paddle is the merchant of record, and the server grants paid access only after a matching transaction is provider-verified and linked to validated signed subscription state. Prior lifetime buyers remain grandfathered with no recurring charge.
 
 See [CHANGELOG.md](CHANGELOG.md) for the concise release history.
 
-Start at `/` for the no-account recommendation preview, `/planner.html` for free manual planning, or `/discover.html` for the private Strata+ Today/Plan/Progress/Explore workspace. Guest plans and local templates stay in this browser; signed-in plans, workouts, optional check-ins, training blocks, and approved adaptations sync to the account.
+Start at `/` for the no-account recommendation and complete-week preview, `/planner.html` for free manual planning, or `/discover.html` for the private Strata+ Today/Plan/Progress/Explore workspace. A guest week remains on the device through signup and is never allowed to overwrite an account Plan without a visible claim, compare, or keep choice. Signed-in plans, workouts, optional check-ins, training blocks, and approved adaptations sync to the account.
 
 ## Requirements
 
@@ -28,7 +28,7 @@ Copy `.env.example` to `.env` and fill in the required values when testing email
 
 ## Project structure
 
-Build 7.4.1 separates browser files from private server code while preserving every public URL used by visitors, Paddle, Render, and installed PWAs:
+Build 7.5.0 separates browser files from private server code while preserving every public URL used by visitors, Paddle, Render, and installed PWAs:
 
 ```text
 server.js          Stable npm/Render bootstrap
@@ -39,6 +39,7 @@ public/scripts/    Browser JavaScript
 public/styles/     Browser stylesheets
 public/data/       Intentionally public exercise catalog
 public/icons/      PWA and site icons
+public/fonts/      Self-hosted interface fonts
 public/images/     Public product and editorial artwork
 data/              Generated local SQLite data; ignored by Git
 test/              Unit, integration, and contract Node tests
@@ -52,7 +53,7 @@ See [docs/architecture.md](docs/architecture.md) for request and data flow, [doc
 ## Quality commands
 
 ```bash
-npm run check       # complete release gate, including Chromium E2E
+npm run check       # complete release gate, including browser E2E
 npm run architecture:check # module budgets, dependencies, and cycles
 npm run typecheck   # strict checkJs at domain boundaries
 npm run lint        # correctness-focused ESLint checks; no formatting policy
@@ -60,7 +61,7 @@ npm test            # Node test suite
 npm run test:unit   # focused tests with mocked/injected collaborators
 npm run test:integration # HTTP/application composition tests
 npm run test:contract    # storage and architecture contracts
-npm run test:e2e    # isolated high-risk Chromium journeys
+npm run test:e2e    # isolated high-risk browser journeys
 npm run coverage    # Node suite with enforced coverage floors
 npm run performance # reproducible endpoint/storage regression evidence
 npm run qa:runtime  # browser-free runtime smoke checks
@@ -78,24 +79,25 @@ Before a release, audit managed version references with `npm run release:check`.
 - Passwords use scrypt with a unique random salt; plaintext and reversible passwords are never stored.
 - Sessions are random database-backed tokens in HttpOnly, SameSite cookies. Sensitive writes also require a same-session CSRF token and trusted origin.
 - Signup verification, password reset, and account deletion use time-limited email flows. Reset revokes every session; deletion requires a one-time registered-email confirmation.
+- Signed-in members can review active session times, sign out one or all other sessions without exposing token/IP/device details, and download a private `no-store` JSON export of their account training and support data.
 - Signed-out plans stay in that browser. Signed-in weekly and monthly plans are private account records and sync through the configured store.
 - Community plans publish validated structured workout data and a display name, never the member's email address or a binary upload.
 - The one verified account matching server-only `ADMIN_EMAIL` may become the permanently bound primary owner. Admin elevation requires the current password and expires after 30 minutes.
 - Admin mutations require elevation, CSRF and origin checks, typed confirmation, an audit reason, and guarded storage operations. The primary owner cannot suspend or delete itself through Admin.
 
-No separate administrator password or Gmail integration is required. `SUPPORT_EMAIL` selects the reply mailbox; Resend sends transactional messages. Changing `ADMIN_EMAIL` does not transfer an already bound owner identity.
+No separate administrator password or Gmail integration is required. `SUPPORT_EMAIL` selects the support-notification and help-desk mailbox; `EMAIL_REPLY_TO` controls the reply-to address for transactional mail sent through Resend. Changing `ADMIN_EMAIL` does not transfer an already bound owner identity.
 
 ## PWA behavior
 
 The deployed site can be installed from `/install.html` on supported iPhone, iPad, Android, Chrome, and Edge environments. The service worker uses a build-versioned cache, deletes older STRATA cache versions during activation, and caches only an explicit set of public assets and public offline fallbacks.
 
-Account APIs, authentication routes, health checks, personalized pages, the administrator area, recovery/deletion pages, and saved account data stay network-only. Bearer-link reset and deletion pages intentionally do not initialize the PWA. An internet connection is required to sign in, use Admin or support, complete account actions, buy Strata+, or sync changes.
+Account APIs, authentication routes, and health checks bypass the service worker. Personalized pages, the administrator area, recovery/deletion pages, and saved account data are never cached or served as offline account content; a failed private-page navigation may receive only the generic public offline explanation. The special offline workout route is a public shell, not a cached account page: it can read only a bounded account-scoped draft created after online authorization, and it must recheck identity, access, and server revision before sync. Bearer-link reset and deletion pages intentionally do not initialize the PWA. An internet connection is required to sign in, use Admin or support, complete account actions, subscribe to Strata+, or sync changes.
 
 ## Public pricing, support, and policies
 
-Build 7.4.1 has public, mobile-friendly pages at `/pricing`, `/contact`, `/policies`, `/terms`, `/privacy`, and `/refunds`. The Policies directory is the single public entry point for legal documents and the founder story. The published refund window is 14 calendar days after purchase. Support is available through the Contact form and at `stratafitness.official@gmail.com`.
+Build 7.5.0 has public, mobile-friendly pages at `/pricing`, `/contact`, `/policies`, `/terms`, `/privacy`, and `/refunds`. The Policies directory is the single public entry point for legal documents and the founder story. The published refund window is 14 calendar days after an eligible monthly charge. Subscription cancellation and refunds are separate actions. Support is available through the Contact form and at `stratafitness.official@gmail.com`.
 
-Paddle receives payment information; STRATA does not receive or store full payment-card or bank-account details. Do not change the displayed price independently of the live Paddle catalog. Before accepting payments, make sure the public operator details match the identity required by Paddle and applicable law rather than inventing missing legal information.
+Paddle receives payment information; STRATA does not receive or store full payment-card or bank-account details. Do not change the displayed amount or monthly renewal interval independently of the live Paddle catalog. Members open short-lived Paddle portal links from Account to manage payment or cancellation. Before accepting payments, make sure the public operator details match the identity required by Paddle and applicable law rather than inventing missing legal information.
 
 ## Deployment
 
@@ -106,7 +108,7 @@ Use [docs/deployment.md](docs/deployment.md) for:
 - Turso and Render setup
 - Resend domain and account-email configuration
 - Paddle catalog, checkout, webhook, and go-live checks
-- health, persistence, rollback, and production-limit checks
+- configuration preflight, liveness/readiness, deployment smoke, rollback, and production-limit checks
 
 The checked-in `render.yaml` is the source of truth for fixed deployment values and secret prompts. The checked-in `.env.example` documents every supported local variable without containing credentials.
 

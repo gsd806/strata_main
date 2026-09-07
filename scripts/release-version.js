@@ -34,6 +34,7 @@ const DEFAULT_MANIFEST=Object.freeze({
     "public/pages/install.html",
     "public/pages/offline.html",
     "public/pages/planner.html",
+    "public/pages/workout-offline.html",
     "public/pages/workout.html",
     "public/pages/onboarding.html",
     "public/pages/pricing.html",
@@ -46,10 +47,12 @@ const DEFAULT_MANIFEST=Object.freeze({
     "public/scripts/app.js",
     "public/scripts/planner.js",
     "public/scripts/onboarding.js",
+    "public/scripts/workout-offline.js",
     "public/service-worker.js",
     "test/public-info.test.js",
     "test/pwa.test.js",
-    "test/server.test.js"
+    "test/server.test.js",
+    "test/workout-offline.test.js"
   ]),
   readmeFiles:Object.freeze(["README.md"])
 });

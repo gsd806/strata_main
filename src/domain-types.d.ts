@@ -9,6 +9,8 @@ export type FetchLike = typeof globalThis.fetch;
 export interface PaymentPrice {
   amount:string;
   currency:string;
+  interval:"month";
+  frequency:1;
 }
 
 export interface PaymentConfig {
@@ -42,7 +44,7 @@ export interface PaddleSecrets {
 export interface PaddlePriceData {
   id?:unknown;
   product_id?:unknown;
-  billing_cycle?:unknown;
+  billing_cycle?:{interval?:unknown;frequency?:unknown}|null;
 }
 
 export interface PaddleItemData {
@@ -63,11 +65,18 @@ export interface PaddleTransactionData {
   subscription_id?:unknown;
   collection_mode?:unknown;
   custom_data?:PaddleCustomData|null;
-  items?:PaddleItemData[]|unknown;
+  items?:PaddleItemData[];
   created_at?:unknown;
+  updated_at?:unknown;
+  customer_id?:unknown;
+  transaction_id?:unknown;
+  scheduled_change?:PaddleScheduledChange|null;
+  current_billing_period?:PaddleBillingPeriod|null;
+  billing_cycle?:{interval?:unknown;frequency?:unknown}|null;
 }
 
 export interface PaddleAdjustmentData {
+  id?:unknown;
   status?:unknown;
   type?:unknown;
   action?:unknown;
@@ -92,6 +101,290 @@ export interface PaddleTransactionResult {
   data?:PaddleTransactionData;
 }
 
+export interface PaddleFetchedTransactionResult extends PaddleTransactionResult {
+  data:PaddleTransactionData;
+}
+
+export interface PaddleScheduledChange {
+  action?:unknown;
+  effective_at?:unknown;
+}
+
+export interface PaddleBillingPeriod {
+  starts_at?:unknown;
+  ends_at?:unknown;
+}
+
+export interface PaddleSubscriptionItemData extends PaddleItemData {
+  recurring?:unknown;
+}
+
+export interface PaddleSubscriptionData extends PaddleTransactionData {
+  items?:PaddleSubscriptionItemData[];
+}
+
+export type SubscriptionValidationResult=
+  |{ok:false;reason:string}
+  |{
+    ok:true;
+    entitled:boolean;
+    subscriptionId:string;
+    customerId:string;
+    status:SubscriptionStatus;
+    priceId:string;
+    productId:string;
+    scheduledChangeAction:ScheduledSubscriptionAction|null;
+    scheduledChangeAt:number|null;
+    currentPeriodEndsAt:number|null;
+  };
+
+export interface PaddlePortalSessionData {
+  customer_id?:unknown;
+  urls?:{
+    general?:{overview?:unknown};
+    subscriptions?:Array<{
+      id?:unknown;
+      cancel_subscription?:unknown;
+      update_subscription_payment_method?:unknown;
+    }>;
+  };
+}
+
+export interface PaddlePortalLinks {
+  overviewUrl:string;
+  cancelUrl:string;
+  updatePaymentMethodUrl:string;
+}
+
+export interface PaddlePortalIdentity {
+  customerId:unknown;
+  subscriptionId:unknown;
+}
+
+export interface SubscriptionValidationIdentity {
+  userId?:unknown;
+  transactionId?:unknown;
+  requireTransaction?:boolean;
+}
+
+export type SubscriptionStatus="active"|"trialing"|"past_due"|"paused"|"canceled";
+export type ScheduledSubscriptionAction="cancel"|"pause"|"resume";
+
+export interface DiscoveryTrialRow {
+  user_id:string;
+  started_at:number;
+  expires_at:number;
+}
+
+export interface DiscoveryTrialState {
+  eligible:boolean;
+  active:boolean;
+  startedAt:number|null;
+  expiresAt:number|null;
+}
+
+export interface DiscoveryAccessSummary {
+  active:boolean;
+  purchaseCount:number;
+  activePurchaseCount:number;
+  pendingPurchaseCount:number;
+  latestActivePurchaseAt:number|null;
+  latestCompletedAt:number|null;
+  latestRevokedAt:number|null;
+}
+
+export interface CheckoutClaimRow {
+  user_id:string;
+  price_id:string;
+  claim_id:string;
+  transaction_id:string|null;
+  expires_at:number;
+  created_at:number;
+  updated_at:number;
+}
+
+export interface PurchaseRow {
+  transaction_id:string;
+  user_id:string;
+  price_id:string;
+  product_id:string;
+  customer_id:string|null;
+  subscription_id:string|null;
+  paddle_status:string;
+  completed_at:number|null;
+  access_revoked_at:number|null;
+  revocation_reason:string|null;
+  created_at:number;
+  updated_at:number;
+}
+
+export interface SubscriptionRow {
+  subscription_id:string;
+  user_id:string;
+  transaction_id:string;
+  customer_id:string;
+  status:SubscriptionStatus;
+  price_id:string;
+  product_id:string;
+  scheduled_change_action:ScheduledSubscriptionAction|null;
+  scheduled_change_at:number|null;
+  current_period_ends_at:number|null;
+  event_occurred_at:number;
+  created_at:number;
+  updated_at:number;
+}
+
+export interface SubscriptionWrite {
+  subscriptionId:string;
+  userId:string;
+  customerId:string;
+  status:SubscriptionStatus;
+  priceId:string;
+  productId:string;
+  scheduledChangeAction:ScheduledSubscriptionAction|null;
+  scheduledChangeAt:number|null;
+  currentPeriodEndsAt:number|null;
+  eventOccurredAt:number;
+  updatedAt:number;
+}
+
+export interface SubscriptionCreate extends SubscriptionWrite {
+  transactionId:string;
+  createdAt:number;
+}
+
+export interface PendingPurchaseWrite {
+  transactionId:string;
+  userId:string;
+  priceId:string;
+  productId:string;
+  paddleStatus:string;
+  createdAt:number;
+  updatedAt:number;
+}
+
+export interface CheckoutClaimWrite {
+  userId:string;
+  priceId:string;
+  claimId:string;
+  expiresAt:number;
+  now:number;
+}
+
+export interface PurchaseCompletion {
+  customerId:string|null;
+  subscriptionId?:string|null;
+  completedAt:number;
+  updatedAt:number;
+}
+
+export interface AdjustmentWrite {
+  adjustmentId:string;
+  transactionId:string;
+  action:string;
+  type:string;
+  status:string;
+  occurredAt:number;
+  updatedAt:number;
+}
+
+export interface WebhookEventWrite {
+  eventId:string;
+  notificationId:string|null;
+  eventType:string;
+  occurredAt:number;
+  processedAt:number;
+}
+
+export interface BillingWebhookEvent {
+  event_id?:unknown;
+  event_type?:unknown;
+  occurred_at?:unknown;
+  notification_id?:unknown;
+  data?:PaddleSubscriptionData&PaddleAdjustmentData;
+}
+
+export interface SubscriptionSummary {
+  id:string;
+  status:SubscriptionStatus;
+  active:boolean;
+  pastDue:boolean;
+  scheduledChange:{action:ScheduledSubscriptionAction;effectiveAt:number|null}|null;
+  currentPeriodEndsAt:number|null;
+}
+
+export type CheckoutRecovery=
+  |{state:"waiting"|"replace"|"entitled"|"deletion"|"blocked"|"pending"}
+  |{state:"transaction";transactionId:string};
+
+export interface BillingStore {
+  hasPaidDiscoveryAccess(userId:string,priceId?:string|null,now?:number):Promise<boolean>;
+  hasCurrentPaidDiscoveryAccess(userId:string,priceId:string,productId:string,now?:number):Promise<boolean>;
+  discoveryTrial(userId:string):Promise<DiscoveryTrialRow|null>;
+  currentDiscoveryAccessSummary(userId:string,priceId:string,productId:string,now?:number):Promise<DiscoveryAccessSummary>;
+  startDiscoveryTrial(userId:string,startedAt:number,expiresAt:number):Promise<DiscoveryTrialRow|null>;
+  activeAccountDeletion(userId:string,now:number):Promise<JsonObject|null>;
+  checkoutCreationForUser(userId:string):Promise<CheckoutClaimRow|null>;
+  claimCheckoutCreation(claim:CheckoutClaimWrite):Promise<CheckoutClaimRow|null>;
+  recordCheckoutCreationTransaction(userId:string,claimId:string,transactionId:string,updatedAt:number):Promise<CheckoutClaimRow|null>;
+  extendCheckoutCreation(userId:string,claimId:string,expiresAt:number,updatedAt:number):Promise<CheckoutClaimRow|null>;
+  releaseCheckoutCreation(userId:string,claimId:string,expectedTransactionId?:string|null):Promise<boolean>;
+  purchaseByTransaction(transactionId:string):Promise<PurchaseRow|null>;
+  pendingPurchaseForUser(userId:string,priceId:string):Promise<PurchaseRow|null>;
+  pendingPurchasesForUser(userId:string):Promise<number>;
+  unsettledPurchasesForUser(userId:string):Promise<PurchaseRow[]>;
+  insertPendingPurchase(purchase:PendingPurchaseWrite):Promise<PurchaseRow|null>;
+  completePurchase(transactionId:string,completion:PurchaseCompletion):Promise<PurchaseRow|null>;
+  updatePurchaseStatus(transactionId:string,status:string,occurredAt:number):Promise<PurchaseRow|null>;
+  createPaddleSubscription(subscription:SubscriptionCreate):Promise<SubscriptionRow|null>;
+  updatePaddleSubscription(subscription:SubscriptionWrite):Promise<SubscriptionRow|null>;
+  subscriptionById(subscriptionId:string):Promise<SubscriptionRow|null>;
+  subscriptionForUser(userId:string):Promise<SubscriptionRow|null>;
+  webhookEvent(eventId:string):Promise<JsonObject|null>;
+  recordWebhookEvent(event:WebhookEventWrite):Promise<boolean>;
+  upsertAdjustment(adjustment:AdjustmentWrite):Promise<boolean>;
+  adjustmentById(adjustmentId:string):Promise<JsonObject|null>;
+  revokePurchase(transactionId:string,reason:string,revokedAt:number,updatedAt:number):Promise<PurchaseRow|null>;
+}
+
+export type BillingAdapterMethods=Omit<BillingStore,"activeAccountDeletion">&{
+  hasDiscoveryAccess(userId:string,priceId?:string|null,now?:number):Promise<boolean>;
+  discoveryAccessSummary(userId:string,priceId?:string|null,now?:number):Promise<DiscoveryAccessSummary>;
+};
+
+export interface OperationalLogger {
+  debug(event:string,fields?:JsonObject):void;
+  info(event:string,fields?:JsonObject):void;
+  warn(event:string,fields?:JsonObject):void;
+  error(event:string,fields?:JsonObject):void;
+}
+
+export interface BillingServiceDependencies {
+  store:BillingStore;
+  paymentConfig:PaymentConfig;
+  enforcePaddleIps:boolean;
+  requestAddress:(request:HttpRequest)=>string;
+  rateAllowed:(request:HttpRequest,key:string,limit:number,windowMs?:number)=>boolean;
+  isUniqueViolation:(error:unknown)=>boolean;
+  getAuth:()=>AuthService|undefined;
+  getUserPayload:(account:SessionRow)=>Promise<JsonObject>;
+  http:JsonHttpHelpers;
+  logger:OperationalLogger;
+  now?:()=>number;
+  makeId?:()=>string;
+}
+
+export interface BillingService {
+  handleApi(request:HttpRequest,response:HttpResponse,url:URL):Promise<boolean>;
+  handleWebhook(request:HttpRequest,response:HttpResponse):Promise<void>;
+  hasCurrentAccess(userId:string,now?:number):Promise<boolean>;
+  accessSummaryForUser(userId:string):Promise<DiscoveryAccessSummary>;
+  subscriptionForUser(userId:string):Promise<SubscriptionSummary|null>;
+  reconcileCheckoutCreationBeforeDeletion(userId:string):Promise<number>;
+  reconcileUnsettledPurchases(userId:string):Promise<number>;
+  warmProviderTrust():Promise<void>;
+}
+
 export type StoreMethod=(...args:any[])=>any;
 export type StoreMethods=Record<string,StoreMethod>;
 
@@ -103,9 +396,10 @@ export type AuthStoreMethod=
   |"claimAccountActionSend"|"claimVerificationAttempt"|"claimVerificationSend"
   |"completeLoginVerification"|"completePasswordReset"|"completeSignup"|"consumeVerification"
   |"countVerificationSends"|"deleteAccount"|"deleteOldAccountActionData"|"deleteOldVerificationData"
-  |"deleteSession"|"discardStagedAccountAction"|"insertSession"|"insertUser"|"insertVerification"
+  |"accountExport"|"accountSessions"|"deleteSession"|"discardStagedAccountAction"|"insertSession"|"insertUser"|"insertVerification"
   |"markVerificationDelivery"|"rotateVerification"|"session"|"stageAccountAction"|"userByEmail"
-  |"userById"|"verificationByTokenHash"|"verificationSendByChallengeGeneration";
+  |"userById"|"verificationByTokenHash"|"verificationSendByChallengeGeneration"
+  |"revokeAccountSession"|"revokeOtherAccountSessions";
 
 export type AdminStoreMethod=
   |"accountCredentialsById"|"adminAudit"|"adminElevation"|"adminOverview"|"adminPrincipal"
@@ -138,7 +432,7 @@ export interface ProductSignalsStore {
 export type AuthStore=StoreCapabilities<AuthStoreMethod>;
 export type AdminStore={readonly kind:string}&StoreCapabilities<AdminStoreMethod>;
 export type SupportStore=StoreCapabilities<SupportStoreMethod>;
-export type ApplicationStore={readonly kind:string}&AuthStore&AdminStore&SupportStore&SetupStore&ProductSignalsStore&TrainingStore;
+export type ApplicationStore={readonly kind:string}&AuthStore&AdminStore&SupportStore&SetupStore&ProductSignalsStore&TrainingStore&BillingStore;
 
 export interface AccountIdentityRow extends JsonObject {
   id:string;
@@ -164,6 +458,65 @@ export interface SessionRow extends AccountIdentityRow {
   token_hash:string;
   csrf_token:string;
   expires_at:number;
+}
+
+export interface AccountSessionStoreRow extends JsonObject {
+  token_hash:string;
+  created_at:number;
+  expires_at:number;
+}
+
+export interface AccountExportProfileRow extends JsonObject {
+  id:string;
+  name:string;
+  email:string;
+  created_at:number;
+  email_verified_at:number|null;
+}
+
+export interface AccountExportStoreRows {
+  profile:AccountExportProfileRow;
+  weeklyPlan:JsonObject|null;
+  monthlyPlan:JsonObject|null;
+  preferences:JsonObject|null;
+  ratings:JsonObject[];
+  workouts:JsonObject[];
+  checkIns:JsonObject[];
+  trainingBlock:JsonObject|null;
+  trainingAdaptations:JsonObject[];
+  communityPlans:JsonObject[];
+  trials:JsonObject[];
+  purchases:JsonObject[];
+  subscriptions:JsonObject[];
+  adjustments:JsonObject[];
+  supportTickets:JsonObject[];
+}
+
+export interface AccountSelfServiceStore {
+  accountSessions(userId:string,currentTokenHash:string,now:number):Promise<AccountSessionStoreRow[]>;
+  revokeAccountSession(userId:string,targetTokenHash:string,currentTokenHash:string,now:number):Promise<boolean>;
+  revokeOtherAccountSessions(userId:string,currentTokenHash:string,now:number):Promise<number>;
+  accountExport(userId:string):Promise<AccountExportStoreRows|null>;
+  accountExportWorkouts(userId:string,afterStartedAt:number,afterId:string,limit:number):Promise<JsonObject[]>;
+}
+
+export interface AccountPreparedStatementLike {
+  get(...args:any[]):unknown;
+  all(...args:any[]):unknown[];
+}
+
+export interface LocalAccountSelfServiceStoreDependencies {
+  db:{exec(sql:string):unknown};
+  statements:Record<string,AccountPreparedStatementLike>;
+  plainRow:(row:unknown,columns?:string[])=>any;
+}
+
+export interface TursoAccountSelfServiceStoreDependencies {
+  client:{batch(statements:{sql:string;args:any[]}[],mode:"read"):Promise<QueryResultLike[]>};
+  first(sql:string,args?:any[]):Promise<JsonObject|null>;
+  run(sql:string,args?:any[]):Promise<QueryResultLike>;
+  all(sql:string,args?:any[]):Promise<any[]>;
+  plainRow:(row:unknown,columns?:string[])=>any;
 }
 
 export interface PreparedSession {
@@ -198,6 +551,7 @@ export interface HttpHelpers {
   bodyJson(request:HttpRequest):Promise<unknown>;
   bodyForm(request:HttpRequest):Promise<Record<string,string>>;
   redirect(response:HttpResponse,location:string,headers?:HttpHeaders):void;
+  securityHeaders():HttpHeaders;
 }
 
 export type JsonHttpHelpers=Pick<HttpHelpers,"json"|"bodyJson">;
@@ -333,6 +687,32 @@ export interface TrainingStore {
 export interface PreparedStatementLike {
   get(...args:any[]):unknown;
   run(...args:any[]):unknown;
+  all(...args:any[]):unknown[];
+}
+
+export type BillingPreparedStatementName=
+  |"pendingPurchasesForUser"|"unsettledPurchasesForUser"
+  |"insertPendingPurchase"|"checkoutCreationForUser"|"claimCheckoutCreation"
+  |"recordCheckoutCreationTransaction"|"extendCheckoutCreation"|"releaseCheckoutCreation"
+  |"purchaseByTransaction"|"pendingPurchaseForUser"|"completePurchase"|"updatePurchaseStatus"
+  |"bindPurchaseSubscription"|"createPaddleSubscription"|"updatePaddleSubscription"
+  |"subscriptionById"|"subscriptionForUser"|"upsertAdjustment"|"adjustmentById"
+  |"revokePurchase"|"hasDiscoveryAccess"|"hasCurrentDiscoveryAccess"|"activeDiscoveryTrial"
+  |"discoveryTrial"|"startDiscoveryTrial"|"discoveryAccessSummary"
+  |"currentDiscoveryAccessSummary"|"webhookEvent"|"recordWebhookEvent";
+
+export interface LocalBillingStoreDependencies {
+  db:{exec(sql:string):unknown};
+  statements:Record<BillingPreparedStatementName,PreparedStatementLike>;
+  plainRow:<Row extends JsonObject>(row:unknown,columns?:string[])=>Row|null;
+}
+
+export interface TursoBillingStoreDependencies {
+  client:{batch(statements:{sql:string;args:unknown[]}[],mode:"write"):Promise<QueryResultLike[]>};
+  first:<Row extends JsonObject>(sql:string,args?:unknown[])=>Promise<Row|null>;
+  run:(sql:string,args?:unknown[])=>Promise<QueryResultLike>;
+  all:<Row extends JsonObject>(sql:string,args?:unknown[])=>Promise<Row[]>;
+  plainRow:<Row extends JsonObject>(row:unknown,columns?:string[])=>Row|null;
 }
 
 export type TrainingPreparedStatementName=
@@ -409,6 +789,20 @@ export interface AuthServiceDependencies {
   reconcileCheckoutCreationBeforeDeletion?:(userId:string)=>Promise<number>;
   reconcileUnsettledPurchases?:(userId:string)=>Promise<number>;
   logger?:Pick<Console,"info"|"error">;
+}
+
+export interface AccountSelfServiceDependencies {
+  store:AccountSelfServiceStore;
+  http:Pick<HttpHelpers,"json"|"bodyJson"|"securityHeaders">;
+  requireSession:(request:HttpRequest,response:HttpResponse)=>Promise<SessionRow|null>;
+  validCsrf:(request:HttpRequest,session:SessionRow)=>boolean;
+  rateAllowed:(request:HttpRequest,key:string,limit:number,windowMs?:number)=>boolean;
+  logger?:Pick<Console,"error">;
+  now?:()=>number;
+}
+
+export interface AccountSelfService {
+  handleApi(request:HttpRequest,response:HttpResponse,url:URL):Promise<boolean>;
 }
 
 export interface AuthService {

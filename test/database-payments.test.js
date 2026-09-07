@@ -5,10 +5,12 @@ const assert = require("node:assert/strict");
 const { mkdirSync,mkdtempSync,rmSync } = require("node:fs");
 const { join } = require("node:path");
 const { createStore } = require("../src/database");
+const { STRATA_PLUS_TRIAL_MS } = require("../src/payments");
 
 const PROJECT_ROOT=join(__dirname,"..");
 
-const PRICE_ID="pri_01m1kyc2zd313d7a3ssmg02424";
+const PRICE_ID="pri_01monthlyfixture00000000000000";
+const LEGACY_PRICE_ID="pri_01m1kyc2zd313d7a3ssmg02424";
 const OTHER_PRICE_ID="pri_01m1kyc2zd313d7a3ssmg09999";
 const PRODUCT_ID="pro_01m1ky8j916ybyacs836dxbz8x";
 
@@ -45,11 +47,11 @@ async function fixture() {
   };
 }
 
-function pending(transactionId,createdAt,status="ready") {
+function pending(transactionId,createdAt,status="ready",priceId=PRICE_ID) {
   return {
     transactionId,
     userId:"user-1",
-    priceId:PRICE_ID,
+    priceId,
     productId:PRODUCT_ID,
     paddleStatus:status,
     createdAt,
@@ -124,12 +126,12 @@ test("one-time Strata+ trials grant temporary access without becoming purchases"
   try{
     assert.equal(await store.discoveryTrial("user-1"),null);
     assert.equal(await store.hasDiscoveryAccess("user-1",null,999),false);
-    const trial=await store.startDiscoveryTrial("user-1",1_000,11_000);
-    assert.deepEqual(trial,{user_id:"user-1",started_at:1_000,expires_at:11_000});
+    const trial=await store.startDiscoveryTrial("user-1",1_000,1_000+STRATA_PLUS_TRIAL_MS);
+    assert.deepEqual(trial,{user_id:"user-1",started_at:1_000,expires_at:1_801_000});
     assert.equal(await store.hasPaidDiscoveryAccess("user-1"),false);
-    assert.equal(await store.hasDiscoveryAccess("user-1",null,10_999),true);
-    assert.equal(await store.hasDiscoveryAccess("user-1",null,11_000),false);
-    assert.equal(await store.startDiscoveryTrial("user-1",20_000,30_000),null,"a used trial cannot restart");
+    assert.equal(await store.hasDiscoveryAccess("user-1",null,1_800_999),true);
+    assert.equal(await store.hasDiscoveryAccess("user-1",null,1_801_000),false,"access expires on the exact server timestamp");
+    assert.equal(await store.startDiscoveryTrial("user-1",2_000_000,2_000_000+STRATA_PLUS_TRIAL_MS),null,"a used trial cannot restart or extend");
     assert.deepEqual(await store.discoveryTrial("user-1"),trial);
   }finally{await close();}
 });
@@ -180,6 +182,84 @@ test("purchase ledger grants access from any completed, unrevoked purchase",asyn
   } finally {
     await close();
   }
+});
+
+test("monthly subscription cache is linked, ordered, fail-closed, and keeps legacy buyers",async()=>{
+  const {store,close}=await fixture();
+  const transactionId="txn_monthly",subscriptionId="sub_monthly",customerId="ctm_monthly";
+  try{
+    // A pre-7.5 completed purchase has no subscription ID and remains a
+    // grandfathered lifetime entitlement.
+    await store.insertPendingPurchase(pending("txn_legacy",500,"ready",LEGACY_PRICE_ID));
+    await store.completePurchase("txn_legacy",{customerId:"ctm_legacy",completedAt:600,updatedAt:600});
+    assert.equal(await store.hasPaidDiscoveryAccess("user-1",null,Number.MAX_SAFE_INTEGER),true);
+    assert.equal(await store.hasCurrentPaidDiscoveryAccess("user-1","","",Number.MAX_SAFE_INTEGER),true,"legacy lifetime access survives missing or replaced recurring catalog configuration");
+    await store.revokePurchase("txn_legacy","test_subscription_isolation",700,700);
+
+    await store.insertPendingPurchase(pending(transactionId,1_000));
+    await store.completePurchase(transactionId,{customerId,subscriptionId,completedAt:1_100,updatedAt:1_100});
+    assert.equal(await store.hasPaidDiscoveryAccess("user-1"),false,"a completed recurring transaction must wait for its verified subscription link");
+    assert.equal(await store.pendingPurchasesForUser("user-1"),1,"an unlinked completed subscription prevents a duplicate checkout or unsafe deletion");
+
+    const active=await store.createPaddleSubscription({
+      subscriptionId,userId:"user-1",transactionId,customerId,status:"active",
+      priceId:PRICE_ID,productId:PRODUCT_ID,scheduledChangeAction:"cancel",scheduledChangeAt:5_000,
+      currentPeriodEndsAt:5_000,eventOccurredAt:2_000,createdAt:2_000,updatedAt:2_100
+    });
+    assert.equal(active.status,"active");
+    assert.equal(active.scheduled_change_action,"cancel");
+    assert.equal(await store.hasPaidDiscoveryAccess("user-1",null,4_999),true,"scheduled cancellation keeps access through the active period");
+    assert.equal(await store.hasPaidDiscoveryAccess("user-1",null,5_000),false,"scheduled cancellation ends access at the exact trusted boundary");
+    assert.equal(await store.hasCurrentPaidDiscoveryAccess("user-1",PRICE_ID,PRODUCT_ID,4_999),true);
+    assert.equal(await store.hasCurrentPaidDiscoveryAccess("user-1",OTHER_PRICE_ID,PRODUCT_ID,4_999),false,"recurring access requires the configured price");
+    assert.equal(await store.hasCurrentPaidDiscoveryAccess("user-1",PRICE_ID,"pro_another_product",4_999),false,"recurring access requires the configured product");
+    assert.equal((await store.currentDiscoveryAccessSummary("user-1",OTHER_PRICE_ID,PRODUCT_ID,4_999)).active,false);
+    assert.equal(await store.pendingPurchasesForUser("user-1"),1,"an active subscription blocks deletion and duplicate subscription creation");
+
+    const pastDue=await store.updatePaddleSubscription({
+      subscriptionId,userId:"user-1",customerId,status:"past_due",priceId:PRICE_ID,productId:PRODUCT_ID,
+      scheduledChangeAction:null,scheduledChangeAt:null,currentPeriodEndsAt:6_000,eventOccurredAt:3_000,updatedAt:3_100
+    });
+    assert.equal(pastDue.status,"past_due");
+    assert.equal(await store.hasPaidDiscoveryAccess("user-1",null,5_999),true,"past-due members retain access while Paddle retries payment");
+    assert.equal(await store.hasPaidDiscoveryAccess("user-1",null,6_000),false,"cached recurring access fails closed when its verified period ends");
+
+    const stale=await store.updatePaddleSubscription({
+      subscriptionId,userId:"user-1",customerId,status:"canceled",priceId:PRICE_ID,productId:PRODUCT_ID,
+      scheduledChangeAction:null,scheduledChangeAt:null,currentPeriodEndsAt:null,eventOccurredAt:2_500,updatedAt:4_000
+    });
+    assert.equal(stale,null,"an older delivery cannot overwrite the newest provider state");
+    assert.equal((await store.subscriptionById(subscriptionId)).status,"past_due");
+
+    await store.updatePaddleSubscription({
+      subscriptionId,userId:"user-1",customerId,status:"active",priceId:OTHER_PRICE_ID,productId:PRODUCT_ID,
+      scheduledChangeAction:null,scheduledChangeAt:null,currentPeriodEndsAt:7_000,eventOccurredAt:4_000,updatedAt:4_100
+    });
+    assert.equal(await store.hasPaidDiscoveryAccess("user-1"),false,"a catalog change fails closed without losing the provider state");
+    assert.equal(await store.pendingPurchasesForUser("user-1"),1,"a still-active mismatched subscription remains deletion-blocking");
+
+    const paused=await store.updatePaddleSubscription({
+      subscriptionId,userId:"user-1",customerId,status:"paused",priceId:PRICE_ID,productId:PRODUCT_ID,
+      scheduledChangeAction:null,scheduledChangeAt:null,currentPeriodEndsAt:null,eventOccurredAt:4_500,updatedAt:4_600
+    });
+    assert.equal(paused.status,"paused");
+    assert.equal(await store.hasPaidDiscoveryAccess("user-1"),false,"paused subscriptions do not grant access");
+    assert.equal(await store.pendingPurchasesForUser("user-1"),1,"paused subscriptions remain provider-managed and cannot be duplicated or orphaned by deletion");
+
+    const canceled=await store.updatePaddleSubscription({
+      subscriptionId,userId:"user-1",customerId,status:"canceled",priceId:PRICE_ID,productId:PRODUCT_ID,
+      scheduledChangeAction:null,scheduledChangeAt:null,currentPeriodEndsAt:null,eventOccurredAt:5_000,updatedAt:5_100
+    });
+    assert.equal(canceled.status,"canceled");
+    assert.equal(await store.hasPaidDiscoveryAccess("user-1"),false);
+    const equalTimestampReactivation=await store.updatePaddleSubscription({
+      subscriptionId,userId:"user-1",customerId,status:"active",priceId:PRICE_ID,productId:PRODUCT_ID,
+      scheduledChangeAction:null,scheduledChangeAt:null,currentPeriodEndsAt:9_000,eventOccurredAt:5_000,updatedAt:5_200
+    });
+    assert.equal(equalTimestampReactivation,null,"an equal-timestamp active update cannot supersede a terminal state");
+    assert.equal((await store.subscriptionById(subscriptionId)).status,"canceled");
+    assert.equal(await store.pendingPurchasesForUser("user-1"),0,"a terminal subscription no longer blocks account deletion");
+  }finally{await close();}
 });
 
 test("purchase status updates are ordered and completed is terminal",async() => {
@@ -244,6 +324,15 @@ test("adjustment upserts keep the newest event and revocation is monotonic",asyn
     });
     assert.equal(approvedApplied,true);
     assert.equal((await store.adjustmentById("adj_refund")).status,"approved");
+
+    await store.insertPendingPurchase(pending("txn_other_refund",6_100));
+    const reassigned=await store.upsertAdjustment({
+      adjustmentId:"adj_refund",transactionId:"txn_other_refund",action:"chargeback",type:"full",
+      status:"approved",occurredAt:7_000,updatedAt:7_000
+    });
+    assert.equal(reassigned,false,"a provider adjustment ID cannot be rebound to another transaction");
+    assert.equal((await store.adjustmentById("adj_refund")).transaction_id,"txn_refund");
+    assert.equal((await store.purchaseByTransaction("txn_other_refund")).access_revoked_at,null);
 
     const revoked=await store.revokePurchase("txn_refund","approved_full_refund",6_000,6_000);
     assert.equal(revoked.access_revoked_at,6_000);

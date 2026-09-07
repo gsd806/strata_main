@@ -25,7 +25,10 @@ const args=[
   "--test-coverage-include=public/scripts/monthly-plan-core.js",
   "--test-coverage-include=public/scripts/workout-core.js",
   "--test-coverage-include=public/scripts/onboarding-core.js",
-  "--test-coverage-include=public/scripts/preview-core.js"
+  "--test-coverage-include=public/scripts/preview-core.js",
+  "--test-coverage-include=public/scripts/activation-core.js",
+  "--test-coverage-include=public/scripts/plan-insights-core.js",
+  "--test-coverage-include=public/scripts/training-block-core.js"
 ];
 
 function runCoverage() {

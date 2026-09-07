@@ -28,7 +28,7 @@ test("workout starts from a snapshot, infers explicit formats and never invents 
   assert.equal(workout.entries[1].loadType,"bodyweight");
   assert.equal(workout.entries[2].measurement,"timed");
   assert.equal(workout.entries[3].loadType,"assisted");
-  for(const entry of workout.entries)for(const set of entry.sets)assert.deepEqual(set,{reps:null,weight:null,seconds:null,completed:false});
+  for(const entry of workout.entries)for(const set of entry.sets)assert.deepEqual(set,{reps:null,weight:null,seconds:null,completed:false,effort:null});
   assert.throws(()=>W.createWorkout({days:{Monday:[]}},"Monday",catalog),/Add exercises/);
   assert.throws(()=>W.createWorkout({days:{Monday:[{exerciseId:"unknown",sets:3}]}},"Monday",catalog),/unavailable/);
 });
@@ -42,6 +42,15 @@ test("workout guidance summarizes a plan day and identifies the next unfinished 
   assert.deepEqual(W.nextIncompleteSet(workout),{entryIndex:1,setIndex:0,entryId:workout.entries[1].id,exerciseId:"push-up",remaining:3});
   workout.entries.forEach((entry)=>entry.sets.forEach((set)=>{set.completed=true;}));
   assert.equal(W.nextIncompleteSet(workout),null);
+});
+
+test("superset pairs guide alternating rounds while ordinary exercises keep their simple order",()=>{
+  const workout=makeWorkout(),group="superset-rounds";workout.entries[0].supersetGroup=group;workout.entries[1].supersetGroup=group;
+  assert.equal(W.nextIncompleteSet(workout).entryId,workout.entries[0].id);
+  workout.entries[0].sets[0].completed=true;
+  assert.equal(W.nextIncompleteSet(workout).entryId,workout.entries[1].id);
+  workout.entries[1].sets[0].completed=true;
+  assert.equal(W.nextIncompleteSet(workout).setIndex,1);assert.equal(W.nextIncompleteSet(workout).entryId,workout.entries[0].id);
 });
 
 test("actual catalog timed prescriptions and compact seconds shorthand infer timed logging",()=>{
@@ -84,6 +93,19 @@ test("a requested planner day survives guest selection and reload; missing or in
   assert.equal(W.dayFromSearch("",sunday),"Sunday");
   assert.equal(W.dayFromSearch("?guest=1&day=Someday",sunday),"Sunday");
   assert.equal(W.dayFromSearch("?day=monday",sunday),"Sunday");
+});
+
+test("offline authorization ends at the earliest verified trial, period, cancel, or pause boundary",()=>{
+  const now=Date.UTC(2026,8,8,12),hour=60*60*1000;
+  assert.equal(W.offlineAccessUntil({active:false},now),0);
+  assert.equal(W.offlineAccessUntil({active:true,accessType:"trial",trial:{expiresAt:now+30*60*1000}},now),now+30*60*1000);
+  assert.equal(W.offlineAccessUntil({active:true,accessType:"paid",subscription:null},now),now+24*hour,"grandfathered access keeps the bounded device window");
+  assert.equal(W.offlineAccessUntil({active:true,accessType:"paid",subscription:{currentPeriodEndsAt:now+48*hour,scheduledChange:null}},now),now+24*hour);
+  for(const action of ["cancel","pause"]){
+    assert.equal(W.offlineAccessUntil({active:true,accessType:"paid",subscription:{currentPeriodEndsAt:now+48*hour,scheduledChange:{action,effectiveAt:now+2*hour}}},now),now+2*hour,action);
+    assert.equal(W.offlineAccessUntil({active:true,accessType:"paid",subscription:{currentPeriodEndsAt:now+48*hour,scheduledChange:{action,effectiveAt:now}}},now),0,`${action} at the current boundary fails closed`);
+  }
+  assert.equal(W.offlineAccessUntil({active:true,accessType:"paid",subscription:{currentPeriodEndsAt:now}},now),0,"an ended or missing billing period cannot authorize offline use");
 });
 
 test("complete sets require actual positive reps or seconds and an explicit external or assisted load",()=>{
@@ -167,4 +189,49 @@ test("save confirmation compares canonical semantic fields and detects an old PO
   assert.equal(W.matches(saved,original),false);
   assert.equal(Object.hasOwn(W.payload(saved),"revision"),false);
   assert.equal(Object.hasOwn(W.payload(saved),"updatedAt"),false);
+});
+
+test("Workout Memory uses only the latest exact exercise, measurement, load-type and unit match",()=>{
+  const current=makeWorkout(),older=complete(makeWorkout()),newer=complete(makeWorkout()),pounds=complete(makeWorkout());
+  older.id="older";older.date="2026-09-01";older.startedAt=100;older.entries[0].sets[0]={reps:8,weight:25,seconds:null,completed:true,effort:2};older.entries[0].effortType="rir";
+  newer.id="newer";newer.date="2026-09-05";newer.startedAt=200;newer.entries[0].sets[0]={reps:10,weight:27.5,seconds:null,completed:true,effort:null};
+  pounds.id="pounds";pounds.startedAt=300;pounds.entries[0].unit="lb";pounds.entries[0].sets[0].weight=80;
+  const memory=W.previousComparable([W.summary(older),W.summary(pounds),W.summary(newer)],current.entries[0],current.id);
+  assert.equal(memory.workoutId,"newer");assert.equal(memory.date,"2026-09-05");assert.deepEqual(memory.sets[0],{reps:10,weight:27.5,seconds:null,effort:null,effortType:"none"});
+  const target=W.suggestedTargets(current.entries[0],memory);assert.equal(target.source,"previous");assert.equal(target.sets[0].weight,27.5);assert.equal(target.sets[0].reps,10);
+  W.applyTargets(current.entries[0],target.sets);assert.equal(current.entries[0].sets[1].weight,27.5);
+  assert.throws(()=>W.applyTargets(current.entries[0],target.sets),/Clear this exercise/);
+  assert.equal(W.previousComparable([W.summary(pounds)],current.entries[0]),null);
+});
+
+test("set editing is explicit, bounded and never treats a copied set as completed",()=>{
+  const entry=makeWorkout().entries[0];entry.sets[0]={reps:8,weight:20,seconds:null,completed:false,effort:null};
+  assert.equal(W.duplicateSet(entry,0),1);assert.deepEqual(entry.sets[1],{reps:8,weight:20,seconds:null,completed:false,effort:null});
+  assert.equal(W.addSet(entry),3);assert.deepEqual(entry.sets[3],W.blankSet());
+  assert.equal(W.removeSet(entry,3),2);entry.sets[0].completed=true;
+  assert.throws(()=>W.removeSet(entry,0),/Uncheck/);
+  entry.sets=Array.from({length:10},W.blankSet);assert.throws(()=>W.addSet(entry),/at most 10/);assert.throws(()=>W.duplicateSet(entry,0),/at most 10/);
+});
+
+test("optional effort, notes and grouping survive canonical payload and account-scoped recovery",()=>{
+  const workout=makeWorkout(),entry=workout.entries[0];entry.note="Seat notch 4\nControlled lowering";entry.effortType="rpe";entry.supersetGroup="superset-a";entry.replacedFromExerciseId="push-up";entry.sets[0].effort=8.5;
+  assert.equal(W.effortError(entry,entry.sets[0]),"");assert.match(W.effortError({...entry,effortType:"rir"},{effort:10.5}),/RIR/);assert.match(W.effortError({...entry,effortType:"none"},{effort:5}),/Choose/);
+  const payload=W.payload(workout);assert.equal(payload.entries[0].note,entry.note);assert.equal(payload.entries[0].sets[0].effort,8.5);
+  const record=W.readDraft(JSON.stringify({ownerId:"account:42",workout:payload,dirty:true}),"account:42");assert.equal(record.workout.entries[0].supersetGroup,"superset-a");assert.equal(record.workout.entries[0].sets[0].effort,8.5);
+  assert.equal(W.readDraft(JSON.stringify({ownerId:"account:other",workout:payload,dirty:true}),"account:42"),null);
+});
+
+test("warm-up and plate calculators are deterministic and reject impossible inputs",()=>{
+  assert.deepEqual(W.warmupSets(100),[{percent:40,load:40,reps:8},{percent:60,load:60,reps:5},{percent:80,load:80,reps:3}]);
+  assert.deepEqual(W.warmupSets(0),[]);
+  assert.deepEqual(W.plateBreakdown(100,20),{pairs:[{plate:25,count:1},{plate:15,count:1}],remainder:0,achievable:true});
+  assert.deepEqual(W.plateBreakdown(21,20),{pairs:[],remainder:.5,achievable:false});
+  assert.equal(W.plateBreakdown(10,20).remainder,null);
+});
+
+test("exercise swap explains trade-offs and Plan proposals remain immutable until approval",()=>{
+  const reference={id:"press",group:"chest",sub:"Upper chest",equipment:"Dumbbells",score:90,metrics:{stability:80}},candidate={id:"machine",group:"chest",sub:"Upper chest",equipment:"Machine",score:94,metrics:{stability:95}};
+  const comparison=W.swapComparison(reference,candidate);assert.equal(comparison.compatible,true);assert.equal(comparison.fitDelta,4);assert.equal(comparison.stabilityDelta,15);assert.match(comparison.explanation,/Same upper chest target/);
+  const workout=makeWorkout(),plan={version:1,days:{Monday:[{instanceId:"plan-press",exerciseId:"press",sets:2,reps:"8–12"}]}};workout.entries[0].planInstanceId="plan-press";
+  const proposal=W.planSwapProposal(plan,"Monday",workout.entries[0],"machine");assert.equal(plan.days.Monday[0].exerciseId,"press");assert.equal(proposal.plan.days.Monday[0].exerciseId,"machine");assert.equal(proposal.before,"press");
 });

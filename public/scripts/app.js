@@ -218,6 +218,7 @@ function renderExercises() {
 function previewPlaceholder(message) {
   el("quickPreviewSummary").textContent = "Ready when you are";
   el("quickPreviewResults").innerHTML = ["Recommendation","Recommendation","Recommendation"].map((label,index) => `<li class="preview-placeholder"><span>${String(index+1).padStart(2,"0")}</span><div><strong>${label}</strong><p>${escapeHtml(message)}</p></div></li>`).join("");
+  if(window.StrataHomeActivation?.hide)window.StrataHomeActivation.hide();else el("quickWeekPreview").hidden=true;
   el("quickPreviewActions").hidden = true;
 }
 
@@ -237,7 +238,17 @@ function updatePreviewEquipmentOptions({announce=false} = {}) {
   }
   const group = previewGroup();
   el("quickPreviewGroup").value = group;
-  const options = [...new Set(exercises.filter((exercise) => exercise.group === group).map((exercise) => exercise.equipment))].sort();
+  const allOptions = [...new Set(exercises.filter((exercise) => exercise.group === group).map((exercise) => exercise.equipment))].sort();
+  const home = window.StrataHomeActivation;
+  const options = typeof home?.canBuild === "function" ? allOptions.filter((equipment) => home.canBuild({
+    exercises,
+    sample:{
+      goal:el("quickPreviewGoal").value || "balanced",group,equipment,
+      level:el("quickPreviewLevel").value || "Intermediate",
+      days:Math.max(2,Math.min(5,Number(el("quickPreviewDays").value)||3)),
+      minutes:[20,35,50].includes(Number(el("quickPreviewMinutes").value))?Number(el("quickPreviewMinutes").value):35
+    }
+  })) : allOptions;
   const previous = select.value;
   const preferred = options.includes(previous) ? previous : options.includes("Dumbbells") ? "Dumbbells" : options.includes("Bodyweight") ? "Bodyweight" : options[0];
   select.innerHTML = options.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join("");
@@ -253,8 +264,20 @@ function quickPreviewProfile() {
     goal:el("quickPreviewGoal").value || "balanced",
     group:previewGroup(),
     equipment:el("quickPreviewEquipment").value,
-    level:el("quickPreviewLevel").value || "Intermediate"
+    level:el("quickPreviewLevel").value || "Intermediate",
+    days:Math.max(2,Math.min(5,Number(el("quickPreviewDays").value)||3)),
+    minutes:[20,35,50].includes(Number(el("quickPreviewMinutes").value))?Number(el("quickPreviewMinutes").value):35
   };
+}
+
+function applyActivationProfile(profile) {
+  el("quickPreviewGoal").value=profile.goal;
+  el("quickPreviewGroup").value=profile.focusGroup&&groups[profile.focusGroup]?profile.focusGroup:"chest";
+  el("quickPreviewLevel").value=profile.level;
+  el("quickPreviewDays").value=String(profile.availability.length);
+  el("quickPreviewMinutes").value=String(profile.minutes);
+  updatePreviewEquipmentOptions();
+  if([...el("quickPreviewEquipment").options].some((option)=>profile.equipment.includes(option.value)))el("quickPreviewEquipment").value=profile.equipment.find((value)=>[...el("quickPreviewEquipment").options].some((option)=>option.value===value));
 }
 
 function previewResultMarkup(item) {
@@ -273,13 +296,15 @@ function previewResultMarkup(item) {
 
 function generateQuickPreview() {
   const output=el("quickPreviewOutput"),submit=el("quickPreviewSubmit");
-  output.setAttribute("aria-busy","true");submit.disabled=true;el("quickPreviewStatus").textContent="Ranking this sample…";
+  output.setAttribute("aria-busy","true");submit.disabled=true;el("quickPreviewStatus").textContent="Building all seven days…";
   try {
-    const result=window.StrataPreview.buildPreview({exercises,profile:quickPreviewProfile(),discovery:window.StrataDiscovery,limit:3});
-    el("quickPreviewSummary").textContent=result.summary;
-    el("quickPreviewResults").innerHTML=result.items.map(previewResultMarkup).join("");
-    el("quickPreviewActions").hidden=false;
-    el("quickPreviewStatus").textContent=`Shortlist ready. ${result.items.length} recommendation${result.items.length===1?"":"s"}, each with its decision factors and trade-off.`;
+    const sample=quickPreviewProfile(),home=window.StrataHomeActivation;
+    if(!home?.generate){
+      const fallback=window.StrataPreview.buildPreview({exercises,profile:sample,discovery:window.StrataDiscovery,limit:3});
+      el("quickPreviewSummary").textContent=fallback.summary;el("quickPreviewResults").innerHTML=fallback.items.map(previewResultMarkup).join("");el("quickPreviewActions").hidden=false;el("quickPreviewStatus").textContent="Shortlist ready. Reload before continuing if the complete-week preview does not appear.";return;
+    }
+    const result=home.generate({exercises,sample,previewResultMarkup});
+    if(!result.stored)el("quickPreviewStatus").textContent="Your complete week is visible, but this browser blocked the private device draft. Keep this page open while you create or sign in to an account.";
     el("quickPreviewSummary").focus({preventScroll:false});
     try { window.dispatchEvent?.(new CustomEvent("strata:milestone",{detail:{name:"preview_generated"}})); } catch {}
   } catch (error) {
@@ -319,6 +344,10 @@ function updateAccountUI() {
   discoveryButton.hidden = !state.user;
   discoveryButton.href = discoveryActive ? "/discover.html" : "/pricing";
   discoveryButton.textContent = discoveryActive ? "Strata+" : "Unlock Strata+";
+  const previewLogin=el("quickPreviewLogin"),previewContinue=el("quickPreviewContinue");
+  previewLogin.hidden=Boolean(state.user);
+  previewContinue.href=state.user?"/planner.html":"/account.html?mode=signup&next=planner";
+  if(state.user)previewContinue.innerHTML="<strong>Compare with my account</strong><span>Choose which week to keep →</span>";
   const planCount = state.user ? (Number(state.user.planCount) || 0) : guestPlanCount();
   el("planCount").textContent = planCount;
   el("planButton").href = "/planner.html";
@@ -443,7 +472,7 @@ async function initializeCatalog() {
   state.catalogStatus = "loading";
   renderAll();
   try {
-    exercises = normalizeCatalog(await api("/exercises.json?v=7.4.1"));
+    exercises = normalizeCatalog(await api("/exercises.json?v=7.5.0"));
     state.catalogStatus = "ready";
     el("catalogTotal").textContent = exercises.length;
   } catch {
@@ -453,6 +482,7 @@ async function initializeCatalog() {
   }
   renderAll();
   updatePreviewEquipmentOptions();
+  window.StrataHomeActivation?.restore?.({exercises,applyProfile:applyActivationProfile,readSample:quickPreviewProfile,previewResultMarkup});
 }
 
 function toggleCompare(id) {
@@ -549,7 +579,7 @@ el("clearCompare").addEventListener("click", () => { state.compare=[];updateComp
 el("openCompare").addEventListener("click", openComparison);
 el("quickPreviewForm").addEventListener("submit", (event) => { event.preventDefault();generateQuickPreview(); });
 el("quickPreviewForm").addEventListener("change", (event) => {
-  if (event.target.id === "quickPreviewGroup") updatePreviewEquipmentOptions({announce:true});
+  if (["quickPreviewGoal","quickPreviewGroup","quickPreviewLevel","quickPreviewDays","quickPreviewMinutes"].includes(event.target.id)) updatePreviewEquipmentOptions({announce:event.target.id === "quickPreviewGroup"});
   previewPlaceholder("Your choices changed. Generate again to refresh this shortlist.");
   el("quickPreviewStatus").textContent="Choices updated. Show your shortlist to apply them.";
 });
