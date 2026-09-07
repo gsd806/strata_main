@@ -472,7 +472,7 @@ async function initializeCatalog() {
   state.catalogStatus = "loading";
   renderAll();
   try {
-    exercises = normalizeCatalog(await api("/exercises.json?v=7.5.0"));
+    exercises = normalizeCatalog(await api("/exercises.json?v=7.5.1"));
     state.catalogStatus = "ready";
     el("catalogTotal").textContent = exercises.length;
   } catch {

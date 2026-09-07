@@ -17,6 +17,7 @@ function monthlyCycle(value){
   const cycle=/** @type {{interval?:unknown;frequency?:unknown}} */(value);
   return cycle.interval==="month"&&Number(cycle.frequency)===1;
 }
+
 /** @param {number} milliseconds */
 function requestSignal(milliseconds){
   const signal=typeof globalThis.AbortSignal?.timeout==="function"?globalThis.AbortSignal.timeout(milliseconds):undefined;

@@ -81,9 +81,10 @@ test("admin ownership requires one normalized, verified configured principal",as
     sessionCookie:()=>"",
     passwordMatches:async()=>true,
     prepareSession:()=>({record:{},token:"token",csrfToken:"csrf"}),
+    accountEmailHash:()=>"email-hash",
     requestSignedInAccountAction:async()=>({maskedEmail:"o***@example.test"})
   };
-  const admin=createAdminService({store,adminEmail:configured,auth,emailConfig:{enabled:true},paymentConfig:{enabled:false},trustedAuthOrigin:()=>true,rateAllowed:()=>true,http:noopHttp});
+  const admin=createAdminService({store,adminEmail:configured,auth,emailConfig:{enabled:true},paymentConfig:{enabled:false},trustedAuthOrigin:()=>true,rateAllowed:()=>true,http:noopHttp,reconcileCheckoutCreationBeforeDeletion:async()=>0,reconcileUnsettledPurchases:async()=>0});
   assert.equal((await admin.adminIdentity(session)).active,true);
   principal={...principal,email:"different@example.test"};
   assert.equal((await admin.adminIdentity(session)).active,false);

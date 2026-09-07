@@ -83,7 +83,7 @@ Test the complete flow with a non-owner address: sign up, receive and submit the
 
 `SUPPORT_EMAIL` is the notification destination for new Contact and help-desk requests. `EMAIL_REPLY_TO` controls the reply-to address on mail sent through the same Resend configuration; no Gmail API or separate administrator password is needed.
 
-After owner setup, verify password step-up, the 30-minute elevation expiry, session rotation, primary-owner self-protection, support responses, and the redacted audit trail.
+After owner setup, verify password step-up, the 30-minute elevation expiry, session rotation, primary-owner self-protection, support responses, and the redacted audit trail. Permanent deletion is deliberately two-step: pause the non-owner account first, resolve or cancel any live Paddle subscription, then type the exact stored email in the deletion confirmation. The final database operation requires the same still-live elevated owner session and rechecks suspension and billing state atomically.
 
 ## Member account controls
 
@@ -91,7 +91,7 @@ After owner setup, verify password step-up, the 30-minute elevation expiry, sess
 
 ## Paddle monthly subscription
 
-Paddle is the merchant of record for the $0.99 USD per month Strata+ subscription. The public amount, USD currency, monthly frequency, and catalog identifiers must stay aligned with the live catalog. Build 7.5.0 deliberately does not contain a replacement recurring price ID: `PADDLE_PRICE_ID` is a secret-style `sync: false` value in `render.yaml`, and checkout remains unavailable until the operator supplies the new monthly price.
+Paddle is the merchant of record for the $0.99 USD per month Strata+ subscription. The public amount, USD currency, monthly frequency, and catalog identifiers must stay aligned with the live catalog. Build 7.5.1 does not embed either current catalog ID: `PADDLE_PRODUCT_ID` and `PADDLE_PRICE_ID` are operator-supplied `sync: false` values in `render.yaml`, and checkout remains unavailable until both identify the same valid monthly catalog item. The browser consumes the product selected and validated by the same-origin server instead of pinning an older product in public code.
 
 Required configuration:
 
@@ -101,7 +101,7 @@ Required configuration:
 - `PADDLE_WEBHOOK_SECRET`, the notification destination's signing secret; and
 - `PADDLE_CHECKOUT_ENABLED`, the launch/rollback switch.
 
-The application rejects the retired one-time live price ID even if it is supplied explicitly. It also fails closed for an absent or malformed recurring price, environment-mismatched credentials, incomplete secrets, or production sandbox configuration. Do not enable checkout to work around this guard. Create the actual monthly catalog item in Paddle, enter its exact ID in the deployment environment, and then run the preflight.
+The application rejects the retired one-time live price ID for every new checkout, even if it is supplied explicitly. Build 7.5.1 recognizes that exact retired price/product pair only while reconciling an already-recorded, abandoned Build 7.4 checkout. It updates a validated `draft` transaction's complete item list to the configured monthly price and reuses that transaction; a stale state Paddle permits the application to cancel must be confirmed canceled before a fresh checkout begins. A delayed completion of the exact retired checkout is accepted only with its original account and checkout metadata, API origin, automatic collection, one item of quantity one, null subscription, null billing cycle, and a valid customer ID; it is then recorded as lifetime access. Unknown one-time prices, mismatched products/accounts, unsafe status changes, and invalid provider responses still fail closed. The application also fails closed for an absent or malformed recurring price, environment-mismatched credentials, incomplete secrets, or production sandbox configuration. Do not enable checkout to work around these guards. Create the actual monthly catalog item in Paddle, enter its exact ID in the deployment environment, and then run the preflight.
 
 Create or reuse a live notification destination at:
 
@@ -147,7 +147,7 @@ After deployment:
 2. Confirm account, protected-page, service-worker, and manifest responses have the expected cache policy.
 3. Complete a signup/login and plan-save round trip.
 4. Exercise provider flows after changing Resend or Paddle configuration.
-5. Run `STRATA_SMOKE_BASE_URL=https://your-host.example STRATA_EXPECTED_BUILD=7.5.0 npm run smoke:deploy` to check status/build/provider flags, durable Turso reporting, storage readiness, the public home and manifest, security headers, and signed-out private-route handling.
+5. Run `STRATA_SMOKE_BASE_URL=https://your-host.example STRATA_EXPECTED_BUILD=7.5.1 npm run smoke:deploy` to check status/build/provider flags, durable Turso reporting, storage readiness, the public home and manifest, security headers, and signed-out private-route handling.
 6. Confirm GitHub Actions is green before tagging or announcing a release.
 
 The deployment smoke is read-only and does not create an account, send email, buy a subscription, process a webhook, or mutate production data. Complete authorized provider-backed smoke separately and record its result; never describe local provider fakes or configuration-shape checks as live credential evidence.

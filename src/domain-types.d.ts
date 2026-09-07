@@ -88,6 +88,7 @@ export interface CheckoutIdentity {
   checkoutId?:unknown;
   priceId?:unknown;
   productId?:unknown;
+  retiredOneTimeCancellation?:boolean;
 }
 
 export interface CheckoutRecoveryIdentity extends CheckoutIdentity {
@@ -334,6 +335,8 @@ export interface BillingStore {
   pendingPurchasesForUser(userId:string):Promise<number>;
   unsettledPurchasesForUser(userId:string):Promise<PurchaseRow[]>;
   insertPendingPurchase(purchase:PendingPurchaseWrite):Promise<PurchaseRow|null>;
+  replacePendingPurchaseCatalog(purchase:PurchaseRow,replacement:{priceId:string;productId:string;paddleStatus:string;updatedAt:number}):Promise<PurchaseRow|null>;
+  completePurchaseCatalogMigration(purchase:PurchaseRow,replacement:{priceId:string;productId:string;customerId:string|null;subscriptionId:string;completedAt:number;updatedAt:number}):Promise<PurchaseRow|null>;
   completePurchase(transactionId:string,completion:PurchaseCompletion):Promise<PurchaseRow|null>;
   updatePurchaseStatus(transactionId:string,status:string,occurredAt:number):Promise<PurchaseRow|null>;
   createPaddleSubscription(subscription:SubscriptionCreate):Promise<SubscriptionRow|null>;
@@ -381,7 +384,7 @@ export interface BillingService {
   accessSummaryForUser(userId:string):Promise<DiscoveryAccessSummary>;
   subscriptionForUser(userId:string):Promise<SubscriptionSummary|null>;
   reconcileCheckoutCreationBeforeDeletion(userId:string):Promise<number>;
-  reconcileUnsettledPurchases(userId:string):Promise<number>;
+  reconcileUnsettledPurchases(userId:string,options?:{reuseDraft?:boolean}):Promise<number>;
   warmProviderTrust():Promise<void>;
 }
 
@@ -405,7 +408,7 @@ export type AdminStoreMethod=
   |"accountCredentialsById"|"adminAudit"|"adminElevation"|"adminOverview"|"adminPrincipal"
   |"adminUserById"|"adminUsers"|"cancelAccountDeletionWithAudit"|"claimAdminPrincipal"
   |"deleteExpiredAdminElevations"|"recordAdminAudit"|"restoreUser"|"revokeUserSessions"
-  |"rotateAdminSessionForElevation"|"suspendUser"|"userByEmail"|"userById";
+  |"rotateAdminSessionForElevation"|"suspendUser"|"deleteUserByAdmin"|"userByEmail"|"userById";
 
 export type SupportStoreMethod=
   |"adminSupportTickets"|"claimSupportRequestEvent"|"deleteOldSupportRequestEvents"
@@ -692,7 +695,7 @@ export interface PreparedStatementLike {
 
 export type BillingPreparedStatementName=
   |"pendingPurchasesForUser"|"unsettledPurchasesForUser"
-  |"insertPendingPurchase"|"checkoutCreationForUser"|"claimCheckoutCreation"
+  |"insertPendingPurchase"|"replacePendingPurchaseCatalog"|"completePurchaseCatalogMigration"|"checkoutCreationForUser"|"claimCheckoutCreation"
   |"recordCheckoutCreationTransaction"|"extendCheckoutCreation"|"releaseCheckoutCreation"
   |"purchaseByTransaction"|"pendingPurchaseForUser"|"completePurchase"|"updatePurchaseStatus"
   |"bindPurchaseSubscription"|"createPaddleSubscription"|"updatePaddleSubscription"
@@ -786,8 +789,8 @@ export interface AuthServiceDependencies {
   http:HttpHelpers;
   getUserPayload:(account:AccountIdentityRow)=>Promise<unknown>;
   claimAdminForLogin?:(user:UserRow)=>Promise<UserRow>;
-  reconcileCheckoutCreationBeforeDeletion?:(userId:string)=>Promise<number>;
-  reconcileUnsettledPurchases?:(userId:string)=>Promise<number>;
+  reconcileCheckoutCreationBeforeDeletion:(userId:string)=>Promise<number>;
+  reconcileUnsettledPurchases:(userId:string)=>Promise<number>;
   logger?:Pick<Console,"info"|"error">;
 }
 
@@ -818,6 +821,7 @@ export interface AuthService {
   validCsrf(request:HttpRequest,session:SessionRow):boolean;
   requestSignedInAccountAction(account:AccountIdentityRow,purpose:AccountActionPurpose):Promise<AccountActionDelivery>;
   accountActionError(message:string,status:number,code:string):Error&{status:number;code:string};
+  accountEmailHash(email:string):string;
   normalizeEmail(value:unknown):string;
   hashToken(token:string):string;
   [method:string]:unknown;
@@ -834,6 +838,8 @@ export interface AdminServiceDependencies {
   http:JsonHttpHelpers;
   environment?:NodeJS.ProcessEnv;
   enforcePaddleIps?:boolean;
+  reconcileCheckoutCreationBeforeDeletion:(userId:string)=>Promise<number>;
+  reconcileUnsettledPurchases:(userId:string)=>Promise<number>;
 }
 
 export interface AdminService {

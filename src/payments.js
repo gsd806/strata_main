@@ -57,10 +57,12 @@ function getPaymentConfig(env=process.env) {
   const environment=sandbox?"sandbox":"live";
   // Sandbox entitlements must never be written to a production application.
   const environmentAllowed=validPaddleEnvironment(requestedEnvironment,env.NODE_ENV);
-  const productId=clean(env.PADDLE_PRODUCT_ID)||(sandbox?"":DEFAULT_PRODUCT_ID);
+  // Both current catalog IDs are deployment-owned. Falling back to the
+  // retired product could make a newly configured price look locally valid
+  // while Paddle correctly rejects the mismatched pair.
+  const productId=clean(env.PADDLE_PRODUCT_ID);
   // A recurring price has a different Paddle catalog ID from the retired
-  // one-time price. Require the deployment to supply that ID explicitly;
-  // tests may keep the stable fixture ID without enabling a live checkout.
+  // one-time price. Require the deployment to supply that ID explicitly.
   const priceId=clean(env.PADDLE_PRICE_ID);
   const clientToken=clean(env.PADDLE_CLIENT_TOKEN);
   const apiKey=clean(env.PADDLE_API_KEY);
@@ -248,46 +250,37 @@ async function cancelPaddleTransaction(config,transactionId,fetchImpl=globalThis
   return {transactionId:transaction.transactionId,status:transaction.status};
 }
 
-/**
- * @param {import("./domain-types").PaddleTransactionData|null|undefined} data
- * @param {import("./domain-types").PaymentConfig} config
- * @param {import("./domain-types").CheckoutIdentity} identity
- * @returns {import("./domain-types").ValidationResult}
- */
-function validateCheckoutTransaction(data,config,{userId,checkoutId,priceId=config?.priceId,productId=config?.productId}={}) {
-  if (!data||!validTransactionId(data.id)||!TRANSACTION_STATUSES.has(clean(data.status))) return {ok:false,reason:"transaction"};
-  if (data.origin!=="api") return {ok:false,reason:"origin"};
-  if (data.subscription_id!=null) return {ok:false,reason:"subscription"};
-  if (data.collection_mode!=="automatic") return {ok:false,reason:"collection"};
-  if (clean(data.custom_data?.strata_user_id)!==clean(userId)) return {ok:false,reason:"account"};
-  if (clean(data.custom_data?.strata_checkout_id)!==clean(checkoutId)) return {ok:false,reason:"checkout"};
-  if (data.custom_data?.strata_version!==1) return {ok:false,reason:"metadata"};
-  if (!Array.isArray(data.items)||data.items.length!==1) return {ok:false,reason:"items"};
-  const item=/** @type {import("./domain-types").PaddleItemData} */(data.items[0]||{}),price=item.price||{};
-  if (Number(item.quantity)!==1) return {ok:false,reason:"quantity"};
-  if (price.id!==priceId) return {ok:false,reason:"price"};
-  if (price.product_id!==productId) return {ok:false,reason:"product"};
-  if (!monthlyCycle(price.billing_cycle)) return {ok:false,reason:"billing_cycle"};
-  return {ok:true};
+/** @param {import("./domain-types").PaymentConfig} config @param {unknown} transactionId @param {import("./domain-types").FetchLike} fetchImpl */
+function replacePaddleTransactionItems(config,transactionId,fetchImpl=globalThis.fetch) {
+  return paddleTransactionRequest(config,transactionId,{method:"PATCH",body:{items:[{price_id:config.priceId,quantity:1}]},fetchImpl});
 }
 
-/**
- * A provider transaction can become completed between checkout creation and
- * crash recovery. At that point Paddle attaches the subscription ID, so the
- * stricter initial-transaction validator and durable checkout identity both
- * have to be applied instead of assuming subscription_id is still null.
- * @param {import("./domain-types").PaddleTransactionData|null|undefined} data
- * @param {import("./domain-types").PaymentConfig} config
- * @param {import("./domain-types").CheckoutIdentity} identity
- * @returns {import("./domain-types").ValidationResult}
- */
-function validateCheckoutRecoveryTransaction(data,config,{userId,checkoutId,priceId=config?.priceId,productId=config?.productId}={}) {
-  if(data?.status!=="completed")return validateCheckoutTransaction(data,config,{userId,checkoutId,priceId,productId});
-  const completed=validateCompletedTransaction(data,{...config,priceId:String(priceId||""),productId:String(productId||"")});
-  if(!completed.ok)return completed;
+/** @param {import("./domain-types").PaddleTransactionData|null|undefined} data @param {import("./domain-types").PaymentConfig} config @param {import("./domain-types").CheckoutIdentity} identity */
+function validateCheckoutTransaction(data,config,{userId,checkoutId,priceId=config?.priceId,productId=config?.productId,retiredOneTimeCancellation=false}={}){
+  if(!data||!validTransactionId(data.id)||!TRANSACTION_STATUSES.has(clean(data.status)))return {ok:false,reason:"transaction"};
+  if(data.origin!=="api")return {ok:false,reason:"origin"};
+  if(data.subscription_id!=null)return {ok:false,reason:"subscription"};
+  if(data.collection_mode!=="automatic")return {ok:false,reason:"collection"};
   if(clean(data.custom_data?.strata_user_id)!==clean(userId))return {ok:false,reason:"account"};
   if(clean(data.custom_data?.strata_checkout_id)!==clean(checkoutId))return {ok:false,reason:"checkout"};
-  return {ok:true};
+  if(data.custom_data?.strata_version!==1)return {ok:false,reason:"metadata"};
+  if(!Array.isArray(data.items)||data.items.length!==1)return {ok:false,reason:"items"};
+  const item=/** @type {import("./domain-types").PaddleItemData} */(data.items[0]||{}),price=item.price||{};
+  if(Number(item.quantity)!==1)return {ok:false,reason:"quantity"};
+  if(price.id!==priceId)return {ok:false,reason:"price"};
+  if(price.product_id!==productId)return {ok:false,reason:"product"};
+  const legacy=retiredOneTimeCancellation&&priceId===DEFAULT_PRICE_ID&&productId===DEFAULT_PRODUCT_ID;
+  return legacy?price.billing_cycle===null?{ok:true}:{ok:false,reason:"billing_cycle"}:monthlyCycle(price.billing_cycle)?{ok:true}:{ok:false,reason:"billing_cycle"};
+}
+
+/** @param {import("./domain-types").PaddleTransactionData|null|undefined} data @param {import("./domain-types").PaymentConfig} config @param {import("./domain-types").CheckoutIdentity} identity */
+function validateCheckoutRecoveryTransaction(data,config,identity={}){
+  if(data?.status==="completed"&&identity.retiredOneTimeCancellation){const validation=validateCheckoutTransaction(data,config,identity);return validation.ok&&!/^ctm_[a-z0-9]{26}$/.test(clean(data.customer_id))?{ok:false,reason:"customer"}:validation;}
+  if(data?.status!=="completed")return validateCheckoutTransaction(data,config,identity);
+  const completed=validateCompletedTransaction(data,{...config,priceId:String(identity.priceId||config?.priceId||""),productId:String(identity.productId||config?.productId||"")});
+  if(!completed.ok)return completed;
+  if(clean(data.custom_data?.strata_user_id)!==clean(identity.userId))return {ok:false,reason:"account"};
+  return clean(data.custom_data?.strata_checkout_id)===clean(identity.checkoutId)?{ok:true}:{ok:false,reason:"checkout"};
 }
 
 /**
@@ -296,7 +289,7 @@ function validateCheckoutRecoveryTransaction(data,config,{userId,checkoutId,pric
  * @param {import("./domain-types").FetchLike} fetchImpl
  * @returns {Promise<import("./domain-types").PaddleFetchedTransactionResult|null>}
  */
-async function findPaddleCheckoutTransaction(config,{userId,checkoutId,createdAt,priceId=config?.priceId,productId=config?.productId}={},fetchImpl=globalThis.fetch) {
+async function findPaddleCheckoutTransaction(config,{userId,checkoutId,createdAt,priceId=config?.priceId,productId=config?.productId,retiredOneTimeCancellation=false}={},fetchImpl=globalThis.fetch) {
   const secrets=secretsByConfig.get(config);
   if (!secrets?.apiKey) throw paddleTransactionError("Paddle transaction status is temporarily unavailable.","PADDLE_RECONCILIATION_UNAVAILABLE");
   const referenceTime=Number(createdAt);
@@ -336,7 +329,7 @@ async function findPaddleCheckoutTransaction(config,{userId,checkoutId,createdAt
     const match=payload.data.find((transaction)=>{
       const transactionTime=Date.parse(clean(transaction?.created_at));
       return Number.isFinite(transactionTime)&&transactionTime>=windowStart&&transactionTime<=windowEnd
-        &&validateCheckoutRecoveryTransaction(transaction,config,{userId,checkoutId,priceId,productId}).ok;
+        &&validateCheckoutRecoveryTransaction(transaction,config,{userId,checkoutId,priceId,productId,retiredOneTimeCancellation}).ok;
     });
     if (match) return {transactionId:validTransactionId(match.id),status:clean(match.status),data:match};
     const pagination=payload?.meta?.pagination;
@@ -410,6 +403,7 @@ module.exports={
   createPaddleTransaction,
   fetchPaddleTransaction,
   cancelPaddleTransaction,
+  replacePaddleTransactionItems,
   validateCheckoutTransaction,
   validateCheckoutRecoveryTransaction,
   findPaddleCheckoutTransaction,

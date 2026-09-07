@@ -156,8 +156,16 @@
       "maxLines": 720,
       "allowedDependencies": [
         "src/http.js",
+        "src/legacy-checkout.js",
         "src/payments.js",
         "src/plans.js"
+      ]
+    },
+    "src/legacy-checkout.js": {
+      "role": "Strict retired-checkout migration and completion policy",
+      "maxLines": 75,
+      "allowedDependencies": [
+        "src/payments.js"
       ]
     },
     "src/billing-schema.js": {

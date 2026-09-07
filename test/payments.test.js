@@ -12,6 +12,7 @@ const {
   createPaddleTransaction,
   fetchPaddleTransaction,
   cancelPaddleTransaction,
+  replacePaddleTransactionItems,
   validateCheckoutTransaction,
   validateCheckoutRecoveryTransaction,
   findPaddleCheckoutTransaction,
@@ -306,12 +307,42 @@ test("checkout transaction recovery validates the durable account and checkout r
   }
 });
 
+test("checkout cancellation recognizes only the retired 7.4 one-time catalog",()=>{
+  const config=getPaymentConfig(liveEnv());
+  const currentIdentity={userId:"user-1",checkoutId:"checkout-1"};
+  assert.deepEqual(validateCheckoutTransaction(checkoutTransaction(),config,{...currentIdentity,retiredOneTimeCancellation:true}),{ok:true},"current monthly checkouts remain cancelable");
+
+  const legacyIdentity={...currentIdentity,priceId:DEFAULT_PRICE_ID,productId:DEFAULT_PRODUCT_ID};
+  const legacyTransaction=checkoutTransaction({
+    items:[{quantity:1,price:{id:DEFAULT_PRICE_ID,product_id:DEFAULT_PRODUCT_ID,billing_cycle:null}}]
+  });
+  assert.deepEqual(validateCheckoutTransaction(legacyTransaction,config,{...legacyIdentity,retiredOneTimeCancellation:true}),{ok:true},"the exact retired one-time checkout can be closed during migration");
+  assert.deepEqual(validateCheckoutTransaction(legacyTransaction,config,legacyIdentity),{ok:false,reason:"billing_cycle"},"legacy cadence stays forbidden for new checkout validation");
+
+  const unknownPrice="pri_01unknownlegacy000000000000";
+  const unknownOneTime=checkoutTransaction({
+    items:[{quantity:1,price:{id:unknownPrice,product_id:DEFAULT_PRODUCT_ID,billing_cycle:null}}]
+  });
+  assert.deepEqual(validateCheckoutTransaction(unknownOneTime,config,{...currentIdentity,priceId:unknownPrice,productId:DEFAULT_PRODUCT_ID,retiredOneTimeCancellation:true}),{ok:false,reason:"billing_cycle"},"unknown one-time prices are not treated as grandfathered catalog state");
+  const wrongProduct="pro_01wrong00000000000000000000";
+  const wrongLegacyProduct=checkoutTransaction({
+    items:[{quantity:1,price:{id:DEFAULT_PRICE_ID,product_id:wrongProduct,billing_cycle:null}}]
+  });
+  assert.deepEqual(validateCheckoutTransaction(wrongLegacyProduct,config,{...legacyIdentity,productId:wrongProduct,retiredOneTimeCancellation:true}),{ok:false,reason:"billing_cycle"},"the retired price is one-time only for its exact historic product");
+});
+
 test("checkout recovery accepts a completed transaction only with its original durable identity",()=>{
   const config=getPaymentConfig(liveEnv()),identity={userId:"user-1",checkoutId:"checkout-1"};
   const completed=completedTransaction({custom_data:{strata_user_id:"user-1",strata_checkout_id:"checkout-1",strata_version:1}});
   assert.deepEqual(validateCheckoutRecoveryTransaction(completed,config,identity),{ok:true});
   assert.deepEqual(validateCheckoutRecoveryTransaction(completedTransaction({custom_data:{strata_user_id:"user-2",strata_checkout_id:"checkout-1",strata_version:1}}),config,identity),{ok:false,reason:"account"});
   assert.deepEqual(validateCheckoutRecoveryTransaction(completedTransaction({custom_data:{strata_user_id:"user-1",strata_checkout_id:"other",strata_version:1}}),config,identity),{ok:false,reason:"checkout"});
+  const legacy={...completed,subscription_id:null,items:[{quantity:1,price:{id:DEFAULT_PRICE_ID,product_id:DEFAULT_PRODUCT_ID,billing_cycle:null}}]};
+  const legacyIdentity={...identity,priceId:DEFAULT_PRICE_ID,productId:DEFAULT_PRODUCT_ID,retiredOneTimeCancellation:true};
+  assert.deepEqual(validateCheckoutRecoveryTransaction(legacy,config,legacyIdentity),{ok:true},"the exact delayed 7.4 payment remains discoverable");
+  assert.deepEqual(validateCheckoutRecoveryTransaction({...legacy,customer_id:"ctm_too_short"},config,legacyIdentity),{ok:false,reason:"customer"});
+  const unknownPrice="pri_01unknownlegacy000000000000";
+  assert.deepEqual(validateCheckoutRecoveryTransaction({...legacy,items:[{quantity:1,price:{id:unknownPrice,product_id:DEFAULT_PRODUCT_ID,billing_cycle:null}}]},config,{...legacyIdentity,priceId:unknownPrice}),{ok:false,reason:"billing_cycle"},"the opt-in cannot broaden to an unknown one-time price");
 });
 
 test("checkout transaction recovery searches Paddle pages and returns only an exact durable match",async()=>{
@@ -555,15 +586,19 @@ test("transaction reconciliation reads and cancels only a specific live transact
   const calls=[];
   const fetchImpl=async(url,options)=>{
     calls.push({url,options});
+    const body=options.body?JSON.parse(options.body):null;
+    if(body?.items)return {ok:true,json:async()=>({data:checkoutTransaction({id:transactionId,status:"draft"})})};
     const status=options.method==="PATCH"?"canceled":"ready";
     return {ok:true,json:async()=>({data:{id:transactionId,status}})};
   };
   assert.deepEqual(await fetchPaddleTransaction(config,transactionId,fetchImpl),{transactionId,status:"ready",data:{id:transactionId,status:"ready"}});
   assert.deepEqual(await cancelPaddleTransaction(config,transactionId,fetchImpl),{transactionId,status:"canceled"});
+  assert.equal((await replacePaddleTransactionItems(config,transactionId,fetchImpl)).transactionId,transactionId);
   assert.equal(calls[0].url,`https://api.paddle.com/transactions/${transactionId}`);
   assert.equal(calls[0].options.method,"GET");
   assert.equal(calls[1].options.method,"PATCH");
   assert.deepEqual(JSON.parse(calls[1].options.body),{status:"canceled"});
+  assert.deepEqual(JSON.parse(calls[2].options.body),{items:[{price_id:RECURRING_PRICE_ID,quantity:1}]});
   for(const call of calls)assert.equal(call.options.headers.Authorization,`Bearer ${API_KEY}`);
 });
 

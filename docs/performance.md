@@ -34,17 +34,17 @@ The command reports median and p95 latency and exits nonzero when either exceeds
 
 ## Recorded baseline
 
-The Build 7.5.0 source candidate passed every checked-in budget on the local Darwin arm64 host under Node 25.8.2. Each path used eight warm-ups followed by 40 measured samples:
+The Build 7.5.1 source candidate passed every checked-in budget on the local Darwin arm64 host under Node 25.8.2. Each path used eight warm-ups followed by 40 measured samples:
 
 | Operation | Observed median | Observed p95 |
 | --- | ---: | ---: |
-| Health endpoint | 0.370 ms | 0.596 ms |
-| Status endpoint | 0.310 ms | 0.956 ms |
-| Authenticated plan endpoint | 0.320 ms | 0.445 ms |
-| Authenticated plan-save endpoint | 0.494 ms | 0.799 ms |
+| Health endpoint | 0.358 ms | 0.675 ms |
+| Status endpoint | 0.331 ms | 1.055 ms |
+| Authenticated plan endpoint | 0.405 ms | 0.954 ms |
+| Authenticated plan-save endpoint | 0.464 ms | 0.960 ms |
 | Session lookup | 0.008 ms | 0.011 ms |
 | Plan lookup | 0.004 ms | 0.006 ms |
-| Plan compare-and-swap | 0.042 ms | 0.051 ms |
+| Plan compare-and-swap | 0.045 ms | 0.059 ms |
 
 This source-candidate capture used isolated local HTTP, SQLite, and fixture-backed storage. It is regression evidence for the selected code paths, not a production claim or a measurement of hosted Turso, Resend, Paddle, Internet, or multi-user behavior. The supported runtime and CI target remain Node 24, so promotion still requires a green Node 24 CI result.
 
@@ -66,4 +66,4 @@ This is one captured run, not a universal expected value. A second Node 24 check
 
 Use `STRATA_PERF_SAMPLES` to select 10–500 measured samples and `npm run performance -- --json` to produce machine-readable evidence. Compare runs made with the same Node version, storage mode, hardware class, sample count, and background load. A single local result is evidence of a regression in this code path, not a claim about production network latency or Turso service behavior.
 
-Before optimizing a path, capture the JSON output and a profiler or query-plan explanation. After changing it, rerun the same command under the same conditions, keep correctness tests enabled, and report both the before and after distributions. Do not loosen a budget to make an unexplained regression green. The latest candidate result belongs in [release readiness](release-readiness.md); the older baseline above remains for historical comparison rather than being relabeled as Build 7.5.0 evidence.
+Before optimizing a path, capture the JSON output and a profiler or query-plan explanation. After changing it, rerun the same command under the same conditions, keep correctness tests enabled, and report both the before and after distributions. Do not loosen a budget to make an unexplained regression green. The latest candidate result belongs in [release readiness](release-readiness.md); the Build 6.9.9.007 baseline remains separately labeled as historical evidence.

@@ -1,5 +1,13 @@
 # Changelog
 
+## 7.5.1 — Checkout continuity and guarded deletion
+
+- Added a narrow compatibility path for an abandoned checkout from the exact retired Build 7.4 one-time Paddle catalog. A validated `draft` is updated in place to the current $0.99 USD monthly item and reused; a provider-cancelable stale transaction must be confirmed canceled before STRATA creates a fresh checkout. A delayed, strictly validated completion of that exact retired checkout is recorded as the paid lifetime purchase it represents; existing completed lifetime purchases remain unchanged, while unknown or mismatched transactions fail closed.
+- Added an exceptional administrator permanent-deletion action for a paused, non-owner account. It requires the exact stored email, a bounded audit reason, origin and CSRF checks, and a currently elevated owner session.
+- Made the final storage mutation atomically revalidate the paused target, byte-exact email, billing-safe state, live owner identity/session/elevation, and matching success audit so a state change cannot turn a reviewed deletion into a different action.
+- Reconciled interrupted and stale incomplete checkout transactions before deletion, then applied the locally stored signed subscription state and other billing blockers. Administrative deletion does not refund a payment or cancel a live Paddle subscription.
+- Removed the public and server fallback to the retired product for new checkouts. Deployments must supply both matching current Paddle catalog IDs, and the browser now accepts the live product validated by the same-origin server.
+
 ## 7.5.0 — Training Memory and operational trust
 
 - Preserved the complete guest-generated week through account creation, verification, and onboarding, then required an explicit claim, compare, or keep decision before replacing either the device preview or an existing account Plan.

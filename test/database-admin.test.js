@@ -667,3 +667,49 @@ test("admin audit ordering is stable, auth material is excluded, and target dele
     await close();
   }
 });
+
+test("direct admin deletion requires suspension, fails closed on billing, and commits its audit atomically",{concurrency:false},async()=>{
+  const {store,close}=await fixture("admin-direct-delete-");
+  const now=1_810_550_000_000;
+  const actor=user("direct-delete-actor",now);
+  const target=user("direct-delete-target",now+1);
+  const audit={id:"direct-delete-audit",actorUserId:actor.id,targetUserId:target.id,action:"delete-account",reason:"Remove the paused test account permanently.",result:"success",createdAt:now+8};
+  try {
+    await store.insertUser(actor);
+    await store.insertUser(target);
+    await store.claimAdminPrincipal(actor.id,actor.email,now+2);
+    await store.insertSession(session("direct-delete-admin-session",actor.id,now+3,2));
+    await store.createAdminElevation("direct-delete-admin-session",now+60_000,now+4);
+    await store.insertSession(session("direct-delete-session",target.id,now+2));
+    await store.upsertPlan(target.id,JSON.stringify({days:["private"]}),now+3,0);
+    await store.insertPendingPurchase(pendingPurchase("txn_direct_delete",target.id,now+4));
+
+    assert.equal(await store.deleteUserByAdmin(target.id,now+5,target.email,"direct-delete-email-hash","direct-delete-admin-session",audit),null,"an active target must be protected");
+    await store.suspendUser(target.id,now+6);
+    assert.equal(await store.deleteUserByAdmin(target.id,now+7,target.email,"direct-delete-email-hash","direct-delete-admin-session",audit),null,"unsettled billing must block deletion");
+    assert.ok(await store.userById(target.id));
+    assert.equal((await store.adminAudit(10)).some((event)=>event.id===audit.id),false,"a blocked deletion must not write a success audit");
+
+    await store.updatePurchaseStatus("txn_direct_delete","canceled",now+8);
+    const deleted=await store.deleteUserByAdmin(target.id,now+9,target.email,"direct-delete-email-hash","direct-delete-admin-session",audit);
+    assert.equal(deleted.id,target.id);
+    assert.equal(await store.userById(target.id),null);
+    assert.equal(await store.session("direct-delete-session",now+10),null);
+    assert.equal(await store.plan(target.id),null);
+    const event=(await store.adminAudit(10)).find((entry)=>entry.id===audit.id);
+    assert.equal(event.target_user_id,target.id);
+    assert.equal(event.target_email,null);
+    assert.ok(await store.userById(actor.id));
+
+    const revokedTarget=user("direct-delete-revoked-target",now+10);
+    await store.insertUser(revokedTarget);
+    await store.suspendUser(revokedTarget.id,now+11);
+    await store.deleteSession("direct-delete-admin-session");
+    const revokedAudit={...audit,id:"direct-delete-revoked-audit",targetUserId:revokedTarget.id,createdAt:now+12};
+    assert.equal(await store.deleteUserByAdmin(revokedTarget.id,now+12,revokedTarget.email,"revoked-target-email-hash","direct-delete-admin-session",revokedAudit),null,"a revoked admin session must fail the final authorization check");
+    assert.ok(await store.userById(revokedTarget.id));
+    assert.equal((await store.adminAudit(20)).some((entry)=>entry.id===revokedAudit.id),false);
+  } finally {
+    await close();
+  }
+});

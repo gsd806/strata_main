@@ -67,7 +67,7 @@ test.before(startServer);
 test.after(stopServer);
 
 test("serves rankings and gates private account pages",async()=>{
-  assert.equal(BUILD,"7.5.0");
+  assert.equal(BUILD,"7.5.1");
   const home=await request("/");
   assert.equal(home.response.status,200);
   assert.equal(home.response.headers.get("cache-control"),"private, no-store");
@@ -94,7 +94,7 @@ test("serves rankings and gates private account pages",async()=>{
   assert.equal(billing.data.configured,false);
   assert.equal(billing.data.enabled,false);
   assert.equal(billing.data.clientToken,"");
-  assert.match(billing.data.productId,/^pro_/);
+  assert.equal(billing.data.productId,"","a current Paddle product must be explicitly configured");
   assert.equal(billing.data.priceId,"","a recurring Paddle price must be explicitly configured");
   assert.deepEqual(billing.data.price,{amount:"0.99",currency:"USD",interval:"month",frequency:1});
   assert.doesNotMatch(JSON.stringify(billing.data),/pdl_(?:live|sandbox|sdbx)_apikey_|pdl_ntfset_/i);

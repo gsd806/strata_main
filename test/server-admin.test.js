@@ -822,3 +822,65 @@ test("secret-shaped admin reasons are rejected before mutation or audit persiste
   const audit=await request("/api/admin/audit",{headers:{Cookie:admin.cookie}});
   assert.ok(!JSON.stringify(audit.data).includes(EMAIL_API_KEY));
 });
+
+test("elevated Admin can permanently delete only a paused, billing-safe non-owner account",async()=>{
+  const target=await verifiedSignup({name:"Delete Me",email:"delete-me@example.test",password:"delete-me-password-123"});
+  const support=await jsonRequest("/api/support",{name:"Ignored",email:"ignored@example.test",category:"privacy",subject:"Delete this test account",referenceId:"direct-delete-test",message:"Please remove the account after the guarded administrator review.",website:""},{cookie:target.cookie});
+  assert.equal(support.response.status,201);
+  const db=openDatabase();
+  const createdAt=Date.now();
+  db.prepare("INSERT INTO plans(user_id,plan_json,updated_at) VALUES(?,?,?)").run(target.user.id,JSON.stringify({version:1,restDay:null,restDays:[],days:{}}),createdAt);
+  db.prepare("INSERT INTO paddle_purchases(transaction_id,user_id,price_id,product_id,customer_id,subscription_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at) VALUES(?,?,?,?,?,?,'completed',?,NULL,NULL,?,?)")
+    .run("txn_direct_admin_delete",target.user.id,"pri_monthly_delete_test","pro_monthly_delete_test","ctm_retained_by_paddle","sub_direct_admin_delete",createdAt,createdAt,createdAt);
+  db.prepare("INSERT INTO paddle_subscriptions(subscription_id,user_id,transaction_id,customer_id,status,price_id,product_id,scheduled_change_action,scheduled_change_at,current_period_ends_at,event_occurred_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)")
+    .run("sub_direct_admin_delete",target.user.id,"txn_direct_admin_delete","ctm_retained_by_paddle","active","pri_monthly_delete_test","pro_monthly_delete_test",null,null,createdAt+86_400_000,createdAt,createdAt,createdAt);
+  db.close();
+
+  const exact=`DELETE ${target.user.email}`;
+  const active=await adminAction(admin,target.user.id,"delete-account",exact,"Customer requested permanent account removal after verification.");
+  assert.equal(active.response.status,409);
+  assert.equal(active.data.code,"ACCOUNT_MUST_BE_SUSPENDED");
+  assert.ok(databaseCounts(target.user.id).user);
+
+  const self=await adminAction(admin,admin.user.id,"delete-account",`DELETE ${ADMIN_EMAIL}`,"Testing the protected owner boundary.");
+  assert.equal(self.response.status,409);
+  assert.equal(self.data.code,"ADMIN_SELF_PROTECTED");
+
+  const paused=await adminAction(admin,target.user.id,"suspend","SUSPEND","Pause before the requested permanent deletion.");
+  assert.equal(paused.response.status,200);
+  const wrong=await adminAction(admin,target.user.id,"delete-account","DELETE wrong@example.test","Customer requested permanent account removal after verification.");
+  assert.equal(wrong.response.status,400);
+  assert.equal(wrong.data.code,"ADMIN_CONFIRMATION_REQUIRED");
+  assert.ok(databaseCounts(target.user.id).user);
+
+  const subscribed=await adminAction(admin,target.user.id,"delete-account",exact,"Customer requested permanent account removal after verification.");
+  assert.equal(subscribed.response.status,409);
+  assert.equal(subscribed.data.code,"SUBSCRIPTION_ACTIVE");
+  const canceledDb=openDatabase();
+  canceledDb.prepare("UPDATE paddle_subscriptions SET status='canceled',current_period_ends_at=? WHERE subscription_id=?").run(Date.now(),"sub_direct_admin_delete");
+  canceledDb.close();
+
+  const beforeAudit=databaseCounts(target.user.id).audits;
+  const deleted=await adminAction(admin,target.user.id,"delete-account",exact,"Customer requested permanent account removal after verification.");
+  assert.equal(deleted.response.status,200);
+  assert.match(deleted.data.message,/permanently deleted from STRATA/i);
+  assert.doesNotMatch(JSON.stringify(deleted.data),/delete-me@example\.test|ctm_retained_by_paddle/i);
+  assert.equal((await request("/api/me",{headers:{Cookie:target.cookie}})).response.status,401);
+  assert.equal((await request("/api/admin/session",{headers:{Cookie:admin.cookie}})).response.status,200);
+  assert.equal((await request("/api/me",{headers:{Cookie:nonAdmin.cookie}})).response.status,200);
+
+  const check=openDatabase();
+  assert.equal(check.prepare("SELECT COUNT(*) AS count FROM users WHERE id=?").get(target.user.id).count,0);
+  assert.equal(check.prepare("SELECT COUNT(*) AS count FROM sessions WHERE user_id=?").get(target.user.id).count,0);
+  assert.equal(check.prepare("SELECT COUNT(*) AS count FROM plans WHERE user_id=?").get(target.user.id).count,0);
+  assert.equal(check.prepare("SELECT COUNT(*) AS count FROM paddle_purchases WHERE user_id=?").get(target.user.id).count,0);
+  assert.equal(check.prepare("SELECT user_id FROM support_tickets WHERE reference=?").get(support.data.reference).user_id,null,"support history is retained but detached");
+  assert.equal(check.prepare("SELECT COUNT(*) AS count FROM admin_audit_events WHERE target_user_id=? AND action='delete-account'").get(target.user.id).count,1);
+  check.close();
+  assert.equal(databaseCounts(target.user.id).audits,beforeAudit+1,"deletion and its success audit must commit together");
+
+  const replay=await adminAction(admin,target.user.id,"delete-account",exact,"Customer requested permanent account removal after verification.");
+  assert.equal(replay.response.status,404);
+  assert.equal(replay.data.code,"ADMIN_TARGET_NOT_FOUND");
+  assertPrivateJson(replay.response);
+});

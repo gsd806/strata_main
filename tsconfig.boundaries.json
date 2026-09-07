@@ -22,6 +22,7 @@
     "src/billing.js",
     "src/billing-store.js",
     "src/http.js",
+    "src/legacy-checkout.js",
     "src/paddle-subscriptions.js",
     "src/paddle-webhooks.js",
     "src/payments.js",

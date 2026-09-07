@@ -61,11 +61,12 @@ test("sandbox configuration fails closed for mixed credentials, missing catalog,
   const invalid=getPaymentConfig(sandboxEnv({PADDLE_ENVIRONMENT:"sandobx"}));assert.equal(webhookSecretFor(invalid),"");
 });
 
-test("live stays the default, requires a recurring price, and rejects sandbox credentials",async()=>{
+test("live stays the default, requires both current catalog IDs, and rejects sandbox credentials",async()=>{
   const env=liveEnv();delete env.PADDLE_ENVIRONMENT;delete env.PADDLE_PRODUCT_ID;
-  const config=getPaymentConfig(env);assert.equal(config.environment,"live");assert.equal(config.enabled,true);
-  assert.equal(config.productId,DEFAULT_PRODUCT_ID);assert.equal(config.priceId,LIVE_PRICE);
-  await fetchPaddleTransaction(config,TRANSACTION,async(url)=>{
+  const config=getPaymentConfig(env);assert.equal(config.environment,"live");assert.equal(config.enabled,false);assert.equal(config.configured,false);
+  assert.equal(config.productId,"");assert.equal(config.priceId,LIVE_PRICE);
+  const configured=getPaymentConfig(liveEnv());
+  await fetchPaddleTransaction(configured,TRANSACTION,async(url)=>{
     assert.equal(url,`${LIVE_API_BASE}/transactions/${TRANSACTION}`);return {ok:true,json:async()=>({data:{id:TRANSACTION,status:"ready"}})};
   });
   assert.equal(getPaymentConfig(liveEnv({PADDLE_CLIENT_TOKEN:sandboxEnv().PADDLE_CLIENT_TOKEN})).enabled,false);
@@ -102,10 +103,12 @@ test("pricing preserves live behavior and refuses mixed client tokens and sandbo
   const config=publicPaymentConfig(getPaymentConfig(liveEnv()));
   const live=await runPricing(config);assert.deepEqual(live.calls,[["initialize",config.clientToken]]);
   assert.doesNotMatch(live.nodes.get("purchaseStatus").textContent,/TEST MODE/);
+  const replacementProduct=await runPricing({...config,productId:"pro_01differentlivecatalog000000"});
+  assert.deepEqual(replacementProduct.calls,[["initialize",config.clientToken]],"the browser must accept the valid live product selected by the server");
   for(const change of [
     {environment:"sandbox"},
     {clientToken:sandboxEnv().PADDLE_CLIENT_TOKEN},
-    {productId:"pro_01differentlivecatalog000000"},
+    {productId:"pro_invalid"},
     {priceId:DEFAULT_PRICE_ID},
     {environment:"invalid"}
   ]){

@@ -10,10 +10,10 @@
     <title>Admin — STRATA</title>
     <link rel="icon" href="/icons/strata-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="/fonts.css?v=7.5.0" />
-    <link rel="stylesheet" href="/admin.css?v=7.5.0" />
-    <link rel="stylesheet" href="/experience.css?v=7.5.0" />
-    <script src="/motion.js?v=7.5.0"></script>
+    <link rel="stylesheet" href="/fonts.css?v=7.5.1" />
+    <link rel="stylesheet" href="/admin.css?v=7.5.1" />
+    <link rel="stylesheet" href="/experience.css?v=7.5.1" />
+    <script src="/motion.js?v=7.5.1"></script>
   </head>
   <body>
     <a class="skip-link" href="#adminMain">Skip to administration</a>
@@ -200,6 +200,11 @@
             <button class="danger-button" type="button" data-user-action="suspend">Suspend account <span aria-hidden="true">!</span></button>
             <button type="button" data-user-action="restore">Restore account <span aria-hidden="true">↻</span></button>
           </div>
+          <div class="irreversible-zone" aria-labelledby="permanentDeletionTitle">
+            <h4 id="permanentDeletionTitle">PERMANENT DELETION</h4>
+            <p id="permanentDeletionWarning">Pause the account first. Deletion immediately removes its STRATA account data and signs out every device. It cannot be undone, cancel a live Paddle subscription, or issue a refund. Stale incomplete checkouts may be closed during safety checks.</p>
+            <button class="danger-button permanent-delete" type="button" data-user-action="delete-account" aria-describedby="permanentDeletionWarning">Permanently delete account <span aria-hidden="true">×</span></button>
+          </div>
         </section>
       </div>
     </dialog>
@@ -218,7 +223,7 @@
           </div>
           <div class="field">
             <label for="actionConfirmation">Type <strong id="confirmationPhrase">CONFIRM</strong> to continue</label>
-            <input id="actionConfirmation" maxlength="254" autocomplete="off" autocapitalize="characters" spellcheck="false" required />
+            <input id="actionConfirmation" maxlength="270" autocomplete="off" autocapitalize="characters" spellcheck="false" required />
           </div>
           <div class="dialog-message" id="confirmMessage" role="alert" tabindex="-1" hidden></div>
           <div class="dialog-actions"><button class="button button-light" id="cancelAction" type="button">Cancel</button><button class="button danger-submit" id="submitAction" type="submit">Confirm action <span aria-hidden="true">→</span></button></div>
@@ -255,8 +260,8 @@
       </div>
     </dialog>
 
-    <footer class="admin-footer">STRATA · Build 7.5.0 · Private administration · <a href="/contact">Contact</a> · <a href="/policies">Policies</a></footer>
+    <footer class="admin-footer">STRATA · Build 7.5.1 · Private administration · <a href="/contact">Contact</a> · <a href="/policies">Policies</a></footer>
     <noscript><p class="noscript-message">JavaScript is required for private administration. Your public STRATA pages still work normally.</p></noscript>
-    <script src="/admin.js?v=7.5.0"></script>
+    <script src="/admin.js?v=7.5.1"></script>
   </body>
 </html>

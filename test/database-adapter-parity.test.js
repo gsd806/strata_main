@@ -172,6 +172,16 @@ async function parityScenario(store) {
     updatedAt:2_000
   });
   const accountExport=await store.accountExport(user.id);
+  const parityDraft=await store.insertPendingPurchase({
+    transactionId:"txn_parity_draft",userId:user.id,priceId:"pri_parity_legacy",productId:"pro_parity",
+    paddleStatus:"draft",createdAt:2_010,updatedAt:2_010
+  });
+  const migratedDraft=await store.replacePendingPurchaseCatalog(parityDraft,{priceId:"pri_parity_monthly",productId:"pro_parity",paddleStatus:"draft",updatedAt:2_020});
+  const replayedDraftMigration=await store.replacePendingPurchaseCatalog(parityDraft,{priceId:"pri_parity_other",productId:"pro_parity",paddleStatus:"draft",updatedAt:2_030});
+  await store.insertUser({id:"parity-catalog-complete",name:"Catalog Complete",email:"catalog-complete@example.test",passwordHash:"catalog-complete-hash",passwordSalt:"catalog-complete-salt",createdAt:2_031,emailVerifiedAt:2_031});
+  const completionDraft=await store.insertPendingPurchase({transactionId:"txn_parity_catalog_complete",userId:"parity-catalog-complete",priceId:"pri_parity_legacy",productId:"pro_parity",paddleStatus:"draft",createdAt:2_032,updatedAt:2_032});
+  const completedCatalogMigration=await store.completePurchaseCatalogMigration(completionDraft,{priceId:"pri_parity_monthly",productId:"pro_parity",customerId:"ctm_parity_catalog",subscriptionId:"sub_parity_catalog",completedAt:2_040,updatedAt:2_040});
+  const replayedCompletedCatalogMigration=await store.completePurchaseCatalogMigration(completionDraft,{priceId:"pri_parity_monthly",productId:"pro_parity",customerId:"ctm_parity_other",subscriptionId:"sub_parity_other",completedAt:2_050,updatedAt:2_050});
 
   const revoked=await store.revokeUserSessions(user.id);
   const staleSessionAccepted=await store.insertSession({
@@ -226,6 +236,18 @@ async function parityScenario(store) {
   const deletedSignals=await store.deleteOldProductSignals("2026-06-10");
   const retainedSignalCounts=await store.productSignalCounts("2026-01-01","2026-09-07");
 
+  const deletionActor={id:"parity-delete-actor",name:"Deletion Actor",email:"deletion-actor@example.test",passwordHash:"delete-actor-hash",passwordSalt:"delete-actor-salt",createdAt:7_000,emailVerifiedAt:7_000};
+  const deletionTarget={id:"parity-delete-target",name:"Deletion Target",email:"deletion-target@example.test",passwordHash:"delete-target-hash",passwordSalt:"delete-target-salt",createdAt:7_001,emailVerifiedAt:7_001};
+  await store.insertUser(deletionActor);
+  await store.insertUser(deletionTarget);
+  await store.claimAdminPrincipal(deletionActor.id,deletionActor.email,7_002);
+  await store.insertSession({tokenHash:"parity-delete-admin-session",userId:deletionActor.id,csrfToken:"private-delete-admin-csrf",expiresAt:20_000,createdAt:7_002,authVersion:2});
+  await store.createAdminElevation("parity-delete-admin-session",20_000,7_002);
+  const activeAdminDelete=await store.deleteUserByAdmin(deletionTarget.id,7_002,deletionTarget.email,"delete-target-email-hash","parity-delete-admin-session",{id:"parity-delete-audit-active",actorUserId:deletionActor.id,targetUserId:deletionTarget.id,action:"delete-account",reason:"Parity should reject an active account.",result:"success",createdAt:7_002});
+  await store.suspendUser(deletionTarget.id,7_003);
+  const adminDeleted=await store.deleteUserByAdmin(deletionTarget.id,7_004,deletionTarget.email,"delete-target-email-hash","parity-delete-admin-session",{id:"parity-delete-audit",actorUserId:deletionActor.id,targetUserId:deletionTarget.id,action:"delete-account",reason:"Parity test permanent deletion.",result:"success",createdAt:7_004});
+  const deletionAudit=(await store.adminAudit(10)).find((event)=>event.id==="parity-delete-audit");
+
   return {
     insertUserResult,
     insertedSession,
@@ -256,6 +278,10 @@ async function parityScenario(store) {
     completed,
     replayed,
     accountExport,
+    migratedDraft,
+    replayedDraftMigration,
+    completedCatalogMigration,
+    replayedCompletedCatalogMigration,
     paidAccess:await store.hasPaidDiscoveryAccess(user.id),
     revoked,
     staleSessionAccepted,
@@ -275,7 +301,11 @@ async function parityScenario(store) {
     workoutSignal,
     signalCounts,
     deletedSignals,
-    retainedSignalCounts
+    retainedSignalCounts,
+    activeAdminDelete,
+    adminDeleted,
+    adminDeletedUser:await store.userById(deletionTarget.id),
+    deletionAudit
   };
 }
 
@@ -294,6 +324,10 @@ test("SQLite and Turso adapters expose matching values, mutation results, and se
     assert.equal(localResult.replayed,null,"a provider completion cannot replace the durable customer identity");
     assert.equal(localResult.completed.customer_id,"ctm_original");
     assert.equal(localResult.completed.completed_at,1_900);
+    assert.equal(localResult.migratedDraft.price_id,"pri_parity_monthly");
+    assert.equal(localResult.replayedDraftMigration,null,"catalog migration must compare the exact prior draft snapshot");
+    assert.equal(localResult.completedCatalogMigration.subscription_id,"sub_parity_catalog");
+    assert.equal(localResult.replayedCompletedCatalogMigration,null,"completed catalog migration must compare the exact prior ledger snapshot");
     assert.equal(localResult.activeSession.expires_at,10_000);
     assert.equal(localResult.sessionAtExpiry,null,"sessions must expire at the exact stored boundary");
     assert.deepEqual(localResult.accountSessions.map(({token_hash,created_at,expires_at})=>({token_hash,created_at,expires_at})),[
@@ -332,6 +366,11 @@ test("SQLite and Turso adapters expose matching values, mutation results, and se
     ]);
     assert.equal(localResult.deletedSignals,1);
     assert.deepEqual(localResult.retainedSignalCounts,localResult.signalCounts);
+    assert.equal(localResult.activeAdminDelete,null,"an active account cannot be deleted directly by Admin");
+    assert.equal(localResult.adminDeleted.id,"parity-delete-target");
+    assert.equal(localResult.adminDeletedUser,null);
+    assert.equal(localResult.deletionAudit.target_user_id,"parity-delete-target");
+    assert.equal(localResult.deletionAudit.target_id,null,"the audit keeps only the deleted account identifier");
   } finally {
     await fixture.close();
   }

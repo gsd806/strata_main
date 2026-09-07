@@ -399,6 +399,7 @@ function createAuthService({
   }
   function validAccountActionToken(value){const token=String(value||"").trim();return /^[A-Za-z0-9_-]{43}$/.test(token)?token:"";}
   function accountActionError(message,status,code){return Object.assign(new Error(message),{status,code});}
+  function accountEmailHash(email){return emailConfig.secretConfigured?verificationEmailHash(emailConfig,email):"";}
 
   async function claimAccountActionSend(email,purpose){
     const now=Date.now(),emailHash=verificationEmailHash(emailConfig,email),send={id:randomUUID(),emailHash,purpose,sentAt:now};
@@ -497,7 +498,7 @@ function createAuthService({
       if(principal?.user_id===action.user_id)throw accountActionError("The primary administrator account cannot be deleted while it owns site management.",409,"ADMIN_ACCOUNT_PROTECTED");
       if(await reconcileCheckoutCreationBeforeDeletion(action.user_id)>0)throw accountActionError("A Strata+ checkout is still being prepared. Nothing was deleted; please try again later.",409,"CHECKOUT_PREPARING");
       if(await reconcileUnsettledPurchases(action.user_id)>0)throw accountActionError("A Strata+ payment is still being processed. Nothing was deleted; please try again later.",409,"PURCHASE_PENDING");
-      const result=await store.deleteAccount(hashToken(token),Date.now(),verificationEmailHash(emailConfig,action.email));
+      const result=await store.deleteAccount(hashToken(token),Date.now(),accountEmailHash(action.email));
       if(result.status==="purchase_pending")throw accountActionError("A Strata+ payment is still being processed. Nothing was deleted; please try again later.",409,"PURCHASE_PENDING");
       if(result.status==="checkout_pending")throw accountActionError("A Strata+ checkout is still being prepared. Nothing was deleted; please try again later.",409,"CHECKOUT_PREPARING");
       if(result.status!=="deleted")throw accountActionError("This deletion link is invalid or expired. Request a new one from your account.",400,"INVALID_DELETE_LINK");
@@ -804,7 +805,7 @@ function createAuthService({
   return Object.freeze({
     handleApi,handleForm,renderAccountFallbacks,renderVerificationFallbacks,cleanup,
     sessionFor,requireSession,sessionCookie,signupCookie,prepareSession,passwordMatches,validCsrf,
-    requestSignedInAccountAction,accountActionError,normalizeEmail,hashToken
+    requestSignedInAccountAction,accountActionError,accountEmailHash,normalizeEmail,hashToken
   });
 }
 

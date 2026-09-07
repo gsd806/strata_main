@@ -1,7 +1,7 @@
 "use strict";
 
 (() => {
-  const EXPECTED_PRODUCT_ID="pro_01m1ky8j916ybyacs836dxbz8x";
+  const RETIRED_PRODUCT_ID="pro_01m1ky8j916ybyacs836dxbz8x";
   const RETIRED_ONE_TIME_PRICE_ID="pri_01m1kyc2zd313d7a3ssmg02424";
   const el=(id)=>document.getElementById(id);
   const panel=el("purchasePanel");
@@ -101,9 +101,9 @@
     if(!["live","production","sandbox"].includes(config.environment))throw new Error("Checkout has an unsupported Paddle environment.");
     if(!config.clientToken.startsWith(sandbox?"test_":"live_"))throw new Error("Checkout credentials do not match the Paddle environment.");
     if(sandbox){
-      if(!/^pro_[a-z0-9]{20,}$/.test(config.productId)||!/^pri_[a-z0-9]{20,}$/.test(config.priceId)||config.productId===EXPECTED_PRODUCT_ID||config.priceId===RETIRED_ONE_TIME_PRICE_ID)throw new Error("Sandbox checkout requires its own recurring test product and price.");
+      if(!/^pro_[a-z0-9]{20,}$/.test(config.productId)||!/^pri_[a-z0-9]{20,}$/.test(config.priceId)||config.productId===RETIRED_PRODUCT_ID||config.priceId===RETIRED_ONE_TIME_PRICE_ID)throw new Error("Sandbox checkout requires its own recurring test product and price.");
     }else{
-      if(config.productId!==EXPECTED_PRODUCT_ID)throw new Error("The configured Strata+ product does not match this release.");
+      if(!/^pro_[a-z0-9]{20,}$/.test(config.productId))throw new Error("The configured Strata+ product is invalid.");
       if(!/^pri_[a-z0-9]{20,}$/.test(config.priceId)||config.priceId===RETIRED_ONE_TIME_PRICE_ID)throw new Error("The configured Strata+ price is not the current recurring price.");
     }
     if(config.price.amount!=="0.99"||config.price.currency!=="USD"||config.price.interval!=="month"||config.price.frequency!==1)throw new Error("Checkout pricing does not match $0.99 USD per month.");

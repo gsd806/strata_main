@@ -35,7 +35,7 @@ test("admin elevation and destructive controls require explicit user input",()=>
   assert.match(html,/id="elevationPassword"[^>]*type="password"[^>]*autocomplete="current-password"/i);
   assert.match(html,/id="actionReason"[^>]*minlength="4"[^>]*maxlength="200"[^>]*required/i);
   assert.match(html,/id="actionConfirmation"[^>]*required/i);
-  for(const action of ["send-password-reset","send-delete-link","cancel-deletion","revoke-sessions","suspend","restore"]){
+  for(const action of ["send-password-reset","send-delete-link","cancel-deletion","revoke-sessions","suspend","restore","delete-account"]){
     assert.match(html,new RegExp(`data-user-action="${action}"`));
     assert.match(source,new RegExp(`(?:"${action}"|${action}):\\{`));
   }
@@ -43,6 +43,10 @@ test("admin elevation and destructive controls require explicit user input",()=>
     "the current password field must be cleared before awaiting the network response");
   assert.match(source,/if\(reason\.length<4\)/);
   assert.match(source,/if\(confirmation!==expected\)/);
+  assert.match(html,/class="irreversible-zone"[^>]*aria-labelledby="permanentDeletionTitle"/i);
+  assert.match(html,/does not cancel a live Paddle subscription|cannot be undone, cancel a live Paddle subscription/i);
+  assert.match(source,/if\(action==="delete-account"\)return `DELETE \$\{userEmail\(user\)\}`/);
+  assert.match(source,/if\(action==="delete-account"&&!suspended\)/);
 });
 
 test("admin page declares a private, accessible management surface",()=>{

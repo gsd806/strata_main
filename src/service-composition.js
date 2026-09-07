@@ -27,7 +27,8 @@ function composeServices({
   });
   admin=createAdminService({
     store,adminEmail,auth,emailConfig,paymentConfig,enforcePaddleIps,
-    trustedAuthOrigin,rateAllowed,http:{json:http.json,bodyJson:http.bodyJson}
+    trustedAuthOrigin,rateAllowed,http:{json:http.json,bodyJson:http.bodyJson},
+    reconcileCheckoutCreationBeforeDeletion,reconcileUnsettledPurchases
   });
   const support=createSupportService({
     store,emailConfig,auth,admin,requestAddress,trustedAuthOrigin,rateAllowed,isUniqueViolation,

@@ -39,7 +39,7 @@ services:
       - key: PADDLE_ENVIRONMENT
         value: live
       - key: PADDLE_PRODUCT_ID
-        value: pro_01m1ky8j916ybyacs836dxbz8x
+        sync: false
       - key: PADDLE_PRICE_ID
         sync: false
       - key: PADDLE_CLIENT_TOKEN

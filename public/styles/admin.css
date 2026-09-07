@@ -135,6 +135,7 @@ button:disabled { cursor:not-allowed; opacity:.56; }
 .field { display:grid; gap:8px; min-width:0; }
 .field label { color:var(--muted); text-transform:uppercase; font:500 10px/1.5 var(--mono); letter-spacing:.05em; }
 .field label span { text-transform:none; letter-spacing:0; }
+.field label strong { text-transform:none; overflow-wrap:anywhere; word-break:break-word; }
 .field input,.field select,.field textarea { width:100%; min-height:50px; padding:12px 13px; border:1px solid var(--line); border-radius:8px; color:var(--ink); background:var(--white); }
 .field textarea { min-height:105px; resize:vertical; line-height:1.55; }
 .field-hint { color:var(--muted); font-size:11px; line-height:1.55; }
@@ -196,6 +197,11 @@ dialog::backdrop { background:rgba(10,11,9,.8); backdrop-filter:blur(4px); }
 .action-grid button:hover:not(:disabled) { color:var(--ink); background:var(--accent); border-color:var(--accent); }
 .action-grid .danger-button { border-color:#ff8f7c; color:#ffb3a6; }
 .action-grid .danger-button:hover:not(:disabled) { color:#fff; background:var(--orange); border-color:var(--orange); }
+.irreversible-zone { margin-top:22px; padding-top:20px; border-top:1px solid rgba(255,255,255,.28); }
+.irreversible-zone h4 { margin:0 0 8px; color:#ffb3a6; font:600 16px/1.2 var(--display); letter-spacing:.02em; }
+.irreversible-zone p { margin:0 0 14px; color:rgba(255,255,255,.75); font-size:11px; line-height:1.65; overflow-wrap:anywhere; }
+.irreversible-zone .permanent-delete { width:100%; min-height:54px; display:flex; align-items:center; justify-content:space-between; gap:14px; padding:0 14px; border:2px solid #ff8f7c; color:#fff; background:#742416; text-align:left; text-transform:uppercase; font:600 10px/1.4 var(--mono); }
+.irreversible-zone .permanent-delete:hover:not(:disabled) { color:#fff; background:var(--orange); border-color:#fff; }
 .confirm-dialog .dialog-body { max-width:650px; margin-inline:auto; }
 .confirm-dialog .dialog-header { color:var(--white); background:var(--ink); }
 .confirm-dialog .dialog-header .panel-index { color:var(--accent); }

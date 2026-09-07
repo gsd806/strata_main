@@ -184,6 +184,27 @@ test("purchase ledger grants access from any completed, unrevoked purchase",asyn
   }
 });
 
+test("a legacy draft can move to the recurring catalog only through an exact pending-row CAS",async()=>{
+  const {store,close}=await fixture();
+  try{
+    const draft=await store.insertPendingPurchase(pending("txn_catalog_migration",1_000,"draft",LEGACY_PRICE_ID));
+    const migrated=await store.replacePendingPurchaseCatalog(draft,{priceId:PRICE_ID,productId:PRODUCT_ID,paddleStatus:"draft",updatedAt:1_100});
+    assert.equal(migrated.price_id,PRICE_ID);
+    assert.equal(migrated.updated_at,1_100);
+    assert.equal(await store.replacePendingPurchaseCatalog(draft,{priceId:PRICE_ID,productId:PRODUCT_ID,paddleStatus:"draft",updatedAt:1_200}),null,"the stale source snapshot cannot replay");
+    const ready=await store.updatePurchaseStatus("txn_catalog_migration","ready",1_200);
+    assert.equal((await store.replacePendingPurchaseCatalog(ready,{priceId:PRICE_ID,productId:PRODUCT_ID,paddleStatus:"ready",updatedAt:1_300})).paddle_status,"ready","a provider-ready/local-stale row can finish the same exact CAS after a response is lost");
+    assert.equal((await store.purchaseByTransaction("txn_catalog_migration")).price_id,PRICE_ID);
+    await store.updatePurchaseStatus("txn_catalog_migration","canceled",1_400);
+    for(const [index,status] of ["paid","past_due","canceled"].entries()){
+      const blocked=await store.insertPendingPurchase(pending(`txn_catalog_blocked_${index}`,2_000+index,status,LEGACY_PRICE_ID));
+      assert.equal(await store.replacePendingPurchaseCatalog(blocked,{priceId:PRICE_ID,productId:PRODUCT_ID,paddleStatus:"ready",updatedAt:2_100+index}),null,`${status} source rows cannot be catalog-rewritten`);
+      assert.equal((await store.purchaseByTransaction(blocked.transaction_id)).price_id,LEGACY_PRICE_ID);
+      if(status!=="canceled")await store.updatePurchaseStatus(blocked.transaction_id,"canceled",2_200+index);
+    }
+  }finally{await close();}
+});
+
 test("monthly subscription cache is linked, ordered, fail-closed, and keeps legacy buyers",async()=>{
   const {store,close}=await fixture();
   const transactionId="txn_monthly",subscriptionId="sub_monthly",customerId="ctm_monthly";

@@ -644,6 +644,36 @@ function localStore(root) {
         throw error;
       }
     },
+    async deleteUserByAdmin(userId,deletedAt,targetEmail,emailHash,actorSessionTokenHash,audit) {
+      if(!audit||audit.targetUserId!==userId||audit.action!=="delete-account")throw new TypeError("Administrative account deletion requires a matching audit event.");
+      let transactionOpen=false;
+      try {
+        db.exec("BEGIN IMMEDIATE");
+        transactionOpen=true;
+        const user=plainRow(statements.deleteUserByAdmin.get(userId,targetEmail,deletedAt,audit.actorUserId,actorSessionTokenHash,deletedAt,deletedAt));
+        if (!user) {
+          db.exec("ROLLBACK");
+          transactionOpen=false;
+          return null;
+        }
+        if (!plainRow(statements.insertAdminAuditIfChanged.get(...adminAuditArgs(audit)))) throw new Error("Administrative account-deletion audit could not be recorded atomically.");
+        deleteLocalTrainingData(statements,user.id);
+        statements.deleteCommunityPlanForDeletedUser.get(user.id,user.id);
+        statements.deleteWorkoutsForDeletedUser.run(user.id,user.id);
+        statements.deleteCheckoutClaimsForDeletedUser.all(user.id,user.id);
+        statements.deleteVerificationSendsForDeletedUser.run(user.id,targetEmail,user.id);
+        statements.deleteVerificationsForDeletedUser.run(user.id,targetEmail,user.id);
+        statements.deleteActionSendsForDeletedUser.run(emailHash,user.id);
+        db.exec("COMMIT");
+        transactionOpen=false;
+        return user;
+      } catch(error) {
+        if (transactionOpen) {
+          try { db.exec("ROLLBACK"); } catch { /* Preserve the original transaction error. */ }
+        }
+        throw error;
+      }
+    },
     async recordAdminAudit(event) {
       return Boolean(plainRow(statements.insertAdminAudit.get(...adminAuditArgs(event))));
     },
@@ -1070,6 +1100,23 @@ async function tursoStore(url,authToken,tursoClientFactory) {
       ],"write");
       const user=plainRow(results[0]?.rows?.[0],results[0]?.columns);
       if (user&&!plainRow(results[1]?.rows?.[0],results[1]?.columns)) throw new Error("Admin audit could not be recorded atomically.");
+      return user;
+    },
+    async deleteUserByAdmin(userId,deletedAt,targetEmail,emailHash,actorSessionTokenHash,audit) {
+      if(!audit||audit.targetUserId!==userId||audit.action!=="delete-account")throw new TypeError("Administrative account deletion requires a matching audit event.");
+      const results=await client.batch([
+        {sql:SQL.deleteUserByAdmin,args:[userId,targetEmail,deletedAt,audit.actorUserId,actorSessionTokenHash,deletedAt,deletedAt]},
+        {sql:SQL.insertAdminAuditIfChanged,args:adminAuditArgs(audit)},
+        ...trainingDeletionBatch(userId),
+        {sql:SQL.deleteCommunityPlanForDeletedUser,args:[userId,userId]},
+        {sql:SQL.deleteWorkoutsForDeletedUser,args:[userId,userId]},
+        {sql:SQL.deleteCheckoutClaimsForDeletedUser,args:[userId,userId]},
+        {sql:SQL.deleteVerificationSendsForDeletedUser,args:[userId,targetEmail,userId]},
+        {sql:SQL.deleteVerificationsForDeletedUser,args:[userId,targetEmail,userId]},
+        {sql:SQL.deleteActionSendsForDeletedUser,args:[emailHash,userId]}
+      ],"write");
+      const user=plainRow(results[0]?.rows?.[0],results[0]?.columns);
+      if(user&&!plainRow(results[1]?.rows?.[0],results[1]?.columns))throw new Error("Administrative account-deletion audit could not be recorded atomically.");
       return user;
     },
     async recordAdminAudit(event) {

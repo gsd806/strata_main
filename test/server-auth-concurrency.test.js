@@ -47,7 +47,7 @@ function services(store){
   const guards={trustedAuthOrigin:()=>true,rateAllowed:()=>true};
   const emailConfig={enabled:true,requestedEnabled:true};
   const auth=createAuthService({store,emailConfig,http,...guards,getUserPayload:async(user)=>({id:user.id}),claimAdminForLogin:(user)=>admin.maybeClaimAdminForLogin(user)});
-  admin=createAdminService({store,auth,emailConfig,paymentConfig:{},adminEmail:EMAIL,http,...guards});
+  admin=createAdminService({store,auth,emailConfig,paymentConfig:{},adminEmail:EMAIL,http,...guards,reconcileCheckoutCreationBeforeDeletion:async()=>0,reconcileUnsettledPurchases:async()=>0});
   return {auth,async login(password=OLD_PASSWORD){
     input={email:EMAIL,password};
     await auth.handleApi({method:"POST",headers:{}},{},new URL("http://auth-race.test/api/login"));

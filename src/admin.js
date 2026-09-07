@@ -20,9 +20,11 @@ function createAdminService({
   trustedAuthOrigin,
   rateAllowed,
   http,
+  reconcileCheckoutCreationBeforeDeletion,
+  reconcileUnsettledPurchases,
   environment=process.env
 }){
-  if(!store||!auth||!emailConfig||!paymentConfig||typeof trustedAuthOrigin!=="function"||typeof rateAllowed!=="function"||!http){
+  if(!store||!auth||typeof auth.accountEmailHash!=="function"||!emailConfig||!paymentConfig||typeof trustedAuthOrigin!=="function"||typeof rateAllowed!=="function"||!http||typeof reconcileCheckoutCreationBeforeDeletion!=="function"||typeof reconcileUnsettledPurchases!=="function"){
     throw new TypeError("Admin service requires store, auth, service configuration, request guards, and HTTP helpers.");
   }
   const {json,bodyJson}=http;
@@ -137,7 +139,7 @@ function createAdminService({
   }
 
   function validAdminConfirmation(action,value,target){
-    const expected={"send-password-reset":"SEND RESET","send-delete-link":target?.email||"","cancel-deletion":"CANCEL","revoke-sessions":"REVOKE",suspend:"SUSPEND",restore:"RESTORE"}[action];
+    const expected={"send-password-reset":"SEND RESET","send-delete-link":target?.email||"","cancel-deletion":"CANCEL","revoke-sessions":"REVOKE",suspend:"SUSPEND",restore:"RESTORE","delete-account":`DELETE ${target?.email||""}`}[action];
     return Boolean(expected&&String(value||"").trim()===expected);
   }
   async function performAdminUserAction(session,targetId,input){
@@ -146,7 +148,7 @@ function createAdminService({
     const principal=await store.adminPrincipal();
     if(principal?.user_id===target.id)throw Object.assign(new Error("Use Account Security for the primary administrator account."),{status:409,code:"ADMIN_SELF_PROTECTED"});
     const action=cleanText(input?.action,40);
-    if(!["send-password-reset","send-delete-link","cancel-deletion","revoke-sessions","suspend","restore"].includes(action))throw Object.assign(new Error("Unknown admin action."),{status:400,code:"UNKNOWN_ADMIN_ACTION"});
+    if(!["send-password-reset","send-delete-link","cancel-deletion","revoke-sessions","suspend","restore","delete-account"].includes(action))throw Object.assign(new Error("Unknown admin action."),{status:400,code:"UNKNOWN_ADMIN_ACTION"});
     const reason=adminReason(input?.reason);
     if(!validAdminConfirmation(action,input?.confirmation,target))throw Object.assign(new Error("The confirmation text does not match this action."),{status:400,code:"ADMIN_CONFIRMATION_REQUIRED"});
     if(action==="send-password-reset"||action==="send-delete-link"){
@@ -173,6 +175,16 @@ function createAdminService({
       if(!target.suspended_at)throw Object.assign(new Error("This account is already active."),{status:409,code:"ACCOUNT_ALREADY_ACTIVE"});
       if(!await store.restoreUser(target.id,adminAuditEvent(session.id,target.id,action,reason)))throw Object.assign(new Error("The account state changed. Refresh and try again."),{status:409,code:"ADMIN_STATE_CHANGED"});
       message="Account restored. The user can sign in again.";
+    }else if(action==="delete-account"){
+      if(!target.suspended_at)throw Object.assign(new Error("Pause this account before permanently deleting it."),{status:409,code:"ACCOUNT_MUST_BE_SUSPENDED"});
+      if(await reconcileCheckoutCreationBeforeDeletion(target.id)>0)throw Object.assign(new Error("A Strata+ checkout is still being prepared. Nothing was deleted; try again later."),{status:409,code:"CHECKOUT_PREPARING"});
+      try{if(await reconcileUnsettledPurchases(target.id)>0)throw Object.assign(new Error("A Strata+ payment is still being processed. Nothing was deleted; try again later."),{status:409,code:"PURCHASE_PENDING"});}
+      catch(error){if(error.code==="SUBSCRIPTION_ACTIVE")throw Object.assign(new Error("This account still has a live Paddle subscription. Cancel it and wait for the canceled status before deleting STRATA data."),{status:409,code:error.code});throw error;}
+      const audit=adminAuditEvent(session.id,target.id,action,reason);
+      const deletedAt=Date.now();
+      const deleted=await store.deleteUserByAdmin(target.id,deletedAt,target.email,auth.accountEmailHash(target.email),session.token_hash,audit);
+      if(!deleted)throw Object.assign(new Error("The account or billing state changed. Nothing was deleted; refresh and try again."),{status:409,code:"ADMIN_STATE_CHANGED"});
+      return {ok:true,message:"Account permanently deleted from STRATA. No refund or live Paddle subscription was canceled; stale incomplete checkouts may have been closed during the safety check."};
     }
     return {ok:true,message,user:adminUserPayload(await store.adminUserById(target.id,Date.now()),{detail:true})};
   }

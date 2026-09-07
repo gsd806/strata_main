@@ -93,6 +93,8 @@ An email setting is only eligible to claim an empty administrator principal; the
 
 Elevation rotates the session rather than upgrading a token in place. The primary owner is protected from self-suspension/deletion controls. Admin payloads are allowlisted and must never include password material, raw tokens, verification codes, provider credentials, or full payment data.
 
+Direct administrator deletion is intentionally a two-step operation: the target must already be paused, which revokes its sessions and prevents new trials, purchases, or checkout claims. The server then reconciles any earlier Paddle checkout work and rejects active or uncertain recurring billing. The final parameterized delete rechecks the pause, primary-owner, purchase, and checkout-claim predicates, plus the acting owner's current session, auth version, and unexpired elevation, and records the successful audit event in the same SQLite transaction or Turso batch. It removes STRATA's account mapping and may close a stale incomplete checkout during reconciliation; it never cancels a live Paddle subscription or issues a refund.
+
 ### Account self-service boundary
 
 An authenticated member can list only their own non-expired sessions. The response exposes a one-way public session identifier, whether it is current, and creation/expiry times; raw token hashes, IP addresses, user agents, and device fingerprints never leave the server. Single-session and all-other-session revocation require trusted origin and CSRF checks. The current session is explicitly protected from the selective route, foreign or stale identifiers look absent, and the store mutation atomically rechecks ownership and current-session existence.

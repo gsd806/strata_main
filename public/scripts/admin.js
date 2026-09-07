@@ -82,7 +82,12 @@ function formatDate(value) {
 function friendlyError(error) {
   if(error?.code==="network")return "Could not reach STRATA. Check the connection and try again.";
   if(error?.status===401)return "Your session expired. Sign in again to continue.";
+  if(error?.code==="ADMIN_ORIGIN_REQUIRED"||error?.code==="INVALID_CSRF")return "The security check expired. Refresh this page and confirm your password again.";
   if(error?.status===403)return "This verified account does not have administrator access.";
+  if(error?.code==="ACCOUNT_MUST_BE_SUSPENDED")return "Pause this account first, then reopen it to permanently delete it.";
+  if(error?.code==="SUBSCRIPTION_ACTIVE")return "Cancel this account’s Paddle subscription and wait for its canceled status before deleting STRATA data.";
+  if(error?.code==="CHECKOUT_PREPARING"||error?.code==="PURCHASE_PENDING")return "A Strata+ checkout or payment is still being reconciled. Nothing was deleted; wait and try again.";
+  if(error?.code==="ADMIN_STATE_CHANGED")return "The account or billing state changed. Nothing was deleted; refresh and try again.";
   if(error?.code==="SUPPORT_STATE_CHANGED"||error?.code==="SUPPORT_VERSION_REQUIRED")return "This help request changed. Close it, refresh the help desk, and try again.";
   if(error?.code==="SUPPORT_RESPONSE_DELIVERY_FAILED")return "The workflow was saved, but the email response was not sent. Refresh the request and try the response again.";
   if(error?.status===429)return "Too many requests were made. Wait a moment and try again.";
@@ -409,6 +414,7 @@ function setActionAvailability(user,{actionsReady=true}={}) {
     if(action==="cancel-deletion"&&!deletionPending(user)){disabled=true;title="There is no active deletion request.";}
     if(action==="suspend"&&suspended){disabled=true;title="This account is already suspended.";}
     if(action==="restore"&&!suspended){disabled=true;title="This account is not suspended.";}
+    if(action==="delete-account"&&!suspended){disabled=true;title="Pause this account before permanently deleting it.";}
     if(isSelf){disabled=true;title="Use Account Security for the sole administrator account.";}
     if(!actionsReady){disabled=true;title="Full account details are still loading.";}
     button.disabled=disabled;
@@ -467,21 +473,28 @@ const actionDetails={
   "cancel-deletion":{title:"CANCEL DELETION?",phrase:"CANCEL",description:"The pending deletion request will be revoked and its emailed link will stop working."},
   "revoke-sessions":{title:"REVOKE ALL SESSIONS?",phrase:"REVOKE",description:"Every active session for this account will be signed out. The account owner can sign in again with the current password."},
   suspend:{title:"SUSPEND ACCOUNT?",phrase:"SUSPEND",description:"The account will lose signed-in access until an administrator restores it. Existing payment records must remain intact."},
-  restore:{title:"RESTORE ACCOUNT?",phrase:"RESTORE",description:"Signed-in access will be restored. This does not create or change Strata+ payment entitlement."}
+  restore:{title:"RESTORE ACCOUNT?",phrase:"RESTORE",description:"Signed-in access will be restored. This does not create or change Strata+ payment entitlement."},
+  "delete-account":{title:"PERMANENTLY DELETE ACCOUNT?",phrase:"",description:"This immediately removes the paused account and its STRATA data and cannot be undone. It does not cancel a live Paddle subscription or issue a refund; stale incomplete checkouts may be closed during safety checks."}
 };
+
+function expectedConfirmation(action,user) {
+  if(action==="send-delete-link")return userEmail(user);
+  if(action==="delete-account")return `DELETE ${userEmail(user)}`;
+  return actionDetails[action]?.phrase||"";
+}
 
 function openActionConfirmation(action,trigger) {
   const details=actionDetails[action];
   if(!details||!state.selectedUser)return;
   state.pendingAction=action;
   state.actionTrigger=trigger;
-  const phrase=action==="send-delete-link"?userEmail(state.selectedUser):details.phrase;
+  const phrase=expectedConfirmation(action,state.selectedUser);
   el("confirmTitle").textContent=details.title;
   el("confirmDescription").textContent=`${details.description} Target: ${userEmail(state.selectedUser)}.`;
   el("confirmationPhrase").textContent=phrase;
   el("actionReason").value="";
   el("actionConfirmation").value="";
-  el("actionConfirmation").setAttribute("autocapitalize",action==="send-delete-link"?"none":"characters");
+  el("actionConfirmation").setAttribute("autocapitalize",action==="send-delete-link"||action==="delete-account"?"none":"characters");
   el("actionConfirmation").inputMode=action==="send-delete-link"?"email":"text";
   el("confirmMessage").hidden=true;
   el("confirmMessage").textContent="";
@@ -507,7 +520,7 @@ async function submitUserAction(event) {
   if(!user||!details)return;
   const reason=el("actionReason").value.trim();
   const confirmation=el("actionConfirmation").value.trim();
-  const expected=action==="send-delete-link"?userEmail(user):details.phrase;
+  const expected=expectedConfirmation(action,user);
   const message=el("confirmMessage");
   if(reason.length<4){message.textContent="Enter a brief reason for the audit log.";message.className="dialog-message error";message.hidden=false;message.focus();return;}
   if(confirmation!==expected){message.textContent=`Type ${expected} exactly to continue.`;message.className="dialog-message error";message.hidden=false;message.focus();return;}
@@ -518,6 +531,7 @@ async function submitUserAction(event) {
     closeDialog(el("confirmDialog"));
     closeDialog(el("userDialog"));
     showGlobal(cleanString(result.message,"The account action was completed and recorded."),{focus:true});
+    state.selectedUser=null;state.pendingAction=null;state.actionTrigger=null;
     state.loaded.delete("overview");state.loaded.delete("activity");
     await Promise.all([loadUsers(),loadOverview()]);
   }catch(error){
