@@ -356,9 +356,15 @@ test("training journeys use real browser controls and isolated local fixtures",{
     const blockWorkoutSave=route=>route.request().method()==="PUT"?route.abort():route.continue();await page.route(`**/api/workouts/${first.workout.id}`,blockWorkoutSave);
     await entry.locator('[data-actual="weight"]').fill("25");await entry.locator('[data-actual="reps"]').fill("9");await entry.locator('[data-complete="0"]').click();
     await page.waitForFunction(()=>globalThis.document.querySelector("#saveStatus")?.dataset.state==="error");
-    page.once("dialog",dialog=>dialog.accept());await page.reload({waitUntil:"domcontentloaded"});await page.locator('#recoveryList [data-recover="0"]').waitFor({state:"visible"});
+    const workoutHistoryPattern=/\/api\/workouts\?/;
+    let releaseHistory,historyRequestedResolve;
+    const historyRelease=new Promise(resolve=>{releaseHistory=resolve;}),historyRequested=new Promise(resolve=>{historyRequestedResolve=resolve;});
+    const blockWorkoutHistory=async route=>{historyRequestedResolve();await historyRelease;await route.continue();};
+    await page.route(workoutHistoryPattern,blockWorkoutHistory);
+    page.once("dialog",dialog=>dialog.accept());await page.reload({waitUntil:"domcontentloaded"});await historyRequested;await page.locator('#recoveryList [data-recover="0"]').waitFor({state:"visible"});
     assert.equal(await page.locator('#historyList [data-history]').count(),0,"A dirty device draft replaces the stale active-history Resume surface");
-    assert.equal(await page.locator("#startWorkout").isHidden(),true,"An active session with a device recovery must not expose a redundant Start action");
+    assert.equal(await page.locator("#startWorkout").isHidden(),true,"An active session with a device recovery must not expose a redundant Start action while saved history is still loading");
+    const historyLoaded=page.waitForResponse(response=>new URL(response.url()).pathname==="/api/workouts"&&response.request().method()==="GET");releaseHistory();await historyLoaded;await page.unroute(workoutHistoryPattern,blockWorkoutHistory);
     await page.locator('#recoveryList [data-recover="0"]').click();await page.locator("#sessionPanel").waitFor({state:"visible"});await page.unroute(`**/api/workouts/${first.workout.id}`,blockWorkoutSave);
     assert.equal(await entry.locator('[data-actual="weight"]').inputValue(),"25");assert.equal(await entry.locator('[data-actual="reps"]').inputValue(),"9");assert.equal(await entry.locator('[data-complete="0"]').getAttribute("aria-pressed"),"true");
     const saving=page.waitForResponse(response=>new URL(response.url()).pathname===`/api/workouts/${first.workout.id}`&&response.request().method()==="PUT");await page.click("#saveNow");

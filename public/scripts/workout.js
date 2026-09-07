@@ -123,7 +123,7 @@
       staleKeys.forEach((key)=>localStorage.removeItem(key));
     }catch{toast("Device draft recovery is unavailable in this browser. Keep this tab open until your session is saved.");}
     state.recoveries=items.sort((a,b)=>b.savedAt-a.savedAt);
-    renderRecovery();renderHistory();
+    renderRecovery();renderPlan();renderHistory();
   }
   function renderRecovery(){
     $("recoveryPanel").hidden=!state.recoveries.length||!!state.workout||state.blocked;
@@ -175,7 +175,7 @@
     const upcomingDays=[...W.DAYS.slice(currentIndex+1),...W.DAYS.slice(0,currentIndex)];
     const scheduledDay=upcomingDays.find((day)=>(state.plan?.days?.[day]||[]).length);
     const startButton=$("startWorkout"),chooseButton=$("chooseScheduledDay"),plannerLink=$("openPlannerFromEmpty"),brief=$("planBrief"),summary=W.planDaySummary(state.plan,state.day);
-    const activeWorkout=state.workout?.status==="active"?state.workout:state.history.find((item)=>item.status==="active");
+    const activeWorkout=state.workout?.status==="active"?state.workout:state.history.find((item)=>item.status==="active")||state.recoveries.find((record)=>record.workout.status==="active")?.workout;
     const activeHint=activeWorkout?`${activeWorkout.title} is already in progress. Resume it from Training history below before starting another session.`:"";
     $("todayLabel").textContent=`${W.localDate()} · ${state.day} plan`;
     startButton.hidden=!items.length||!!activeWorkout;startButton.disabled=!state.plan||state.blocked;
@@ -495,7 +495,7 @@
     }finally{state.checkInBusy=false;$("anotherSession").disabled=false;if(state.adaptation){$("acceptAdaptation").disabled=false;$("dismissAdaptation").disabled=false;}}
   }
   function returnToPlan(){
-    state.workout=null;state.draftKey="";state.pausedSeconds=null;resetCheckIn();$("celebration").hidden=true;$("sessionPanel").hidden=true;$("startPanel").hidden=false;scanDrafts();renderPlan();($("startWorkout").hidden?$("planDay"):$("startWorkout")).focus();
+    state.workout=null;state.draftKey="";state.pausedSeconds=null;resetCheckIn();$("celebration").hidden=true;$("sessionPanel").hidden=true;$("startPanel").hidden=false;scanDrafts();($("startWorkout").hidden?$("planDay"):$("startWorkout")).focus();
   }
   function exportDraft(){
     if(!state.workout)return;
@@ -617,7 +617,7 @@
       state.plan=planResult.plan;state.planUpdatedAt=Number(planResult.planUpdatedAt)||0;
       if(!state.plan?.days)throw new Error("Your account plan could not be loaded. Retry to continue.");
       $("modeNotice").innerHTML=`<strong>Strata+ · ${esc(state.user.name||"Your account")}.</strong> Saved sessions sync across devices; an opened active workout can continue from this browser while offline. <a href='/account.html'>Account</a>`;
-      $("trainingRoom").hidden=false;$("historySection").hidden=false;renderPlan();scanDrafts();await loadHistory();
+      $("trainingRoom").hidden=false;$("historySection").hidden=false;scanDrafts();await loadHistory();
       const resumed=!state.blocked&&await openRequestedWorkout();
       if(!resumed&&location.hash==="#historySection"&&!state.blocked){$("historySection").scrollIntoView({block:"start"});$("historyTitle").focus();}
     }catch(error){

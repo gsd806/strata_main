@@ -574,6 +574,7 @@ test("security-sensitive browser journeys",{timeout:120_000},async(t)=>{
     const requestPromise=account.page.waitForResponse((response)=>new URL(response.url()).pathname==="/api/account/delete/request");
     await account.page.click("#accountDeleteRequest");
     assert.equal((await requestPromise).status(),202);
+    await account.page.waitForFunction(()=>/nothing is deleted until/i.test(globalThis.document.querySelector("#accountSecurityStatus")?.textContent||""),undefined,{timeout:WAIT_MS});
     assert.match((await account.page.locator("#accountSecurityStatus").textContent())||"",/nothing is deleted until/i);
     const deletionMessage=await waitForEmail(deleteEmailIndex,(candidate)=>messageForAddress(candidate,email)&&/Confirm deletion of your STRATA account/i.test(String(candidate.subject||"")),"account-deletion email");
     const deletionUrl=accountActionUrl(deletionMessage,"delete-account");

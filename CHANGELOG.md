@@ -7,6 +7,7 @@
 - Made the final storage mutation atomically revalidate the paused target, byte-exact email, billing-safe state, live owner identity/session/elevation, and matching success audit so a state change cannot turn a reviewed deletion into a different action.
 - Reconciled interrupted and stale incomplete checkout transactions before deletion, then applied the locally stored signed subscription state and other billing blockers. Administrative deletion does not refund a payment or cancel a live Paddle subscription.
 - Removed the public and server fallback to the retired product for new checkouts. Deployments must supply both matching current Paddle catalog IDs, and the browser now accepts the live product validated by the same-origin server.
+- Prevented an active workout recovery saved on the device from briefly exposing a second Start action while account history is still loading.
 
 ## 7.5.0 — Training Memory and operational trust
 

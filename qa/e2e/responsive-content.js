@@ -70,7 +70,7 @@ test("Strata+ content keeps long labels and persistent controls in separate resp
 test("workout controls give long movement names and narrow inputs their own rows",{timeout:30_000},async()=>{
   const options={headless:true};
   if(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH)options.executablePath=resolve(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH);
-  const browser=await chromium.launch(options),page=await browser.newPage({viewport:{width:768,height:800}});
+  const browser=await chromium.launch(options),page=await browser.newPage({viewport:{width:768,height:800},reducedMotion:"reduce"});
   try{
     const css=read("public/styles/workout.css"),markup=`
       <article class="exercise-card"><div class="exercise-heading"><span class="exercise-index">01</span><div><h3>Single-leg Dumbbell Romanian Deadlift</h3><p>Planned: 3 × 8–12 / side · Dumbbells</p></div><span class="exercise-progress">0/3 sets</span></div><div class="format-controls"><label class="field">Record<select><option>Time in seconds</option></select></label><label class="field">Load type<select><option>External load</option></select></label><label class="field">Unit<select><option>kg</option></select></label></div><table class="sets-table"><thead><tr><th>Set</th><th>Load (kg)</th><th>Reps</th><th>Completed</th></tr></thead><tbody><tr><td>1</td><td><input /></td><td><input /></td><td><button class="set-check">Mark done</button></td></tr></tbody></table></article>

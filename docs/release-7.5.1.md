@@ -20,6 +20,10 @@ After any provider transaction reconciliation has completed, the final local dat
 
 Deletion removes the local STRATA account and its user-owned application records. It does not create a Paddle refund, cancel a live Paddle subscription, or erase records retained by Paddle. Billing must be handled separately and the canceled provider state must reach STRATA before this action can succeed.
 
+## Workout recovery polish
+
+An active workout recovery already stored on the device now suppresses the Start action immediately, including while saved account history is still loading. This removes the brief duplicate-start choice without discarding the recovery draft or weakening the server's one-active-workout guard.
+
 ## Verification scope
 
 Focused tests cover exact retired-catalog draft migration and reuse, provider-current/local-legacy recovery, provider-confirmed cancellation before a fresh monthly checkout, signed and provider-fetch delayed lifetime completion, rejection before provider mutation for unknown or mismatched transactions, no webhook acknowledgment after an atomic migration conflict, paused-target, owner-protection, exact-email, billing, replay, session, and elevation boundaries, atomic success-audit behavior, and SQLite/Turso adapter parity. Provider calls use local fakes and do not prove that production Paddle credentials or catalog settings work.
