@@ -18,7 +18,7 @@
   color: var(--accent);
 }
 
-nav[aria-label="Primary navigation"] [data-product-owner] {
+body nav[aria-label="Primary navigation"] [data-product-owner] {
   min-width: 44px;
   min-height: 44px;
   text-transform: none;
@@ -27,6 +27,8 @@ nav[aria-label="Primary navigation"] [data-product-owner] {
 nav[aria-label="Primary navigation"] [aria-current="page"] {
   color: var(--accent, #d4f578);
 }
+
+.planner-header .planner-primary-nav-desktop [aria-current="page"] { color: var(--ink, #10110f); }
 
 @media (max-width: 680px) {
   .install-page .install-header nav { grid-template-columns: repeat(5,minmax(0,1fr)); }
@@ -71,5 +73,5 @@ nav[aria-label="Primary navigation"] [aria-current="page"] {
 @media (max-width: 760px) { .plus-studio .studio-nav-mobile { grid-template-columns: repeat(5,minmax(0,1fr)); } }
 @media (max-width: 800px) {
   .home-page .mobile-public-nav { grid-template-columns: repeat(5,minmax(0,1fr)); }
-  nav[aria-label="Primary navigation"] [data-product-owner] { letter-spacing: 0; padding-inline: 2px; font-size: 11px; }
+  body nav[aria-label="Primary navigation"] [data-product-owner] { letter-spacing: 0; padding-inline: 2px; font-size: 11px; }
 }
