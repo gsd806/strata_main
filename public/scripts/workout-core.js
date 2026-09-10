@@ -169,11 +169,11 @@
     }).sort((a,b)=>a.startedAt-b.startedAt||a.id.localeCompare(b.id));
   }
   function bestInWindow(points){return points.length?Math.max(...points.map((point)=>point.value)):null;}
-  function previousComparable(history,entry,excludeId=""){
+  function previousComparable(history,entry,excludeId="",beforeStartedAt=Infinity){
     const key=formatKey(entry),ordered=[...(Array.isArray(history)?history:[])].sort((a,b)=>Number(b.startedAt)-Number(a.startedAt));
     for(const workout of ordered){
-      if(workout?.id===excludeId||workout?.status!=="completed")continue;
-      const match=(workout.exerciseSummaries||[]).find((item)=>formatKey(item)===key&&Array.isArray(item.setValues)&&item.setValues.length);
+      if(workout?.id===excludeId||workout?.status!=="completed"||Number(workout.startedAt)>=beforeStartedAt)continue;
+      const match=(workout.exerciseSummaries||[]).find((item)=>formatKey(item)===key&&Array.isArray(item.setValues));
       if(match)return{workoutId:workout.id,date:workout.date,sets:copy(match.setValues),unit:entry.unit,measurement:entry.measurement,loadType:entry.loadType};
     }
     return null;

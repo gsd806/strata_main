@@ -23,7 +23,7 @@ function walk(directory){
 
 test("keeps root, private server, and public browser files separated",()=>{
   for(const required of [
-    "server.js","src/server.js","src/account-export.js","src/account-self-service.js","src/account-self-service-schema.js","src/account-self-service-store.js","src/admin.js","src/admin-mfa.js","src/auth.js","src/billing-store.js","src/database.js","src/domain-types.d.ts","src/email.js","src/http.js","src/legacy-checkout.js","src/paddle-webhooks.js","src/payments.js","src/plans.d.ts","src/plans.js","src/product-signals-schema.js","src/product-signals.js","src/schema.js","src/service-composition.js","src/setup.js","src/store-contract.js","src/support.js","src/training-loop-schema.js","src/training-loop-store.js","src/training.js","src/workouts.d.ts",
+    "server.js","src/server.js","src/account-export.js","src/account-self-service.js","src/account-self-service-schema.js","src/account-self-service-store.js","src/admin.js","src/admin-mfa.js","src/auth.js","src/billing-store.js","src/database.js","src/domain-types.d.ts","src/email.js","src/http.js","src/legacy-checkout.js","src/paddle-webhooks.js","src/payments.js","src/plans.d.ts","src/plans.js","src/product-signals-schema.js","src/product-signals.js","src/progression.js","src/schema.js","src/service-composition.js","src/setup.js","src/store-contract.js","src/support.js","src/training-loop-schema.js","src/training-loop-store.js","src/training.js","src/workouts.d.ts",
     "src/data/discovery-data.json","public/pages/index.html","public/pages/forgot-password.html",
     "public/pages/reset-password.html","public/pages/delete-account.html",
     "public/pages/admin.html","public/scripts/admin.js","public/styles/admin.css",
@@ -34,7 +34,7 @@ test("keeps root, private server, and public browser files separated",()=>{
   assert.deepEqual(readdirSync(PUBLIC_ROOT).sort(),[
     "data","fonts","icons","images","manifest.webmanifest","pages","scripts","service-worker.js","styles"
   ]);
-  assert.deepEqual(readdirSync(SRC_ROOT).sort(),["access-controls-schema.js","access-controls-store.js","access-controls.js","account-export.js","account-self-service-schema.js","account-self-service-store.js","account-self-service.js","admin-mfa.js","admin-user-actions.js","admin.js","auth.js","billing-schema.js","billing-store.js","billing.js","checkout-reconciliation.js","data","database.js","domain-types.d.ts","email.js","http.js","legacy-checkout.js","migrations.js","observability.js","paddle-subscriptions.js","paddle-webhooks.js","payments.js","plans.d.ts","plans.js","product-signals-schema.js","product-signals.js","schema.js","server.js","service-composition.js","setup.js","static-assets.js","store-contract.js","support.js","training-loop-schema.js","training-loop-store.js","training.js","workouts.d.ts","workouts.js"]);
+  assert.deepEqual(readdirSync(SRC_ROOT).sort(),["access-controls-schema.js","access-controls-store.js","access-controls.js","account-export.js","account-self-service-schema.js","account-self-service-store.js","account-self-service.js","admin-mfa.js","admin-user-actions.js","admin.js","auth.js","billing-schema.js","billing-store.js","billing.js","checkout-reconciliation.js","data","database.js","domain-types.d.ts","email.js","http.js","legacy-checkout.js","migrations.js","observability.js","paddle-subscriptions.js","paddle-webhooks.js","payments.js","plans.d.ts","plans.js","product-signals-schema.js","product-signals.js","progression.js","schema.js","server.js","service-composition.js","setup.js","static-assets.js","store-contract.js","support.js","training-loop-schema.js","training-loop-store.js","training.js","workouts.d.ts","workouts.js"]);
 
   const rootFiles=readdirSync(PROJECT_ROOT,{withFileTypes:true}).filter((entry)=>entry.isFile()).map((entry)=>entry.name);
   assert.deepEqual(rootFiles.filter((name)=>name.endsWith(".js")).sort(),["server.js"]);
@@ -45,7 +45,7 @@ test("keeps root, private server, and public browser files separated",()=>{
 
 test("keeps credentials, databases, and private modules out of public",()=>{
   const allowedExtensions=new Set([".html",".css",".js",".json",".webmanifest",".svg",".png",".jpg",".jpeg",".woff2"]);
-  const forbiddenNames=new Set(["server.js","auth.js","database.js","email.js","http.js","payments.js","plans.js","schema.js","service-composition.js","store-contract.js","support.js","training-loop-schema.js","training-loop-store.js","training.js","workouts.js","discovery-data.json","render.yaml","package.json","package-lock.json"]);
+  const forbiddenNames=new Set(["server.js","auth.js","database.js","email.js","http.js","payments.js","plans.js","progression.js","schema.js","service-composition.js","store-contract.js","support.js","training-loop-schema.js","training-loop-store.js","training.js","workouts.js","discovery-data.json","render.yaml","package.json","package-lock.json"]);
   const textExtensions=new Set([".html",".css",".js",".json",".webmanifest",".svg"]);
 
   for(const file of walk(PUBLIC_ROOT)){

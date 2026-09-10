@@ -8,11 +8,11 @@
   const E=globalThis.StrataWorkoutEvents;
   const C=globalThis.StrataWorkoutCalendar;
   const H=globalThis.StrataWorkoutHistory;
-  const Q=globalThis.StrataWorkoutGuidance;
+  const Q=globalThis.StrataWorkoutGuidance,P=globalThis.StrataWorkoutProgression;
   const $=(id)=>document.getElementById(id);
   const signal=name=>globalThis.StrataSignals?.record?.(name);
   const state=S.create(W,location);
-  const view=R.create({state,workout:W,discovery:G});
+  const view=R.create({state,workout:W,discovery:G,nextTarget:entry=>progression.targetFor(entry)});
   const {esc,number,exercise,formatLabel,hasActuals,memoryFor}=view;
   const saveError=S.saveError;
   function toast(message){
@@ -47,7 +47,7 @@
     return client.request(path,options);
   }
   function blockSession(){
-    state.blocked=true;clearTimeout(state.saveTimer);persistDraft();
+    state.blocked=true;progression.reset();clearTimeout(state.saveTimer);persistDraft();
     document.body.classList.remove("has-workout-access");
     clearOfflineContext();
     $("trainingRoom").hidden=true;$("historySection").hidden=true;$("recoveryPanel").hidden=true;$("conflictPanel").hidden=true;
@@ -59,7 +59,7 @@
     if($("swapDialog").open)$("swapDialog").close();
   }
   function blockAccess(){
-    state.blocked=true;clearTimeout(state.saveTimer);persistDraft();
+    state.blocked=true;progression.reset();clearTimeout(state.saveTimer);persistDraft();
     document.body.classList.remove("has-workout-access");
     clearOfflineContext();
     $("trainingRoom").hidden=true;$("historySection").hidden=true;$("recoveryPanel").hidden=true;$("conflictPanel").hidden=true;$("accessPanel").hidden=false;
@@ -106,7 +106,7 @@
     }).join("");
   }
   function selectWorkout(workout,{dirty=false,pausedSeconds=null}={}){
-    state.workout=W.normalizeWorkout(workout);state.dirty=dirty;state.sequence++;state.conflict=null;
+    progression.reset();state.workout=W.normalizeWorkout(workout);state.dirty=dirty;state.sequence++;state.conflict=null;
     state.memoryError="";state.memoryReady=memoryReadyFor(state.workout);
     state.pausedSeconds=Number.isFinite(pausedSeconds)&&pausedSeconds>0?Math.min(3600,pausedSeconds):null;
     state.draftKey=`${W.draftPrefix(state.ownerId)}${state.contextId}:${workout.id}`;
@@ -192,10 +192,10 @@
     }
   }
   function renderSession(){
-    const workout=state.workout;if(!workout)return;
+    const workout=state.workout;if(!workout)return;state.memoryReady=memoryReadyFor(workout);
     $("sessionTitle").textContent=workout.title;$("sessionDate").textContent=`${workout.date} · ${workout.planDay||"Training"}${workout.status==="completed"?" · awaiting save":""}`;
     $("sessionEntries").innerHTML=workout.entries.map(view.renderEntry).join("");
-    updateSessionMeta();tick();
+    updateSessionMeta();tick();if(workout.status==="active"){if(state.memoryReady)void progression.load(workout.id);else if(!state.memoryBusy&&!state.memoryError)void loadWorkoutMemory(workout.id);}
   }
   function updateSessionMeta(){
     if(!state.workout)return;
@@ -269,7 +269,9 @@
   }
   function applyRemembered(entry,kind){
     try{
-      const memory=memoryFor(entry),values=kind==="last"?memory?.sets:W.suggestedTargets(entry,memory).sets;
+      const memory=memoryFor(entry),proposal=kind==="last"?null:progression.targetFor(entry);
+      if(proposal&&!["ready","baseline"].includes(proposal.status))throw new Error(proposal.explanation);
+      const values=kind==="last"?memory?.sets:proposal?.status==="ready"?proposal.sets:W.suggestedTargets(entry,memory).sets;
       if(!values?.length)throw new Error("No comparable set values are available yet.");W.applyTargets(entry,values);markDirty();renderSession();toast(kind==="last"?"Previous values applied. Review them before each set.":"Suggested target applied. Review it before training.");
     }catch(error){errorMessage(error.message);}
   }
@@ -367,7 +369,7 @@
     $("calendarLink").href=event.href;$("calendarLink").download=event.filename;
   }
   function returnToPlan(){
-    state.workout=null;state.draftKey="";state.pausedSeconds=null;guidance.reset();$("calendarNext").hidden=true;$("celebration").hidden=true;$("sessionPanel").hidden=true;$("startPanel").hidden=false;scanDrafts();($("startWorkout").hidden?$("planDay"):$("startWorkout")).focus();
+    progression.reset();state.workout=null;state.draftKey="";state.pausedSeconds=null;guidance.reset();$("calendarNext").hidden=true;$("celebration").hidden=true;$("sessionPanel").hidden=true;$("startPanel").hidden=false;scanDrafts();($("startWorkout").hidden?$("planDay"):$("startWorkout")).focus();
   }
   function exportDraft(){
     if(!state.workout)return;
@@ -386,8 +388,9 @@
     if(!state.workout||state.workout.status!=="active"||state.blocked)return;
     state.workout.restEndsAt=Date.now()+seconds*1000;state.pausedSeconds=null;state.timerAnnounced=false;markDirty();tick();
   }
+  const progression=P.create({state,workout:W,memoryFor,accountRead,renderSession:()=>view.refreshTargets($("sessionEntries"))});
   const guidance=Q.create({$,state,accountRead,api,assertIdentity,saveError,exercise,esc,number,renderPlan});
-  const historyView=H.create({$,state,workout:W,view,esc,number,exercise,formatLabel,accountRead,saveError,blockSession,renderPlan,mergeMemory,memoryReadyFor,renderSession,loadWorkoutMemory,fetchWorkout,selectWorkout,toast,recover,locationLike:location,historyLike:history});
+  const historyView=H.create({$,state,workout:W,view,esc,number,exercise,formatLabel,accountRead,saveError,blockSession,renderPlan,mergeMemory,memoryReadyFor,renderSession,loadWorkoutMemory,fetchWorkout,selectWorkout,toast,recover,resetProgression:progression.reset,locationLike:location,historyLike:history});
   async function initialize(){
     if(state.loading)return;
     if(state.blocked){location.reload();return;}

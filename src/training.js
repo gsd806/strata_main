@@ -3,7 +3,7 @@
 
 const {createHash}=require("node:crypto");
 const {DAYS,EXERCISES,sanitizePlan}=require("./plans");
-const {summarizeWorkout}=require("./workouts");
+const {progressionForWorkout,formatKey}=require("./progression");
 
 const EXERCISE_BY_ID=new Map(EXERCISES.map((exercise)=>[exercise.id,exercise]));
 
@@ -125,132 +125,8 @@ function summaryFromRow(row) {
   try { return JSON.parse(String(row.summary_json)); }
   catch { return null; }
 }
-/** @param {AnyRecord} workout @param {string} exerciseId */
-function prescribedRange(workout,exerciseId) {
-  const value=workout.entries.find((/** @type {AnyRecord} */ entry)=>entry.exerciseId===exerciseId)?.prescribedReps||"";
-  const match=String(value).match(/(\d{1,3})(?:\D+(\d{1,3}))?/);
-  if (!match) return null;
-  const low=Number(match[1]),high=Number(match[2]||match[1]);
-  return low>0&&high>=low&&high<=1000?{low,high}:null;
-}
-/** @param {AnyRecord[]} summaries @param {AnyRecord} current @param {AnyRecord} exercise @returns {AnyRecord|null} */
-function previousComparable(summaries,current,exercise) {
-  for (const summary of summaries) {
-    if (!summary||summary.id===current.id||summary.status!=="completed"||Number(summary.startedAt)>=Number(current.startedAt)) continue;
-    const match=summary.exerciseSummaries?.find((/** @type {AnyRecord} */ candidate)=>
-      candidate.exerciseId===exercise.exerciseId&&candidate.measurement===exercise.measurement&&
-      candidate.loadType===exercise.loadType&&candidate.unit===exercise.unit
-    );
-    if (match) return match;
-  }
-  return null;
-}
-/** @param {unknown} value */
-function numberOrNull(value) { return value!==null&&value!==undefined&&Number.isFinite(Number(value))?Number(value):null; }
-/** @param {number} value */
-function rounded(value) { return Math.round(value*100)/100; }
 /** @param {string} userId @param {string} workoutId */
 function adaptationId(userId,workoutId) { return `adapt_${createHash("sha256").update(`${userId}\0${workoutId}`).digest("hex").slice(0,24)}`; }
-
-/** @param {AnyRecord} workout @param {AnyRecord} exercise */
-function recordedTarget(workout,exercise) {
-  const sets=workout.entries
-    .filter((/** @type {AnyRecord} */ entry)=>entry.exerciseId===exercise.exerciseId&&entry.measurement===exercise.measurement&&entry.loadType===exercise.loadType&&entry.unit===exercise.unit)
-    .flatMap((/** @type {AnyRecord} */ entry)=>entry.sets)
-    .filter((/** @type {AnyRecord} */ set)=>set.completed);
-  if (exercise.measurement==="timed") return {reps:null,weight:null,seconds:Math.max(...sets.map((/** @type {AnyRecord} */ set)=>Number(set.seconds)))};
-  if (exercise.loadType==="external") {
-    sets.sort((/** @type {AnyRecord} */ a,/** @type {AnyRecord} */ b)=>Number(b.weight)-Number(a.weight)||Number(b.reps)-Number(a.reps));
-    return {reps:Number(sets[0]?.reps),weight:Number(sets[0]?.weight),seconds:null};
-  }
-  if (exercise.loadType==="assisted") {
-    sets.sort((/** @type {AnyRecord} */ a,/** @type {AnyRecord} */ b)=>Number(a.weight)-Number(b.weight)||Number(b.reps)-Number(a.reps));
-    return {reps:Number(sets[0]?.reps),weight:Number(sets[0]?.weight),seconds:null};
-  }
-  return {reps:Math.max(...sets.map((/** @type {AnyRecord} */ set)=>Number(set.reps))),weight:null,seconds:null};
-}
-
-/** @param {AnyRecord} exercise @param {AnyRecord} previous */
-function metPreviousTarget(exercise,previous) {
-  if (exercise.measurement==="timed") return Number(exercise.maxSeconds)>=Number(previous.maxSeconds);
-  if (Number(exercise.maxReps)<Number(previous.maxReps)) return false;
-  if (exercise.loadType==="external") return Number(exercise.maxWeight)>=Number(previous.maxWeight);
-  if (exercise.loadType==="assisted") return exercise.minAssistance!=null&&previous.minAssistance!=null&&Number(exercise.minAssistance)<=Number(previous.minAssistance);
-  return true;
-}
-
-/**
- * Deterministic guidance based only on recorded comparable sets and the
- * member's explicit check-in. It never mutates a workout or plan.
- * @param {AnyRecord} workout
- * @param {AnyRecord[]} summaries
- * @param {CheckIn|null} checkIn
- * @param {"reps-then-load"|"reps-only"|"time"} [progressionRule]
- * @param {boolean} [lighterWeek]
- */
-function progressionForWorkout(workout,summaries,checkIn,progressionRule="reps-then-load",lighterWeek=false) {
-  const current=summarizeWorkout(workout),suggestions=/** @type {AnyRecord[]} */([]);
-  for (const exercise of current.exerciseSummaries) {
-    if (!exercise.completedSets) continue;
-    const previous=previousComparable(summaries,current,exercise),range=prescribedRange(workout,exercise.exerciseId),recorded=recordedTarget(workout,exercise);
-    const maxReps=numberOrNull(recorded.reps),maxWeight=numberOrNull(recorded.weight),maxSeconds=numberOrNull(recorded.seconds);
-    const target={reps:maxReps,weight:maxWeight,seconds:maxSeconds};
-    let action="repeat",basis="baseline",explanation="Use this recorded result as a baseline. Complete another comparable session before increasing the target.";
-    const hold=checkIn&&(checkIn.comfort<=2||checkIn.energy<=2||checkIn.difficulty>=5);
-    if (!previous) {
-      explanation="Use this recorded result as a baseline. Complete another comparable session before increasing the target.";
-    } else if (!checkIn) {
-      basis="check-in-needed";
-      explanation="Repeat this target and add a post-workout check-in before STRATA suggests an increase.";
-    } else if (hold) {
-      basis="hold";
-      const reason=checkIn.comfort<=2?`comfort ${checkIn.comfort}/5`:checkIn.energy<=2?`energy ${checkIn.energy}/5`:`difficulty ${checkIn.difficulty}/5`;
-      explanation=`You reported ${reason}. Repeat the recorded target instead of increasing it; choose a different movement if this one does not feel right.`;
-    } else if (!metPreviousTarget({...exercise,maxReps,maxWeight,maxSeconds},previous)) {
-      basis="repeat-comparable";
-      explanation="This result did not yet match the previous comparable target, so repeat it before increasing reps, time, or load.";
-    } else if (lighterWeek) {
-      basis="lighter-week";
-      explanation="This is the selected lighter week in your active block. Keep this target unchanged and review the week before progressing again.";
-    } else if (exercise.measurement==="timed"&&progressionRule==="reps-only") {
-      basis="block-rule";explanation="This block uses a repetitions-only rule, so the recorded timed target stays unchanged for review.";
-    } else if (exercise.measurement!=="timed"&&progressionRule==="time") {
-      basis="block-rule";explanation="This block uses a time-based rule, so the recorded repetition target stays unchanged for review.";
-    } else if (exercise.measurement==="timed"&&maxSeconds!==null) {
-      basis="comparable-progression";
-      action="increase_time";target.seconds=Math.min(3600,maxSeconds+5);
-      explanation=`You completed ${maxSeconds} seconds. Try ${target.seconds} seconds next time with the same setup.`;
-    } else if (maxReps!==null) {
-      const reachedTop=Boolean(range&&maxReps>=range.high);
-      if (progressionRule==="reps-only") {
-        basis="comparable-progression";action="increase_reps";target.reps=Math.min(1000,maxReps+1);
-        explanation=`This block uses repetition progression. You matched the prior result, so aim for ${target.reps} reps with the same setup.`;
-      } else if (reachedTop&&exercise.loadType==="external"&&maxWeight!==null) {
-        basis="comparable-progression";
-        const increment=exercise.unit==="lb"?5:2.5;
-        action="increase_load";target.weight=rounded(maxWeight+increment);target.reps=range?.low??maxReps;
-        explanation=`You reached the top of the recorded ${range?.low}–${range?.high} range. Try ${target.weight} ${exercise.unit} for ${target.reps} reps next time.`;
-      } else if (reachedTop&&exercise.loadType==="assisted"&&maxWeight!==null&&maxWeight>0) {
-        basis="comparable-progression";
-        const increment=exercise.unit==="lb"?5:2.5;
-        action="reduce_assistance";target.weight=rounded(Math.max(0,maxWeight-increment));target.reps=range?.low??maxReps;
-        explanation=`You reached the top of the recorded range. If form stays consistent, try ${target.weight} ${exercise.unit} of assistance for ${target.reps} reps.`;
-      } else {
-        basis="comparable-progression";
-        action="increase_reps";target.reps=Math.min(range?.high??1000,maxReps+1);
-        explanation=`You completed ${maxReps} reps. Aim for ${target.reps} with the same setup next time.`;
-      }
-    }
-    suggestions.push({
-      exerciseId:exercise.exerciseId,name:EXERCISE_BY_ID.get(exercise.exerciseId)?.name||exercise.exerciseId,
-      measurement:exercise.measurement,loadType:exercise.loadType,unit:exercise.unit,action,
-      completed:{reps:maxReps,weight:maxWeight,seconds:maxSeconds},
-      previous:previous?{reps:numberOrNull(previous.maxReps),weight:numberOrNull(exercise.loadType==="assisted"?previous.minAssistance:previous.maxWeight),seconds:numberOrNull(previous.maxSeconds)}:null,
-      target,basis,explanation,requiresApproval:true
-    });
-  }
-  return {workoutId:workout.id,generatedFrom:"recorded-performance-and-member-check-in",progressionRule,suggestions};
-}
 
 /** @param {{workout:AnyRecord,plan:AnyRecord,planUpdatedAt:number,checkIn:CheckIn}} input */
 function adaptationForFeedback({workout,plan,planUpdatedAt,checkIn}) {
@@ -304,12 +180,46 @@ function createTrainingService({store,auth,requireAccess,trustedOrigin,rateAllow
     if (workout.status!=="completed") throw trainingError("Finish this workout before adding a check-in or progression target.",409,"WORKOUT_NOT_COMPLETED");
     return workout;
   }
+  /** Resolve the newest full prior workout for each format, including sources beyond the first history page.
+   * @param {string} userId @param {AnyRecord} workout */
+  async function previousWorkouts(userId,workout) {
+    const pending=new Set(workout.entries.map((/** @type {AnyRecord} */ entry)=>formatKey(entry))),seen=new Set(),history=/** @type {AnyRecord[]} */([]);
+    let offset=0,exhausted=false;
+    while(pending.size&&offset<5000&&!exhausted){
+      const rows=await store.workouts(userId,100,offset);offset+=rows.length;exhausted=rows.length<100;
+      for(const row of rows){
+        const summary=summaryFromRow(row),id=typeof summary?.id==="string"?summary.id:typeof row.id==="string"?row.id:null;
+        // An unidentifiable row cannot safely be skipped for an older success.
+        if(!id)return {history,limited:false};
+        if(seen.has(id)||id===workout.id)continue;
+        seen.add(id);
+        const validIndex=Array.isArray(summary?.exerciseSummaries)&&summary.exerciseSummaries.length>0&&summary.exerciseSummaries.every((/** @type {AnyRecord} */ entry)=>
+          entry&&typeof entry==="object"&&typeof entry.exerciseId==="string"&&["reps","timed"].includes(entry.measurement)&&["external","bodyweight","assisted"].includes(entry.loadType)&&["kg","lb"].includes(entry.unit));
+        let previous=null;
+        const usableSummary=summary&&Number.isSafeInteger(summary.startedAt)&&typeof summary.date==="string"&&["active","completed"].includes(summary.status);
+        if(!validIndex||!usableSummary)previous=workoutFromRow(await store.workout(userId,id));
+        const source=usableSummary?summary:previous;
+        if(!source)return {history,limited:false};
+        if(source.status!=="completed"||Number(source.startedAt)>=Number(workout.startedAt)||String(source.date)>=String(workout.date))continue;
+        const index=validIndex?summary.exerciseSummaries:previous?.entries;
+        if(!Array.isArray(index)||!index.length||index.some((/** @type {AnyRecord} */ entry)=>!entry||typeof entry!=="object"||typeof entry.exerciseId!=="string"||!["reps","timed"].includes(entry.measurement)||!["external","bodyweight","assisted"].includes(entry.loadType)||!["kg","lb"].includes(entry.unit)))return {history,limited:false};
+        const formats=index.filter((/** @type {AnyRecord} */ entry)=>entry&&typeof entry==="object").map((/** @type {AnyRecord} */ entry)=>formatKey(entry)).filter((/** @type {string} */ key)=>pending.has(key));
+        if(!formats.length)continue;
+        if(!previous)previous=workoutFromRow(await store.workout(userId,id));
+        // Only this row's newly resolved formats may contribute evidence. Otherwise
+        // loading an older workout for B could revive stale A after A's source vanished.
+        if(previous&&previous.id===id&&Array.isArray(previous.entries))history.push({...previous,entries:previous.entries.filter((/** @type {AnyRecord} */ entry)=>entry&&typeof entry==="object"&&formats.includes(formatKey(entry)))});
+        formats.forEach((/** @type {string} */ key)=>pending.delete(key));
+      }
+    }
+    return {history,limited:pending.size>0&&!exhausted};
+  }
   /** @param {string} userId @param {AnyRecord} workout @param {CheckIn|null} [checkIn] */
   async function progression(userId,workout,checkIn=null) {
-    const rows=await store.workouts(userId,100,0),summaries=/** @type {AnyRecord[]} */(rows.map(summaryFromRow).filter((summary)=>summary!==null));
-    const block=blockPayload(await store.trainingBlock(userId));
-    const activeBlock=block?.status==="active"?block:null;
-    return progressionForWorkout(workout,summaries,checkIn,activeBlock?.progressionRule,Boolean(activeBlock&&activeBlock.lightWeek===activeBlock.currentWeek));
+    const [{history,limited},blockRow]=await Promise.all([previousWorkouts(userId,workout),store.trainingBlock(userId)]);
+    const block=blockPayload(blockRow),activeBlock=block?.status==="active"?block:null;
+    const result=progressionForWorkout(workout,history,checkIn,activeBlock?.progressionRule,Boolean(activeBlock&&activeBlock.lightWeek===activeBlock.currentWeek));
+    return {...result,historyLimited:limited,suggestions:result.suggestions.map((suggestion)=>limited?{...suggestion,explanation:`${suggestion.explanation} Only the 5,000 most recent saved sessions were checked.`}:suggestion)};
   }
   /** @param {string} userId */
   async function latestProgression(userId) {

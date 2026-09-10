@@ -311,7 +311,7 @@ test("training journeys use real browser controls and isolated local fixtures",{
     assert.deepEqual(checkInResponse.request().postDataJSON(),{checkIn:{difficulty:3,energy:4,comfort:4,enjoyment:5}});
     assert.ok(checkInResponse.request().headers()['x-csrf-token'],"The check-in write must carry CSRF proof");
     await page.waitForFunction(()=>globalThis.document.querySelector('#checkInStatus')?.textContent==="Saved");
-    await page.locator('#progressionPanel').waitFor({state:"visible"});assert.match(await page.locator('#progressionPanel').textContent(),/never change a workout or weekly Plan automatically/i);
+    await page.locator('#progressionPanel').waitFor({state:"visible"});assert.match(await page.locator('#progressionPanel').textContent(),/Targets use your completed sets[\s\S]*Review and apply a target when you next train the same exercise/i);
     const restoredCheckIn=await context.request.get(`/api/workouts/${workoutId}/check-in`);assert.equal(restoredCheckIn.status(),200);assert.deepEqual((await restoredCheckIn.json()).checkIn.difficulty,3);
     await page.locator("#historyList [data-history]").first().click();
     await page.locator("#detailDialog").waitFor({state:"visible"});const details=await page.locator("#detailBody").textContent();

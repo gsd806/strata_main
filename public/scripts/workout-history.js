@@ -7,7 +7,7 @@
 })(typeof globalThis!=="undefined"?globalThis:this,function(){
   "use strict";
 
-  function create({$,state,workout:W,view,esc,number,exercise,formatLabel,accountRead,saveError,blockSession,renderPlan,mergeMemory,memoryReadyFor,renderSession,loadWorkoutMemory,fetchWorkout,selectWorkout,toast,recover,locationLike=globalThis.location,historyLike=globalThis.history}){
+  function create({$,state,workout:W,view,esc,number,exercise,formatLabel,accountRead,saveError,blockSession,renderPlan,mergeMemory,memoryReadyFor,renderSession,loadWorkoutMemory,fetchWorkout,selectWorkout,toast,recover,resetProgression=()=>{},locationLike=globalThis.location,historyLike=globalThis.history}){
     function chartEntries(){
       const result=new Map();
       for(const workout of state.history.filter((item)=>item.status==="completed"))for(const entry of workout.exerciseSummaries||[]){
@@ -62,7 +62,7 @@
         state.offset=(more?state.offset:0)+result.workouts.length;
         const combined=more?[...state.history,...result.workouts]:result.workouts;
         state.history=[...new Map(combined.map((item)=>[item.id,item])).values()].sort((a,b)=>b.startedAt-a.startedAt);
-        if(more)mergeMemory(result.workouts);else{state.memoryHistory=result.workouts;state.memoryExhausted=!result.hasMore;state.memoryError="";}
+        if(more)mergeMemory(result.workouts);else{state.memoryHistory=result.workouts;state.memoryExhausted=!result.hasMore;state.memoryError="";resetProgression();}
         state.hasMore=result.hasMore;renderPlan();render();
         if(state.workout){state.memoryReady=memoryReadyFor(state.workout);renderSession();if(!state.memoryReady)void loadWorkoutMemory(state.workout.id);}
       }catch(error){
