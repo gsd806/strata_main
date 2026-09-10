@@ -13,11 +13,11 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icons/strata-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="/fonts.css?v=7.8.0" />
-    <link rel="stylesheet" href="/experience.css?v=7.8.0" />
-    <link rel="stylesheet" href="discover.css?v=7.8.0" />
-    <link rel="stylesheet" href="/product-signals.css?v=7.8.0" />
-    <script src="/motion.js?v=7.8.0"></script>
+    <link rel="stylesheet" href="/fonts.css?v=7.8.1" />
+    <link rel="stylesheet" href="/experience.css?v=7.8.1" />
+    <link rel="stylesheet" href="discover.css?v=7.8.1" />
+    <link rel="stylesheet" href="/product-signals.css?v=7.8.1" />
+    <script src="/motion.js?v=7.8.1"></script>
   </head>
   <body class="plus-studio">
     <a class="skip-link" href="#todayWorkspace">Skip to today’s training</a>
@@ -224,17 +224,21 @@
           </div>
 
           <form class="session-builder" id="sessionBuilderForm">
-            <div class="session-builder-intro"><div><strong>SET THE BRIEF.</strong><p>Choose a focus and duration, then decide where the finished session belongs. You can review every movement before saving anything.</p></div></div>
+            <div class="session-builder-intro"><div><strong>SET THE BRIEF.</strong><p>Choose how we pick your movements. Keep a broad focus or narrow it to one muscle, then review your session before adding it to the week.</p></div></div>
             <div class="session-controls">
+              <label for="sessionSelectionMode"><span>Pick workouts by</span><select id="sessionSelectionMode" name="selectionMode" aria-describedby="sessionSelectionHelp"><option value="random">Random</option><option value="not-in-week">Not in my week</option><option value="needs-focus">Needs focus</option><option value="preferences">My preferences</option></select></label>
               <label for="sessionGroup"><span>Training focus</span><select id="sessionGroup" name="group"><option value="full">Full body</option><option value="upper">Upper body</option><option value="lower">Lower body</option><option value="push">Push</option><option value="pull">Pull</option><option value="core">Core</option></select></label>
               <label for="sessionLength"><span>Time available</span><select id="sessionLength" name="length"><option value="20">Quick · 20 min</option><option value="35" selected>Focused · 35 min</option><option value="50">Extended · 50 min</option></select></label>
+              <label for="sessionMuscleGroup"><span>Muscle group</span><select id="sessionMuscleGroup" name="muscleGroup"><option value="all">All muscles in this focus</option></select></label>
+              <label for="sessionMuscleTarget"><span>Specific muscle</span><select id="sessionMuscleTarget" name="muscleTarget" disabled><option value="all">Choose a muscle group first</option></select></label>
               <label for="sessionDay"><span>Save result to day</span><select id="sessionDay" name="day"><option value="Monday">Monday</option><option value="Tuesday">Tuesday</option><option value="Wednesday">Wednesday</option><option value="Thursday">Thursday</option><option value="Friday">Friday</option><option value="Saturday">Saturday</option><option value="Sunday">Sunday</option></select></label>
+              <p class="session-selection-help" id="sessionSelectionHelp" role="status" aria-live="polite">Random picks within your focus, available equipment, and movement limits. Build again for another mix.</p>
             </div>
             <div class="session-builder-actions"><button class="button button-accent" id="sessionGenerate" type="submit" aria-controls="sessionResults">Build session <span aria-hidden="true">→</span></button><p id="sessionStatus" role="status" aria-live="polite" aria-atomic="true">Choose your brief, then build a session.</p></div>
           </form>
 
           <section class="session-results" id="sessionResults" aria-labelledby="sessionResultsTitle" aria-busy="false">
-            <div class="session-empty-state"><div><h3 id="sessionResultsTitle">YOUR SESSION WILL APPEAR HERE.</h3><p>Strata+ will prioritize personal fit, useful exercise order, and a practical amount of work for the time selected.</p></div></div>
+            <div class="session-empty-state"><div><h3 id="sessionResultsTitle">YOUR SESSION WILL APPEAR HERE.</h3><p>Choose Random, Not in my week, Needs focus, or My preferences. Every method respects your equipment and movement limits.</p></div></div>
           </section>
           <div class="session-result-actions"><button class="button button-accent" id="sessionAddAll" type="button" hidden>Add session to plan <span aria-hidden="true">→</span></button><a class="small-button session-open-plan" id="sessionOpenPlan" href="/planner.html" hidden>Open weekly plan <span aria-hidden="true">→</span></a></div>
         </div>
@@ -346,7 +350,7 @@
 
     </main>
 
-    <footer class="build-footer">STRATA · Build 7.8.0 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
+    <footer class="build-footer">STRATA · Build 7.8.1 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
 
     <aside class="compare-tray" id="compareTray" hidden aria-label="Exercise comparison tray">
       <div><span>EXERCISE BATTLE</span><p id="compareNames">Choose 2–4 exercises</p></div>
@@ -379,22 +383,23 @@
     </dialog>
     <noscript><div class="no-script-note" role="status"><strong>Strata+ needs JavaScript for personalized tools.</strong> The page content remains available, but saving, filtering, comparing, and plan building require JavaScript.</div></noscript>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=7.8.0"></script>
-    <script src="/product-signals.js?v=7.8.0"></script>
-    <script src="discovery-core.js?v=7.8.0"></script>
-    <script src="monthly-plan-core.js?v=7.8.0"></script>
-    <script src="training-block-core.js?v=7.8.0"></script>
-    <script src="discover-state.js?v=7.8.0"></script>
-    <script src="discover-api.js?v=7.8.0"></script>
-    <script src="discover-navigation.js?v=7.8.0"></script>
-    <script src="discover-progress.js?v=7.8.0"></script>
-    <script src="discover-render.js?v=7.8.0"></script>
-    <script src="discover-catalog.js?v=7.8.0"></script>
-    <script src="discover-detail.js?v=7.8.0"></script>
-    <script src="discover-community.js?v=7.8.0"></script>
-    <script src="discover-session.js?v=7.8.0"></script>
-    <script src="discover-sharing.js?v=7.8.0"></script>
-    <script src="discover-events.js?v=7.8.0"></script>
-    <script src="discover.js?v=7.8.0"></script>
+    <script src="/pwa.js?v=7.8.1"></script>
+    <script src="/product-signals.js?v=7.8.1"></script>
+    <script src="session-selection-core.js?v=7.8.1"></script>
+    <script src="discovery-core.js?v=7.8.1"></script>
+    <script src="monthly-plan-core.js?v=7.8.1"></script>
+    <script src="training-block-core.js?v=7.8.1"></script>
+    <script src="discover-state.js?v=7.8.1"></script>
+    <script src="discover-api.js?v=7.8.1"></script>
+    <script src="discover-navigation.js?v=7.8.1"></script>
+    <script src="discover-progress.js?v=7.8.1"></script>
+    <script src="discover-render.js?v=7.8.1"></script>
+    <script src="discover-catalog.js?v=7.8.1"></script>
+    <script src="discover-detail.js?v=7.8.1"></script>
+    <script src="discover-community.js?v=7.8.1"></script>
+    <script src="discover-session.js?v=7.8.1"></script>
+    <script src="discover-sharing.js?v=7.8.1"></script>
+    <script src="discover-events.js?v=7.8.1"></script>
+    <script src="discover.js?v=7.8.1"></script>
   </body>
 </html>

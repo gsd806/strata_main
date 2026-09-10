@@ -1,8 +1,9 @@
 (function(root,factory){
-  const api=factory();
+  const selection=typeof module==="object"&&module.exports?require("./session-selection-core"):root.StrataSessionSelection;
+  const api=factory(selection);
   if(typeof module==="object"&&module.exports)module.exports=api;
   root.StrataDiscovery=api;
-})(typeof globalThis!=="undefined"?globalThis:this,function(){
+})(typeof globalThis!=="undefined"?globalThis:this,function(SessionSelection){
   "use strict";
 
   const FACTOR_KEYS=["stimulus","range","stability","progression","fatigue"];
@@ -259,7 +260,12 @@
     }
     return roles.every((_,roleIndex)=>assign(roleIndex,new Set()));
   }
-  function buildSession({exercises,preferences,focus="full",minutes=35,weeklyPlan=null}={}){
+  function sessionMuscleTargets(exercises,focus="full",muscleGroup="all"){return SessionSelection.sessionMuscleTargets(exercises,focus,muscleGroup,sessionFocusMatches);}
+  function buildSession(options={}){
+    if(options.selectionMode!==undefined)return SessionSelection.buildSession(options,{WEEKDAYS,SESSION_FOCUSES,SESSION_LENGTHS,personalResult,sessionError,sessionRoleMatches,sessionFocusMatches,scheduledExerciseIds,sessionRolesAreFeasible,sessionSetCount,sessionCandidateScore});
+    return buildLegacySession(options);
+  }
+  function buildLegacySession({exercises,preferences,focus="full",minutes=35,weeklyPlan=null}={}){
     const focusConfig=SESSION_FOCUSES[focus],lengthConfig=SESSION_LENGTHS[Number(minutes)];
     if(!focusConfig)throw sessionError("Choose a valid session focus.","INVALID_SESSION_FOCUS");
     if(!lengthConfig)throw sessionError("Choose 20, 35, or 50 minutes.","INVALID_SESSION_LENGTH");
@@ -357,5 +363,5 @@
     return {day:selected.day,isToday,offset,movements,workingSets,scheduledDays,targetDays,progressPercent,eyebrow:isToday?"Today in your week":"Next in your week",title:`${when.toUpperCase()} · ${movements} MOVEMENT${movements===1?"":"S"}.`,detail:`${selected.day} · ${workingSets} working sets · ${scheduledDays} scheduled training day${scheduledDays===1?"":"s"} vs ${targetDays}-day profile target.`,actionLabel:"Open weekly plan"};
   }
 
-  return {FACTOR_KEYS,TRAIT_KEYS,ISOLATION,UNILATERAL,OVERHEAD,DEEP_KNEE,UNSUPPORTED_HINGE,FLOOR,WEEKDAYS,SESSION_LENGTHS,SESSION_FOCUSES,hasTrait,movementClass,round,clamp,levelNumber,averageMetric,setupScore,setupLabel,resistanceProfile,practicality,factorWeights,weightedBaseline,scoreAdjustment,excludedByLimitations,personalResult,similarity,targetsCompatible,alternativesFor,exerciseGuidance,gainsAndLosses,normalizeShortlist,filterExercises,comparisonRecommendation,sessionRoleMatches,sessionFocusMatches,buildSession,repeatSessionAnchors,mergeSessionIntoPlan,weeklyPulse};
+  return {FACTOR_KEYS,TRAIT_KEYS,ISOLATION,UNILATERAL,OVERHEAD,DEEP_KNEE,UNSUPPORTED_HINGE,FLOOR,WEEKDAYS,SESSION_LENGTHS,SESSION_FOCUSES,SESSION_SELECTION_MODES:SessionSelection?.SESSION_SELECTION_MODES,hasTrait,movementClass,round,clamp,levelNumber,averageMetric,setupScore,setupLabel,resistanceProfile,practicality,factorWeights,weightedBaseline,scoreAdjustment,excludedByLimitations,personalResult,similarity,targetsCompatible,alternativesFor,exerciseGuidance,gainsAndLosses,normalizeShortlist,filterExercises,comparisonRecommendation,sessionRoleMatches,sessionFocusMatches,sessionMuscleTargets,buildSession,repeatSessionAnchors,mergeSessionIntoPlan,weeklyPulse};
 });

@@ -1,5 +1,15 @@
 # Changelog
 
+## 7.8.1 — Session selection choices
+
+- Add Random, Not in my week, Needs focus, and My preferences modes to Build a session, with optional muscle-group and specific-muscle focus.
+- Make Not in my week exclude every exercise in the saved weekly plan; keep equipment and movement limits enforced across all modes.
+- Use completed sets from the last 28 calendar days for Needs focus, and explain when missing or partial history limits the recommendation.
+- Let My preferences use the member's saved profile, own ratings, movement board, and repeated completed exercises, while distinguishing repeated use from an explicit positive rating.
+- Keep generated sessions reviewable before a revision-checked save, and advance managed build references and the service-worker cache to 7.8.1.
+
+Validation is pending for this candidate. See the [7.8.1 release guide](docs/release-7.8.1.md); earlier release results are historical evidence only.
+
 ## 7.8.0 — One clear training path
 
 - Join preview, verified account, deliberate seven-day trial, Plan review, training, and completed-workout evidence into one consistent product journey with stable Rankings, Strata+, Plan, and Train navigation.

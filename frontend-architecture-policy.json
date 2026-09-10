@@ -19,6 +19,7 @@
     "strata-plus": {
       "html": "public/pages/discover.html",
       "modules": [
+        {"file":"public/scripts/session-selection-core.js","role":"logic","global":"StrataSessionSelection","maxLines":280},
         {"file":"public/scripts/discovery-core.js","role":"logic","global":"StrataDiscovery","maxLines":400},
         {"file":"public/scripts/monthly-plan-core.js","role":"logic","global":"StrataMonthlyPlan","maxLines":330},
         {"file":"public/scripts/training-block-core.js","role":"logic","global":"StrataTrainingBlock","maxLines":160},
