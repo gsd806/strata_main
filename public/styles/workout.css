@@ -83,6 +83,33 @@
 .workout-page .completion-badge{border-radius:50%}
 .workout-page dialog{border-color:var(--line);background:var(--panel);box-shadow:0 28px 80px rgba(0,0,0,.36)}
 .workout-page .toast{font-family:var(--body);font-size:.875rem}
+.workout-page .history-layout>*{min-width:0}
+.workout-page .progress-panel{min-width:0;overflow:hidden;background:radial-gradient(circle at 92% 3%,rgba(212,245,120,.08),transparent 28%),var(--panel)}
+.workout-page .chart-controls{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,.9fr);gap:10px;margin-top:18px}
+.workout-page .chart-controls .field{min-width:0;margin:0;text-transform:uppercase;font:500 .65rem/1.4 var(--mono);letter-spacing:.055em}
+.workout-page .chart-controls select{width:100%;min-width:0;min-height:48px;text-overflow:ellipsis;text-transform:none;font:500 .78rem/1.35 var(--mono)}
+.workout-page .history-chart{min-width:0;margin-top:22px}
+.workout-page .chart-best{display:flex;align-items:baseline;gap:10px;min-width:0;flex-wrap:wrap}
+.workout-page .chart-best strong{min-width:0;color:var(--lime);font-size:clamp(2rem,5vw,3rem);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.workout-page .chart-best strong small{font:500 .72rem/1.4 var(--mono);letter-spacing:.03em}
+.workout-page .chart-best>span{color:var(--muted);font:500 .68rem/1.4 var(--mono);text-transform:uppercase;letter-spacing:.05em}
+.workout-page .history-chart-frame{position:relative;width:100%;height:clamp(230px,28vw,310px);min-width:0;margin-top:16px;overflow:hidden;border:1px solid rgba(212,245,120,.13);border-radius:10px;background:linear-gradient(180deg,rgba(212,245,120,.025),rgba(0,0,0,.13)),#0d0f0c}
+.workout-page .history-chart-canvas{width:100%;height:100%;min-width:0;overflow:hidden}
+.workout-page .history-chart-canvas canvas{display:block;max-width:100%}
+.workout-page .chart-baseline{margin:16px 0 0;padding:18px;border:1px dashed #59654a;border-radius:9px;color:var(--text);background:rgba(13,15,12,.65);font-size:.82rem}
+.workout-page .chart-status{min-height:1.5em;margin:12px 0 0;color:var(--muted);font-size:.78rem}
+.workout-page .chart-data{margin-top:16px;border:1px solid var(--line);border-radius:9px;color:var(--muted);background:#121410;font-size:.8rem}
+.workout-page .chart-data summary{min-height:48px;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:0 13px;cursor:pointer;text-transform:uppercase;font:500 .68rem/1.4 var(--mono);letter-spacing:.05em}
+.workout-page .chart-data summary::marker{content:""}.workout-page .chart-data summary::-webkit-details-marker{display:none}
+.workout-page .chart-data summary span{color:var(--lime);font-size:1rem;transition:transform .2s var(--ease-out)}
+.workout-page .chart-data[open] summary span{transform:rotate(45deg)}
+.workout-page .chart-table-scroll{max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;border-top:1px solid var(--line);-webkit-overflow-scrolling:touch}
+.workout-page .chart-table-scroll:focus-visible{outline:3px solid var(--lime);outline-offset:-3px}
+.workout-page .chart-table{width:100%;min-width:360px;margin:0;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+.workout-page .chart-table caption{padding:12px;text-align:left;color:var(--muted);font:400 .68rem/1.45 var(--mono)}
+.workout-page .chart-table th,.workout-page .chart-table td{padding:10px 12px;border-top:1px solid var(--line);text-align:left}
+.workout-page .chart-table th{color:var(--muted);font-weight:500}.workout-page .chart-table tbody th{color:var(--text)}
+.workout-page .scope-note{min-width:0;overflow-wrap:anywhere}
 @media(hover:hover) and (pointer:fine){
   .workout-page :where(.panel:not(.error-panel):not(.conflict-panel),.exercise-card,.preview-card):hover{border-color:#56623f}
   .workout-page :where(.button,.header-account):hover{transform:translateY(-2px)}
@@ -108,6 +135,9 @@
   .workout-page .site-header nav a::after{display:none}
   .workout-page .site-header nav a[aria-current="page"]{color:var(--lime);box-shadow:inset 0 3px 0 var(--lime)}
   .workout-page :where(.panel,.exercise-card){border-radius:12px}
+  .workout-page .chart-controls{grid-template-columns:minmax(0,1fr)}
+  .workout-page .chart-controls select{font-size:1rem}
+  .workout-page .history-chart-frame{height:clamp(220px,72vw,280px)}
 }
 @media(max-width:420px){.workout-page .shell{width:calc(100% - 28px)}.workout-page .hero h1{font-size:clamp(2.55rem,13vw,3.65rem)}}
 

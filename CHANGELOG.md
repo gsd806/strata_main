@@ -1,5 +1,17 @@
 # Changelog
 
+## 7.8.1 — Focused training visuals
+
+- Add three restrained Particle Chart surfaces: exact comparable-session trends in Strata+ Training Memory and Workout History, plus Planner’s primary-muscle-set distribution as a visual-only enhancement over its exact rows.
+- Keep workout exercise, measurement, load type, and unit boundaries exact. Strata+ shows at most the latest 12 matching points from its loaded 100-session window; Workout History uses its currently loaded, load-more-aware window; one point remains a baseline rather than a trend.
+- Derive Planner’s top eight primary-muscle set counts from its existing deterministic Plan analysis. The chart adds no readiness, recovery, injury, balance, or outcome score and performs no separate read or write.
+- Retain visible exact tables or rows, truthful scope and empty states, and useful content when canvas rendering is unavailable. Protect all three layouts at 320 px and disable chart animation when reduced motion is requested.
+- Route page-specific adapters through one `StrataParticleChart` core for the STRATA lime, DM Mono axes, bounded rendering, in-place updates, resize, failure, and destroy behavior.
+- Pin and self-host Particle Charts 1.0.0 with SRI, an enforced checksum, a complete MIT notice, static allowlisting, and build-versioned PWA precaching. Private workout responses and rendered values remain outside Cache Storage and browser persistence.
+- Destroy private chart instances and synchronously blank their generated canvas, accessibility DOM, controls, status, scope, and exact values before account revalidation, access loss, or identity replacement.
+
+See [release guide](docs/release-7.8.1.md) and [current verification](docs/release-readiness.md).
+
 ## 7.8.0 — One clear training path
 
 - Join preview, verified account, deliberate seven-day trial, Plan review, training, and completed-workout evidence into one consistent product journey with stable Rankings, Strata+, Plan, and Train navigation.

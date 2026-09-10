@@ -41,6 +41,7 @@
     });
     window.addEventListener?.("focus",()=>{void actions.revalidateMemberWorkspaceWhenVisible();});
     document.addEventListener("visibilitychange",()=>{void actions.revalidateMemberWorkspaceWhenVisible();});
+    window.addEventListener?.("pageshow",event=>{if(event.persisted)void actions.revalidateMemberWorkspaceWhenVisible();});
     el("searchInput").addEventListener("input",event=>{const query=event.target.value;clearTimeout(state.explorerSearchTimer);state.explorerSearchTimer=setTimeout(()=>{state.query=query;actions.resetExplorerWindow();actions.renderExplorer();},searchDebounceMs);});
     for(const [id,key] of [["groupFilter","group"],["equipmentFilter","equipment"],["patternFilter","pattern"],["levelFilter","level"],["sortSelect","sort"]])el(id).addEventListener("change",event=>{state[key]=event.target.value;actions.resetExplorerWindow();actions.renderExplorer();});
     el("clearFilters").addEventListener("click",actions.resetFilters);
@@ -58,6 +59,8 @@
       catch(error){if(error.status===401){window.location.replace("/");return;}button.disabled=false;actions.showToast("Could not sign out. Check your connection and try again.");}
     });
     el("discoveryRetry").addEventListener("click",()=>{void actions.init();});
+    el("trainingMemoryMovement").addEventListener("change",event=>{state.progressChartKey=event.target.value;state.progressChartMetric="";actions.renderProgressChart();});
+    el("trainingMemoryMetric").addEventListener("change",event=>{state.progressChartMetric=event.target.value;actions.renderProgressChart();});
   }
 
   return{bind};

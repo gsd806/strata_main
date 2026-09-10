@@ -96,6 +96,66 @@ test("progress logic excludes malformed history and compares each supported metr
   assert.equal(unplanned.sessions,"1+");
 });
 
+test("progress charts compare only exact formats in chronological order without mutating history",()=>{
+  const summary=(overrides={})=>({
+    exerciseId:"press",measurement:"reps",loadType:"external",unit:"kg",completedSets:3,
+    maxWeight:80,maxReps:8,totalReps:24,volume:1_920,...overrides
+  });
+  const workout=(id,startedAt,date,exerciseSummary,status="completed")=>({id,status,startedAt,date,exerciseSummaries:[exerciseSummary]});
+  const pressKg=summary(),pressKgKey=DiscoverProgress.chartFormatKey(pressKg);
+  const pressLb=summary({unit:"lb",maxWeight:175,volume:4_200});
+  const pressAssisted=summary({loadType:"assisted",minAssistance:20,maxWeight:0,volume:0});
+  const pressTimed=summary({measurement:"timed",maxSeconds:45,totalSeconds:120,maxWeight:0,volume:0});
+  const rowKg=summary({exerciseId:"row",maxWeight:70,volume:1_680});
+  const squatKg=summary({exerciseId:"squat",maxWeight:100,volume:2_400});
+  const history=[
+    workout("press-new",300,"2026-09-03",summary({maxWeight:85,volume:2_040})),
+    workout("ignored-active",1_000,"2026-09-10",summary({maxWeight:999}),"active"),
+    workout("ignored-date",950,"09/09/2026",summary({maxWeight:998})),
+    workout("ignored-calendar-date",945,"2026-02-30",summary({maxWeight:997.5})),
+    workout("ignored-time",Number.NaN,"2026-09-09",summary({maxWeight:997})),
+    workout("ignored-sets",940,"2026-09-09",summary({completedSets:0,maxWeight:996})),
+    workout("squat-single",900,"2026-09-09",squatKg),
+    workout("row-new",700,"2026-09-07",summary({...rowKg,maxWeight:75,volume:1_800})),
+    workout("press-lb",500,"2026-09-05",pressLb),
+    workout("press-assisted",450,"2026-09-04",pressAssisted),
+    workout("press-timed",400,"2026-09-04",pressTimed),
+    workout("press-old",100,"2026-09-01",pressKg),
+    workout("row-old",600,"2026-09-06",rowKg)
+  ];
+  const before=structuredClone(history),entries=DiscoverProgress.chartEntries(history),byKey=new Map(entries.map((entry)=>[entry.key,entry]));
+
+  assert.deepEqual(history,before,"deriving charts must not sort or rewrite caller-owned workout records");
+  assert.deepEqual(
+    byKey.get(pressKgKey).metrics.find((metric)=>metric.key==="maxWeight").points.map(({id,date,value})=>({id,date,value})),
+    [{id:"press-old",date:"2026-09-01",value:80},{id:"press-new",date:"2026-09-03",value:85}]
+  );
+  assert.equal(byKey.get(DiscoverProgress.chartFormatKey(pressLb)).pointCount,1,"pounds must remain separate from kilograms");
+  assert.equal(byKey.get(DiscoverProgress.chartFormatKey(pressAssisted)).pointCount,1,"assistance must remain separate from external load");
+  assert.equal(byKey.get(DiscoverProgress.chartFormatKey(pressTimed)).pointCount,1,"timed logging must remain separate from repetitions");
+  assert.equal(DiscoverProgress.chartFormatKey(summary({unit:"stone"})),"");
+  assert.equal(DiscoverProgress.chartFormatKey(summary({measurement:"distance"})),"");
+
+  const preferred=DiscoverProgress.preferredChartEntry(entries);
+  assert.equal(preferred.exerciseId,"row","the most recently repeated valid format should win over a newer one-point baseline");
+  assert.equal(DiscoverProgress.preferredChartEntry(entries,pressKgKey).key,pressKgKey,"an explicit valid selection should remain stable");
+  assert.equal(DiscoverProgress.preferredChartMetric(byKey.get(pressKgKey),"volume").key,"volume");
+});
+
+test("progress chart series uses the latest twelve exact points and preserves its input",()=>{
+  const key=DiscoverProgress.chartFormatKey({exerciseId:"press",measurement:"reps",loadType:"external",unit:"kg"});
+  const history=Array.from({length:15},(_,index)=>({
+    id:`session-${index+1}`,status:"completed",startedAt:index+1,date:`2026-09-${String(index+1).padStart(2,"0")}`,
+    exerciseSummaries:[{exerciseId:"press",measurement:"reps",loadType:"external",unit:"kg",completedSets:1,maxWeight:index+1,maxReps:5,totalReps:5,volume:(index+1)*5}]
+  })).reverse();
+  const before=structuredClone(history),points=DiscoverProgress.chartSeries(history,key,"maxWeight");
+
+  assert.equal(points.length,12);
+  assert.deepEqual(points.map((point)=>point.value),[4,5,6,7,8,9,10,11,12,13,14,15]);
+  assert.deepEqual(points.map((point)=>point.startedAt),[4,5,6,7,8,9,10,11,12,13,14,15]);
+  assert.deepEqual(history,before);
+});
+
 test("workout API protects identity, access, and network error boundaries",async()=>{
   const baseState=()=>({mode:"account",user:{id:"member-1",discovery:{active:true}},csrfToken:"csrf-1"});
   let sessionBlocked=0,accessBlocked=0;

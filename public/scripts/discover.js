@@ -10,11 +10,9 @@ const StateCore=globalThis.StrataDiscoverState;
 if(!StateCore)throw new Error("The Strata+ state module did not load.");
 const ApiCore=globalThis.StrataDiscoverApi;
 if(!ApiCore)throw new Error("The Strata+ API module did not load.");
-const NavigationCore=globalThis.StrataDiscoverNavigation;
-if(!NavigationCore)throw new Error("The Strata+ navigation module did not load.");
-const ProgressCore=globalThis.StrataDiscoverProgress;
-if(!ProgressCore)throw new Error("The Strata+ progress module did not load.");
-const RenderCore=globalThis.StrataDiscoverRender;if(!RenderCore)throw new Error("The Strata+ rendering module did not load.");
+const NavigationCore=globalThis.StrataDiscoverNavigation;if(!NavigationCore)throw new Error("The Strata+ navigation module did not load.");
+const ProgressCore=globalThis.StrataDiscoverProgress;if(!ProgressCore)throw new Error("The Strata+ progress module did not load.");
+const ChartCore=globalThis.StrataDiscoverChart;if(!ChartCore)throw new Error("The Strata+ chart module did not load.");const RenderCore=globalThis.StrataDiscoverRender;if(!RenderCore)throw new Error("The Strata+ rendering module did not load.");
 const EventsCore=globalThis.StrataDiscoverEvents;if(!EventsCore)throw new Error("The Strata+ event module did not load.");
 const CatalogCore=globalThis.StrataDiscoverCatalog;if(!CatalogCore)throw new Error("The Strata+ catalog module did not load.");
 const DetailCore=globalThis.StrataDiscoverDetail;if(!DetailCore)throw new Error("The Strata+ detail module did not load.");
@@ -29,7 +27,7 @@ const RATINGS_REFRESH_MIN_INTERVAL_MS=StateCore.LIMITS.ratingsRefreshMinInterval
 const COMMUNITY_PAGE_SIZE=StateCore.LIMITS.communityPageSize;
 const MOVEMENT_BOARD_LIMIT=StateCore.LIMITS.movementBoard;
 const state=StateCore.createState();
-let workspaceGeneration=0,workspaceReady=false,workspaceRevalidating=false;
+let workspaceGeneration=0,workspaceReady=false,workspaceRevalidating=false,progressChartController=null;
 const el=(id)=>document.getElementById(id);
 const api=ApiCore.createClient({fetchImpl:fetch,getCsrfToken:()=>state.csrfToken,getGeneration:()=>workspaceGeneration,redirect:(path)=>window.location.replace(path)});
 const saveRetryMessage=ApiCore.saveRetryMessage;
@@ -60,6 +58,7 @@ const featureNavigation=NavigationCore.createFeatureNavigation({
   onActivate:(name)=>{
     if(state.user&&["recommendations","library","battle"].includes(name))void refreshCommunityRatings().catch(()=>{});
     if(state.user&&name==="community"&&!state.communityLoaded&&!state.communityLoading)void loadCommunityPlans({reset:true});
+    if(name==="progress"&&progressChartController)(globalThis.requestAnimationFrame||setTimeout)(()=>progressChartController?.resize());
   }
 });
 function featureName(value){return featureNavigation.featureName(value);}
@@ -198,8 +197,8 @@ function renderWeeklyPulse(){
   }
   el("weeklyPulseAction").href="#planWorkspace";el("weeklyPulseAction").innerHTML='Review plan <span aria-hidden="true">→</span>';
 }
-const progressRenderer=RenderCore.createProgressRenderer({element:el,escapeHtml,exerciseName,readableDate,days:Monthly.DAYS});
-function renderProgress(){return progressRenderer.render({workouts:state.workouts,weeklyPlan:state.weeklyPlan,historyAvailable:state.workoutHistoryAvailable,hasMore:state.workoutHistoryHasMore});}
+const progressRenderer=RenderCore.createProgressRenderer({element:el,escapeHtml,exerciseName,readableDate,days:Monthly.DAYS});progressChartController=ChartCore.createProgressChart({element:el,state,exerciseName,readableDate,escapeHtml});
+function renderProgressChart(){return progressChartController.render({workouts:state.workouts,historyAvailable:state.workoutHistoryAvailable,hasMore:state.workoutHistoryHasMore});}function renderProgress(){const result=progressRenderer.render({workouts:state.workouts,weeklyPlan:state.weeklyPlan,historyAvailable:state.workoutHistoryAvailable,hasMore:state.workoutHistoryHasMore});renderProgressChart();return result;}
 function normalizeTrainingBlock(data){
   const raw=data?.trainingBlock||data?.block||null;if(!raw||typeof raw!=="object")return null;
   const weeks=Math.round(Number(raw.weeks??raw.durationWeeks));if(weeks<4||weeks>8)return null;
@@ -280,7 +279,7 @@ function renderProgression(){
   el("progressionTitle").textContent=suggestion.title.toUpperCase();el("progressionExplanation").textContent=suggestion.explanation;el("progressionChange").textContent=suggestion.change;el("progressionTradeoff").textContent=suggestion.tradeoff;el("progressionEvidence").textContent=suggestion.evidence;
   el("progressionAccept").disabled=suggestion.applied;el("progressionAccept").textContent=suggestion.applied?"Change accepted":"Accept change";el("progressionDismiss").hidden=suggestion.applied;el("progressionStatus").textContent=suggestion.applied?"Saved. Your weekly Plan was updated; this edit remains until you change Plan again.":"Nothing changes unless you accept.";
 }
-function clearPrivateWorkspace(){
+function clearPrivateWorkspace(){progressChartController?.clear({wipe:true});
   workspaceGeneration+=1;workspaceReady=false;
   state.exercises=[];state.methodology=null;state.sources=[];state.limited=new Set();state.preferences=null;state.user=null;state.csrfToken="";state.aggregate=new Map();state.userRatings=new Map();state.ratingsRefreshedAt=0;state.ratingsRefreshPromise=null;state.ratingSaving=new Set();state.compare=[];state.shortlist=[];state.collection="all";state.query="";state.group="all";state.equipment="all";state.pattern="all";state.level="all";state.sort="personal";state.recommendations=[];state.activeExercise=null;state.explorerLimit=EXPLORER_DESKTOP_PAGE_SIZE;
   state.weeklyPlan=null;state.weeklyPlanUpdatedAt=0;state.workouts=[];state.workoutHistoryAvailable=false;state.workoutHistoryHasMore=false;state.trainingBlock=null;state.trainingBlockRevision=0;state.trainingBlockAction=null;state.progressionSuggestion=null;state.session=null;state.sessionSaving=false;state.sessionDayInitialized=false;state.monthlyPlan=null;state.monthlyPlanUpdatedAt=0;state.monthlySchedule=null;state.monthlySource="muscle-schedule";state.communityPlans=[];state.communityLoaded=false;state.communityLoading=false;state.communityError="";state.communityNextOffset=0;state.communityQuery="";state.communityPendingId=null;state.communityAppliedId=null;state.communityAppliedUpdatedAt=0;
@@ -693,7 +692,7 @@ async function init(){
 
 EventsCore.bind({
   document,window,el,state,core:Core,movementBoardLimit:MOVEMENT_BOARD_LIMIT,searchDebounceMs:SEARCH_DEBOUNCE_MS,featureNavigation,
-  actions:{api,activateFeature,closeDialog,explorerPageSize,featureName,hideToast,init,openComparison,openDetail,readBattleBuilder,renderCompareTray,renderExplorer,renderMovementBoard,renderRecommendations,resetExplorerWindow,resetFilters,restoreDialogFocus,revalidateMemberWorkspaceWhenVisible,saveMovementBoard,setCollectionState,shareCard,showToast,syncDialogState,toggleCompare,toggleMovementBoard}
+  actions:{api,activateFeature,closeDialog,explorerPageSize,featureName,hideToast,init,openComparison,openDetail,readBattleBuilder,renderCompareTray,renderExplorer,renderMovementBoard,renderProgressChart,renderRecommendations,resetExplorerWindow,resetFilters,restoreDialogFocus,revalidateMemberWorkspaceWhenVisible,saveMovementBoard,setCollectionState,shareCard,showToast,syncDialogState,toggleCompare,toggleMovementBoard}
 });
 initializeFeatureNavigation();
 init();

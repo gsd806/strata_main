@@ -97,7 +97,7 @@ test("release version, cache keys, asset URLs, and catalog claims stay aligned",
   const serviceWorker=read("service-worker.js");
   const pages=["index.html","account.html","verify-email.html","forgot-password.html","reset-password.html","delete-account.html","admin.html","planner.html","discover.html","onboarding.html","workout.html","workout-offline.html","install.html","offline.html","pricing.html","contact.html","policies.html","terms.html","privacy.html","refunds.html"];
 
-  assert.equal(version,"7.8.0");
+  assert.equal(version,"7.8.1");
   assert.match(serviceWorker,new RegExp(`const BUILD="${versionPattern}";`));
   assert.match(serviceWorker,/const CACHE_PREFIX="strata-static-";/);
   assert.match(serviceWorker,/const STATIC_CACHE=`\$\{CACHE_PREFIX\}\$\{BUILD\}`;/);
@@ -245,6 +245,11 @@ test("service worker precaches only public assets and never handles account APIs
   assert.ok(harness.precache.includes(`/offline.js?v=${BUILD}`));
   assert.ok(harness.precache.includes(`/workout-offline.js?v=${BUILD}`));
   assert.ok(harness.precache.includes(`/workout-offline.css?v=${BUILD}`));
+  assert.ok(harness.precache.includes(`/particle-charts-1.0.0.min.js?v=${BUILD}`),"the pinned chart runtime must be available from the same-origin PWA cache");
+  assert.ok(harness.precache.includes(`/particle-chart-core.js?v=${BUILD}`),"the shared bounded chart theme must be available from the same-origin PWA cache");
+  assert.ok(harness.precache.includes(`/discover-chart.js?v=${BUILD}`),"the STRATA chart adapter must be available from the same-origin PWA cache");
+  assert.ok(harness.precache.includes(`/planner-charts.js?v=${BUILD}`),"the planner chart adapter must be available from the same-origin PWA cache");
+  assert.ok(harness.precache.includes(`/workout-chart.js?v=${BUILD}`),"the workout-history chart adapter must be available from the same-origin PWA cache");
   for(const asset of ["/fonts/manrope-latin.woff2","/fonts/dm-mono-400-latin.woff2","/fonts/dm-mono-500-latin.woff2","/images/hero-training.jpg","/images/training-story.jpg"])assert.ok(harness.precache.includes(asset),`${asset} must remain self-hosted and installable`);
   assert.ok(harness.precache.some((url)=>url.includes("strata-512.png")));
   assert.ok(!harness.precache.some((url)=>url.includes("strata-layers.jpg")),"The lazy homepage artwork must not become an eager PWA install download");
@@ -254,7 +259,7 @@ test("service worker precaches only public assets and never handles account APIs
   for(const forbidden of privateHtml)assert.ok(!paths.includes(forbidden),`${forbidden} must not be precached`);
   assert.ok(!paths.some((entry)=>entry.startsWith("/api/")||entry.startsWith("/auth/")||entry==="/healthz"),"account and health routes must not be precached");
 
-  for(const endpoint of ["/api/status","/api/me","/api/verification-status","/api/verify-email","/api/resend-verification","/api/password-reset/request","/api/password-reset/status","/api/password-reset/complete","/api/account/password-reset/request","/api/account/delete/request","/api/account/delete/cancel","/api/account/delete/status","/api/account/delete/complete","/api/admin/session","/api/admin/elevate","/api/admin/elevate/verify","/api/admin/overview","/api/admin/users","/api/admin/users/example-user/actions","/api/admin/support","/api/admin/support/example-ticket","/api/admin/audit","/api/billing/config","/api/billing/checkout","/api/paddle/webhook","/auth/login","/auth/signup","/auth/verify-email","/auth/resend-verification","/auth/password-reset/request","/auth/password-reset/complete","/auth/account-delete/complete","/healthz","/livez","/readyz"]) {
+  for(const endpoint of ["/api/status","/api/me","/api/workouts?limit=100&offset=0","/api/training","/api/training/progression/latest","/api/plan","/api/verification-status","/api/verify-email","/api/resend-verification","/api/password-reset/request","/api/password-reset/status","/api/password-reset/complete","/api/account/password-reset/request","/api/account/delete/request","/api/account/delete/cancel","/api/account/delete/status","/api/account/delete/complete","/api/admin/session","/api/admin/elevate","/api/admin/elevate/verify","/api/admin/overview","/api/admin/users","/api/admin/users/example-user/actions","/api/admin/support","/api/admin/support/example-ticket","/api/admin/audit","/api/billing/config","/api/billing/checkout","/api/paddle/webhook","/auth/login","/auth/signup","/auth/verify-email","/auth/resend-verification","/auth/password-reset/request","/auth/password-reset/complete","/auth/account-delete/complete","/healthz","/livez","/readyz"]) {
     assert.equal(dispatchServiceWorkerFetch(harness.listeners.fetch,endpoint),undefined,`${endpoint} must bypass the service worker`);
   }
   for(const privatePage of ["/index.html","/account.html","/verify-email","/verify-email.html","/forgot-password","/forgot-password.html","/reset-password","/reset-password.html","/delete-account","/delete-account.html","/admin","/admin.html","/discover.html","/onboarding.html","/workout.html"]) {
@@ -263,9 +268,12 @@ test("service worker precaches only public assets and never handles account APIs
   assert.equal(dispatchServiceWorkerFetch(harness.listeners.fetch,"/styles.css",{method:"POST"}),undefined,"writes must never be intercepted");
   assert.equal(dispatchServiceWorkerFetch(harness.listeners.fetch,"/styles.css",{origin:"https://cdn.test"}),undefined,"cross-origin requests must never be intercepted");
 
-  const publicAsset=dispatchServiceWorkerFetch(harness.listeners.fetch,`/styles.css?v=${BUILD}`);
-  assert.equal(await publicAsset,harness.networkResponse);
-  assert.equal(harness.cachePuts.length,1,"an allowlisted successful same-origin asset may enter the runtime cache");
+  const cacheableAssets=[`/styles.css?v=${BUILD}`,`/particle-charts-1.0.0.min.js?v=${BUILD}`,`/particle-chart-core.js?v=${BUILD}`,`/discover-chart.js?v=${BUILD}`,`/planner-charts.js?v=${BUILD}`,`/workout-chart.js?v=${BUILD}`];
+  for(const asset of cacheableAssets){
+    const publicAsset=dispatchServiceWorkerFetch(harness.listeners.fetch,asset);
+    assert.equal(await publicAsset,harness.networkResponse,asset);
+  }
+  assert.equal(harness.cachePuts.length,cacheableAssets.length,"only allowlisted successful same-origin assets may enter the runtime cache");
   assert.equal(dispatchServiceWorkerFetch(harness.listeners.fetch,"/styles.css?v=unexpected"),undefined,"query variants outside the release allowlist must remain network-only");
   assert.equal(dispatchServiceWorkerFetch(harness.listeners.fetch,"/unlisted.js"),undefined,"unlisted assets must remain network-only");
 });

@@ -2,6 +2,7 @@
 
 const assert=require("node:assert/strict");
 const {spawn}=require("node:child_process");
+const {createHash}=require("node:crypto");
 const {mkdirSync,mkdtempSync,rmSync}=require("node:fs");
 const {join}=require("node:path");
 
@@ -97,6 +98,29 @@ async function main() {
   const precacheBlock=workerText.match(/const PRECACHE_URLS=\[([\s\S]*?)\];/);
   assert.ok(precacheBlock,"service worker must expose a literal maintenance-auditable precache list");
   assert.doesNotMatch(precacheBlock[1],/account\.html|discover\.html|workout\.html|onboarding\.html|admin\.html|reset-password|delete-account|\/api\/|\/auth\//);
+  assert.match(precacheBlock[1],new RegExp(`"/particle-charts-1\\.0\\.0\\.min\\.js\\?v=${BUILD.replace(/\./g,"\\.")}"`));
+  assert.match(precacheBlock[1],new RegExp(`"/particle-chart-core\\.js\\?v=${BUILD.replace(/\./g,"\\.")}"`));
+  assert.match(precacheBlock[1],new RegExp(`"/discover-chart\\.js\\?v=${BUILD.replace(/\./g,"\\.")}"`));
+  assert.match(precacheBlock[1],new RegExp(`"/planner-charts\\.js\\?v=${BUILD.replace(/\./g,"\\.")}"`));
+  assert.match(precacheBlock[1],new RegExp(`"/workout-chart\\.js\\?v=${BUILD.replace(/\./g,"\\.")}"`));
+
+  const particleChart=await get(`/particle-charts-1.0.0.min.js?v=${BUILD}`),particleBody=Buffer.from(particleChart.body);
+  assert.equal(particleChart.response.status,200);
+  assert.match(particleChart.response.headers.get("content-type"),/^text\/javascript/);
+  assert.match(particleChart.response.headers.get("cache-control"),/no-cache/);
+  assert.equal(createHash("sha256").update(particleBody).digest("hex"),"decc110ce9f87238e2c3b682ff73844422af772147ce6f43c8a646f29f39404a");
+  const chartAdapter=await get(`/discover-chart.js?v=${BUILD}`),adapterText=Buffer.from(chartAdapter.body).toString("utf8");
+  assert.equal(chartAdapter.response.status,200);
+  assert.match(chartAdapter.response.headers.get("content-type"),/^text\/javascript/);
+  assert.match(chartAdapter.response.headers.get("cache-control"),/no-cache/);
+  assert.match(adapterText,/StrataDiscoverChart/);
+  for(const [path,globalName] of [["particle-chart-core.js","StrataParticleChart"],["planner-charts.js","StrataPlannerCharts"],["workout-chart.js","StrataWorkoutChart"]]){
+    const asset=await get(`/${path}?v=${BUILD}`),source=Buffer.from(asset.body).toString("utf8");
+    assert.equal(asset.response.status,200);
+    assert.match(asset.response.headers.get("content-type"),/^text\/javascript/);
+    assert.match(asset.response.headers.get("cache-control"),/no-cache/);
+    assert.match(source,new RegExp(globalName));
+  }
 
   for(const [url,size] of [["/icons/strata-192.png",192],["/icons/strata-512.png",512],["/icons/strata-maskable-512.png",512],["/icons/apple-touch-icon.png",180]]) {
     const icon=await get(url),body=Buffer.from(icon.body);

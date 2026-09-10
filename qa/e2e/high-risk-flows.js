@@ -19,7 +19,8 @@ const WEBHOOK_SECRET="pdl_ntfset_e2e_12345678901234567890";
 const EMAIL_SECRET="e2e-email-secret-123456789012345678901234567890";
 const OLD_PASSWORD="old-e2e-password-123";
 const NEW_PASSWORD="new-e2e-password-456";
-const WAIT_MS=10_000;
+// Password hashing and browser startup can exceed 10 seconds on a cold CI host.
+const WAIT_MS=20_000;
 
 let app;
 let appBaseUrl="";

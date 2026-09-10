@@ -7,7 +7,15 @@
 })(typeof globalThis!=="undefined"?globalThis:this,function(){
   "use strict";
   function bind({$,state,workout:W,number,signal,actions,windowLike=globalThis.window,documentLike=globalThis.document,locationLike=globalThis.location,historyLike=globalThis.history,confirmImpl=globalThis.confirm}){
-    const {initialize,renderPlan,toast,selectWorkout,markDirty,errorMessage,entryFor,hasActuals,exercise,openSwap,toggleSuperset,applyRemembered,renderSession,startRest,tick,rememberPreferences,focusNextSet,flushSave,persistDraft,returnToPlan,exportDraft,resolveAdaptation,recover,removeDraft,scanDrafts,showCompleted,upsertHistory,openDetail,loadHistory,renderMetricOptions,renderChart,closeSwap,renderSwapComparison,applyWorkoutSwap,reviewPlanSwap,approvePlanSwap,assertIdentity,status,saveError}=actions;
+    const {initialize,renderPlan,toast,selectWorkout,markDirty,errorMessage,entryFor,hasActuals,exercise,openSwap,toggleSuperset,applyRemembered,renderSession,startRest,tick,rememberPreferences,focusNextSet,flushSave,persistDraft,returnToPlan,exportDraft,resolveAdaptation,recover,removeDraft,scanDrafts,showCompleted,upsertHistory,openDetail,loadHistory,renderMetricOptions,renderChart,closeSwap,renderSwapComparison,applyWorkoutSwap,reviewPlanSwap,approvePlanSwap}=actions;
+    let foregroundIdentityCheck=null;
+    function revalidatePrivateWorkout(){
+      if(state.mode!=="account"||state.blocked||state.loading)return Promise.resolve(false);
+      if(foregroundIdentityCheck)return foregroundIdentityCheck;
+      actions.hidePrivateWorkoutView();
+      foregroundIdentityCheck=(async()=>{try{await actions.assertIdentity();if(!state.blocked){actions.revealPrivateWorkoutView();return true;}return false;}catch(error){if(!state.blocked)actions.identityCheckFailed(error);return false;}finally{foregroundIdentityCheck=null;}})();
+      return foregroundIdentityCheck;
+    }
     $("retryLoad").addEventListener("click",()=>void initialize());
     $("planDay").addEventListener("change",()=>{
       state.day=$("planDay").value;
@@ -89,7 +97,8 @@
     $("reviewPlanSwap").addEventListener("click",reviewPlanSwap);$("approvePlanSwap").addEventListener("click",()=>void approvePlanSwap());$("cancelPlanSwap").addEventListener("click",()=>{$("planSwapReview").hidden=true;state.swapProposal=null;$("reviewPlanSwap").focus();});$("closeSwap").addEventListener("click",closeSwap);
     $("swapDialog").addEventListener("close",()=>{const trigger=state.swapTrigger,card=state.swapEntryId?$("sessionEntries").querySelector(`[data-entry="${CSS.escape(state.swapEntryId)}"]`):null,replacement=card?.querySelector(".exercise-more > summary"),target=trigger?.isConnected?trigger:replacement;state.swapEntryId="";state.swapCandidateId="";state.swapProposal=null;state.swapTrigger=null;setTimeout(()=>{if(target?.isConnected)target.focus();},0);});
     windowLike.addEventListener("beforeunload",(event)=>{persistDraft();if(state.dirty||state.checkInBusy||state.swapBusy){event.preventDefault();event.returnValue="";}});
-    documentLike.addEventListener("visibilitychange",()=>{if(documentLike.visibilityState==="hidden")persistDraft();else if(state.mode==="account"&&!state.blocked)void assertIdentity().catch((error)=>{if(error.status!==401&&error.code!=="IDENTITY_CHANGED")status(saveError(error),"error");});tick();});
+    documentLike.addEventListener("visibilitychange",()=>{if(documentLike.visibilityState==="hidden")persistDraft();else void revalidatePrivateWorkout();tick();});
+    windowLike.addEventListener("pageshow",event=>{if(event.persisted)void revalidatePrivateWorkout();});
     windowLike.addEventListener("online",()=>{if(state.dirty&&!state.blocked&&!state.conflict)toast("Connection restored. Choose Save now to retry your pending account changes.");});
   }
   return{bind};

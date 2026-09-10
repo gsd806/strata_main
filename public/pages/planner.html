@@ -13,11 +13,11 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icons/strata-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="/fonts.css?v=7.8.0" />
-    <link rel="stylesheet" href="planner.css?v=7.8.0" />
-    <link rel="stylesheet" href="/product-signals.css?v=7.8.0" />
-    <link rel="stylesheet" href="/experience.css?v=7.8.0" />
-    <script src="/motion.js?v=7.8.0"></script>
+    <link rel="stylesheet" href="/fonts.css?v=7.8.1" />
+    <link rel="stylesheet" href="planner.css?v=7.8.1" />
+    <link rel="stylesheet" href="/product-signals.css?v=7.8.1" />
+    <link rel="stylesheet" href="/experience.css?v=7.8.1" />
+    <script src="/motion.js?v=7.8.1"></script>
   </head>
   <body>
     <a class="skip-link" href="#weekTitle">Skip to weekly plan</a>
@@ -134,7 +134,7 @@
             <p class="plan-insights-boundary">These are planning estimates from the exercises and sets in this week—not recovery, injury, or readiness scores. You decide whether repeated movements and uneven distribution are intentional.</p>
             <div class="insight-metrics" id="insightMetrics" aria-label="Plan evidence summary"></div>
             <div class="insight-distributions">
-              <section aria-labelledby="insightMuscleTitle"><h3 id="insightMuscleTitle">Primary muscle sets</h3><div id="insightMuscles"></div></section>
+              <section class="insight-muscle-section" aria-labelledby="insightMuscleTitle"><h3 id="insightMuscleTitle">Primary muscle sets</h3><div class="planner-muscle-chart-shell" id="plannerMuscleChartShell" aria-hidden="true" hidden><div class="planner-muscle-chart" id="plannerMuscleChart" hidden></div></div><div class="insight-muscle-values" id="insightMuscles"></div></section>
               <section aria-labelledby="insightPatternTitle"><h3 id="insightPatternTitle">Movement patterns</h3><div id="insightPatterns"></div></section>
               <section aria-labelledby="insightEquipmentTitle"><h3 id="insightEquipmentTitle">Equipment concentration</h3><div id="insightEquipment"></div></section>
             </div>
@@ -193,22 +193,25 @@
       <button class="dark-button" id="applyCopyDay" type="button" disabled>Apply reviewed copy</button>
     </dialog>
 
-    <footer class="build-footer">STRATA · Build 7.8.0 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
+    <footer class="build-footer">STRATA · Build 7.8.1 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
     <div class="planner-toast" id="plannerToast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=7.8.0"></script>
-    <script src="/product-signals.js?v=7.8.0"></script>
-    <script src="/discovery-core.js?v=7.8.0"></script>
-    <script src="/activation-core.js?v=7.8.0"></script>
-    <script src="/plan-insights-core.js?v=7.8.0"></script>
-    <script src="/planner-logic.js?v=7.8.0"></script>
-    <script src="/planner-state.js?v=7.8.0"></script>
-    <script src="/planner-api.js?v=7.8.0"></script>
-    <script src="/planner-render.js?v=7.8.0"></script>
-    <script src="/planner-conflicts.js?v=7.8.0"></script>
-    <script src="/planner-templates.js?v=7.8.0"></script>
-    <script src="/planner-sharing.js?v=7.8.0"></script>
-    <script src="/planner-activation.js?v=7.8.0"></script>
-    <script src="/planner-events.js?v=7.8.0"></script>
-    <script src="planner.js?v=7.8.0"></script>
+    <script src="/pwa.js?v=7.8.1"></script>
+    <script src="/product-signals.js?v=7.8.1"></script>
+    <script src="/discovery-core.js?v=7.8.1"></script>
+    <script src="/activation-core.js?v=7.8.1"></script>
+    <script src="/plan-insights-core.js?v=7.8.1"></script>
+    <script src="/particle-charts-1.0.0.min.js?v=7.8.1" integrity="sha384-joGLiJhhw9MfAzG3mRZB0Qm16f7kfXvhb0FxHC7mlfK/lH4Ih3w3DkhbSoXGfKPQ" crossorigin="anonymous"></script>
+    <script src="/particle-chart-core.js?v=7.8.1"></script>
+    <script src="/planner-charts.js?v=7.8.1"></script>
+    <script src="/planner-logic.js?v=7.8.1"></script>
+    <script src="/planner-state.js?v=7.8.1"></script>
+    <script src="/planner-api.js?v=7.8.1"></script>
+    <script src="/planner-render.js?v=7.8.1"></script>
+    <script src="/planner-conflicts.js?v=7.8.1"></script>
+    <script src="/planner-templates.js?v=7.8.1"></script>
+    <script src="/planner-sharing.js?v=7.8.1"></script>
+    <script src="/planner-activation.js?v=7.8.1"></script>
+    <script src="/planner-events.js?v=7.8.1"></script>
+    <script src="planner.js?v=7.8.1"></script>
   </body>
 </html>

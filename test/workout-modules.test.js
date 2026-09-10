@@ -10,6 +10,8 @@ const Api=require("../public/scripts/workout-api");
 const Calendar=require("../public/scripts/workout-calendar");
 const Render=require("../public/scripts/workout-render");
 const Guidance=require("../public/scripts/workout-guidance");
+const ParticleChart=require("../public/scripts/particle-chart-core");
+const WorkoutChart=require("../public/scripts/workout-chart");
 const History=require("../public/scripts/workout-history");
 const Events=require("../public/scripts/workout-events");
 
@@ -68,16 +70,33 @@ test("training guidance keeps labels and explicit targets predictable",()=>{
   assert.equal(Guidance.actionLabel("reduce-load"),"Reduce Load");
   assert.equal(Guidance.suggestionTarget({target:{weight:42.5,reps:8},unit:"kg"},String),"42.5 kg · 8 reps");
   assert.equal(Guidance.suggestionTarget({target:{}},String),"Keep the current logged target");
-  assert.equal(typeof Guidance.create,"function");assert.equal(typeof History.create,"function");
+  assert.equal(typeof Guidance.create,"function");assert.equal(typeof ParticleChart.upsert,"function");assert.equal(typeof WorkoutChart.create,"function");assert.equal(typeof History.create,"function");
 });
 
 test("workout entry point is a bounded coordinator over dedicated modules",()=>{
   const main=readFileSync(join(ROOT,"public/scripts/workout.js"),"utf8"),html=readFileSync(join(ROOT,"public/pages/workout.html"),"utf8");
-  const ordered=["workout-state.js","workout-api.js","workout-calendar.js","workout-render.js","workout-guidance.js","workout-history.js","workout-events.js","workout.js"];
+  const ordered=["workout-state.js","workout-api.js","workout-calendar.js","workout-render.js","workout-guidance.js","particle-charts-1.0.0.min.js","particle-chart-core.js","workout-chart.js","workout-history.js","workout-events.js","workout.js"];
   assert.ok(main.trimEnd().split("\n").length<=430,`workout.js coordinator is still too large: ${main.trimEnd().split("\n").length} lines`);
-  for(const [file,globalName] of [["workout-state.js","StrataWorkoutState"],["workout-api.js","StrataWorkoutApi"],["workout-calendar.js","StrataWorkoutCalendar"],["workout-render.js","StrataWorkoutRender"],["workout-guidance.js","StrataWorkoutGuidance"],["workout-history.js","StrataWorkoutHistory"],["workout-events.js","StrataWorkoutEvents"]]){
+  for(const [file,globalName] of [["workout-state.js","StrataWorkoutState"],["workout-api.js","StrataWorkoutApi"],["workout-calendar.js","StrataWorkoutCalendar"],["workout-render.js","StrataWorkoutRender"],["workout-guidance.js","StrataWorkoutGuidance"],["particle-chart-core.js","StrataParticleChart"],["workout-chart.js","StrataWorkoutChart"],["workout-history.js","StrataWorkoutHistory"],["workout-events.js","StrataWorkoutEvents"]]){
     const source=readFileSync(join(ROOT,"public/scripts",file),"utf8");assert.ok(Buffer.byteLength(source)<18_000,`${file} should remain focused`);assert.match(source,new RegExp(globalName));
   }
   for(let index=1;index<ordered.length;index++)assert.ok(html.indexOf(`/${ordered[index-1]}`)<html.indexOf(`/${ordered[index]}`),`${ordered[index-1]} must load before ${ordered[index]}`);
-  assert.match(main,/S\.create\(W,location\)/);assert.match(main,/A\.create\(/);assert.match(main,/R\.create\(/);assert.match(main,/Q\.create\(/);assert.match(main,/H\.create\(/);assert.match(main,/E\.bind\(/);assert.equal(typeof Events.bind,"function");
+  assert.match(main,/S\.create\(W,location\)/);assert.match(main,/A\.create\(/);assert.match(main,/R\.create\(/);assert.match(main,/Q\.create\(/);assert.match(main,/V\.create\(/);assert.match(main,/H\.create\([^;]*chart:chartView/);assert.match(main,/E\.bind\(/);assert.equal(typeof Events.bind,"function");
+  assert.match(main,/function hidePrivateWorkoutView\(\)\{\s*chartView\.clear\(\)/);assert.match(main,/function blockSession\(\)\{\s*state\.blocked=true;hidePrivateWorkoutView\(\)/);assert.match(main,/function blockAccess\(\)\{\s*state\.blocked=true;hidePrivateWorkoutView\(\)/);
+  const events=readFileSync(join(ROOT,"public/scripts/workout-events.js"),"utf8"),hide=events.indexOf("actions.hidePrivateWorkoutView()"),check=events.indexOf("await actions.assertIdentity()");assert.ok(hide>=0&&check>hide,"private Workout DOM must be hidden before foreground identity revalidation awaits");
+});
+
+test("Workout History chart markup and CSS stay accessible and contained at 320px",()=>{
+  const html=readFileSync(join(ROOT,"public/pages/workout.html"),"utf8"),css=readFileSync(join(ROOT,"public/styles/workout.css"),"utf8");
+  assert.match(html,/id="performanceChart"[^>]+aria-labelledby="progressTitle"[^>]+aria-describedby="chartStatus chartScope"/);
+  assert.match(html,/id="chartStatus"[^>]+role="status"[^>]+aria-live="polite"[^>]+aria-atomic="true"/);
+  assert.match(html,/class="chart-table-scroll" role="region" aria-label="Exact completed-session values" tabindex="0"/);
+  assert.match(html,/<caption id="chartTableCaption"><\/caption>/);assert.match(html,/<th scope="col" id="chartTableMetric">/);assert.match(html,/<tbody id="chartTableBody"><\/tbody>/);
+  for(const id of ["performanceChart","performanceChartFrame","performanceChartCanvas","chartExercise","chartMetric"])assert.equal((html.match(new RegExp(`id="${id}"`,"g"))||[]).length,1,`${id} must have one stable root`);
+  assert.doesNotMatch(html,/id="chartSvg"|class="chart-svg"/);assert.match(html,/particle-charts-1\.0\.0\.min\.js[^>]+integrity="sha384-[^"]+"[^>]+crossorigin="anonymous"/);
+  assert.match(css,/\.workout-page \.history-layout>\*\{min-width:0\}/);assert.match(css,/\.workout-page \.progress-panel\{min-width:0;overflow:hidden/);
+  assert.match(css,/\.workout-page \.history-chart-frame\{[^}]*width:100%;[^}]*min-width:0;[^}]*overflow:hidden/);
+  assert.match(css,/\.workout-page \.history-chart-canvas canvas\{display:block;max-width:100%\}/);assert.match(css,/\.workout-page \.chart-table-scroll\{[^}]*max-width:100%;overflow-x:auto/);
+  assert.match(css,/@media\(max-width:760px\)\{[\s\S]*?\.workout-page \.chart-controls\{grid-template-columns:minmax\(0,1fr\)\}/);
+  assert.match(css,/@media\(prefers-reduced-motion:reduce\)\{[^}]*scroll-behavior:auto[\s\S]*?animation:none!important;transition:none!important/);
 });

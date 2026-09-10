@@ -25,7 +25,9 @@
         {"file":"public/scripts/discover-state.js","role":"state","global":"StrataDiscoverState","maxLines":80},
         {"file":"public/scripts/discover-api.js","role":"api","global":"StrataDiscoverApi","maxLines":70},
         {"file":"public/scripts/discover-navigation.js","role":"logic","global":"StrataDiscoverNavigation","maxLines":120},
-        {"file":"public/scripts/discover-progress.js","role":"logic","global":"StrataDiscoverProgress","maxLines":100},
+        {"file":"public/scripts/discover-progress.js","role":"logic","global":"StrataDiscoverProgress","maxLines":150},
+        {"file":"public/scripts/particle-chart-core.js","role":"render","global":"StrataParticleChart","maxLines":80},
+        {"file":"public/scripts/discover-chart.js","role":"render","global":"StrataDiscoverChart","maxLines":110},
         {"file":"public/scripts/discover-render.js","role":"render","global":"StrataDiscoverRender","maxLines":70},
         {"file":"public/scripts/discover-catalog.js","role":"render","global":"StrataDiscoverCatalog","maxLines":110},
         {"file":"public/scripts/discover-detail.js","role":"render","global":"StrataDiscoverDetail","maxLines":75},
@@ -42,6 +44,8 @@
         {"file":"public/scripts/discovery-core.js","role":"logic","global":"StrataDiscovery","maxLines":400},
         {"file":"public/scripts/activation-core.js","role":"logic","global":"StrataActivation","maxLines":150},
         {"file":"public/scripts/plan-insights-core.js","role":"logic","global":"StrataPlanInsights","maxLines":110},
+        {"file":"public/scripts/particle-chart-core.js","role":"render","global":"StrataParticleChart","maxLines":60},
+        {"file":"public/scripts/planner-charts.js","role":"render","global":"StrataPlannerCharts","maxLines":60},
         {"file":"public/scripts/planner-logic.js","role":"logic","global":"StrataPlannerLogic","maxLines":110},
         {"file":"public/scripts/planner-state.js","role":"state","global":"StrataPlannerState","maxLines":60},
         {"file":"public/scripts/planner-api.js","role":"api","global":"StrataPlannerApi","maxLines":60},
@@ -64,9 +68,11 @@
         {"file":"public/scripts/workout-calendar.js","role":"logic","global":"StrataWorkoutCalendar","maxLines":50},
         {"file":"public/scripts/workout-render.js","role":"render","global":"StrataWorkoutRender","maxLines":90},
         {"file":"public/scripts/workout-guidance.js","role":"render","global":"StrataWorkoutGuidance","maxLines":130},
-        {"file":"public/scripts/workout-history.js","role":"render","global":"StrataWorkoutHistory","maxLines":130},
+        {"file":"public/scripts/particle-chart-core.js","role":"render","global":"StrataParticleChart","maxLines":60},
+        {"file":"public/scripts/workout-chart.js","role":"render","global":"StrataWorkoutChart","maxLines":100},
+        {"file":"public/scripts/workout-history.js","role":"render","global":"StrataWorkoutHistory","maxLines":90},
         {"file":"public/scripts/workout-events.js","role":"events","global":"StrataWorkoutEvents","maxLines":120},
-        {"file":"public/scripts/workout.js","role":"entry","maxLines":450}
+        {"file":"public/scripts/workout.js","role":"entry","maxLines":430}
       ]
     },
     "pricing": {
