@@ -51,17 +51,17 @@ test("responsive product headers follow their visual keyboard order",{timeout:30
   try{
     const fixtures=[
       {
-        name:"Exercises",header:headerFrom("public/pages/discover.html"),css:`${read("public/styles/discover.css")}\n${sharedCss}`,bodyClass:"plus-studio",
+        name:"Exercises",header:headerFrom("public/pages/discover.html"),css:`${read("public/styles/experience.css")}\n${read("public/styles/discover.css")}\n${sharedCss}`,bodyClass:"plus-studio",
         desktop:["STRATA home","Exercises","Plan","Train","Progress","Account","Sign out"],
         mobile:["STRATA home","Sign out","Exercises","Plan","Train","Progress","Account"]
       },
       {
-        name:"Plan",header:headerFrom("public/pages/planner.html"),css:`${read("public/styles/planner.css")}\n${sharedCss}`,signedIn:true,
+        name:"Plan",header:headerFrom("public/pages/planner.html"),css:`${read("public/styles/planner.css")}\n${read("public/styles/experience.css")}\n${sharedCss}`,signedIn:true,
         desktop:["STRATA home","Exercises","Plan","Train","Progress","Account","Sign out"],
         mobile:["STRATA home","Sign out","Exercises","Plan","Train","Progress","Account"]
       },
       {
-        name:"Train",header:headerFrom("public/pages/workout.html"),css:`${read("public/styles/workout.css")}\n${sharedCss}`,
+        name:"Train",header:headerFrom("public/pages/workout.html"),bodyClass:"workout-page",css:`${read("public/styles/workout.css")}\n${sharedCss}`,
         desktop:["STRATA home","Exercises","Plan","Train","Progress","Account"],
         mobile:["STRATA home","Exercises","Plan","Train","Progress","Account"]
       }
@@ -78,7 +78,17 @@ test("responsive product headers follow their visual keyboard order",{timeout:30
         });
         controls.forEach((control,index)=>{control.dataset.focusOrder=String(index);});
         document.body.tabIndex=-1;document.body.focus();
+        const rgba=value=>{const parts=String(value).match(/[\d.]+/g)?.map(Number)||[];return[parts[0]||0,parts[1]||0,parts[2]||0,parts.length>3?parts[3]:1];};
+        const over=(top,bottom)=>{const alpha=top[3]+bottom[3]*(1-top[3]);return[0,1,2].map(index=>(top[index]*top[3]+bottom[index]*bottom[3]*(1-top[3]))/alpha).concat(alpha);};
+        const luminance=color=>{const rgb=color.slice(0,3).map(part=>{const value=part/255;return value<=.04045?value/12.92:((value+.055)/1.055)**2.4;});return .2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2];};
+        const selectedContrast=controls.filter(control=>control.dataset.productOwner&&control.getAttribute("aria-current")==="page").map(control=>{
+          const layers=[];for(let node=control;node;node=node.parentElement)layers.push(rgba(getComputedStyle(node).backgroundColor));
+          let background=[255,255,255,1];for(const layer of layers.reverse())background=over(layer,background);
+          const foreground=over(rgba(getComputedStyle(control).color),background),values=[luminance(foreground),luminance(background)].sort((a,b)=>b-a);
+          return{label:control.textContent.trim(),ratio:(values[0]+.05)/(values[1]+.05),foreground,background};
+        });
         return {
+          selectedContrast,
           labels:controls.map((control)=>(control.getAttribute("aria-label")||control.textContent||"").replace(/\s+/g," ").trim()),
           clippedNavigation:[...document.querySelectorAll('header nav[aria-label="Primary navigation"] a')].filter(link=>{const box=link.getBoundingClientRect();if(!box.width)return false;const range=document.createRange();range.selectNodeContents(link);const text=range.getBoundingClientRect();return text.left<box.left||text.right>box.right;}).map(link=>link.textContent.trim()),
           navigationRows:[...document.querySelectorAll('header nav[aria-label="Primary navigation"]')].filter(nav=>nav.getBoundingClientRect().height>0).map(nav=>[...new Set([...nav.querySelectorAll("a")].map(link=>Math.round(link.getBoundingClientRect().top)))]),
@@ -91,6 +101,8 @@ test("responsive product headers follow their visual keyboard order",{timeout:30
         await page.keyboard.press("Tab");
         keyboard.push(await page.evaluate(()=>Number(document.activeElement?.dataset.focusOrder)));
       }
+      assert.equal(result.selectedContrast.length,1,`${fixture.name} must expose one selected primary link at ${width}px`);
+      assert.ok(result.selectedContrast.every(link=>link.ratio>=4.5),`${fixture.name} selected primary text must have 4.5:1 contrast at ${width}px: ${JSON.stringify(result.selectedContrast)}`);
       assert.deepEqual(result.clippedNavigation,[],`${fixture.name} primary labels must fit each target at ${width}px`);
       assert.ok(result.navigationRows.every(rows=>rows.length===1),`${fixture.name} primary links must share one row at ${width}px`);
       assert.deepEqual(result.labels,expected,`${fixture.name} visible controls must follow visual order at ${width}px`);
