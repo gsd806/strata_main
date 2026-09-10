@@ -15,6 +15,7 @@ const { createTrainingService } = require("./training");
 const { createSetupService } = require("./setup");
 const { createSupportService } = require("./support");
 const { createProductSignalsService } = require("./product-signals");
+const {adminGrantState}=require("./access-controls");
 const { createBillingService,discoveryTrialState } = require("./billing");
 const { composeServices } = require("./service-composition");
 const { getPaymentConfig } = require("./payments");
@@ -212,22 +213,24 @@ async function hasCurrentDiscoveryAccess(userId,now=Date.now()) {
 
 async function userPayload(session) {
   const now=Date.now();
-  const [plan,paidDiscovery,trial,subscription,deletion,adminState]=await Promise.all([
+  const [plan,paidDiscovery,trial,subscription,deletion,adminState,controls]=await Promise.all([
     planFor(session.id),
     billing.accessSummaryForUser(session.id),
     store.discoveryTrial(session.id),
     billing.subscriptionForUser(session.id),
     store.activeAccountDeletion(session.id,now),
-    admin.adminIdentity(session)
+    admin.adminIdentity(session),
+    store.adminControls(session.id)
   ]);
-  const trialState=discoveryTrialState(trial,now);
+  const trialState=discoveryTrialState(trial,now),adminGrant=adminGrantState(controls,now);
   const discovery={
     ...paidDiscovery,
-    active:paidDiscovery.active||trialState.active,
+    active:paidDiscovery.active||trialState.active||adminGrant.active,
     // Preserve the established durable-access marker for existing clients.
     // The nullable subscription snapshot distinguishes monthly from legacy
     // lifetime access without ever making a grandfathered buyer appear free.
-    accessType:paidDiscovery.active?"paid":trialState.active?"trial":null,
+    accessType:paidDiscovery.active?"paid":adminGrant.active?"grant":trialState.active?"trial":null,
+    adminGrant,checkoutBlocked:Boolean(controls?.checkout_blocked_at),
     trial:trialState,
     subscription
   };

@@ -1,5 +1,7 @@
 // @ts-check
 "use strict";
+const {createCheckoutReconciliation}=require("./checkout-reconciliation");
+const {adminGrantState}=require("./access-controls");
 
 const {randomUUID}=require("node:crypto");
 const {MAX_WEBHOOK_BYTES,bodyBuffer:readBodyBuffer}=require("./http");
@@ -25,7 +27,6 @@ const {cleanText}=require("./plans");
 
 const ABANDONED_CHECKOUT_MS=30*60*1000;
 const CHECKOUT_CREATION_CLAIM_MS=60*1000;
-const MAX_DELETION_RECONCILIATIONS=8;
 const PADDLE_IP_CACHE_MS=6*60*60*1000;
 const PADDLE_TRANSACTION_STATUSES=new Set(["draft","ready","billed","paid","completed","canceled","past_due"]);
 const PADDLE_STATUS_EVENTS=new Set([
@@ -38,8 +39,8 @@ const PADDLE_CANCELABLE_STALE_STATUSES=new Set(["ready","billed"]);
 const eventTime=(value,fallback=Date.now())=>{const parsed=Date.parse(String(value||""));return Number.isFinite(parsed)?parsed:fallback;};
 
 /**
- * Bound a stored trial to the server-owned 30-minute maximum. Old or malformed
- * rows can never extend access, even if their stored expiry is later.
+ * Bound a stored trial to the server-owned seven-day maximum. Old or malformed
+ * rows cannot exceed this maximum. Valid earlier expiries remain unchanged.
  * @param {import("./domain-types").DiscoveryTrialRow|null|undefined} trial
  * @param {number} [now]
  * @returns {import("./domain-types").DiscoveryTrialState}
@@ -90,8 +91,8 @@ function createBillingService({
 
   /** @param {string} userId @param {number} [timestamp] */
   async function hasCurrentAccess(userId,timestamp=now()) {
-    const [paid,trial]=await Promise.all([hasCurrentPaidAccess(userId,timestamp),store.discoveryTrial(userId)]);
-    return Boolean(paid||discoveryTrialState(trial,timestamp).active);
+    const [paid,trial,controls]=await Promise.all([hasCurrentPaidAccess(userId,timestamp),store.discoveryTrial(userId),store.adminControls(userId)]);
+    return Boolean(paid||discoveryTrialState(trial,timestamp).active||adminGrantState(controls,timestamp).active);
   }
 
   /** @param {string} userId @param {number} [timestamp] */
@@ -147,7 +148,9 @@ function createBillingService({
     return authService().accountActionError(message,503,code);
   }
 
-  const {purchaseCatalog,checkoutCatalog,validatePurchaseCheckoutForCancellation,migrateReusableDraft,completeCatalogMigration}=createLegacyCheckoutPolicy({store,paymentConfig,now,reconciliationError});
+  const legacy=createLegacyCheckoutPolicy({store,paymentConfig,now,reconciliationError});
+  const {purchaseCatalog,checkoutCatalog,validatePurchaseCheckoutForCancellation,migrateReusableDraft,completeCatalogMigration}=legacy;
+  const {reconcileUnsettledPurchases}=createCheckoutReconciliation({store,paymentConfig,now,authService,legacy});
 
   /** @param {import("./domain-types").CheckoutClaimRow} claim @param {string|null} [expectedTransactionId] */
   async function releaseCheckoutClaim(claim,expectedTransactionId=null) {
@@ -260,16 +263,17 @@ function createBillingService({
     return {state:"pending"};
   }
 
-  /** @param {string} userId */
-  async function reconcileCheckoutCreationBeforeDeletion(userId) {
+  /** @param {string} userId @param {string} [expectedClaimId] */
+  async function reconcileCheckoutCreationBeforeDeletion(userId,expectedClaimId) {
     const claim=await store.checkoutCreationForUser(userId);
     if(!claim)return 0;
+    if(expectedClaimId&&claim.claim_id!==expectedClaimId)return 1;
     const remote=await transactionForCheckoutClaim(claim);
     if(!remote){
       if(Number(claim.expires_at)<=now())return await releaseCheckoutClaim(claim,null)?0:1;
       return 1;
     }
-    const purchase=await store.purchaseByTransaction(remote.transactionId);
+    let purchase=await store.purchaseByTransaction(remote.transactionId);
     if(purchase&&purchase.user_id!==userId){
       throw reconciliationError("STRATA could not safely attach an interrupted Strata+ checkout. Please contact support.","PURCHASE_RECONCILIATION_INVALID");
     }
@@ -292,7 +296,11 @@ function createBillingService({
       const legacy=remoteCatalog==="retired";
       const validation=legacy?validateRetiredCompletedTransaction(remote.data,paymentConfig,{userId,checkoutId}):validateCompletedTransaction(remote.data,paymentConfig);
       if(!validation.ok)throw reconciliationError("STRATA could not safely validate a completed Strata+ checkout. Please contact support.","PURCHASE_RECONCILIATION_INVALID");
-      if(!purchase)throw reconciliationError("STRATA could not safely attach a completed Strata+ checkout while account deletion is pending. Please cancel deletion and contact support.","PURCHASE_RECONCILIATION_INVALID");
+      if(!purchase){
+        const stamp=now();
+        purchase=await store.recordClaimedPurchase({transactionId:remote.transactionId,userId,priceId:legacy?DEFAULT_PRICE_ID:paymentConfig.priceId,productId:legacy?DEFAULT_PRODUCT_ID:paymentConfig.productId,paddleStatus:remote.status,createdAt:eventTime(remote.data.created_at,Number(claim.created_at)),updatedAt:stamp},claim.claim_id)||await store.purchaseByTransaction(remote.transactionId);
+        if(!purchase||purchase.user_id!==userId)throw reconciliationError("STRATA could not safely attach the completed checkout to its account.","PURCHASE_RECONCILIATION_INVALID");
+      }
       const completedAt=eventTime(remote.data.updated_at,now());
       const subscriptionId=legacy?null:cleanText(remote.data.subscription_id,100);
       const completed=await store.completePurchase(remote.transactionId,{customerId:cleanText(remote.data.customer_id,100)||null,subscriptionId,completedAt,updatedAt:completedAt});
@@ -302,76 +310,6 @@ function createBillingService({
     const timestamp=now();
     await store.extendCheckoutCreation(userId,claim.claim_id,timestamp+CHECKOUT_CREATION_CLAIM_MS,timestamp);
     return 1;
-  }
-
-  /** @param {string} userId @param {{reuseDraft?:boolean}} [options] */
-  async function reconcileUnsettledPurchases(userId,{reuseDraft=false}={}) {
-    const subscription=await store.subscriptionForUser(userId);
-    if(subscription&&["active","trialing","past_due","paused"].includes(subscription.status)){
-      const cancelAt=Number(subscription.scheduled_change_at);
-      const scheduled=subscription.scheduled_change_action==="cancel"&&Number.isSafeInteger(cancelAt)&&cancelAt>0
-        ?` It remains active until ${new Date(cancelAt).toISOString()}.`
-        :subscription.status==="paused"
-          ?" It can still resume billing, so cancel it from subscription management first."
-          :" Cancel it from subscription management first.";
-      throw authService().accountActionError(
-        `Your Strata+ monthly subscription has not ended.${scheduled} Nothing was deleted.`,
-        409,"SUBSCRIPTION_ACTIVE"
-      );
-    }
-    const purchases=await store.unsettledPurchasesForUser(userId);
-    const timestamp=now();
-    const staleBefore=timestamp-ABANDONED_CHECKOUT_MS;
-    const stale=purchases
-      .filter((purchase)=>purchase.paddle_status==="past_due"||Number(purchase.updated_at)<=staleBefore)
-      .slice(0,MAX_DELETION_RECONCILIATIONS);
-    const reconciled=await Promise.allSettled(stale.map(async(purchase)=>{
-      const sourceCatalog=purchaseCatalog(purchase);
-      if(!sourceCatalog)throw authService().accountActionError("STRATA could not safely validate an abandoned Strata+ checkout catalog. Please contact support.",503,"PURCHASE_RECONCILIATION_INVALID");
-      let remote;
-      try{remote=await fetchPaddleTransaction(paymentConfig,purchase.transaction_id);}
-      catch{
-        throw authService().accountActionError("STRATA could not safely confirm an older Strata+ checkout. Please try again later.",503,"PURCHASE_RECONCILIATION_UNAVAILABLE");
-      }
-      const reconciledAt=Math.max(now(),Number(purchase.updated_at)+1);
-      const checkoutId=cleanText(remote.data.custom_data?.strata_checkout_id,100);
-      const remoteCatalog=checkoutCatalog(remote,purchase.user_id,checkoutId);
-      if(remote.status==="canceled"){
-        if(!validatePurchaseCheckoutForCancellation(remote,purchase).ok)throw authService().accountActionError("STRATA could not safely validate an abandoned Strata+ checkout. Please contact support.",503,"PURCHASE_RECONCILIATION_INVALID");
-        await store.updatePurchaseStatus(purchase.transaction_id,"canceled",reconciledAt);
-        return;
-      }
-      if(remote.status==="draft"){
-        const validation=validatePurchaseCheckoutForCancellation(remote,purchase);
-        if(!validation.ok)throw authService().accountActionError("STRATA could not safely validate an abandoned Strata+ checkout. Please contact support.",503,"PURCHASE_RECONCILIATION_INVALID");
-        if(reuseDraft)await migrateReusableDraft(remote,purchase);
-        return;
-      }
-      if(PADDLE_CANCELABLE_STALE_STATUSES.has(remote.status)){
-        const validation=validatePurchaseCheckoutForCancellation(remote,purchase);
-        if(!validation.ok)throw authService().accountActionError("STRATA could not safely validate an abandoned Strata+ checkout. Please contact support.",503,"PURCHASE_RECONCILIATION_INVALID");
-        if(reuseDraft&&sourceCatalog==="retired"&&remoteCatalog==="current"&&remote.status==="ready"){await migrateReusableDraft(remote,purchase);return;}
-        try{await cancelPaddleTransaction(paymentConfig,purchase.transaction_id);}
-        catch{throw authService().accountActionError("STRATA could not safely close an abandoned Strata+ checkout. Please try again later.",503,"PURCHASE_RECONCILIATION_UNAVAILABLE");}
-        await store.updatePurchaseStatus(purchase.transaction_id,"canceled",reconciledAt);
-        return;
-      }
-      if(remote.status==="completed"){
-        if(sourceCatalog==="retired"&&remoteCatalog==="current"){await completeCatalogMigration(remote,purchase,reconciledAt);return;}
-        const validation=sourceCatalog==="retired"?validateRetiredCompletedTransaction(remote.data,paymentConfig,{userId:purchase.user_id,checkoutId}):validateCompletedTransaction(remote.data,paymentConfig);
-        const claimedUser=cleanText(remote.data.custom_data?.strata_user_id,100);
-        if(!validation.ok||claimedUser!==purchase.user_id){
-          throw authService().accountActionError("STRATA could not safely validate a completed Strata+ checkout. Please contact support.",503,"PURCHASE_RECONCILIATION_INVALID");
-        }
-        const completedAt=eventTime(remote.data.updated_at,now());
-        const subscriptionId=sourceCatalog==="retired"?null:cleanText(remote.data.subscription_id,100);
-        const completed=await store.completePurchase(purchase.transaction_id,{customerId:cleanText(remote.data.customer_id,100)||null,subscriptionId,completedAt,updatedAt:completedAt});
-        if(!completed||completed.subscription_id!==subscriptionId)throw authService().accountActionError("STRATA could not safely attach the completed Strata+ subscription. Please contact support.",503,"PURCHASE_RECONCILIATION_INVALID");
-      }
-    }));
-    const failure=reconciled.find((result)=>result.status==="rejected");
-    if(failure&&failure.status==="rejected")throw failure.reason;
-    return store.pendingPurchasesForUser(userId);
   }
 
   /** @param {import("./domain-types").BillingWebhookEvent} event */
@@ -510,7 +448,7 @@ function createBillingService({
       json(res,403,{error:"Security check failed. Refresh and try again.",code:"INVALID_CSRF"});return;
     }
     await bodyJson(req);
-    if(await hasCurrentPaidAccess(session.id)){
+    if(await hasCurrentPaidAccess(session.id)||adminGrantState(await store.adminControls(session.id),now()).active){
       json(res,409,{error:"Strata+ is already active for this account.",code:"DISCOVERY_ALREADY_ACTIVE"});return;
     }
     const timestamp=now();
@@ -537,6 +475,7 @@ function createBillingService({
       json(res,403,{error:"Security check failed. Refresh and try again.",code:"INVALID_CSRF"});return;
     }
     await bodyJson(req);
+    if((await store.adminControls(session.id))?.checkout_blocked_at){json(res,403,{error:"New payment sessions are disabled for this account. Contact support.",code:"CHECKOUT_BLOCKED"});return;}
     if(!paymentConfig.enabled){json(res,503,{error:"Checkout is not available yet.",code:"CHECKOUT_UNAVAILABLE"});return;}
     if(await store.activeAccountDeletion(session.id,now())){
       json(res,409,{error:"Cancel the pending account-deletion request before starting checkout.",code:"ACCOUNT_DELETION_PENDING"});return;
@@ -544,14 +483,24 @@ function createBillingService({
     if(!rateAllowed(req,`checkout:${session.id}`,8)){
       json(res,429,{error:"Too many checkout attempts. Try again later."});return;
     }
-    if(await hasCurrentPaidAccess(session.id)){
+    if(await hasCurrentPaidAccess(session.id)||adminGrantState(await store.adminControls(session.id),now()).active){
       json(res,409,{error:"Strata+ is already unlocked for this account.",code:"ALREADY_ENTITLED"});return;
     }
+    /** @param {number} status @param {import("./domain-types").JsonObject} data */
+    const sendCheckout=async(status,data)=>{if(await checkoutAllowed())json(res,status,data);};
+    const checkoutAllowed=async()=>{
+      if(!await auth.requireSession(req,res))return false;
+      const controls=await store.adminControls(session.id);
+      if(controls?.checkout_blocked_at!=null){json(res,403,{error:"New payment sessions are disabled for this account. Contact support.",code:"CHECKOUT_BLOCKED"});return false;}
+      if(await hasCurrentPaidAccess(session.id)||adminGrantState(controls,now()).active){json(res,409,{error:"Strata+ is already unlocked for this account.",code:"ALREADY_ENTITLED"});return false;}
+      if(await store.activeAccountDeletion(session.id,now())){json(res,409,{error:"Cancel account deletion before starting checkout.",code:"ACCOUNT_DELETION_PENDING"});return false;}
+      return true;
+    };
     const interrupted=await store.checkoutCreationForUser(session.id);
     if(interrupted){
       const recovery=await recoverCheckoutCreation(interrupted);
       if(recovery.state==="transaction"){
-        json(res,200,{transactionId:recovery.transactionId,reused:true,recovered:true});return;
+        await sendCheckout(200,{transactionId:recovery.transactionId,reused:true,recovered:true});return;
       }
       if(recovery.state==="entitled"){
         json(res,409,{error:"Strata+ is already unlocked for this account.",code:"ALREADY_ENTITLED"});return;
@@ -573,7 +522,7 @@ function createBillingService({
     });
     if(!claim){
       const pending=await store.pendingPurchaseForUser(session.id,paymentConfig.priceId);
-      if(pending){json(res,200,{transactionId:pending.transaction_id,reused:true});return;}
+      if(pending){await sendCheckout(200,{transactionId:pending.transaction_id,reused:true});return;}
       json(res,409,{error:"Another checkout is already being prepared. Please try again in a moment.",code:"CHECKOUT_PREPARING"});return;
     }
     let preserveClaim=false;
@@ -583,36 +532,38 @@ function createBillingService({
       if(await store.activeAccountDeletion(session.id,now())){
         json(res,409,{error:"Cancel the pending account-deletion request before starting checkout.",code:"ACCOUNT_DELETION_PENDING"});return;
       }
-      if(await hasCurrentPaidAccess(session.id)){
+      if(await hasCurrentPaidAccess(session.id)||adminGrantState(await store.adminControls(session.id),now()).active){
         json(res,409,{error:"Strata+ is already unlocked for this account.",code:"ALREADY_ENTITLED"});return;
       }
       let pending=await store.pendingPurchaseForUser(session.id,paymentConfig.priceId);
       if(pending&&Number(pending.updated_at)>now()-ABANDONED_CHECKOUT_MS){
-        json(res,200,{transactionId:pending.transaction_id,reused:true});return;
+        await sendCheckout(200,{transactionId:pending.transaction_id,reused:true});return;
       }
       if(await store.pendingPurchasesForUser(session.id)>0){
         await reconcileUnsettledPurchases(session.id,{reuseDraft:true});
-        if(await hasCurrentPaidAccess(session.id)){
+        if(await hasCurrentPaidAccess(session.id)||adminGrantState(await store.adminControls(session.id),now()).active){
           json(res,409,{error:"Strata+ is already unlocked for this account.",code:"ALREADY_ENTITLED"});return;
         }
         pending=await store.pendingPurchaseForUser(session.id,paymentConfig.priceId);
-        if(pending){json(res,200,{transactionId:pending.transaction_id,reused:true});return;}
+        if(pending){await sendCheckout(200,{transactionId:pending.transaction_id,reused:true});return;}
         if(await store.pendingPurchasesForUser(session.id)>0){
           json(res,409,{error:"A previous Strata+ payment is still being confirmed. Please wait before starting another checkout.",code:"CHECKOUT_PENDING_CONFIRMATION"});return;
         }
       }
       // Once Paddle accepts create, retain this durable claim until a retry can
       // discover and bind the provider transaction by stable checkout ID.
+      if(!await checkoutAllowed())return;
       preserveClaim=true;
       const created=await createPaddleTransaction(paymentConfig,{userId:session.id,checkoutId:claimId});
       releaseTransactionId=created.transactionId;
       const timestamp=now();
       const recorded=await store.recordCheckoutCreationTransaction(session.id,claimId,created.transactionId,timestamp);
       if(!recorded){
+        if(!await checkoutAllowed())return;
         const recoveredPurchase=await store.purchaseByTransaction(created.transactionId);
         if(recoveredPurchase?.user_id===session.id){
           preserveClaim=false;
-          json(res,201,{transactionId:created.transactionId,recovered:true});return;
+          await sendCheckout(201,{transactionId:created.transactionId,recovered:true});return;
         }
         throw reconciliationError("STRATA could not safely record the prepared Strata+ checkout. Please try again later.");
       }
@@ -627,6 +578,7 @@ function createBillingService({
         if(storedPurchase?.user_id!==session.id)throw error;
         if(!storedPurchase)throw error;
       }
+      if(!storedPurchase)storedPurchase=await store.recordClaimedPurchase({transactionId:created.transactionId,userId:session.id,priceId:paymentConfig.priceId,productId:paymentConfig.productId,paddleStatus:created.status,createdAt:timestamp,updatedAt:timestamp},claimId);
       if(!storedPurchase){
         if(await store.activeAccountDeletion(session.id,now())){
           json(res,409,{error:"Checkout could not be attached because account deletion is pending. Cancel deletion and try again.",code:"ACCOUNT_DELETION_PENDING"});return;
@@ -637,7 +589,7 @@ function createBillingService({
         throw reconciliationError("STRATA could not safely attach the prepared Strata+ checkout. Please contact support.","PURCHASE_RECONCILIATION_INVALID");
       }
       preserveClaim=false;
-      json(res,201,{transactionId:created.transactionId});
+      await sendCheckout(201,{transactionId:created.transactionId});
     }finally{
       try{
         if(preserveClaim){

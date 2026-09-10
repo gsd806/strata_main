@@ -230,6 +230,7 @@ function previewGroup() {
 function updatePreviewEquipmentOptions({announce=false} = {}) {
   const select = el("quickPreviewEquipment");
   const submit = el("quickPreviewSubmit");
+  for(const button of document.querySelectorAll("[data-preview-starter]")) button.disabled=state.catalogStatus!=="ready";
   if (state.catalogStatus !== "ready") {
     select.disabled = true;
     submit.disabled = true;
@@ -257,6 +258,29 @@ function updatePreviewEquipmentOptions({announce=false} = {}) {
   submit.disabled = options.length === 0;
   el("quickPreviewOutput").setAttribute("aria-busy","false");
   el("quickPreviewStatus").textContent = options.length ? (announce ? `${groups[group].name} selected. Choose your equipment, then show your shortlist.` : "Ready. Change any choice or generate this starting point.") : `No equipment options are available for ${groups[group].name}.`;
+}
+
+function applyPreviewStarter(name) {
+  const presets={
+    dumbbells:{equipment:"Dumbbells",level:"Intermediate",minutes:35,goal:"balanced"},
+    bodyweight:{equipment:"Bodyweight",level:"Intermediate",minutes:20,goal:"balanced"},
+    barbell:{equipment:"Barbell / Smith",level:"Intermediate",minutes:50,goal:"strength"}
+  };
+  const preset=Object.hasOwn(presets,name)?presets[name]:null;
+  if(!preset||state.catalogStatus!=="ready")return;
+  el("quickPreviewGoal").value=preset.goal;
+  el("quickPreviewGroup").value="chest";
+  el("quickPreviewLevel").value=preset.level;
+  el("quickPreviewDays").value="3";
+  el("quickPreviewMinutes").value=String(preset.minutes);
+  updatePreviewEquipmentOptions();
+  if(![...el("quickPreviewEquipment").options].some(option=>option.value===preset.equipment)){
+    previewPlaceholder("This starting point is unavailable. Choose your equipment below.");
+    el("quickPreviewStatus").textContent="Choose available equipment, then build your week.";
+    return;
+  }
+  el("quickPreviewEquipment").value=preset.equipment;
+  generateQuickPreview();
 }
 
 function quickPreviewProfile() {
@@ -472,7 +496,7 @@ async function initializeCatalog() {
   state.catalogStatus = "loading";
   renderAll();
   try {
-    exercises = normalizeCatalog(await api("/exercises.json?v=7.5.1"));
+    exercises = normalizeCatalog(await api("/exercises.json?v=7.7.0"));
     state.catalogStatus = "ready";
     el("catalogTotal").textContent = exercises.length;
   } catch {
@@ -578,6 +602,7 @@ el("resetActiveFilters").addEventListener("click", resetFilters);
 el("clearCompare").addEventListener("click", () => { state.compare=[];updateCompareDock();renderExercises();requestAnimationFrame(()=>el("searchInput").focus()); });
 el("openCompare").addEventListener("click", openComparison);
 el("quickPreviewForm").addEventListener("submit", (event) => { event.preventDefault();generateQuickPreview(); });
+for(const button of document.querySelectorAll("[data-preview-starter]"))button.addEventListener("click",()=>applyPreviewStarter(button.dataset.previewStarter));
 el("quickPreviewForm").addEventListener("change", (event) => {
   if (["quickPreviewGoal","quickPreviewGroup","quickPreviewLevel","quickPreviewDays","quickPreviewMinutes"].includes(event.target.id)) updatePreviewEquipmentOptions({announce:event.target.id === "quickPreviewGroup"});
   previewPlaceholder("Your choices changed. Generate again to refresh this shortlist.");

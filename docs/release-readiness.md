@@ -1,60 +1,36 @@
-# STRATA 7.5.1 readiness
+# STRATA 7.7.0 readiness
 
-Status: complete local release gate passed; awaiting the required Node 24 Linux CI result and deployment smoke.
+Status: the complete local release gate and responsive UI audit passed. Promotion still requires the exact commit to pass the required Node 24 Linux GitHub Actions check before the tag and GitHub release are created. Live provider and deployed-runtime checks remain separate.
 
-Build 7.5.1 is a focused compatibility and account-operations patch on the 7.5.0 Training Memory release. It migrates a strictly validated abandoned Build 7.4 Paddle `draft` to the current monthly item for safe reuse, cancels only provider-cancelable stale transactions before a fresh checkout, and adds guarded direct administrator deletion for a paused non-owner account. The $0.99 USD monthly subscription, optional no-card 30-minute trial, grandfathered lifetime access, and other 7.5.0 product behavior remain unchanged. See the [release guide](release-7.5.1.md) and [changelog](../CHANGELOG.md).
+## Current verification
 
-## Verification record
+The final local checks ran on Darwin arm64 with Node.js 24.19.0 and npm 11.11.1. Provider-dependent tests use controlled fakes and isolated temporary data; they do not contact production services or modify production data.
 
-| Check | Current result |
+| Check | Observed result |
 | --- | --- |
-| Complete release gate | Passed locally |
-| Node regression tests | 562 passed, zero failed |
-| Coverage | 93.84% lines; 79.50% branches; 90.02% functions; enforced 90% / 78% / 85% floors passed |
-| Architecture | Passed; 33 modules, zero dependency cycles, zero policy violations; exact table in [module architecture](module-architecture.md) |
-| Static boundary typing and lint | Passed |
-| Runtime QA | Passed across account, Discover, planner, workout, and PWA journeys |
-| Endpoint and storage performance | Passed; 40 measured samples after 8 warm-ups for each local benchmark (details below) |
-| Browser E2E | Passed; 29 tests, zero failed; local Darwin compatibility coverage used Chromium and WebKit, while Firefox remains required in Node 24 Linux CI |
-| Responsive layout audit | Passed in Chromium across the authenticated/public route matrix and focused 320–1440 px component boundaries |
-| 100-user load profiles | Not executable on this Darwin host because the harness deliberately requires Linux loopback and `/proc`; both profiles remain required in Node 24 Linux CI |
+| Complete release gate | Passed with `npm run check` |
+| Node regression suite | 583 passed; zero failures, skips, or cancellations |
+| Coverage | 94.21% lines; 80.16% branches; 90.48% functions; enforced 90% / 78% / 85% floors passed |
+| Runtime smoke checks | Account, Discover, planner, workout, and PWA checks passed |
+| Architecture | 38 modules; zero cycles; zero policy violations |
+| Boundary type checking and lint | Passed |
+| Managed release references | Aligned at 7.7.0 across 32 allowlisted files |
+| Browser E2E | 29 passed in Chromium and WebKit |
+| Responsive UI audit | 18 routes at eight widths from 320–768 px, plus planner geometry through 1440 px; zero overflow, text, dialog, focus-navigation, or console failures |
+| Performance budgets | Passed |
+| Linux Firefox and 100-user profiles | Required in GitHub Actions before promotion |
+| Live Paddle, Resend, Turso and hosted runtime | Not verified locally |
 
-The completed local Node and coverage checks ran under Node 25.8.2 on Darwin arm64. STRATA's supported runtime and CI target remain Node 24, so these local results do not replace a green Node 24 CI run. Tests use isolated local accounts, provider fakes, and temporary SQLite or Turso-transport fixtures; they do not contact production services or modify production data.
+New tests cover exact grant expiry, indefinite access, early revocation, future starts, invalid durations, calendar leap days, offline expiry limits, the admin grant dialog and security reset, ordinary-user and CSRF denial, stale grant updates, unused trials and unchanged purchase records, direct account deletion, billing blockers, fresh checkout closure, provider cancellation failure, unsupported draft states, re-enabling checkouts, concurrent provider creation and admin grants/holds, and recovery of an already-completed transaction while checkout blocking remains active.
 
-The local performance gate also passed on that Darwin/Node host. Median/p95 latency was 0.358/0.675 ms for health readiness, 0.331/1.055 ms for public status, 0.405/0.954 ms for authenticated Plan reads, and 0.464/0.960 ms for Plan saves. Direct storage medians/p95s were 0.008/0.011 ms for session lookup, 0.004/0.006 ms for Plan lookup, and 0.045/0.059 ms for Plan compare-and-swap. Each result used 8 warm-ups followed by 40 measured samples. These local, fixture-backed timings are regression evidence rather than hosted Turso, Internet, or provider capacity evidence.
+SQLite and the SQLite-backed Turso transport fixture check commit-time owner elevation, grant and hold revision conflicts, audit rollback, primary-owner grants, payment hold enforcement, recording accepted provider work only against a matching durable claim, and explicit administrator-control cleanup during both self-service and administrator deletion when foreign-key enforcement is unavailable. This is adapter-parity evidence, not a live Turso test.
 
-All 29 browser E2E tests passed. On this Darwin host the accessibility compatibility matrix explicitly exercised Chromium and WebKit; Firefox remains part of the required Node 24 Linux CI gate because its headless compositor cannot run in the current macOS app sandbox. The Chromium responsive evidence covered 18 live routes at eight widths from 320 through 768 px, 105 focused public route/viewport combinations, and planner component geometry at 13 widths from 320 through 1440 px. Those checks found no horizontal overflow, card text escaping its container, navigation collision, or browser-console failure in the exercised states. They supplement rather than replace assistive-technology and physical-device review.
+Independent review found and prompted fixes for administrator-dialog reset, in-flight checkout responses, interrupted transaction recovery, concurrent closure or re-enable targeting, explicit Turso deletion cleanup, and disclosure of complimentary grants that coexist with paid or grandfathered lifetime access. Release and architecture documentation was reconciled with the implemented 7.7.0 behavior. The final code, security, release, and UI reviews found no remaining concrete local blocker.
 
-## Product and state-transition evidence
+## Deployment requirements
 
-Activation coverage proves that a validated complete homepage week persists through the account and verification pages without becoming account data. Merely signing in performs no Plan write. Claiming requires review, confirmation, account identity, and the exact Plan revision; keeping the account copy performs no write; stale or cross-account decisions fail without discarding either source.
+The app remains a Node web service. No new dependency or payment-catalog change was introduced. Deploy the server and public assets together. Startup creates the additive `admin_account_controls` table on SQLite or Turso. Existing account, purchase, and trial rows are preserved. The 7.6.0 product improvements and seven-day trial policy are included.
 
-Training Memory searches saved history in bounded 100-row pages until every active exercise has the latest exact exercise/measurement/load-type/unit match or history is exhausted, then presents the matching saved sets and date. Browser coverage places a comparable workout behind newer non-matching sessions so the visible 20-row history cannot accidentally become the search boundary. Focused tests cover target application, set addition/duplication/removal, private notes, RIR/RPE, warm-up and plate calculations, superset rounds, and explainable swaps. The workout-only path cannot touch Plan, while the Plan path remains a separately reviewed, revision-bound proposal. Training-block review derives time from its start date and labels only logged planned/completed work, records, improvements, skips, and replacements; carry, lighter-week, and finish update block metadata without mutating the weekly Plan.
+Paddle cancellation is limited to supported unfinished transaction states. A checkout hold does not cancel recurring subscriptions or reverse payments. Resolve live subscriptions and unresolved payments before permanent account deletion. Verify provider behavior and mobile and administrator workflows in the configured deployment before using the new controls on customers.
 
-The offline PWA journey starts from an account-authorized active workout, continues only the matching unexpired device draft, keeps offline changes pending, and rechecks the same user, Strata+ access, and server revision before sync. Private HTML, account/API responses, session state, and workout data remain outside Cache Storage. Trial authorization cannot outlive the server's exact expiry. Grandfathered lifetime authorization lasts offline for at most 24 hours; recurring authorization also requires a verified future period and stops at the earliest of 24 hours, that period end, or a scheduled cancellation/pause effective time. Server conflicts are never overwritten automatically.
-
-Account self-service tests exercise the live HTTP boundary for opaque active-session listing, selective and all-other revocation, current-session protection, CSRF, foreign and stale identifiers, private download headers, and the allowlisted export. Browser controls have accessible names and live feedback. SQLite/Turso parity covers session mutations, owner-scoped export reads, and stable workout keyset pages; streaming avoids full-history buffering and silent truncation. Concurrent account changes may be reflected progressively rather than as one point-in-time snapshot. Exported JSON excludes credential, token, network/device, Paddle customer/temporary, administrator, and aggregate-signal internals.
-
-## Billing, migration, and operational evidence
-
-New checkout requires explicit, matching current Paddle product and recurring price IDs and rejects the retired one-time catalog for new sales. The same-origin server validates and supplies that product to the browser; neither layer falls back to the retired product. For an existing unresolved row only, 7.5.1 recognizes the exact retired Build 7.4 price/product pair after account, checkout, metadata, quantity, origin, collection, and cadence validation. A provider `draft` has its complete item list changed to the current monthly price, is validated again, and is compare-and-swapped locally before reuse; a `ready` or otherwise provider-cancelable stale transaction must be confirmed canceled before a new checkout is created. If that exact retired checkout completed before reconciliation, its null subscription, null billing cycle, and exact customer identity are strictly validated before the pending row is completed as a lifetime purchase. Existing completed lifetime purchases remain unchanged; unknown catalogs, mismatched identities, unsafe state transitions, and provider failures fail closed. The 30-minute trial is server-bounded, one-use, no-card, and never creates or converts into a subscription. Completed initial transactions do not grant monthly access by themselves: the linked subscription must match account, customer, transaction, product, price, quantity, automatic collection, and monthly cycle, be `active`, `trialing`, or `past_due`, and have a verified future current-period end. Missing or expired bounds, paused, and canceled states deny access; a scheduled cancellation or pause stops access at its effective time, no later than the current-period end. Legacy completed, unrevoked one-time buyers remain entitled without a subscription row.
-
-Direct administrator deletion is covered as a two-step exceptional action. Pausing the target revokes sessions and blocks new checkout, purchase, and trial writes. Origin, CSRF, password elevation, exact stored-email confirmation, and a bounded non-sensitive reason are required. Reconciliation and locally stored signed subscription state block active or uncertain billing; the final SQLite transaction or Turso batch revalidates the paused non-owner target, exact email, absent billing/checkout blockers, immutable primary owner, current auth version, live owner session, and live elevation, then commits the account cascade and one success audit together. It never cancels a live subscription or issues a refund.
-
-Webhook tests cover exact raw-body signature validation, timestamp bounds, unknown/mismatched records, duplicate IDs, stale and out-of-order state, interrupted checkout recovery, and adjustment revocation. Portal tests allow only temporary account-bound Paddle HTTPS URLs and never persist them. These are controlled provider fakes, not evidence that a live catalog, credential, notification destination, or webhook delivery works.
-
-The focused security audit also proves that an equal-timestamp event cannot replace a stricter subscription state with a more permissive one, an adjustment identifier cannot move between transactions, and a transaction mismatch is rejected before any entitlement is revoked. The Account summary and administrator counts use the same time-bounded entitlement predicate, so an expired cached subscription is not presented or counted as active. Logging tests cover both sensitive field names and credentials, tokens, codes, and email addresses embedded in otherwise ordinary text. Production preflight reuses the runtime email and Paddle validators instead of maintaining a weaker parallel interpretation. The focused storage, administrator, parity, observability, preflight, server-payment, and Account-interface suites passed 27/27 and 23/23 respectively.
-
-Migration `004-monthly-subscriptions` remains ordered and idempotent in both adapters. It adds a nullable subscription link and lean subscription cache while retaining legacy lifetime rows; 7.5.1 adds no schema migration. The architecture report shows the HTTP root reduced from 1,185 to 732 lines and the dual adapter at 1,182 lines after adding guarded administrator-deletion parity, still below its enforced ceiling and connected through downward billing, account-self-service, schema, and store edges—not a cosmetic file split.
-
-Structured request-log tests verify validated or generated request IDs, one terminal record, query-free paths, bounded machine-readable fields, and redaction of secrets and provider/account identifiers. `/livez` is process-only, `/readyz` probes storage, and `/healthz` is its privacy-safe compatibility alias. Production preflight and read-only deployment-smoke tests reject unsafe URLs, incomplete providers, insecure deployment values, wrong builds, non-durable production storage, and missing security/cache boundaries without claiming provider credential success.
-
-Self-hosted-asset tests require every ordinary page to use bundled Manrope/DM Mono and same-origin photographs, preserve font license and photo attribution, reject runtime Google Fonts or Unsplash dependencies, and keep the homepage source note above normal-text contrast minimums.
-
-## Promotion and rollback limits
-
-Hosted Turso behavior and capacity, real Resend delivery, real Paddle sandbox or live transaction/subscription/webhook/portal behavior, production migration, backup restoration, physical-device PWA behavior, localization, and assistive-technology combinations have not been established by the local tests. Before promotion, require the full source gate and both 100-user load profiles on Node 24 Linux CI, then complete authorized configuration preflight, backup/restore, provider, migration, and post-deploy smoke.
-
-Build 7.5.1 adds no schema migration, but an older application must not run against a database after monthly purchases exist: Build 7.4.1 would interpret a completed, unrevoked purchase without the new subscription-state rule as lifetime access. Before any monthly checkout is recorded, rollback may be possible only after confirming that state is absent. Afterward, disable new checkout and prefer a forward fix; database restoration or billing-row transformation requires a separate reviewed incident plan and provider reconciliation.
-
-No GitHub release, tag, provider setting, production account, subscription, refund, or deployment is created by this source-readiness record.
+See [the release guide](release-7.7.0.md) for operating instructions and [the founder plan](founder-plan.md) for product priorities. Historical release records describe their own builds and are not current verification evidence.

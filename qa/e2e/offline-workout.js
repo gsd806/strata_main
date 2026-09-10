@@ -112,7 +112,7 @@ test("an authorized active workout continues offline without caching private acc
     assert.equal(trialResponse.status(),201,await trialResponse.text());
     const trial=(await trialResponse.json()).user.discovery.trial;
     assert.ok(Number(trial.expiresAt)>Date.now(),"The account should receive a live server-owned trial window.");
-    assert.ok(Number(trial.expiresAt)<=Date.now()+30*60*1000,"The browser flow must use the 30-minute trial, not a longer client-selected window.");
+    assert.ok(Number(trial.expiresAt)<=Date.now()+7*24*60*60*1000,"The browser flow must use the 7-day trial, not a longer client-selected window.");
 
     const planResponse=await context.request.put("/api/plan",{
       headers:{Origin:baseUrl,"X-CSRF-Token":account.csrfToken,"X-Strata-User":user.id},

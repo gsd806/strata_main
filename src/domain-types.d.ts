@@ -171,6 +171,10 @@ export interface SubscriptionValidationIdentity {
 export type SubscriptionStatus="active"|"trialing"|"past_due"|"paused"|"canceled";
 export type ScheduledSubscriptionAction="cancel"|"pause"|"resume";
 
+export interface AdminControlsRow {
+  user_id:string;grant_starts_at:number|null;grant_expires_at:number|null;grant_revoked_at:number|null;checkout_blocked_at:number|null;revision:number;updated_at:number;
+}
+
 export interface DiscoveryTrialRow {
   user_id:string;
   started_at:number;
@@ -319,6 +323,7 @@ export type CheckoutRecovery=
   |{state:"transaction";transactionId:string};
 
 export interface BillingStore {
+  adminControls(userId:string):Promise<AdminControlsRow|null>;
   hasPaidDiscoveryAccess(userId:string,priceId?:string|null,now?:number):Promise<boolean>;
   hasCurrentPaidDiscoveryAccess(userId:string,priceId:string,productId:string,now?:number):Promise<boolean>;
   discoveryTrial(userId:string):Promise<DiscoveryTrialRow|null>;
@@ -335,6 +340,7 @@ export interface BillingStore {
   pendingPurchasesForUser(userId:string):Promise<number>;
   unsettledPurchasesForUser(userId:string):Promise<PurchaseRow[]>;
   insertPendingPurchase(purchase:PendingPurchaseWrite):Promise<PurchaseRow|null>;
+  recordClaimedPurchase(purchase:PendingPurchaseWrite,claimId:string):Promise<PurchaseRow|null>;
   replacePendingPurchaseCatalog(purchase:PurchaseRow,replacement:{priceId:string;productId:string;paddleStatus:string;updatedAt:number}):Promise<PurchaseRow|null>;
   completePurchaseCatalogMigration(purchase:PurchaseRow,replacement:{priceId:string;productId:string;customerId:string|null;subscriptionId:string;completedAt:number;updatedAt:number}):Promise<PurchaseRow|null>;
   completePurchase(transactionId:string,completion:PurchaseCompletion):Promise<PurchaseRow|null>;
@@ -350,7 +356,7 @@ export interface BillingStore {
   revokePurchase(transactionId:string,reason:string,revokedAt:number,updatedAt:number):Promise<PurchaseRow|null>;
 }
 
-export type BillingAdapterMethods=Omit<BillingStore,"activeAccountDeletion">&{
+export type BillingAdapterMethods=Omit<BillingStore,"activeAccountDeletion"|"adminControls">&{
   hasDiscoveryAccess(userId:string,priceId?:string|null,now?:number):Promise<boolean>;
   discoveryAccessSummary(userId:string,priceId?:string|null,now?:number):Promise<DiscoveryAccessSummary>;
 };
@@ -383,8 +389,8 @@ export interface BillingService {
   hasCurrentAccess(userId:string,now?:number):Promise<boolean>;
   accessSummaryForUser(userId:string):Promise<DiscoveryAccessSummary>;
   subscriptionForUser(userId:string):Promise<SubscriptionSummary|null>;
-  reconcileCheckoutCreationBeforeDeletion(userId:string):Promise<number>;
-  reconcileUnsettledPurchases(userId:string,options?:{reuseDraft?:boolean}):Promise<number>;
+  reconcileCheckoutCreationBeforeDeletion(userId:string,expectedClaimId?:string):Promise<number>;
+  reconcileUnsettledPurchases(userId:string,options?:{reuseDraft?:boolean;includeFresh?:boolean;checkSubscription?:boolean;transactionIds?:string[]}):Promise<number>;
   warmProviderTrust():Promise<void>;
 }
 
@@ -408,7 +414,7 @@ export type AdminStoreMethod=
   |"accountCredentialsById"|"adminAudit"|"adminElevation"|"adminOverview"|"adminPrincipal"
   |"adminUserById"|"adminUsers"|"cancelAccountDeletionWithAudit"|"claimAdminPrincipal"
   |"deleteExpiredAdminElevations"|"recordAdminAudit"|"restoreUser"|"revokeUserSessions"
-  |"rotateAdminSessionForElevation"|"suspendUser"|"deleteUserByAdmin"|"userByEmail"|"userById";
+  |"adminControls"|"writeAdminControls"|"unsettledPurchasesForUser"|"subscriptionForUser"|"checkoutCreationForUser"|"rotateAdminSessionForElevation"|"suspendUser"|"deleteUserByAdmin"|"userByEmail"|"userById";
 
 export type SupportStoreMethod=
   |"adminSupportTickets"|"claimSupportRequestEvent"|"deleteOldSupportRequestEvents"
@@ -488,6 +494,7 @@ export interface AccountExportStoreRows {
   trainingBlock:JsonObject|null;
   trainingAdaptations:JsonObject[];
   communityPlans:JsonObject[];
+  grants:JsonObject[];
   trials:JsonObject[];
   purchases:JsonObject[];
   subscriptions:JsonObject[];
@@ -695,13 +702,13 @@ export interface PreparedStatementLike {
 
 export type BillingPreparedStatementName=
   |"pendingPurchasesForUser"|"unsettledPurchasesForUser"
-  |"insertPendingPurchase"|"replacePendingPurchaseCatalog"|"completePurchaseCatalogMigration"|"checkoutCreationForUser"|"claimCheckoutCreation"
+  |"insertPendingPurchase"|"recordClaimedPurchase"|"replacePendingPurchaseCatalog"|"completePurchaseCatalogMigration"|"checkoutCreationForUser"|"claimCheckoutCreation"
   |"recordCheckoutCreationTransaction"|"extendCheckoutCreation"|"releaseCheckoutCreation"
   |"purchaseByTransaction"|"pendingPurchaseForUser"|"completePurchase"|"updatePurchaseStatus"
   |"bindPurchaseSubscription"|"createPaddleSubscription"|"updatePaddleSubscription"
   |"subscriptionById"|"subscriptionForUser"|"upsertAdjustment"|"adjustmentById"
   |"revokePurchase"|"hasDiscoveryAccess"|"hasCurrentDiscoveryAccess"|"activeDiscoveryTrial"
-  |"discoveryTrial"|"startDiscoveryTrial"|"discoveryAccessSummary"
+  |"activeAdminGrant"|"discoveryTrial"|"startDiscoveryTrial"|"discoveryAccessSummary"
   |"currentDiscoveryAccessSummary"|"webhookEvent"|"recordWebhookEvent";
 
 export interface LocalBillingStoreDependencies {
@@ -789,8 +796,8 @@ export interface AuthServiceDependencies {
   http:HttpHelpers;
   getUserPayload:(account:AccountIdentityRow)=>Promise<unknown>;
   claimAdminForLogin?:(user:UserRow)=>Promise<UserRow>;
-  reconcileCheckoutCreationBeforeDeletion:(userId:string)=>Promise<number>;
-  reconcileUnsettledPurchases:(userId:string)=>Promise<number>;
+  reconcileCheckoutCreationBeforeDeletion:(userId:string,expectedClaimId?:string)=>Promise<number>;
+  reconcileUnsettledPurchases:(userId:string,options?:{includeFresh?:boolean;checkSubscription?:boolean;transactionIds?:string[]})=>Promise<number>;
   logger?:Pick<Console,"info"|"error">;
 }
 
@@ -838,8 +845,8 @@ export interface AdminServiceDependencies {
   http:JsonHttpHelpers;
   environment?:NodeJS.ProcessEnv;
   enforcePaddleIps?:boolean;
-  reconcileCheckoutCreationBeforeDeletion:(userId:string)=>Promise<number>;
-  reconcileUnsettledPurchases:(userId:string)=>Promise<number>;
+  reconcileCheckoutCreationBeforeDeletion:(userId:string,expectedClaimId?:string)=>Promise<number>;
+  reconcileUnsettledPurchases:(userId:string,options?:{includeFresh?:boolean;checkSubscription?:boolean;transactionIds?:string[]})=>Promise<number>;
 }
 
 export interface AdminService {
@@ -894,8 +901,8 @@ export interface ServiceCompositionDependencies {
   requestAddress:(request:HttpRequest)=>string;
   http:HttpHelpers;
   getUserPayload:(account:AccountIdentityRow)=>Promise<unknown>;
-  reconcileCheckoutCreationBeforeDeletion:(userId:string)=>Promise<number>;
-  reconcileUnsettledPurchases:(userId:string)=>Promise<number>;
+  reconcileCheckoutCreationBeforeDeletion:(userId:string,expectedClaimId?:string)=>Promise<number>;
+  reconcileUnsettledPurchases:(userId:string,options?:{includeFresh?:boolean;checkSubscription?:boolean;transactionIds?:string[]})=>Promise<number>;
   isUniqueViolation:(error:unknown)=>boolean;
   createAuthService:CreateAuthService;
   createAdminService:CreateAdminService;

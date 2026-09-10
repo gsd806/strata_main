@@ -539,7 +539,7 @@ test("admin overview, user search, detail, and support queries are accurate and 
       verified_users:3,
       suspended_users:1,
       active_sessions:2,
-      discovery_users:2,
+      discovery_users:1,
       pending_payments:1,
       pending_deletions:1,
       open_support:1

@@ -612,8 +612,11 @@ function renderWeeklyPulse(){
   if(pulseNodes.some((node)=>!node)||!state.preferences)return;
   const pulse=Core.weeklyPulse(state.weeklyPlan,{profileDays:state.preferences.days});
   const active=state.workoutHistoryAvailable?state.workouts.find((workout)=>workout.status==="active"):null,week=weekContext(),next=nextPlannedDay(week),items=next?.items||[],start=el("plusStartWorkout");
-  el("weeklyPulseBar").setAttribute("style",`width:${pulse.progressPercent}%`);
-  el("weeklyPulseDays").textContent=`${pulse.scheduledDays} / ${pulse.targetDays}`;renderPlanOverview(pulse);
+  const planned=scheduledDays(),done=new Set(completedThisWeek(week).map(workout=>workout.planDay).filter(day=>planned.includes(day)));
+  const progress=state.workoutHistoryAvailable&&planned.length?Math.round(done.size/planned.length*100):0;
+  el("weeklyPulseBar").setAttribute("style",`width:${progress}%`);
+  el("weeklyPulseBar").parentElement.hidden=!state.workoutHistoryAvailable;
+  el("weeklyPulseDays").textContent=state.workoutHistoryAvailable?`${state.workoutHistoryHasMore?"At least ":""}${done.size} / ${planned.length}`:"History unavailable ·";renderPlanOverview(pulse);
   if(active){
     el("weeklyPulseEyebrow").textContent="Workout in progress";el("weeklyPulseTitle").textContent=String(active.title||"Open workout").toUpperCase();
     el("weeklyPulseDetail").textContent=`${Math.max(0,Number(active.completedSets)||0)} of ${Math.max(0,Number(active.totalSets)||0)} sets completed. Continue where you left off.`;

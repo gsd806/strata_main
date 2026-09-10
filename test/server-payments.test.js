@@ -24,6 +24,7 @@ let BASE;
 let PADDLE_BASE;
 let transactionSequence=0;
 let malformedCreateResponses=0;
+let createResponseHook=null,cancelFailure=false;
 const paddleRequests=[];
 const paddleTransactions=new Map();
 
@@ -71,6 +72,13 @@ async function startFakePaddle() {
       res.end(JSON.stringify(transaction?{data:transaction}:{error:{detail:"not found"}}));
       return;
     }
+    if(req.method==="PATCH"&&transactionMatch){
+      const transaction=paddleTransactions.get(transactionMatch[1]);
+      const allowed=transaction&&["ready","billed"].includes(transaction.status)&&body?.status==="canceled"&&!cancelFailure;
+      if(allowed){transaction.status="canceled";transaction.updated_at=new Date().toISOString();}
+      res.writeHead(allowed?200:409,{"Content-Type":"application/json"});
+      res.end(JSON.stringify(allowed?{data:transaction}:{error:{detail:"cannot cancel current state"}}));return;
+    }
     const portalMatch=requestUrl.pathname.match(/^\/customers\/(ctm_[a-z0-9]+)\/portal-sessions$/);
     if(req.method==="POST"&&portalMatch){
       const subscriptionId=body?.subscription_ids?.[0];
@@ -108,13 +116,15 @@ async function startFakePaddle() {
       }]
     };
     paddleTransactions.set(id,transaction);
+    const createResponse=structuredClone(transaction);
+    if(createResponseHook){const hook=createResponseHook;createResponseHook=null;await hook(transaction);}
     res.writeHead(201,{"Content-Type":"application/json"});
     if (malformedCreateResponses>0) {
       malformedCreateResponses-=1;
       res.end(JSON.stringify({data:{id,status:"not-a-paddle-status"}}));
       return;
     }
-    res.end(JSON.stringify({data:transaction}));
+    res.end(JSON.stringify({data:createResponse}));
   });
   PADDLE_BASE=await listen(fakePaddle);
 }
@@ -134,6 +144,7 @@ async function startApp() {
       PORT:"0",
       HOST:"127.0.0.1",
       NODE_ENV:"test",
+      ADMIN_EMAIL:"billing-admin@example.test",
       ALLOW_UNVERIFIED_SIGNUP_FOR_TESTS:"true",
       TRUST_PROXY:"true",
       TURSO_DATABASE_URL:"",
@@ -867,4 +878,82 @@ test("completed checkout recovery reports entitlement only after durable access 
     assert.equal(db.prepare("SELECT COUNT(*) AS count FROM paddle_checkout_claims WHERE user_id=?").get(revoked.user.id).count,0);
     db.close();
   }
+});
+
+let paymentAdmin;
+async function elevatedPaymentAdmin(){
+  if(paymentAdmin)return paymentAdmin;
+  const password="billing-admin-password-123",account=await signup({name:"Billing Admin",email:"billing-admin@example.test",password});
+  const db=new DatabaseSync(join(runtimeDir,"strata.sqlite"));
+  db.prepare("UPDATE users SET email_verified_at=? WHERE id=?").run(Date.now(),account.user.id);
+  db.prepare("INSERT INTO admin_principal(slot,user_id,configured_email,bound_at) VALUES('primary',?,?,?)").run(account.user.id,account.user.email,Date.now());db.close();
+  const loggedIn=await request("/api/login",{method:"POST",headers:{Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({email:account.user.email,password})});
+  assert.equal(loggedIn.response.status,200);
+  const me=await request("/api/me",{headers:{Cookie:loggedIn.cookie}});
+  const result=await request("/api/admin/elevate",{method:"POST",headers:{Cookie:loggedIn.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":me.data.csrfToken},body:JSON.stringify({password})});
+  assert.equal(result.response.status,200,JSON.stringify(result.data));
+  const match=result.response.headers.get("set-cookie").match(/strata_session=([^;,]+)/);
+  paymentAdmin={cookie:`strata_session=${match[1]}`,csrf:result.data.csrfToken};return paymentAdmin;
+}
+async function controlPaymentAccount(account,action,revision,grant){
+  const admin=await elevatedPaymentAdmin();
+  return request(`/api/admin/users/${account.user.id}/actions`,{method:"POST",headers:{Cookie:admin.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":admin.csrf},body:JSON.stringify({action,expectedControlsRevision:revision,confirmation:{"close-checkouts":"CLOSE CHECKOUTS","enable-checkouts":"ENABLE CHECKOUTS","grant-plus":"GRANT"}[action],reason:"Admin payment session test",...(grant?{grant}:{})})});
+}
+
+test("admin closes fresh checkouts, reports noncancelable states, and retains holds on provider failure",async()=>{
+  const account=await signup({name:"Close Checkout",email:"close-checkout@example.test",password:"close-checkout-password-123"});
+  const prepared=await checkout(account);assert.equal(prepared.response.status,201);
+  const remote=paddleTransactions.get(prepared.data.transactionId);
+  cancelFailure=true;
+  let closed;try{closed=await controlPaymentAccount(account,"close-checkouts",0);}finally{cancelFailure=false;}
+  assert.equal(closed.response.status,503,JSON.stringify(closed.data));
+  assert.equal(closed.data.code,"CHECKOUT_CLOSE_INCOMPLETE");
+  assert.equal((await checkout(account)).data.code,"CHECKOUT_BLOCKED");
+  assert.equal(remote.status,"ready","failed cancellation must not mark local or provider state canceled");
+  remote.status="draft";
+  const partial=await controlPaymentAccount(account,"close-checkouts",1);
+  assert.equal(partial.response.status,200,JSON.stringify(partial.data));
+  assert.match(partial.data.message,/unfinished payment record/);
+  assert.equal(remote.status,"draft");
+  remote.status="ready";
+  const retried=await controlPaymentAccount(account,"close-checkouts",2);
+  assert.equal(retried.response.status,200,JSON.stringify(retried.data));
+  assert.equal(remote.status,"canceled");assert.match(retried.data.message,/No unfinished/);
+  const enabled=await controlPaymentAccount(account,"enable-checkouts",3);assert.equal(enabled.response.status,200);
+  const next=await checkout(account);assert.equal(next.response.status,201);
+  assert.notEqual(next.data.transactionId,prepared.data.transactionId);
+});
+
+test("a grant or hold during provider creation prevents exposing the in-flight checkout",async()=>{
+  for(const action of ["grant-plus","close-checkouts"]){
+    const account=await signup({name:"Concurrent Control",email:`race-${action}@example.test`,password:"concurrent-control-password-123"});
+    let controlled;
+    createResponseHook=async()=>{controlled=await controlPaymentAccount(account,action,0,action==="grant-plus"?{unit:"days",amount:30}:undefined);};
+    const prepared=await checkout(account);
+    assert.equal(controlled.response.status,200,JSON.stringify(controlled.data));
+    assert.equal(prepared.data.transactionId,undefined);
+    assert.equal(prepared.data.code,action==="grant-plus"?"ALREADY_ENTITLED":"CHECKOUT_BLOCKED");
+    const db=new DatabaseSync(join(runtimeDir,"strata.sqlite"));
+    const remote=[...paddleTransactions.values()].find(t=>t.custom_data.strata_user_id===account.user.id);
+    const purchase=db.prepare("SELECT * FROM paddle_purchases WHERE transaction_id=?").get(remote.id);
+    if(action==="grant-plus")assert.ok(purchase,"accepted provider work remains durably recorded");
+    else assert.equal(remote.status,"canceled");
+    db.close();
+  }
+});
+
+test("admin closure records a completed interrupted checkout while the payment hold remains active",async()=>{
+  const account=await signup({name:"Completed During Hold",email:"completed-hold@example.test",password:"completed-hold-password-123"});
+  malformedCreateResponses=1;assert.equal((await checkout(account)).response.status,502);
+  const remote=[...paddleTransactions.values()].find(t=>t.custom_data.strata_user_id===account.user.id);
+  remote.status="completed";remote.customer_id="ctm_00000000000000000000000009";remote.subscription_id=subscriptionId(remote.id);remote.updated_at=new Date().toISOString();
+  const closed=await controlPaymentAccount(account,"close-checkouts",0);
+  assert.equal(closed.response.status,200,JSON.stringify(closed.data));
+  assert.equal(closed.data.user.checkoutBlocked,true);
+  const db=new DatabaseSync(join(runtimeDir,"strata.sqlite"));
+  const purchase=db.prepare("SELECT * FROM paddle_purchases WHERE transaction_id=?").get(remote.id);
+  assert.equal(purchase.subscription_id,remote.subscription_id);assert.ok(purchase.completed_at);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM paddle_checkout_claims WHERE user_id=?").get(account.user.id).n,0);db.close();
+  assert.equal((await checkout(account)).data.code,"CHECKOUT_BLOCKED");
+  assert.equal(remote.status,"completed","settled payment must never be canceled by checkout closure");
 });

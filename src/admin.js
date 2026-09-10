@@ -1,5 +1,7 @@
 "use strict";
 
+const {createAdminUserActions}=require("./admin-user-actions");
+const {adminGrantState}=require("./access-controls");
 const {randomUUID}=require("node:crypto");
 const {cleanText,defaultPlan,sanitizePlan,planStats}=require("./plans");
 
@@ -115,10 +117,12 @@ function createAdminService({
   function adminUserPayload(row,{detail=false}={}){
     if(!row)return null;
     const output=numericAdminRow(row);
+    const grant=adminGrantState(output),trialActive=Number(output.trial_expires_at)>Date.now();
     const result={
+      controlsRevision:Number(output.controls_revision||0),checkoutBlocked:Boolean(output.checkout_blocked_at),
       id:output.id,name:output.name,email:output.email,createdAt:output.created_at,verifiedAt:output.email_verified_at??null,suspendedAt:output.suspended_at??null,
       activeSessions:Number(output.active_session_count||0),
-      discovery:{active:Number(output.active_purchase_count||0)>0,activePurchaseCount:Number(output.active_purchase_count||0),pendingPurchaseCount:Number(output.pending_purchase_count||0),purchaseCount:Number(output.purchase_count||0),latestPurchaseAt:output.latest_purchase_at??null,transactionId:output.transaction_id||null,transactionStatus:output.transaction_status||null},
+      discovery:{active:!output.suspended_at&&(Number(output.active_purchase_count||0)>0||grant.active||trialActive),adminGrant:grant,trialExpiresAt:output.trial_expires_at??null,activePurchaseCount:Number(output.active_purchase_count||0),pendingPurchaseCount:Number(output.pending_purchase_count||0),purchaseCount:Number(output.purchase_count||0),latestPurchaseAt:output.latest_purchase_at??null,transactionId:output.transaction_id||null,transactionStatus:output.transaction_status||null},
       accountDeletion:{pending:Boolean(output.deletion_expires_at),expiresAt:output.deletion_expires_at??null}
     };
     if(detail){
@@ -139,55 +143,10 @@ function createAdminService({
   }
 
   function validAdminConfirmation(action,value,target){
-    const expected={"send-password-reset":"SEND RESET","send-delete-link":target?.email||"","cancel-deletion":"CANCEL","revoke-sessions":"REVOKE",suspend:"SUSPEND",restore:"RESTORE","delete-account":`DELETE ${target?.email||""}`}[action];
+    const expected={"send-password-reset":"SEND RESET","send-delete-link":target?.email||"","cancel-deletion":"CANCEL","revoke-sessions":"REVOKE",suspend:"SUSPEND",restore:"RESTORE","delete-account":`DELETE ${target?.email||""}`,"grant-plus":"GRANT","revoke-plus":"REVOKE PLUS","close-checkouts":"CLOSE CHECKOUTS","enable-checkouts":"ENABLE CHECKOUTS"}[action];
     return Boolean(expected&&String(value||"").trim()===expected);
   }
-  async function performAdminUserAction(session,targetId,input){
-    const target=await store.adminUserById(targetId,Date.now());
-    if(!target)throw Object.assign(new Error("Account not found."),{status:404,code:"ADMIN_TARGET_NOT_FOUND"});
-    const principal=await store.adminPrincipal();
-    if(principal?.user_id===target.id)throw Object.assign(new Error("Use Account Security for the primary administrator account."),{status:409,code:"ADMIN_SELF_PROTECTED"});
-    const action=cleanText(input?.action,40);
-    if(!["send-password-reset","send-delete-link","cancel-deletion","revoke-sessions","suspend","restore","delete-account"].includes(action))throw Object.assign(new Error("Unknown admin action."),{status:400,code:"UNKNOWN_ADMIN_ACTION"});
-    const reason=adminReason(input?.reason);
-    if(!validAdminConfirmation(action,input?.confirmation,target))throw Object.assign(new Error("The confirmation text does not match this action."),{status:400,code:"ADMIN_CONFIRMATION_REQUIRED"});
-    if(action==="send-password-reset"||action==="send-delete-link"){
-      const purpose=action==="send-password-reset"?"password_reset":"account_delete";
-      await recordAdminAudit(session.id,target.id,action,reason,"requested");
-      const delivery=await auth.requestSignedInAccountAction(target,purpose);
-      const label=purpose==="password_reset"?"Password-reset":"Deletion-confirmation";
-      return {ok:true,message:`${label} email sent to ${delivery.maskedEmail}.`,user:adminUserPayload(await store.adminUserById(target.id,Date.now()),{detail:true})};
-    }
-    let message="Action completed.";
-    if(action==="cancel-deletion"){
-      const canceled=await store.cancelAccountDeletionWithAudit(target.id,adminAuditEvent(session.id,target.id,action,reason));
-      if(!canceled)throw Object.assign(new Error("This account has no pending deletion request."),{status:409,code:"NO_PENDING_DELETION"});
-      message="Pending account deletion canceled.";
-    }else if(action==="revoke-sessions"){
-      const result=await store.revokeUserSessions(target.id,adminAuditEvent(session.id,target.id,action,reason));
-      if(!result)throw Object.assign(new Error("Account not found."),{status:404,code:"ADMIN_TARGET_NOT_FOUND"});
-      message=`Signed the account out on ${result.revoked} active ${result.revoked===1?"session":"sessions"}.`;
-    }else if(action==="suspend"){
-      if(target.suspended_at)throw Object.assign(new Error("This account is already paused."),{status:409,code:"ACCOUNT_ALREADY_SUSPENDED"});
-      if(!await store.suspendUser(target.id,Date.now(),adminAuditEvent(session.id,target.id,action,reason)))throw Object.assign(new Error("The account state changed. Refresh and try again."),{status:409,code:"ADMIN_STATE_CHANGED"});
-      message="Account paused and all sessions revoked.";
-    }else if(action==="restore"){
-      if(!target.suspended_at)throw Object.assign(new Error("This account is already active."),{status:409,code:"ACCOUNT_ALREADY_ACTIVE"});
-      if(!await store.restoreUser(target.id,adminAuditEvent(session.id,target.id,action,reason)))throw Object.assign(new Error("The account state changed. Refresh and try again."),{status:409,code:"ADMIN_STATE_CHANGED"});
-      message="Account restored. The user can sign in again.";
-    }else if(action==="delete-account"){
-      if(!target.suspended_at)throw Object.assign(new Error("Pause this account before permanently deleting it."),{status:409,code:"ACCOUNT_MUST_BE_SUSPENDED"});
-      if(await reconcileCheckoutCreationBeforeDeletion(target.id)>0)throw Object.assign(new Error("A Strata+ checkout is still being prepared. Nothing was deleted; try again later."),{status:409,code:"CHECKOUT_PREPARING"});
-      try{if(await reconcileUnsettledPurchases(target.id)>0)throw Object.assign(new Error("A Strata+ payment is still being processed. Nothing was deleted; try again later."),{status:409,code:"PURCHASE_PENDING"});}
-      catch(error){if(error.code==="SUBSCRIPTION_ACTIVE")throw Object.assign(new Error("This account still has a live Paddle subscription. Cancel it and wait for the canceled status before deleting STRATA data."),{status:409,code:error.code});throw error;}
-      const audit=adminAuditEvent(session.id,target.id,action,reason);
-      const deletedAt=Date.now();
-      const deleted=await store.deleteUserByAdmin(target.id,deletedAt,target.email,auth.accountEmailHash(target.email),session.token_hash,audit);
-      if(!deleted)throw Object.assign(new Error("The account or billing state changed. Nothing was deleted; refresh and try again."),{status:409,code:"ADMIN_STATE_CHANGED"});
-      return {ok:true,message:"Account permanently deleted from STRATA. No refund or live Paddle subscription was canceled; stale incomplete checkouts may have been closed during the safety check."};
-    }
-    return {ok:true,message,user:adminUserPayload(await store.adminUserById(target.id,Date.now()),{detail:true})};
-  }
+  const {performAdminUserAction}=createAdminUserActions({store,auth,adminReason,validAdminConfirmation,adminAuditEvent,recordAdminAudit,adminUserPayload,reconcileCheckoutCreationBeforeDeletion,reconcileUnsettledPurchases});
 
   async function handleApi(req,res,url){
     if(!url.pathname.startsWith("/api/admin/")||url.pathname.startsWith("/api/admin/support"))return false;

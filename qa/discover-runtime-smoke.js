@@ -89,6 +89,23 @@ assert.equal(vm.runInContext('Object.keys(FEATURE_CONFIG).filter((name)=>feature
   assert.equal(elements.get("discoveryLoadError").hidden,true,"a successful retry must clear the error UI");
   const todayComparable=/Flat Dumbbell Press/.test(elements.get("todayPreviousValue").textContent);
   const progressRendered=elements.get("progressSessions").textContent==="1"&&/kg·reps/.test(elements.get("progressVolume").textContent);
+  // A saved week is not completed training; duplicates and unscheduled sessions
+  // cannot inflate completed planned days.
+  vm.runInContext(`
+    globalThis.savedProgressWorkouts=state.workouts;
+    state.workouts=[];renderWeeklyPulse();
+  `,context);
+  assert.equal(elements.get("weeklyPulseBar").attributes.style,"width:0%");
+  assert.equal(elements.get("weeklyPulseDays").textContent,"0 / 1");
+  vm.runInContext(`
+    state.workouts=[savedProgressWorkouts[0],{...savedProgressWorkouts[0],id:"duplicate"},{...savedProgressWorkouts[0],id:"unscheduled",planDay:"Tuesday"}];renderWeeklyPulse();
+  `,context);
+  assert.equal(elements.get("weeklyPulseBar").attributes.style,"width:100%");
+  assert.equal(elements.get("weeklyPulseDays").textContent,"1 / 1");
+  vm.runInContext("state.workoutHistoryAvailable=false;renderWeeklyPulse();",context);
+  assert.equal(elements.get("weeklyPulseBar").parentElement.hidden,true);
+  assert.match(elements.get("weeklyPulseDays").textContent,/History unavailable/);
+  vm.runInContext("state.workoutHistoryAvailable=true;state.workouts=savedProgressWorkouts;renderWeeklyPulse();",context);
   vm.runInContext(`
     globalThis.featureAudit={defaultFeature:state.activeFeature,defaultVisible:!el("todayWorkspace").hidden,defaultHidden:Object.keys(FEATURE_CONFIG).filter((name)=>featurePanel(name).hidden).length};
     activateFeature("library");

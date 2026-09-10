@@ -10,10 +10,10 @@
     <title>Admin — STRATA</title>
     <link rel="icon" href="/icons/strata-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="/fonts.css?v=7.5.1" />
-    <link rel="stylesheet" href="/admin.css?v=7.5.1" />
-    <link rel="stylesheet" href="/experience.css?v=7.5.1" />
-    <script src="/motion.js?v=7.5.1"></script>
+    <link rel="stylesheet" href="/fonts.css?v=7.7.0" />
+    <link rel="stylesheet" href="/admin.css?v=7.7.0" />
+    <link rel="stylesheet" href="/experience.css?v=7.7.0" />
+    <script src="/motion.js?v=7.7.0"></script>
   </head>
   <body>
     <a class="skip-link" href="#adminMain">Skip to administration</a>
@@ -193,6 +193,10 @@
           <p class="panel-index">Audited controls</p><h3 id="userActionsTitle">ACCOUNT ACTIONS</h3>
           <p>STRATA sends private links to the registered email. It never reveals a password, verification code, or reset token.</p>
           <div class="action-grid">
+            <button type="button" data-user-action="grant-plus">Give free Strata+ <span aria-hidden="true">+</span></button>
+            <button type="button" data-user-action="revoke-plus">Revoke free Strata+ <span aria-hidden="true">×</span></button>
+            <button type="button" data-user-action="close-checkouts">Block and close payment sessions <span aria-hidden="true">×</span></button>
+            <button type="button" data-user-action="enable-checkouts">Allow new payment sessions <span aria-hidden="true">↻</span></button>
             <button type="button" data-user-action="send-password-reset">Send password reset <span aria-hidden="true">→</span></button>
             <button type="button" data-user-action="send-delete-link">Send deletion link <span aria-hidden="true">→</span></button>
             <button type="button" data-user-action="cancel-deletion">Cancel deletion request <span aria-hidden="true">×</span></button>
@@ -202,7 +206,7 @@
           </div>
           <div class="irreversible-zone" aria-labelledby="permanentDeletionTitle">
             <h4 id="permanentDeletionTitle">PERMANENT DELETION</h4>
-            <p id="permanentDeletionWarning">Pause the account first. Deletion immediately removes its STRATA account data and signs out every device. It cannot be undone, cancel a live Paddle subscription, or issue a refund. Stale incomplete checkouts may be closed during safety checks.</p>
+            <p id="permanentDeletionWarning">Confirm once to pause the account, sign out every device, close supported unfinished checkouts, and delete its STRATA data. Deletion cannot be undone. A live subscription or unresolved payment blocks deletion and leaves the account paused; you can restore it. This action does not cancel a live Paddle subscription or issue refunds.</p>
             <button class="danger-button permanent-delete" type="button" data-user-action="delete-account" aria-describedby="permanentDeletionWarning">Permanently delete account <span aria-hidden="true">×</span></button>
           </div>
         </section>
@@ -217,6 +221,13 @@
         </div>
         <div class="dialog-body">
           <p class="dialog-lede" id="confirmDescription"></p>
+          <fieldset class="grant-fields" id="grantFields" hidden>
+            <legend>How long should free Strata+ last?</legend>
+            <div class="field"><label for="grantUnit">Access period</label><select id="grantUnit"><option value="minutes">Minutes</option><option value="hours">Hours</option><option value="days" selected>Days</option><option value="weeks">Weeks</option><option value="months">Months</option><option value="years">Years</option><option value="until">Until a date and time</option><option value="indefinite">Until revoked</option></select></div>
+            <div class="field" id="grantAmountField"><label for="grantAmount">Amount</label><input id="grantAmount" type="number" min="1" max="10000000" step="1" value="30" /></div>
+            <div class="field" id="grantUntilField" hidden><label for="grantUntil">Expiry in your local time</label><input id="grantUntil" type="datetime-local" /></div>
+            <p id="grantHelp">The period starts when you confirm. Months and years use calendar dates. A new grant replaces the current grant; it does not add time to it. Existing paid subscriptions are unchanged.</p>
+          </fieldset>
           <div class="field">
             <label for="actionReason">Reason for the audit log</label>
             <textarea id="actionReason" minlength="4" maxlength="200" required placeholder="Briefly explain why this action is needed."></textarea>
@@ -260,8 +271,8 @@
       </div>
     </dialog>
 
-    <footer class="admin-footer">STRATA · Build 7.5.1 · Private administration · <a href="/contact">Contact</a> · <a href="/policies">Policies</a></footer>
+    <footer class="admin-footer">STRATA · Build 7.7.0 · Private administration · <a href="/contact">Contact</a> · <a href="/policies">Policies</a></footer>
     <noscript><p class="noscript-message">JavaScript is required for private administration. Your public STRATA pages still work normally.</p></noscript>
-    <script src="/admin.js?v=7.5.1"></script>
+    <script src="/admin.js?v=7.7.0"></script>
   </body>
 </html>

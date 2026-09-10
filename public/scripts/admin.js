@@ -154,6 +154,7 @@ function clearAdminData() {
   el("userFacts").replaceChildren();el("supportFacts").replaceChildren();
   el("ticketMessage").textContent="";el("ticketNote").value="";el("ticketResponse").value="";
   el("actionReason").value="";el("actionConfirmation").value="";
+  el("grantFields").hidden=true;updateGrantFields();
   for(const id of ["totalUsersStat","verifiedUsersStat","discoveryUsersStat","openSupportStat","suspendedUsersStat","activeSessionsStat","pendingPaymentsStat","pendingDeletionsStat"])el(id).textContent="—";
 }
 
@@ -414,8 +415,9 @@ function setActionAvailability(user,{actionsReady=true}={}) {
     if(action==="cancel-deletion"&&!deletionPending(user)){disabled=true;title="There is no active deletion request.";}
     if(action==="suspend"&&suspended){disabled=true;title="This account is already suspended.";}
     if(action==="restore"&&!suspended){disabled=true;title="This account is not suspended.";}
-    if(action==="delete-account"&&!suspended){disabled=true;title="Pause this account before permanently deleting it.";}
-    if(isSelf){disabled=true;title="Use Account Security for the sole administrator account.";}
+    if(action==="revoke-plus"&&!user?.discovery?.adminGrant?.active){disabled=true;title="No active complimentary grant.";}
+    if(action==="enable-checkouts"&&!user?.checkoutBlocked){disabled=true;title="New payment sessions are already allowed.";}
+    if(isSelf&&!["grant-plus","revoke-plus","close-checkouts","enable-checkouts"].includes(action)){disabled=true;title="Use Account Security for the sole administrator account.";}
     if(!actionsReady){disabled=true;title="Full account details are still loading.";}
     button.disabled=disabled;
     button.title=title;
@@ -432,6 +434,9 @@ function renderUserDetails(user,{actionsReady=true}={}) {
   addFact(facts,"Email status",userVerified(user)?"Verified":"Unverified");
   addFact(facts,"Account status",userSuspended(user)?"Suspended":"Active");
   addFact(facts,"Strata+",discoveryActive(user)?"Unlocked":"Not unlocked");
+  const grant=user?.discovery?.adminGrant;
+  addFact(facts,"Complimentary Strata+",grant?.active?(grant.expiresAt==null?"Until revoked":`Until ${formatDate(grant.expiresAt)}`):grant?.revokedAt?"Revoked":grant?.startedAt?"Expired":"None");
+  addFact(facts,"New payment sessions",user.checkoutBlocked?"Blocked by admin":"Allowed");
   addFact(facts,"Purchase records",`${formatCount(firstValue(user?.discovery||{},["purchaseCount","purchase_count"],0))} total · ${formatCount(firstValue(user?.discovery||{},["pendingPurchaseCount","pending_purchase_count"],0))} pending`);
   addFact(facts,"Latest purchase activity",formatDate(firstValue(user?.discovery||{},["latestPurchaseAt","latest_purchase_at"],null)));
   addFact(facts,"Weekly plan",planSummary(user));
@@ -468,13 +473,17 @@ async function openUserDialog(user,trigger) {
 }
 
 const actionDetails={
+  "grant-plus":{title:"GIVE FREE STRATA+?",phrase:"GRANT",description:"Give this account complimentary access for the chosen period. This replaces its current grant, never charges the user, and does not cancel a paid subscription."},
+  "revoke-plus":{title:"REVOKE FREE STRATA+?",phrase:"REVOKE PLUS",description:"End the administrator's complimentary grant. Separate paid or trial access is unchanged."},
+  "close-checkouts":{title:"CLOSE PAYMENT SESSIONS?",phrase:"CLOSE CHECKOUTS",description:"Block new checkouts until you allow them again and ask Paddle to cancel eligible unfinished transactions. Drafts and payments already processing may remain open. Existing subscriptions and charges are unchanged."},
+  "enable-checkouts":{title:"ALLOW PAYMENT SESSIONS?",phrase:"ENABLE CHECKOUTS",description:"Allow this account to open new checkouts again. Previously canceled transactions stay canceled."},
   "send-password-reset":{title:"SEND PASSWORD RESET?",phrase:"SEND RESET",description:"A single-use password-reset link will be emailed to the account’s registered address. The link itself will not be shown here."},
   "send-delete-link":{title:"SEND DELETION LINK?",phrase:"",description:"A deletion-confirmation link will be emailed to the registered address. Opening the link alone does not delete the account."},
   "cancel-deletion":{title:"CANCEL DELETION?",phrase:"CANCEL",description:"The pending deletion request will be revoked and its emailed link will stop working."},
   "revoke-sessions":{title:"REVOKE ALL SESSIONS?",phrase:"REVOKE",description:"Every active session for this account will be signed out. The account owner can sign in again with the current password."},
   suspend:{title:"SUSPEND ACCOUNT?",phrase:"SUSPEND",description:"The account will lose signed-in access until an administrator restores it. Existing payment records must remain intact."},
   restore:{title:"RESTORE ACCOUNT?",phrase:"RESTORE",description:"Signed-in access will be restored. This does not create or change Strata+ payment entitlement."},
-  "delete-account":{title:"PERMANENTLY DELETE ACCOUNT?",phrase:"",description:"This immediately removes the paused account and its STRATA data and cannot be undone. It does not cancel a live Paddle subscription or issue a refund; stale incomplete checkouts may be closed during safety checks."}
+  "delete-account":{title:"PERMANENTLY DELETE ACCOUNT?",phrase:"",description:"This pauses the account and signs out its devices, then checks payment state before deleting data permanently. If a live subscription or unresolved payment blocks deletion, the account stays paused and can be restored. Subscriptions and refunds are separate."}
 };
 
 function expectedConfirmation(action,user) {
@@ -492,7 +501,9 @@ function openActionConfirmation(action,trigger) {
   el("confirmTitle").textContent=details.title;
   el("confirmDescription").textContent=`${details.description} Target: ${userEmail(state.selectedUser)}.`;
   el("confirmationPhrase").textContent=phrase;
-  el("actionReason").value="";
+  el("actionReason").value=action==="delete-account"?"Administrator requested account removal":"";
+  el("grantFields").hidden=action!=="grant-plus";
+  updateGrantFields();
   el("actionConfirmation").value="";
   el("actionConfirmation").setAttribute("autocapitalize",action==="send-delete-link"||action==="delete-account"?"none":"characters");
   el("actionConfirmation").inputMode=action==="send-delete-link"?"email":"text";
@@ -512,6 +523,14 @@ function syncDialogLock() {
   document.body.classList.toggle("dialog-open",Boolean(document.querySelector("dialog[open]")));
 }
 
+function updateGrantFields(){
+  const active=state.pendingAction==="grant-plus",unit=el("grantUnit").value;
+  const dated=unit==="until",unlimited=unit==="indefinite";
+  el("grantAmountField").hidden=dated||unlimited;el("grantUntilField").hidden=!dated;
+  el("grantAmount").required=active&&!dated&&!unlimited;el("grantUntil").required=active&&dated;
+}
+el("grantUnit").addEventListener("change",updateGrantFields);
+
 async function submitUserAction(event) {
   event.preventDefault();
   const user=state.selectedUser;
@@ -524,10 +543,18 @@ async function submitUserAction(event) {
   const message=el("confirmMessage");
   if(reason.length<4){message.textContent="Enter a brief reason for the audit log.";message.className="dialog-message error";message.hidden=false;message.focus();return;}
   if(confirmation!==expected){message.textContent=`Type ${expected} exactly to continue.`;message.className="dialog-message error";message.hidden=false;message.focus();return;}
+  const payload={action,reason,confirmation,expectedControlsRevision:Number(user.controlsRevision||0)};
+  if(action==="grant-plus"){
+    const unit=el("grantUnit").value,amount=Number(el("grantAmount").value),date=new Date(el("grantUntil").value);
+    if(unit==="until"&&(!Number.isFinite(date.getTime())||date.getTime()<=Date.now())||!["until","indefinite"].includes(unit)&&(!Number.isSafeInteger(amount)||amount<1)){
+      message.textContent="Choose a positive whole duration or a future expiry date.";message.hidden=false;message.focus();return;
+    }
+    payload.grant=unit==="until"?{unit,expiresAt:date.toISOString()}:{unit,amount};
+  }
   const button=el("submitAction");button.disabled=true;
   message.textContent="Applying the audited account action…";message.className="dialog-message";message.hidden=false;
   try{
-    const result=await api(`/api/admin/users/${encodeURIComponent(userId(user))}/actions`,{method:"POST",body:JSON.stringify({action,reason,confirmation})});
+    const result=await api(`/api/admin/users/${encodeURIComponent(userId(user))}/actions`,{method:"POST",body:JSON.stringify(payload)});
     closeDialog(el("confirmDialog"));
     closeDialog(el("userDialog"));
     showGlobal(cleanString(result.message,"The account action was completed and recorded."),{focus:true});
@@ -535,7 +562,10 @@ async function submitUserAction(event) {
     state.loaded.delete("overview");state.loaded.delete("activity");
     await Promise.all([loadUsers(),loadOverview()]);
   }catch(error){
-    if(!handleAuthorizationFailure(error)){message.textContent=friendlyError(error);message.className="dialog-message error";message.hidden=false;message.focus();}
+    if(!handleAuthorizationFailure(error)){
+      try{const refreshed=await api(`/api/admin/users/${encodeURIComponent(userId(user))}`);if(refreshed.user)renderUserDetails(refreshed.user);}catch{/* Preserve the action error. */}
+      message.textContent=friendlyError(error)+(action==="delete-account"&&userSuspended(state.selectedUser)?" The account remains paused. Close this dialog to restore it or retry deletion.":"");message.className="dialog-message error";message.hidden=false;message.focus();
+    }
   }finally{button.disabled=false;}
 }
 

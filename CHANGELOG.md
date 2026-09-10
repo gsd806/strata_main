@@ -1,5 +1,25 @@
 # Changelog
 
+## 7.7.0 — Founder account controls
+
+- Grant complimentary Strata+ for a custom duration, exact expiry, or until revoked, including the owner's account, while keeping the grant visible when paid access also exists.
+- Preserve paid subscriptions and trial eligibility independently of gifts; show grant expiry in Account and Pricing.
+- Delete member accounts with one confirmation; automatically pause and revoke sessions, with billing blockers and owner protection retained.
+- Block new checkouts and attempt closure of fresh or interrupted Paddle payment sessions; retain durable holds and unresolved records on failure.
+- Add SQLite/Turso controls, explicit account-deletion cleanup, revision conflict detection, atomic audits, private export data, and focused security/concurrency tests.
+
+See [release guide](docs/release-7.7.0.md) and [current verification](docs/release-readiness.md).
+
+## 7.6.0 — First-week value
+
+- Seven-day no-card trials for new eligible accounts; valid existing trials keep their expiry.
+- Equipment starter weeks, clearer Training Memory positioning, a labeled sample and free/Plus comparison.
+- Completed scheduled-day progress in Today and a next-session link after logging a workout.
+- Checkout errors remain visible; trial controls respect open checkout and pending payment confirmation.
+- Day/hour trial status, regression coverage, and a focused founder launch plan.
+
+See [release guide](docs/release-7.6.0.md) and [current verification](docs/release-readiness.md).
+
 ## 7.5.1 — Checkout continuity and guarded deletion
 
 - Added a narrow compatibility path for an abandoned checkout from the exact retired Build 7.4 one-time Paddle catalog. A validated `draft` is updated in place to the current $0.99 USD monthly item and reused; a provider-cancelable stale transaction must be confirmed canceled before STRATA creates a fresh checkout. A delayed, strictly validated completion of that exact retired checkout is recorded as the paid lifetime purchase it represents; existing completed lifetime purchases remain unchanged, while unknown or mismatched transactions fail closed.

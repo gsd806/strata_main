@@ -183,3 +183,51 @@ dialog::backdrop { background: #080b08a8; backdrop-filter: blur(5px); }
   }
   .account-page-shell .account-header.product-header .product-nav a:last-child { border-right: 0; }
 }
+
+/* First-week activation: retain STRATA's charcoal, lime and training-led type. */
+.home-page .hero { height:auto; min-height:680px; max-height:none; }
+.home-page .hero-grid { padding-top:140px; }
+.home-page .hero h1 { font-size:clamp(58px,7.7vw,108px); line-height:1.02; }
+.hero-trial-note { margin:18px 0 0; color:#d9dfd5; font-size:.875rem; line-height:1.6; }
+.preview-starters { display:grid; gap:8px; margin:22px 0; }
+.preview-starters button { display:flex; flex-wrap:wrap; justify-content:space-between; gap:6px 12px; padding:14px; min-height:56px; border:1px solid #b5baa9; border-radius:8px; background:#fff; color:var(--ink); text-align:left; cursor:pointer; font:inherit; }
+.preview-starters button strong { font-size:1rem; }
+.preview-starters button span { font-size:.875rem; color:#505747; }
+.preview-starters button:hover:not(:disabled) { border-color:#58751d; background:#eff7db; }
+.preview-starters button:focus-visible { outline:3px solid #58751d; outline-offset:3px; }
+.preview-custom-label { margin:0 0 14px; font-size:.875rem; font-weight:700; }
+.plus-benefits strong { color:var(--ink); }
+.plus-extras { border-top:1px solid var(--line); padding:18px 0; font-size:1rem; line-height:1.7; }
+.plus-extras summary { cursor:pointer; font-weight:700; min-height:44px; }
+.memory-preview { border-bottom:1px solid var(--line); margin-bottom:28px; padding-bottom:24px; }
+.memory-preview h2 { font-size:clamp(28px,3vw,42px); line-height:1.12; }
+.memory-example-label,.memory-example-note { font-size:.875rem; line-height:1.6; }
+.memory-sample { margin:20px 0 14px; background:#171c15; color:#f2f3eb; border-radius:12px; padding:20px; }
+.memory-sample-heading { display:grid; gap:5px; }
+.memory-sample-heading strong { font-size:1.1rem; color:var(--accent); }
+.memory-sample-heading span { font-size:.875rem; color:#c8d0c1; }
+.memory-sample table { width:100%; border-collapse:collapse; margin-top:18px; font-variant-numeric:tabular-nums; }
+.memory-sample th,.memory-sample td { padding:10px 6px; text-align:left; border-bottom:1px solid #ffffff26; font-size:1rem; }
+.memory-sample thead th { color:#c8d0c1; font-size:.875rem; }
+.memory-sample p { margin:18px 0 0; color:#e3eadb; font-size:.875rem; line-height:1.7; }
+.plan-comparison { margin-top:48px; margin-bottom:40px; }
+.plan-comparison h2 { font-size:clamp(25px,3vw,40px); line-height:1.2; }
+.plan-comparison table { width:100%; table-layout:fixed; border-collapse:collapse; margin:22px 0 18px; background:#fff; }
+.plan-comparison caption { text-align:left; padding:0 0 12px; font-size:1rem; color:var(--muted); }
+.plan-comparison th,.plan-comparison td { border-bottom:1px solid var(--line); padding:16px; text-align:left; font-size:1rem; line-height:1.5; overflow-wrap:anywhere; }
+.plan-comparison th:first-child { width:58%; }
+.plan-comparison tbody th { font-weight:500; }
+.plan-comparison thead { background:#171c15; color:#fff; }
+.plan-comparison thead th:last-child { color:var(--accent); }
+.plan-comparison p { max-width:880px; font-size:.875rem; line-height:1.7; color:var(--muted); }
+.completion-next-note { max-width:560px; margin:24px auto 18px; line-height:1.7; }
+@media (max-width:600px) {
+  .home-page .hero { min-height:0; }
+  .home-page .hero-grid { padding-top:calc(var(--site-header-height,70px) + 48px + env(safe-area-inset-top)); }
+  .home-page .hero h1 { font-size:clamp(48px,11vw,66px); }
+  .plan-comparison th,.plan-comparison td { padding:12px 8px; font-size:.875rem; }
+  .plan-comparison th:first-child { width:52%; }
+  .memory-sample { padding:16px; }
+}
+.preview-starters,.preview-custom-label,.preview-setup-note { grid-column:1 / -1; }
+.preview-setup-note { margin:0 0 18px; font-size:.875rem; line-height:1.6; color:#c8d0c1; }

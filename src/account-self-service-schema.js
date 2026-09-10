@@ -14,6 +14,7 @@ const ACCOUNT_EXPORT_QUERIES=Object.freeze({
   trainingBlock:"SELECT block_json,revision,updated_at FROM training_blocks WHERE user_id=?",
   trainingAdaptations:"SELECT id,workout_id,adaptation_json,plan_updated_at,status,created_at,resolved_at FROM training_adaptations WHERE user_id=? ORDER BY created_at,id",
   communityPlans:"SELECT id,title,description,plan_json,is_published,created_at,updated_at FROM community_weekly_plans WHERE user_id=? ORDER BY created_at,id",
+  grants:"SELECT grant_starts_at,grant_expires_at,grant_revoked_at,checkout_blocked_at FROM admin_account_controls WHERE user_id=?",
   trials:"SELECT started_at,expires_at FROM discovery_trials WHERE user_id=? ORDER BY started_at",
   purchases:"SELECT transaction_id,price_id,product_id,subscription_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at FROM paddle_purchases WHERE user_id=? ORDER BY created_at,transaction_id",
   subscriptions:"SELECT subscription_id,transaction_id,status,price_id,product_id,scheduled_change_action,scheduled_change_at,current_period_ends_at,created_at,updated_at FROM paddle_subscriptions WHERE user_id=? ORDER BY created_at,subscription_id",

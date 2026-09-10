@@ -14,7 +14,7 @@ const {
 
 const DEFAULT_PRODUCT_ID="pro_01m1ky8j916ybyacs836dxbz8x";
 const DEFAULT_PRICE_ID="pri_01m1kyc2zd313d7a3ssmg02424";
-const STRATA_PLUS_TRIAL_MS=30*60*1000;
+const STRATA_PLUS_TRIAL_MS=7*24*60*60*1000;
 const LIVE_API_BASE="https://api.paddle.com";
 const SANDBOX_API_BASE="https://sandbox-api.paddle.com";
 const TRANSACTION_STATUSES=new Set(["draft","ready","billed","paid","completed","canceled","past_due"]);

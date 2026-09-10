@@ -7,6 +7,7 @@ const { defineStore } = require("./store-contract");
 const {createLocalTrainingMethods,createTursoTrainingMethods,deleteLocalTrainingData,trainingDeletionBatch}=require("./training-loop-store");
 const {createLocalAccountSelfServiceMethods,createTursoAccountSelfServiceMethods}=require("./account-self-service-store");
 const {createLocalBillingMethods,createTursoBillingMethods}=require("./billing-store");
+const {createLocalAccessControlMethods,createTursoAccessControlMethods}=require("./access-controls-store");
 const {migrateLocalSchema,migrateTursoSchema}=require("./migrations");
 function plainValue(value) {
   return typeof value === "bigint" ? Number(value) : value;
@@ -163,6 +164,7 @@ function localStore(root) {
   const accountSelfServiceMethods=createLocalAccountSelfServiceMethods({db,statements,plainRow});
   const billingMethods=createLocalBillingMethods({db,statements,plainRow});
   return defineStore("local",{
+    ...createLocalAccessControlMethods({db,statements,plainRow}),
     async ping() { return probeConnection(() => statements.ping.get()); },
     async userByEmail(email) { return plainRow(statements.userByEmail.get(email)); },
     async userById(id) { return plainRow(statements.userById.get(id)); },
@@ -407,6 +409,7 @@ function localStore(root) {
         if (!user) throw new Error("Account deletion did not remove the requested user.");
         // Keep deletion complete even if a future database connection loses
         // its per-session foreign-key PRAGMA state.
+        statements.deleteAdminControlsForDeletedUser.run(user.id,user.id);
         deleteLocalTrainingData(statements,user.id);
         statements.deleteCommunityPlanForDeletedUser.get(user.id,user.id);
         statements.deleteWorkoutsForDeletedUser.run(user.id,user.id);
@@ -657,6 +660,7 @@ function localStore(root) {
           return null;
         }
         if (!plainRow(statements.insertAdminAuditIfChanged.get(...adminAuditArgs(audit)))) throw new Error("Administrative account-deletion audit could not be recorded atomically.");
+        statements.deleteAdminControlsForDeletedUser.run(user.id,user.id);
         deleteLocalTrainingData(statements,user.id);
         statements.deleteCommunityPlanForDeletedUser.get(user.id,user.id);
         statements.deleteWorkoutsForDeletedUser.run(user.id,user.id);
@@ -762,6 +766,7 @@ async function tursoStore(url,authToken,tursoClientFactory) {
   const billingMethods=createTursoBillingMethods({client,first,run,all,plainRow});
 
   return defineStore("turso",{
+    ...createTursoAccessControlMethods({client,first,plainRow,SQL}),
     // A successful query is the health signal. Some Turso-compatible row
     // implementations expose selected values only by numeric index, so the
     // probe must not depend on a particular row-object shape.
@@ -933,6 +938,7 @@ async function tursoStore(url,authToken,tursoClientFactory) {
         // This conditional cleanup is intentionally explicit. Turso PRAGMA
         // state is connection-scoped, so account privacy must not depend only
         // on ON DELETE CASCADE surviving a renewed serverless session.
+        {sql:SQL.deleteAdminControlsForDeletedUser,args:[action.user_id,action.user_id]},
         ...trainingDeletionBatch(action.user_id),
         {sql:SQL.deleteCommunityPlanForDeletedUser,args:[action.user_id,action.user_id]},
         {sql:SQL.deleteWorkoutsForDeletedUser,args:[action.user_id,action.user_id]},
@@ -1107,6 +1113,7 @@ async function tursoStore(url,authToken,tursoClientFactory) {
       const results=await client.batch([
         {sql:SQL.deleteUserByAdmin,args:[userId,targetEmail,deletedAt,audit.actorUserId,actorSessionTokenHash,deletedAt,deletedAt]},
         {sql:SQL.insertAdminAuditIfChanged,args:adminAuditArgs(audit)},
+        {sql:SQL.deleteAdminControlsForDeletedUser,args:[userId,userId]},
         ...trainingDeletionBatch(userId),
         {sql:SQL.deleteCommunityPlanForDeletedUser,args:[userId,userId]},
         {sql:SQL.deleteWorkoutsForDeletedUser,args:[userId,userId]},

@@ -246,6 +246,21 @@ test("signed-in dashboard distinguishes access and plan states with a useful nex
       access:"Active",detail:/\$0\.99\/month · renews/i,primary:"Open next workout",href:/^\/workout\.html\?day=/,discoveryAction:"Open Strata+ studio →",billing:/next renewal/i,badge:"Active",cancel:true
     },
     {
+      name:"active monthly account with a complimentary grant",planCount:0,workoutDays:0,
+      discovery:{active:true,accessType:"paid",pendingPurchaseCount:0,adminGrant:{active:true,startedAt:Date.now(),expiresAt:cancelAt,revokedAt:null},subscription:subscription("active")},
+      access:"Complimentary",detail:/Until /i,grantMessage:/monthly subscription remains separate/i,primary:"Build your week",href:/^\/onboarding\.html$/,discoveryAction:"Open Strata+ studio →",billing:/next renewal/i,badge:"Active",cancel:true
+    },
+    {
+      name:"complimentary grant without paid billing",planCount:0,workoutDays:0,
+      discovery:{active:true,accessType:"grant",pendingPurchaseCount:0,adminGrant:{active:true,startedAt:Date.now(),expiresAt:null,revokedAt:null},subscription:null},
+      access:"Complimentary",detail:/Until revoked/i,grantMessage:/did not create a paid subscription/i,grantMessageNot:/manage it below/i,primary:"Build your week",href:/^\/onboarding\.html$/,discoveryAction:"Open Strata+ studio →",billing:null
+    },
+    {
+      name:"grandfathered lifetime account with a complimentary grant",planCount:0,workoutDays:0,
+      discovery:{active:true,accessType:"paid",pendingPurchaseCount:0,adminGrant:{active:true,startedAt:Date.now(),expiresAt:cancelAt,revokedAt:null},subscription:null},
+      access:"Complimentary",detail:/Until /i,grantMessage:/grandfathered lifetime access remains separate/i,primary:"Build your week",href:/^\/onboarding\.html$/,discoveryAction:"Open Strata+ studio →",billing:/prior lifetime purchase remains active/i,badge:"Grandfathered",manage:false
+    },
+    {
       name:"grandfathered lifetime account",planCount:0,workoutDays:0,
       discovery:{active:true,accessType:"lifetime",pendingPurchaseCount:0,subscription:null},
       access:"Lifetime",detail:/grandfathered · no renewal/i,primary:"Build your week",href:/^\/onboarding\.html$/,discoveryAction:"Open Strata+ studio →",billing:/prior lifetime purchase remains active/i,badge:"Grandfathered",manage:false
@@ -317,6 +332,8 @@ test("signed-in dashboard distinguishes access and plan states with a useful nex
     assert.equal(page.elements.get("accountWorkoutDays").textContent,String(fixture.workoutDays),fixture.name);
     assert.equal(page.elements.get("accountAccessState").textContent,fixture.access,fixture.name);
     assert.match(page.elements.get("accountAccessDetail").textContent,fixture.detail,fixture.name);
+    if(fixture.grantMessage)assert.match(page.elements.get("accountDiscoveryStatus").textContent,fixture.grantMessage,fixture.name);
+    if(fixture.grantMessageNot)assert.doesNotMatch(page.elements.get("accountDiscoveryStatus").textContent,fixture.grantMessageNot,fixture.name);
     assert.match(page.elements.get("accountMemberSince").textContent,/2024/,fixture.name);
     assert.equal(page.elements.get("accountPrimaryLabel").textContent,fixture.primary,fixture.name);
     assert.match(page.elements.get("accountPrimaryAction").href,fixture.href,fixture.name);

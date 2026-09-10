@@ -1,6 +1,6 @@
 # Module architecture evidence
 
-Build 7.5.1 keeps extraction as an enforceable boundary, not a file-count exercise. `npm run architecture:check` recursively inventories server JavaScript and reports physical lines, nonblank lines, bytes, reviewed line budgets, and every statically analyzable local dependency. It fails when a module exceeds its budget, gains an unapproved dependency, is omitted from the policy, references a missing local module, introduces a dependency cycle, or uses module loading that cannot be audited.
+Build 7.7.0 keeps extraction as an enforceable boundary, not a file-count exercise. `npm run architecture:check` recursively inventories server JavaScript and reports physical lines, nonblank lines, bytes, reviewed line budgets, and every statically analyzable local dependency. It fails when a module exceeds its budget, gains an unapproved dependency, is omitted from the policy, references a missing local module, introduces a dependency cycle, or uses module loading that cannot be audited.
 
 The policy lives in `architecture-policy.json`; it should change only with an intentional architecture review. A larger line budget is not the default response to a failure: first decide whether the module has accumulated another responsibility.
 
@@ -33,13 +33,15 @@ root bootstrap
 
 The HTTP root supplies services and adapters through explicit factories. Domain services do not import the composition root or instantiate storage. The billing service points down to HTTP, provider, bounded text-validation, and a focused retired-checkout policy; the latter points only to the Paddle transaction boundary and cannot reach upward into billing. The database adapter delegates account, billing, and training-loop behavior to focused parity modules. Schema leaves have no upward dependencies.
 
-## Current 7.5.1 boundary
+## Current 7.7.0 boundary
 
-The 7.5.0 extraction remains intact: the composition root fell from 1,185 to 732 physical lines after trial, checkout, webhook, entitlement, subscription, portal, and deletion-reconciliation policy moved into `src/billing.js`. The dual adapter is now 1,182 lines after adding atomic SQLite/Turso administrator-deletion parity, still below its reviewed 1,200-line ceiling; recurring billing and account self-service storage remain in dedicated parity modules. `src/payments.js` owns provider transactions and points only to focused subscription/portal and webhook-trust leaves, while `src/legacy-checkout.js` isolates the exact Build 7.4 catalog exception and its atomic migration rules.
+The 7.5.0 extraction remains intact: the current composition root is 735 physical lines after trial, checkout, webhook, entitlement, subscription, portal, and reconciliation policy moved into focused billing modules. The dual adapter is now 1,189 lines after adding atomic SQLite/Turso administrator-control cleanup, still below its reviewed 1,200-line ceiling; recurring billing, administrator controls, and account self-service storage remain in dedicated parity modules. `src/payments.js` owns provider transactions and points only to focused subscription/portal and webhook-trust leaves, while `src/legacy-checkout.js` isolates the exact Build 7.4 catalog exception and its atomic migration rules.
 
 Account session/export work is not hidden inside the HTTP root: `src/auth.js` constructs a narrow injected account-self-service service, `src/account-export.js` owns bounded serialization and workout keyset streaming, and the database adapter delegates its queries and mutations to `src/account-self-service-store.js`. `src/migrations.js` owns ordered schema evolution instead of leaving version checks scattered across startup code. `src/observability.js` remains an independent transport-safe leaf.
 
-The result is 33 inventoried modules, zero dependency cycles, and zero policy violations. Several files remain substantial—especially authentication, billing, the database adapter, and the composition root—but each has an explicit responsibility, allowed edge set, and reviewed ceiling.
+The result is 38 inventoried modules, zero dependency cycles, and zero policy violations. Several files remain substantial—especially authentication, billing, the database adapter, and the composition root—but each has an explicit responsibility, allowed edge set, and reviewed ceiling.
+
+The 7.7.0 account controls live in focused grant state, schema, and storage modules. Administrator mutations and checkout reconciliation are extracted into their own modules so existing administrator and billing size ceilings remain unchanged.
 
 ## Browser boundaries
 
@@ -54,21 +56,26 @@ The server inventory deliberately covers the process bootstrap and `src/**/*.js`
 
 ## Resulting module sizes
 
-The command-generated table below is the Build 7.5.1 snapshot. CI generates the same table on every architecture check, while the policy enforces budgets and edges against the live sources.
+The command-generated table below is the Build 7.7.0 snapshot. CI generates the same table on every architecture check, while the policy enforces budgets and edges against the live sources.
 
 | Module | Responsibility | Lines | Nonblank | Size | Line budget | Local dependencies |
 | --- | --- | ---: | ---: | ---: | ---: | --- |
 | `server.js` | Process bootstrap | 4 | 3 | 113 B | 20 | `src/server.js` |
-| `src/account-export.js` | Bounded streaming account export serialization | 81 | 75 | 7.2 KiB | 120 | — |
-| `src/account-self-service-schema.js` | Account self-service query catalog | 33 | 31 | 4.1 KiB | 55 | — |
+| `src/access-controls-schema.js` | Admin grant and checkout hold schema and authorization guards | 22 | 22 | 2.4 KiB | 55 | — |
+| `src/access-controls-store.js` | Atomic audited account controls for SQLite and Turso | 34 | 34 | 2.2 KiB | 65 | `src/access-controls-schema.js` |
+| `src/access-controls.js` | Complimentary access state and duration validation | 35 | 34 | 2.1 KiB | 65 | — |
+| `src/account-export.js` | Bounded streaming account export serialization | 82 | 76 | 7.4 KiB | 120 | — |
+| `src/account-self-service-schema.js` | Account self-service query catalog | 34 | 32 | 4.3 KiB | 55 | — |
 | `src/account-self-service-store.js` | SQLite and Turso account self-service storage parity | 72 | 67 | 4.2 KiB | 95 | `src/account-self-service-schema.js` |
 | `src/account-self-service.js` | Authenticated session inventory, revocation, and privacy-safe data export | 84 | 80 | 6.2 KiB | 150 | `src/account-export.js` |
-| `src/admin.js` | Administrative authorization and actions | 263 | 248 | 17.8 KiB | 280 | `src/plans.js` |
+| `src/admin-user-actions.js` | Audited administrator account and payment actions | 86 | 85 | 9.2 KiB | 160 | `src/access-controls.js`, `src/plans.js` |
+| `src/admin.js` | Administrative authorization and actions | 222 | 207 | 13.8 KiB | 280 | `src/access-controls.js`, `src/admin-user-actions.js`, `src/plans.js` |
 | `src/auth.js` | Authentication and account lifecycle | 812 | 769 | 53.4 KiB | 840 | `src/account-self-service.js`, `src/email.js`, `src/plans.js` |
-| `src/billing-schema.js` | Commercial entitlement and recurring-subscription schema | 120 | 114 | 14.6 KiB | 140 | — |
-| `src/billing-store.js` | SQLite and Turso commercial storage parity | 207 | 199 | 19.0 KiB | 240 | `src/billing-schema.js` |
-| `src/billing.js` | Commercial entitlement, checkout, trial, webhook, and reconciliation service | 710 | 682 | 42.3 KiB | 720 | `src/http.js`, `src/legacy-checkout.js`, `src/payments.js`, `src/plans.js` |
-| `src/database.js` | SQLite and Turso store adapters | 1182 | 1155 | 62.7 KiB | 1200 | `src/account-self-service-store.js`, `src/billing-store.js`, `src/migrations.js`, `src/schema.js`, `src/store-contract.js`, `src/training-loop-store.js` |
+| `src/billing-schema.js` | Commercial entitlement and recurring-subscription schema | 121 | 115 | 15.4 KiB | 140 | — |
+| `src/billing-store.js` | SQLite and Turso commercial storage parity | 210 | 202 | 19.7 KiB | 240 | `src/access-controls-schema.js`, `src/billing-schema.js` |
+| `src/billing.js` | Commercial entitlement, checkout, trial, webhook, and reconciliation service | 662 | 635 | 39.7 KiB | 720 | `src/access-controls.js`, `src/checkout-reconciliation.js`, `src/http.js`, `src/legacy-checkout.js`, `src/payments.js`, `src/plans.js` |
+| `src/checkout-reconciliation.js` | Validated checkout closure and settlement reconciliation | 86 | 85 | 6.8 KiB | 130 | `src/legacy-checkout.js`, `src/payments.js`, `src/plans.js` |
+| `src/database.js` | SQLite and Turso store adapters | 1189 | 1162 | 63.3 KiB | 1200 | `src/access-controls-store.js`, `src/account-self-service-store.js`, `src/billing-store.js`, `src/migrations.js`, `src/schema.js`, `src/store-contract.js`, `src/training-loop-store.js` |
 | `src/email.js` | Resend integration and email security | 387 | 354 | 19.9 KiB | 400 | — |
 | `src/http.js` | HTTP transport helpers | 170 | 155 | 5.9 KiB | 180 | — |
 | `src/legacy-checkout.js` | Strict retired-checkout migration and completion policy | 54 | 49 | 6.3 KiB | 75 | `src/payments.js` |
@@ -80,19 +87,19 @@ The command-generated table below is the Build 7.5.1 snapshot. CI generates the 
 | `src/plans.js` | Plan domain validation | 355 | 321 | 18.5 KiB | 380 | — |
 | `src/product-signals-schema.js` | Aggregate product-activity schema and statements | 23 | 20 | 1.4 KiB | 35 | — |
 | `src/product-signals.js` | Consent-gated aggregate product-activity boundary | 135 | 122 | 5.5 KiB | 140 | — |
-| `src/schema.js` | Shared storage schema and statements | 355 | 350 | 42.5 KiB | 390 | `src/account-self-service-schema.js`, `src/billing-schema.js`, `src/product-signals-schema.js`, `src/training-loop-schema.js` |
-| `src/server.js` | HTTP composition root | 732 | 707 | 38.4 KiB | 800 | `src/admin.js`, `src/auth.js`, `src/billing.js`, `src/database.js`, `src/email.js`, `src/http.js`, `src/observability.js`, `src/payments.js`, `src/plans.js`, `src/product-signals.js`, `src/service-composition.js`, `src/setup.js`, `src/static-assets.js`, `src/support.js`, `src/training.js`, `src/workouts.js` |
+| `src/schema.js` | Shared storage schema and statements | 359 | 353 | 43.3 KiB | 390 | `src/access-controls-schema.js`, `src/account-self-service-schema.js`, `src/billing-schema.js`, `src/product-signals-schema.js`, `src/training-loop-schema.js` |
+| `src/server.js` | HTTP composition root | 735 | 710 | 38.7 KiB | 800 | `src/access-controls.js`, `src/admin.js`, `src/auth.js`, `src/billing.js`, `src/database.js`, `src/email.js`, `src/http.js`, `src/observability.js`, `src/payments.js`, `src/plans.js`, `src/product-signals.js`, `src/service-composition.js`, `src/setup.js`, `src/static-assets.js`, `src/support.js`, `src/training.js`, `src/workouts.js` |
 | `src/service-composition.js` | Typed auth/admin/support composition | 40 | 38 | 1.8 KiB | 60 | — |
 | `src/setup.js` | Atomic weekly-plan and preference setup | 84 | 77 | 4.9 KiB | 105 | `src/plans.js` |
 | `src/static-assets.js` | Bounded public asset representations | 46 | 41 | 1.9 KiB | 65 | `src/http.js` |
-| `src/store-contract.js` | Storage boundary contract | 165 | 162 | 4.3 KiB | 175 | — |
+| `src/store-contract.js` | Storage boundary contract | 168 | 165 | 4.4 KiB | 175 | — |
 | `src/support.js` | Public and administrative support workflow | 137 | 129 | 10.0 KiB | 160 | `src/email.js`, `src/plans.js` |
 | `src/training-loop-schema.js` | Check-in, training-block, and adaptation storage schema | 57 | 54 | 6.4 KiB | 70 | — |
 | `src/training-loop-store.js` | SQLite and Turso training-loop adapter parity | 136 | 133 | 7.1 KiB | 140 | `src/training-loop-schema.js` |
 | `src/training.js` | Check-ins, deterministic progression, blocks, and approved adaptations | 448 | 433 | 29.8 KiB | 450 | `src/plans.js`, `src/workouts.js` |
 | `src/workouts.js` | Workout validation, history summaries, and authenticated lifecycle | 214 | 208 | 14.3 KiB | 230 | `src/plans.js` |
 
-Snapshot result: 33 modules, zero dependency cycles, and zero policy violations.
+Snapshot result: 38 modules, zero dependency cycles, and zero policy violations.
 
 ## Static boundary types
 

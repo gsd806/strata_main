@@ -172,7 +172,7 @@ test("live configuration is fail-closed and serializes browser-safe fields only"
   assert.equal(configured.productId,DEFAULT_PRODUCT_ID);
   assert.equal(configured.priceId,RECURRING_PRICE_ID);
   assert.deepEqual(configured.price,{amount:"0.99",currency:"USD",interval:"month",frequency:1});
-  assert.equal(STRATA_PLUS_TRIAL_MS,30*60*1000);
+  assert.equal(STRATA_PLUS_TRIAL_MS,7*24*60*60*1000);
   assert.ok(Object.isFrozen(configured));
 
   const serialized=JSON.stringify(configured);

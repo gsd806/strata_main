@@ -401,9 +401,19 @@ function billingDate(value){
 function accountAccessSummary(user,pending=false){
   const discovery=user?.discovery||{},subscription=subscriptionFor(user),status=String(subscription?.status||"");
   const trialActive=discovery.active===true&&discovery.accessType==="trial";
+  if(discovery.adminGrant?.active===true){
+    const grant=discovery.adminGrant;
+    const coexistence=subscription
+      ?"Your existing monthly subscription remains separate and is not canceled by this grant; review its billing state below."
+      :grandfatheredAccess(user)
+        ?"Your grandfathered lifetime access remains separate and does not renew."
+        :"It did not create a paid subscription or consume your trial.";
+    return{state:"Complimentary",detail:grant.expiresAt==null?"Until revoked":`Until ${billingDate(grant.expiresAt)}`,message:`An administrator granted you free Strata+ access. This grant never renews or charges you. ${coexistence}`};
+  }
   if(trialActive){
     const expiresAt=Number(discovery.trial?.expiresAt),remaining=Math.max(0,expiresAt-Date.now());
-    return{state:"Trial",detail:remaining>=60000?`${Math.ceil(remaining/60000)} min remaining`:`${Math.ceil(remaining/1000)} sec remaining`,message:"Your free 30-minute trial ends automatically and will never convert into a paid subscription."};
+    const detail=remaining>=86400000?`${Math.floor(remaining/86400000)}d ${Math.floor(remaining%86400000/3600000)}h remaining`:remaining>=3600000?`${Math.floor(remaining/3600000)}h ${Math.floor(remaining%3600000/60000)}m remaining`:remaining>=60000?`${Math.ceil(remaining/60000)} min remaining`:`${Math.ceil(remaining/1000)} sec remaining`;
+    return{state:"Trial",detail,message:"Your free trial ends automatically and will never convert into a paid subscription."};
   }
   if(subscription){
     if(status==="paused")return{state:"Paused",detail:"Paid access inactive",message:"Your monthly subscription is paused and Strata+ paid access is inactive. Manage it in Paddle to review the available next steps."};

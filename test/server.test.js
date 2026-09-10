@@ -67,12 +67,12 @@ test.before(startServer);
 test.after(stopServer);
 
 test("serves rankings and gates private account pages",async()=>{
-  assert.equal(BUILD,"7.5.1");
+  assert.equal(BUILD,"7.7.0");
   const home=await request("/");
   assert.equal(home.response.status,200);
   assert.equal(home.response.headers.get("cache-control"),"private, no-store");
   assert.match(home.response.headers.get("vary"),/Cookie/i);
-  assert.match(home.data,/YOUR MUSCLES/);
+  assert.match(home.data,/YOUR NEXT<br \/>WORKOUT/);
   assert.match(home.data,/id="signupButton"[^>]*>Sign up/);
   assert.match(home.data,/id="accountButton"[^>]*>Log in/);
   assert.match(home.data,BUILD_LABEL);
@@ -200,7 +200,7 @@ test("creates an account with a private default plan",async()=>{
   assert.equal(trial.data.user.discovery.active,true);
   assert.equal(trial.data.user.discovery.accessType,"trial");
   assert.equal(trial.data.user.discovery.trial.active,true);
-  assert.equal(trial.data.user.discovery.trial.expiresAt-trial.data.user.discovery.trial.startedAt,STRATA_PLUS_TRIAL_MS,"client input cannot alter the server-owned 30-minute window");
+  assert.equal(trial.data.user.discovery.trial.expiresAt-trial.data.user.discovery.trial.startedAt,STRATA_PLUS_TRIAL_MS,"client input cannot alter the server-owned 7-day window");
   const repeatedTrial=await request("/api/discovery/trial",{method:"POST",headers:{Cookie:signup.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":me.data.csrfToken},body:"{}"});
   assert.equal(repeatedTrial.response.status,200,"repeating an active trial request is idempotent");
   assert.equal(repeatedTrial.data.user.discovery.trial.startedAt,trial.data.user.discovery.trial.startedAt,"a replay cannot move the trial start");

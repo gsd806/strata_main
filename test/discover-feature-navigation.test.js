@@ -51,11 +51,12 @@ test("session builder waits for an explicit build and adds the result with plan 
   assert.ok((script.match(/id="sessionResultsTitle"/g)||[]).length>=2,"success and error rendering must retain the results label target");
 });
 
-test("weekly pulse uses saved-plan counts without implying workout completion or readiness",()=>{
+test("Today distinguishes completed planned days from plan coverage and preserves the next action",()=>{
   const html=read("pages","discover.html"),script=read("scripts","discover.js");
   for(const id of ["weeklyPulse","weeklyPulseEyebrow","weeklyPulseTitle","weeklyPulseDetail","weeklyPulseBar","weeklyPulseAction"])assert.match(html,new RegExp(`\\bid="${id}"`),id);
   assert.match(script,/Core\.weeklyPulse\(state\.weeklyPlan,\{profileDays:state\.preferences\.days\}\)/);
-  assert.match(script,/weeklyPulseBar"\)\.setAttribute\("style",`width:\$\{pulse\.progressPercent\}%`/);
+  assert.match(html,/planned days completed this week/);
+  assert.match(script,/History unavailable/);
   assert.match(html,/id="plusStartWorkout"[^>]*>Start working out <span aria-hidden="true">↗<\/span>/);
   assert.match(script,/start\.href=`\/workout\.html\?day=\$\{encodeURIComponent\(next\.day\)\}`;start\.innerHTML='Start working out <span aria-hidden="true">↗<\/span>'/);
   assert.match(script,/start\.href=`\/workout\.html#resume=\$\{encodeURIComponent\(active\.id\)\}`;start\.innerHTML='Resume workout <span aria-hidden="true">↗<\/span>'/);

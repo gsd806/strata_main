@@ -505,7 +505,7 @@ test("admin reads require elevation and return bounded, explicitly redacted acco
   assert.equal(users.data.users[0].id,member.user.id);
   assert.equal(users.data.users[0].name,"<img src=x onerror=alert(1)>");
   assert.deepEqual(users.data.users[0].discovery,{
-    active:true,activePurchaseCount:1,pendingPurchaseCount:0,purchaseCount:1,
+    active:true,adminGrant:{active:false,startedAt:null,expiresAt:null,revokedAt:null},trialExpiresAt:null,activePurchaseCount:1,pendingPurchaseCount:0,purchaseCount:1,
     latestPurchaseAt:purchaseAt,transactionId:"txn_admin_visible_member",transactionStatus:"completed"
   },"account search must expose the selected account's complete entitlement state");
   assertPrivateJson(users.response);
@@ -516,7 +516,7 @@ test("admin reads require elevation and return bounded, explicitly redacted acco
   assert.equal(detail.data.user.email,"member@example.test");
   assert.ok(detail.data.user.activeSessions>=2);
   assert.deepEqual(detail.data.user.discovery,{
-    active:true,activePurchaseCount:1,pendingPurchaseCount:0,purchaseCount:1,
+    active:true,adminGrant:{active:false,startedAt:null,expiresAt:null,revokedAt:null},trialExpiresAt:null,activePurchaseCount:1,pendingPurchaseCount:0,purchaseCount:1,
     latestPurchaseAt:purchaseAt,transactionId:"txn_admin_visible_member",transactionStatus:"completed"
   });
   assertPrivateJson(detail.response);
@@ -823,7 +823,7 @@ test("secret-shaped admin reasons are rejected before mutation or audit persiste
   assert.ok(!JSON.stringify(audit.data).includes(EMAIL_API_KEY));
 });
 
-test("elevated Admin can permanently delete only a paused, billing-safe non-owner account",async()=>{
+test("elevated Admin automatically pauses deletion targets and preserves accounts with live billing",async()=>{
   const target=await verifiedSignup({name:"Delete Me",email:"delete-me@example.test",password:"delete-me-password-123"});
   const support=await jsonRequest("/api/support",{name:"Ignored",email:"ignored@example.test",category:"privacy",subject:"Delete this test account",referenceId:"direct-delete-test",message:"Please remove the account after the guarded administrator review.",website:""},{cookie:target.cookie});
   assert.equal(support.response.status,201);
@@ -839,15 +839,16 @@ test("elevated Admin can permanently delete only a paused, billing-safe non-owne
   const exact=`DELETE ${target.user.email}`;
   const active=await adminAction(admin,target.user.id,"delete-account",exact,"Customer requested permanent account removal after verification.");
   assert.equal(active.response.status,409);
-  assert.equal(active.data.code,"ACCOUNT_MUST_BE_SUSPENDED");
+  assert.equal(active.data.code,"SUBSCRIPTION_ACTIVE");
+  assert.equal((await request("/api/me",{headers:{Cookie:target.cookie}})).response.status,401);
   assert.ok(databaseCounts(target.user.id).user);
 
   const self=await adminAction(admin,admin.user.id,"delete-account",`DELETE ${ADMIN_EMAIL}`,"Testing the protected owner boundary.");
   assert.equal(self.response.status,409);
   assert.equal(self.data.code,"ADMIN_SELF_PROTECTED");
 
-  const paused=await adminAction(admin,target.user.id,"suspend","SUSPEND","Pause before the requested permanent deletion.");
-  assert.equal(paused.response.status,200);
+  const detail=await request(`/api/admin/users/${target.user.id}`,{headers:{Cookie:admin.cookie}});
+  assert.ok(detail.data.user.suspendedAt);
   const wrong=await adminAction(admin,target.user.id,"delete-account","DELETE wrong@example.test","Customer requested permanent account removal after verification.");
   assert.equal(wrong.response.status,400);
   assert.equal(wrong.data.code,"ADMIN_CONFIRMATION_REQUIRED");
@@ -883,4 +884,55 @@ test("elevated Admin can permanently delete only a paused, billing-safe non-owne
   assert.equal(replay.response.status,404);
   assert.equal(replay.data.code,"ADMIN_TARGET_NOT_FOUND");
   assertPrivateJson(replay.response);
+});
+
+test("admin grants timed or indefinite free Strata+, revokes it, and controls new payment sessions",async()=>{
+  const target=await verifiedSignup({name:"Complimentary Member",email:"complimentary@example.test",password:MEMBER_PASSWORD});
+  const path=`/api/admin/users/${target.user.id}/actions`;
+  const send=(body,options={})=>jsonRequest(path,{reason:"Founder complimentary membership",...body},{cookie:admin.cookie,csrf:admin.csrf,...options});
+  const grant={action:"grant-plus",confirmation:"GRANT",expectedControlsRevision:0,grant:{unit:"minutes",amount:90}};
+  assert.equal((await send(grant,{cookie:target.cookie,csrf:target.csrf})).response.status,403);
+  assert.equal((await send(grant,{csrf:"wrong"})).response.status,403);
+  assert.equal((await send({...grant,grant:{unit:"days",amount:-1}})).response.status,400);
+  assert.equal((await send({...grant,confirmation:"WRONG"})).response.status,400);
+  const timed=await send(grant);
+  assert.equal(timed.response.status,200,JSON.stringify(timed.data));
+  assert.equal(timed.data.user.controlsRevision,1);
+  assert.ok(timed.data.user.discovery.adminGrant.expiresAt>Date.now()+89*60000);
+  let me=await request("/api/me",{headers:{Cookie:target.cookie}});
+  assert.equal(me.data.user.discovery.accessType,"grant");
+  assert.equal((await request("/api/discovery",{headers:{Cookie:target.cookie}})).response.status,200);
+  assert.equal((await jsonRequest("/api/discovery/trial",{},{cookie:target.cookie,csrf:target.csrf})).response.status,409);
+  const db=openDatabase();
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM discovery_trials WHERE user_id=?").get(target.user.id).n,0);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM paddle_purchases WHERE user_id=?").get(target.user.id).n,0);
+  db.prepare("UPDATE admin_account_controls SET grant_starts_at=?,grant_expires_at=? WHERE user_id=?").run(Date.now()-2000,Date.now()-1000,target.user.id);db.close();
+  assert.equal((await request("/api/discovery",{headers:{Cookie:target.cookie}})).response.status,402);
+  assert.equal((await send(grant)).response.status,409,"stale controls must not overwrite a grant");
+  const indefinite=await send({...grant,expectedControlsRevision:1,grant:{unit:"indefinite"}});
+  assert.equal(indefinite.response.status,200);
+  assert.equal(indefinite.data.user.discovery.adminGrant.expiresAt,null);
+  const revoked=await send({action:"revoke-plus",confirmation:"REVOKE PLUS",expectedControlsRevision:2});
+  assert.equal(revoked.response.status,200);
+  assert.equal(revoked.data.user.discovery.active,false);
+  const held=await send({action:"close-checkouts",confirmation:"CLOSE CHECKOUTS",expectedControlsRevision:3});
+  assert.equal(held.response.status,200,JSON.stringify(held.data));
+  assert.equal(held.data.user.checkoutBlocked,true);
+  assert.match(held.data.message,/No unfinished/);
+  const blocked=await jsonRequest("/api/billing/checkout",{},{cookie:target.cookie,csrf:target.csrf});
+  assert.equal(blocked.data.code,"CHECKOUT_BLOCKED");
+  const enabled=await send({action:"enable-checkouts",confirmation:"ENABLE CHECKOUTS",expectedControlsRevision:4});
+  assert.equal(enabled.response.status,200);
+  assert.equal(enabled.data.user.checkoutBlocked,false);
+});
+
+test("one confirmed admin deletion pauses and removes an active account; wrong confirmation has no effect",async()=>{
+  const target=await verifiedSignup({name:"Easy Removal",email:"easy-removal@example.test",password:MEMBER_PASSWORD});
+  const wrong=await adminAction(admin,target.user.id,"delete-account","DELETE wrong@example.test");
+  assert.equal(wrong.response.status,400);
+  assert.equal((await request("/api/me",{headers:{Cookie:target.cookie}})).response.status,200);
+  const deleted=await adminAction(admin,target.user.id,"delete-account",`DELETE ${target.user.email}`);
+  assert.equal(deleted.response.status,200,JSON.stringify(deleted.data));
+  assert.equal((await request("/api/me",{headers:{Cookie:target.cookie}})).response.status,401);
+  assert.equal((await request(`/api/admin/users/${target.user.id}`,{headers:{Cookie:admin.cookie}})).response.status,404);
 });

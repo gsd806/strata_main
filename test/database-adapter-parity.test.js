@@ -10,8 +10,9 @@ const {createStore}=require("../src/database");
 const PROJECT_ROOT=join(__dirname,"..");
 const TEST_RUNTIME=join(PROJECT_ROOT,"test-runtime");
 
-function fakeTursoClientFactory() {
+function fakeTursoClientFactory(capture=()=>{}) {
   const database=new DatabaseSync(":memory:",{enableForeignKeyConstraints:true});
+  capture(database);
 
   async function execute(statement) {
     const sql=typeof statement==="string"?statement:statement.sql;
@@ -65,6 +66,7 @@ async function stores() {
   };
   let local;
   let turso;
+  let tursoDatabase;
   try {
     process.env.NODE_ENV="test";
     process.env.STRATA_DATA_DIR=localDirectory;
@@ -75,13 +77,14 @@ async function stores() {
     delete process.env.STRATA_DATA_DIR;
     process.env.TURSO_DATABASE_URL="https://adapter-parity.invalid";
     process.env.TURSO_AUTH_TOKEN="parity-test-token";
-    turso=await createStore(PROJECT_ROOT,{tursoClientFactory:fakeTursoClientFactory});
+    turso=await createStore(PROJECT_ROOT,{tursoClientFactory:()=>fakeTursoClientFactory((database)=>{tursoDatabase=database;})});
   } finally {
     restoreEnvironment(previous);
   }
   return {
     local,
     turso,
+    tursoDatabase,
     async close() {
       await Promise.all([local?.close(),turso?.close()]);
       rmSync(localDirectory,{recursive:true,force:true});
@@ -374,4 +377,69 @@ test("SQLite and Turso adapters expose matching values, mutation results, and se
   } finally {
     await fixture.close();
   }
+});
+
+test("SQLite and Turso grants and payment holds enforce owner elevation, revision, audit and billing isolation",async()=>{
+  const pair=await stores();
+  try{for(const store of [pair.local,pair.turso]){
+    const now=Date.UTC(2026,8,10),actor="grant-owner",target="grant-member",token="grant-owner-session";
+    for(const id of [actor,target])await store.insertUser({id,name:id,email:`${id}@example.test`,passwordHash:"hash",passwordSalt:"salt",createdAt:now,emailVerifiedAt:now});
+    await store.claimAdminPrincipal(actor,`${actor}@example.test`,now);
+    await store.insertSession({tokenHash:token,userId:actor,csrfToken:"csrf",expiresAt:now+100000,createdAt:now,authVersion:2});
+    const base={id:"grant-audit",actorUserId:actor,targetUserId:target,action:"grant-plus",reason:"Complimentary membership",result:"success",createdAt:now};
+    const row={grant_starts_at:now,grant_expires_at:now+60000,grant_revoked_at:null,checkout_blocked_at:null};
+    assert.equal(await store.writeAdminControls(target,row,0,token,base),null,"elevation is mandatory at commit");
+    await store.createAdminElevation(token,now+90000,now);
+    assert.equal((await store.writeAdminControls(actor,row,0,token,{...base,id:"owner-gift",targetUserId:actor})).revision,1,"owner may grant complimentary access to their own account");
+    const saved=await store.writeAdminControls(target,row,0,token,base);
+    assert.equal(saved.revision,1);
+    assert.equal(await store.hasDiscoveryAccess(target,null,now),true);
+    assert.equal(await store.hasDiscoveryAccess(target,null,now+60000),false);
+    assert.equal(await store.hasPaidDiscoveryAccess(target,null,now),false);
+    assert.equal(await store.discoveryTrial(target),null);
+    assert.equal((await store.accountExport(target)).grants.length,1);
+    assert.equal(await store.writeAdminControls(target,row,0,token,{...base,id:"stale"}),null);
+    await assert.rejects(store.writeAdminControls(target,{...row,grant_expires_at:null},1,token,base),/UNIQUE/);
+    assert.equal((await store.adminControls(target)).revision,1,"duplicate audit rolls mutation back");
+    const held=await store.writeAdminControls(target,{...row,grant_expires_at:null,checkout_blocked_at:now},1,token,{...base,id:"held",action:"close-checkouts"});
+    assert.equal(held.revision,2);
+    assert.equal(await store.claimCheckoutCreation({userId:target,priceId:"price",claimId:"held-claim",expiresAt:now+10000,now}),null);
+    const purchase={transactionId:"txn_grant_held",userId:target,priceId:"price",productId:"product",paddleStatus:"ready",createdAt:now,updatedAt:now};
+    assert.equal(await store.insertPendingPurchase(purchase),null,"hold also blocks direct insertion");
+    assert.equal(await store.recordClaimedPurchase(purchase,"invented-claim"),null,"recovery requires the matching durable claim");
+    await store.writeAdminControls(target,{...held,checkout_blocked_at:null},2,token,{...base,id:"enable",action:"enable-checkouts"});
+    await store.claimCheckoutCreation({userId:target,priceId:"price",claimId:"real-claim",expiresAt:now+10000,now});
+    await store.recordCheckoutCreationTransaction(target,"real-claim",purchase.transactionId,now);
+    await store.writeAdminControls(target,{...held,grant_revoked_at:now},3,token,{...base,id:"revoke",action:"revoke-plus"});
+    assert.equal(await store.hasDiscoveryAccess(target,null,now),false);
+    assert.equal((await store.recordClaimedPurchase(purchase,"real-claim")).transaction_id,purchase.transactionId,"hold cannot prevent recording already accepted provider work");
+    await store.deleteSession(token);
+    assert.equal(await store.writeAdminControls(target,row,4,token,{...base,id:"expired"}),null);
+    assert.equal((await store.adminControls(target)).revision,4);
+  }}finally{await pair.close();}
+});
+
+test("Turso account deletion explicitly removes administrator controls when foreign keys are unavailable",{concurrency:false},async()=>{
+  const pair=await stores();
+  try{
+    const store=pair.turso,database=pair.tursoDatabase,now=Date.UTC(2026,8,10),actor="delete-controls-owner",token="delete-controls-session";
+    const directTarget="delete-controls-direct",selfTarget="delete-controls-self";
+    for(const id of [actor,directTarget,selfTarget])await store.insertUser({id,name:id,email:`${id}@example.test`,passwordHash:"hash",passwordSalt:"salt",createdAt:now,emailVerifiedAt:now});
+    await store.claimAdminPrincipal(actor,`${actor}@example.test`,now);
+    await store.insertSession({tokenHash:token,userId:actor,csrfToken:"csrf",expiresAt:now+100000,createdAt:now,authVersion:2});
+    await store.createAdminElevation(token,now+90000,now);
+    for(const [index,target] of [directTarget,selfTarget].entries()){
+      const row={grant_starts_at:now,grant_expires_at:now+60000,grant_revoked_at:null,checkout_blocked_at:now};
+      const audit={id:`delete-controls-grant-${index}`,actorUserId:actor,targetUserId:target,action:"grant-plus",reason:"Deletion cleanup regression fixture",result:"success",createdAt:now+index};
+      assert.ok(await store.writeAdminControls(target,row,0,token,audit));
+    }
+    database.exec("PRAGMA foreign_keys=OFF");
+    await store.suspendUser(directTarget,now+10);
+    const deleted=await store.deleteUserByAdmin(directTarget,now+11,`${directTarget}@example.test`,"direct-email-hash",token,{id:"delete-controls-direct-audit",actorUserId:actor,targetUserId:directTarget,action:"delete-account",reason:"Verify explicit controls cleanup",result:"success",createdAt:now+11});
+    assert.equal(deleted.id,directTarget);
+    assert.equal(await store.adminControls(directTarget),null);
+    const action=await store.upsertAccountAction({requestId:"delete-controls-self-request",userId:selfTarget,purpose:"account_delete",tokenHash:"delete-controls-self-token",expiresAt:now+60000,deliveryState:"sent",createdAt:now+20,updatedAt:now+20});
+    assert.equal((await store.deleteAccount(action.token_hash,now+21,"self-email-hash")).status,"deleted");
+    assert.equal(await store.adminControls(selfTarget),null);
+  }finally{await pair.close();}
 });

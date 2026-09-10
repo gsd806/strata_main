@@ -37,6 +37,7 @@ class Element{
   close(){this.open=false;}
   querySelector(){return null;}
   querySelectorAll(){return [];}
+  get options(){return [...this.innerHTML.matchAll(/<option value="([^"]+)"/g)].map(match=>({value:match[1]}));}
   getBoundingClientRect(){return{left:0,right:1000,top:0,bottom:1000};}
 }
 
@@ -50,14 +51,16 @@ function deferred(){
   return{promise,resolve,reject};
 }
 
-function createRuntime({meResponse,guestPlan=null,serverUser=null}={}){
+function createRuntime({meResponse,guestPlan=null,serverUser=null,activation=false}={}){
   const elements=new Map(ids.map((id)=>[id,new Element(id)]));
+  const starters=["dumbbells","bodyweight","barbell"].map(name=>{const button=new Element(name);button.dataset.previewStarter=name;return button;});
+  const storage=new Map();
   const documentListeners={};
   const document={
     body:new Element("body"),
     getElementById(id){return elements.get(id)||null;},
     addEventListener(type,handler){(documentListeners[type]||=[]).push(handler);},
-    querySelectorAll(){return[];}
+    querySelectorAll(selector){return selector==="[data-preview-starter]"?starters:[];}
   };
   if(serverUser){
     elements.get("accountButton").textContent=`${serverUser.name} profile`;
@@ -74,7 +77,7 @@ function createRuntime({meResponse,guestPlan=null,serverUser=null}={}){
   const context={
     console,document,location:{search:""},history:{replaceState(){}},requestAnimationFrame:(callback)=>callback(),setTimeout,clearTimeout,URLSearchParams,
     window:{location:{assign(){}},StrataDiscovery:Discovery,StrataPreview:Preview},
-    localStorage:{getItem(key){return key==="strata_guest_plan_v1"&&guestPlan!==null?guestPlan:null;}},
+    localStorage:{getItem(key){return key==="strata_guest_plan_v1"&&guestPlan!==null?guestPlan:storage.get(key)??null;},setItem(key,value){storage.set(key,value);},removeItem(key){storage.delete(key);}},
     fetch:async(pathname)=>{
       if(pathname==="/api/me")return typeof meResponse==="function"?meResponse():meResponse;
       if(pathname===`/exercises.json?v=${BUILD}`)return jsonResponse(200,catalog);
@@ -83,8 +86,14 @@ function createRuntime({meResponse,guestPlan=null,serverUser=null}={}){
   };
   context.globalThis=context;
   vm.createContext(context);
+  if(activation){
+    context.StrataDiscovery=Discovery;context.StrataPreview=Preview;
+    context.StrataOnboarding=require("../public/scripts/onboarding-core");
+    for(const script of ["activation-core.js","activation-home.js"])vm.runInContext(fs.readFileSync(path.join(PROJECT_ROOT,"public/scripts",script),"utf8"),context,{filename:script});
+    context.window.StrataHomeActivation=context.StrataHomeActivation;
+  }
   vm.runInContext(appSource,context,{filename:"app.js"});
-  return{context,elements};
+  return{context,elements,starters};
 }
 
 async function settle(){
@@ -180,4 +189,23 @@ test("homepage has one score ring and lets JavaScript create the equipment defau
   assert.ok(equipmentSelect,"equipment select");
   assert.doesNotMatch(equipmentSelect[1],/All equipment/);
   assert.equal((appSource.match(/<option value="all">All equipment<\/option>/g)||[]).length,1);
+});
+
+test("each starter builds and preserves a real three-day week using its stated equipment",async()=>{
+  const {context,elements,starters}=createRuntime({meResponse:jsonResponse(401,{error:"Not signed in."}),activation:true});
+  await settle();
+  const equipment={dumbbells:"Dumbbells",bodyweight:"Bodyweight",barbell:"Barbell / Smith"};
+  for(const button of starters){
+    assert.equal(button.disabled,false);
+    for(const handler of button.listeners.click)handler();
+    const intent=context.StrataActivation.readIntent(context.localStorage);
+    assert.ok(intent,`${button.id} must save a recoverable preview`);
+    assert.equal(intent.profile.equipment[0],equipment[button.id]);
+    const days=Object.values(intent.plan.days).filter(items=>items.length);
+    assert.equal(days.length,3);
+    for(const item of days.flat())assert.equal(catalog.find(exercise=>exercise.id===item.exerciseId).equipment,equipment[button.id]);
+    assert.equal(elements.get("quickWeekPreview").hidden,false);
+    assert.equal(elements.get("quickPreviewActions").hidden,false);
+    assert.match(elements.get("quickPreviewSummary").textContent,/3-day week ready/);
+  }
 });

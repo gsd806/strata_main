@@ -319,3 +319,8 @@ dialog::backdrop { background:rgba(10,11,9,.8); backdrop-filter:blur(4px); }
 :where(.admin-identity,.global-message,.dialog-message,.access-panel,.elevation-panel,.section-heading h2,.section-lede,.stat-card,.attention-grid dt,.system-grid,.signal-boundary,.product-signal-grid dt,.panel-heading,.field-hint,.result-toolbar > p,.section-status,.record-primary,.badge,.empty-state,.audit-item,.dialog-lede,.fact-grid dd,.action-zone,.action-grid button,.ticket-message,.admin-footer) { overflow-wrap:anywhere; }
 .button,.pagination button,.section-nav button { height:auto; padding-top:10px; padding-bottom:10px; white-space:normal; }
 @media(max-width:900px){.admin-header{background:var(--ink)}}
+
+.grant-fields { border:1px solid var(--line); border-radius:10px; padding:18px; margin:0 0 20px; }
+.grant-fields legend { font-size:1rem; font-weight:700; padding:0 6px; }
+.grant-fields p { font-size:.875rem; line-height:1.6; }
+.grant-fields select,.grant-fields input { width:100%; min-height:46px; padding:10px 12px; font:inherit; border:1px solid var(--line); border-radius:6px; background:#fff; color:#10110f; }

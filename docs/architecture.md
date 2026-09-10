@@ -29,7 +29,11 @@ The application is intentionally server-served and framework-light. Public HTML,
 | `src/server.js` | HTTP composition root, request dispatch, public route aliases, static serving, health endpoints, startup, and shutdown. |
 | `src/service-composition.js` | Strictly checked composition function for auth, admin, and support factories and their narrow capabilities. |
 | `src/auth.js` | Login, signup, email verification, recovery, reset, deletion, cookie/session/CSRF helpers, native auth forms and JSON routes, account-action delivery, account self-service composition, and auth-data cleanup. |
-| `src/admin.js` | Primary-owner binding, admin identity and elevation, session rotation, permission gates, account actions, redacted admin payloads, and audit helpers/routes. |
+| `src/admin.js` | Primary-owner binding, admin identity and elevation, session rotation, permission gates, redacted admin payloads, audit helpers, and route composition. |
+| `src/admin-user-actions.js` | Audited administrator account, complimentary-access, deletion, and payment-session actions. |
+| `src/access-controls.js` | Complimentary-access state and duration validation shared by server and administration boundaries. |
+| `src/access-controls-schema.js` | Administrator grant and checkout-hold schema, entitlement predicates, and guarded statements. |
+| `src/access-controls-store.js` | Atomic audited SQLite and Turso mutations for complimentary access and checkout holds. |
 | `src/support.js` | Public support validation and durable rate reservations, acknowledgment/notification delivery, admin support workflow and responses, safe payload shaping, and retention cleanup. |
 | `src/account-self-service.js` | Authenticated active-session review/revocation and rate-limited full-account JSON export orchestration. |
 | `src/account-export.js` | Allowlisted export serialization and bounded workout-history keyset streaming. |
@@ -48,7 +52,8 @@ The application is intentionally server-served and framework-light. Public HTML,
 | `src/http.js` | Security headers, JSON/redirect helpers, body limits and parsing, compression negotiation, and response semantics. |
 | `src/observability.js` | Structured JSON request logs, validated or generated request IDs, bounded fields, and defensive redaction. |
 | `src/email.js` | Browser-safe email configuration plus privately retained Resend credentials, HMAC digests, address masking, and transactional message delivery. |
-| `src/billing.js` | Account trial, checkout, entitlement, subscription, portal, webhook, and deletion-reconciliation policy. |
+| `src/billing.js` | Account trial, checkout, entitlement, subscription, portal, webhook, and reconciliation-service composition. |
+| `src/checkout-reconciliation.js` | Validated unfinished-checkout closure, settlement recovery, and deletion-safety reconciliation. |
 | `src/payments.js` | Browser-safe Paddle configuration, privately retained server credentials, and provider transaction orchestration. |
 | `src/paddle-subscriptions.js` | Monthly transaction/subscription validation and short-lived customer-portal sessions. |
 | `src/paddle-webhooks.js` | Raw-body signature verification plus optional Paddle webhook-address validation. |
@@ -93,7 +98,7 @@ An email setting is only eligible to claim an empty administrator principal; the
 
 Elevation rotates the session rather than upgrading a token in place. The primary owner is protected from self-suspension/deletion controls. Admin payloads are allowlisted and must never include password material, raw tokens, verification codes, provider credentials, or full payment data.
 
-Direct administrator deletion is intentionally a two-step operation: the target must already be paused, which revokes its sessions and prevents new trials, purchases, or checkout claims. The server then reconciles any earlier Paddle checkout work and rejects active or uncertain recurring billing. The final parameterized delete rechecks the pause, primary-owner, purchase, and checkout-claim predicates, plus the acting owner's current session, auth version, and unexpired elevation, and records the successful audit event in the same SQLite transaction or Turso batch. It removes STRATA's account mapping and may close a stale incomplete checkout during reconciliation; it never cancels a live Paddle subscription or issues a refund.
+Direct administrator deletion is one explicitly confirmed operation. The server first pauses the non-owner target, revokes its sessions, prevents new trials, purchases, or checkout claims, then reconciles earlier Paddle checkout work and rejects active or uncertain recurring billing. A blocker leaves the account paused for an explicit retry or restore. The final parameterized delete rechecks the pause, primary-owner, purchase, and checkout-claim predicates, plus the acting owner's current session, auth version, and unexpired elevation, and records the successful audit event in the same SQLite transaction or Turso batch. It removes STRATA's account mapping—including explicit cleanup of administrator controls when a Turso connection cannot rely on foreign-key state—and may close a stale incomplete checkout during reconciliation; it never cancels a live Paddle subscription or issues a refund.
 
 ### Account self-service boundary
 
@@ -181,7 +186,7 @@ Add an index only for a demonstrated high-frequency lookup, join, ordering, or c
 7. Duplicate webhook event IDs return an idempotent replay outcome, and stale subscription events cannot regress newer state.
 8. Later ordered transaction events update pending state without overriding a terminal completion. Applicable adjustment events are upserted and may revoke the corresponding purchase.
 
-The separate STRATA trial is one server-bounded 30-minute app trial per eligible account. It requires no payment method, ends automatically, and cannot convert into a subscription. A previously completed, unrevoked one-time lifetime purchase remains valid without requiring or fabricating a monthly subscription row.
+The separate STRATA trial is one server-bounded seven-day app trial per eligible account. It requires no payment method, ends automatically, and cannot convert into a subscription. A previously completed, unrevoked one-time lifetime purchase remains valid without requiring or fabricating a monthly subscription row.
 
 Checkout recovery is bounded and validates every provider response, pagination link, and durable account reference. Account deletion reconciles or blocks unsettled checkout work so a late webhook cannot recreate access for a deleted user.
 

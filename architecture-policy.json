@@ -11,6 +11,7 @@
       "role": "HTTP composition root",
       "maxLines": 800,
       "allowedDependencies": [
+        "src/access-controls.js",
         "src/admin.js",
         "src/auth.js",
         "src/billing.js",
@@ -47,6 +48,8 @@
       "role": "Administrative authorization and actions",
       "maxLines": 280,
       "allowedDependencies": [
+        "src/access-controls.js",
+        "src/admin-user-actions.js",
         "src/plans.js"
       ]
     },
@@ -86,11 +89,12 @@
       "role": "SQLite and Turso store adapters",
       "maxLines": 1200,
       "allowedDependencies": [
+        "src/access-controls-store.js",
         "src/account-self-service-store.js",
         "src/billing-store.js",
+        "src/migrations.js",
         "src/schema.js",
         "src/store-contract.js",
-        "src/migrations.js",
         "src/training-loop-store.js"
       ]
     },
@@ -110,6 +114,7 @@
       "role": "Shared storage schema and statements",
       "maxLines": 390,
       "allowedDependencies": [
+        "src/access-controls-schema.js",
         "src/account-self-service-schema.js",
         "src/billing-schema.js",
         "src/product-signals-schema.js",
@@ -155,6 +160,8 @@
       "role": "Commercial entitlement, checkout, trial, webhook, and reconciliation service",
       "maxLines": 720,
       "allowedDependencies": [
+        "src/access-controls.js",
+        "src/checkout-reconciliation.js",
         "src/http.js",
         "src/legacy-checkout.js",
         "src/payments.js",
@@ -177,6 +184,7 @@
       "role": "SQLite and Turso commercial storage parity",
       "maxLines": 240,
       "allowedDependencies": [
+        "src/access-controls-schema.js",
         "src/billing-schema.js"
       ]
     },
@@ -231,6 +239,40 @@
       "role": "Atomic weekly-plan and preference setup",
       "maxLines": 105,
       "allowedDependencies": [
+        "src/plans.js"
+      ]
+    },
+    "src/access-controls.js": {
+      "role": "Complimentary access state and duration validation",
+      "maxLines": 65,
+      "allowedDependencies": []
+    },
+    "src/access-controls-schema.js": {
+      "role": "Admin grant and checkout hold schema and authorization guards",
+      "maxLines": 55,
+      "allowedDependencies": []
+    },
+    "src/access-controls-store.js": {
+      "role": "Atomic audited account controls for SQLite and Turso",
+      "maxLines": 65,
+      "allowedDependencies": [
+        "src/access-controls-schema.js"
+      ]
+    },
+    "src/admin-user-actions.js": {
+      "role": "Audited administrator account and payment actions",
+      "maxLines": 160,
+      "allowedDependencies": [
+        "src/access-controls.js",
+        "src/plans.js"
+      ]
+    },
+    "src/checkout-reconciliation.js": {
+      "role": "Validated checkout closure and settlement reconciliation",
+      "maxLines": 130,
+      "allowedDependencies": [
+        "src/legacy-checkout.js",
+        "src/payments.js",
         "src/plans.js"
       ]
     }

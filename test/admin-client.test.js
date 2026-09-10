@@ -35,7 +35,7 @@ test("admin elevation and destructive controls require explicit user input",()=>
   assert.match(html,/id="elevationPassword"[^>]*type="password"[^>]*autocomplete="current-password"/i);
   assert.match(html,/id="actionReason"[^>]*minlength="4"[^>]*maxlength="200"[^>]*required/i);
   assert.match(html,/id="actionConfirmation"[^>]*required/i);
-  for(const action of ["send-password-reset","send-delete-link","cancel-deletion","revoke-sessions","suspend","restore","delete-account"]){
+  for(const action of ["send-password-reset","send-delete-link","cancel-deletion","revoke-sessions","suspend","restore","delete-account","grant-plus","revoke-plus","close-checkouts","enable-checkouts"]){
     assert.match(html,new RegExp(`data-user-action="${action}"`));
     assert.match(source,new RegExp(`(?:"${action}"|${action}):\\{`));
   }
@@ -46,7 +46,7 @@ test("admin elevation and destructive controls require explicit user input",()=>
   assert.match(html,/class="irreversible-zone"[^>]*aria-labelledby="permanentDeletionTitle"/i);
   assert.match(html,/does not cancel a live Paddle subscription|cannot be undone, cancel a live Paddle subscription/i);
   assert.match(source,/if\(action==="delete-account"\)return `DELETE \$\{userEmail\(user\)\}`/);
-  assert.match(source,/if\(action==="delete-account"&&!suspended\)/);
+  assert.doesNotMatch(source,/if\(action==="delete-account"&&!suspended\)/);
 });
 
 test("admin page declares a private, accessible management surface",()=>{
@@ -96,4 +96,29 @@ test("authenticated admin layout keeps dense desktop rows and readable controls"
   assert.match(css,/body\.admin-ready \.record-primary \{ display:grid; grid-template-columns:/);
   assert.match(css,/\.pagination button \{ min-height:44px;/);
   assert.match(css,/\.field label \{[^}]*font:500 10px\/1\.5 var\(--mono\)/);
+});
+
+test("admin grant dialog opens its duration fields and security reset clears them without crashing",()=>{
+  const vm=require("node:vm"),nodes=new Map();
+  function node(id){if(!nodes.has(id))nodes.set(id,{value:"",hidden:false,required:false,textContent:"",classList:{toggle(){}},replaceChildren(){},setAttribute(){},addEventListener(){},focus(){},showModal(){this.open=true;},close(){this.open=false;}});return nodes.get(id);}
+  const document={getElementById:node,querySelectorAll:()=>[],querySelector:()=>null,body:{classList:{toggle(){}}}};
+  const context=vm.createContext({document,requestAnimationFrame:fn=>fn(),clearTimeout,Date,Intl,URLSearchParams});
+  const source=readPublic("scripts/admin.js").split("\nsetupEvents();")[0];
+  vm.runInContext(source,context);
+  vm.runInContext('clearAdminData();state.selectedUser={id:"member",email:"member@example.test"};',context);
+  node("grantUnit").value="days";
+  vm.runInContext('openActionConfirmation("grant-plus",null)',context);
+  assert.equal(node("grantFields").hidden,false);
+  assert.equal(node("grantAmount").required,true);
+  node("grantUnit").value="until";vm.runInContext("updateGrantFields()",context);
+  assert.equal(node("grantUntilField").hidden,false);
+  assert.equal(node("grantUntil").required,true);
+  node("grantUnit").value="indefinite";vm.runInContext("updateGrantFields()",context);
+  assert.equal(node("grantAmount").required,false);assert.equal(node("grantUntil").required,false);
+  vm.runInContext('openActionConfirmation("delete-account",null)',context);
+  assert.equal(node("grantFields").hidden,true);
+  assert.equal(node("actionReason").value,"Administrator requested account removal");
+  assert.equal(node("confirmationPhrase").textContent,"DELETE member@example.test");
+  vm.runInContext("clearAdminData()",context);
+  assert.equal(node("actionReason").value,"");assert.equal(node("grantFields").hidden,true);
 });

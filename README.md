@@ -1,10 +1,10 @@
 # STRATA — Exercise Rankings and Workout Planning
 
-STRATA is an evidence-informed workout index with server-backed, email-verified accounts, a private Strata+ studio, and weekly, community, and monthly workout planning. It includes 200 resistance-training exercises—25 per muscle group, including 50 bodyweight options—across 8 muscle groups and 26 sub-muscle targets. Build 7.5.1 is an installable Progressive Web App (PWA) with Training Memory, Resend-powered account email, Paddle-powered Strata+ subscriptions, and a private owner dashboard.
+STRATA is an evidence-informed workout index with server-backed, email-verified accounts, a private Strata+ studio, and weekly, community, and monthly workout planning. It includes 200 resistance-training exercises—25 per muscle group, including 50 bodyweight options—across 8 muscle groups and 26 sub-muscle targets. Build 7.7.0 is an installable Progressive Web App (PWA) with Training Memory, Resend-powered account email, Paddle-powered Strata+ subscriptions, and a private owner dashboard.
 
-**Build 7.5.1 is a checkout-compatibility and account-operations patch.** It lets accounts carrying an abandoned Build 7.4 one-time checkout safely migrate an incomplete draft to the current $0.99 monthly item, or close a provider-cancelable stale transaction before starting fresh. It also gives the primary owner a guarded, audited way to permanently delete a paused non-owner account when no live subscription or unresolved payment state remains. The Training Memory, activation, offline-workout, planning, and accessibility work from 7.5.0 remains unchanged. See [release readiness](docs/release-readiness.md) and the [7.5.1 release guide](docs/release-7.5.1.md).
+**Build 7.7.0 is an administrator access and payment-control release.** Give any registered account complimentary Strata+ for a chosen duration or until revoked, delete accounts with one confirmed action, and block or close unfinished payment sessions. The seven-day trial, equipment starter weeks, and Training Memory improvements remain included. See [release readiness](docs/release-readiness.md), the [7.7.0 release guide](docs/release-7.7.0.md), and the [founder plan](docs/founder-plan.md).
 
-STRATA also includes a login-free local weekly planner, account-synced plans, structured community-plan sharing, a deterministic 31-day workspace, community ratings, printable exports, and a private administrator help desk. Strata+ is a **$0.99 USD per month recurring subscription** and offers one optional free 30-minute trial per eligible account. The trial requires no card, ends automatically, and never converts into a subscription; subscribing always requires explicit checkout. Paddle is the merchant of record, and the server grants paid access only after a matching transaction is provider-verified and linked to validated signed subscription state. Prior lifetime buyers remain grandfathered with no recurring charge.
+STRATA also includes a login-free local weekly planner, account-synced plans, structured community-plan sharing, a deterministic 31-day workspace, community ratings, printable exports, and a private administrator help desk. Strata+ is a **$0.99 USD per month recurring subscription** and offers one optional free 7-day trial per eligible account. The trial requires no card, ends automatically, and never converts into a subscription; subscribing always requires explicit checkout. Paddle is the merchant of record, and the server grants paid access only after a matching transaction is provider-verified and linked to validated signed subscription state. Prior lifetime buyers remain grandfathered with no recurring charge.
 
 See [CHANGELOG.md](CHANGELOG.md) for the concise release history.
 
@@ -28,7 +28,7 @@ Copy `.env.example` to `.env` and fill in the required values when testing email
 
 ## Project structure
 
-Build 7.5.1 separates browser files from private server code while preserving every public URL used by visitors, Paddle, Render, and installed PWAs:
+Build 7.7.0 separates browser files from private server code while preserving every public URL used by visitors, Paddle, Render, and installed PWAs:
 
 ```text
 server.js          Stable npm/Render bootstrap
@@ -83,7 +83,7 @@ Before a release, audit managed version references with `npm run release:check`.
 - Signed-out plans stay in that browser. Signed-in weekly and monthly plans are private account records and sync through the configured store.
 - Community plans publish validated structured workout data and a display name, never the member's email address or a binary upload.
 - The one verified account matching server-only `ADMIN_EMAIL` may become the permanently bound primary owner. Admin elevation requires the current password and expires after 30 minutes.
-- Admin mutations require elevation, CSRF and origin checks, typed confirmation, an audit reason, and guarded storage operations. A non-owner account must be paused before direct deletion, which reconciles Paddle state and atomically records the removal; active subscriptions and unresolved checkouts block it. The primary owner cannot suspend or delete itself through Admin.
+- Admin mutations require elevation, CSRF and origin checks, typed confirmation, an audit reason, and guarded storage operations. The confirmed non-owner deletion action pauses the account, revokes its sessions, reconciles Paddle state, and atomically records the removal; active subscriptions and unresolved checkouts block it and leave the account paused for an explicit retry or restore. The primary owner cannot suspend or delete itself through Admin.
 
 No separate administrator password or Gmail integration is required. `SUPPORT_EMAIL` selects the support-notification and help-desk mailbox; `EMAIL_REPLY_TO` controls the reply-to address for transactional mail sent through Resend. Changing `ADMIN_EMAIL` does not transfer an already bound owner identity.
 
@@ -95,7 +95,7 @@ Account APIs, authentication routes, and health checks bypass the service worker
 
 ## Public pricing, support, and policies
 
-Build 7.5.1 has public, mobile-friendly pages at `/pricing`, `/contact`, `/policies`, `/terms`, `/privacy`, and `/refunds`. The Policies directory is the single public entry point for legal documents and the founder story. The published refund window is 14 calendar days after an eligible monthly charge. Subscription cancellation and refunds are separate actions. Support is available through the Contact form and at `stratafitness.official@gmail.com`.
+Build 7.7.0 has public, mobile-friendly pages at `/pricing`, `/contact`, `/policies`, `/terms`, `/privacy`, and `/refunds`. The Policies directory is the single public entry point for legal documents and the founder story. The published refund window is 14 calendar days after an eligible monthly charge. Subscription cancellation and refunds are separate actions. Support is available through the Contact form and at `stratafitness.official@gmail.com`.
 
 Paddle receives payment information; STRATA does not receive or store full payment-card or bank-account details. Do not change the displayed amount or monthly renewal interval independently of the live Paddle catalog. Members open short-lived Paddle portal links from Account to manage payment or cancellation. Before accepting payments, make sure the public operator details match the identity required by Paddle and applicable law rather than inventing missing legal information.
 

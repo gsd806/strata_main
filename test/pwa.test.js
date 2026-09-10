@@ -97,7 +97,7 @@ test("release version, cache keys, asset URLs, and catalog claims stay aligned",
   const serviceWorker=read("service-worker.js");
   const pages=["index.html","account.html","verify-email.html","forgot-password.html","reset-password.html","delete-account.html","admin.html","planner.html","discover.html","onboarding.html","workout.html","workout-offline.html","install.html","offline.html","pricing.html","contact.html","policies.html","terms.html","privacy.html","refunds.html"];
 
-  assert.equal(version,"7.5.1");
+  assert.equal(version,"7.7.0");
   assert.match(serviceWorker,new RegExp(`const BUILD="${versionPattern}";`));
   assert.match(serviceWorker,/const CACHE_PREFIX="strata-static-";/);
   assert.match(serviceWorker,/const STATIC_CACHE=`\$\{CACHE_PREFIX\}\$\{BUILD\}`;/);
@@ -132,7 +132,7 @@ test("release version, cache keys, asset URLs, and catalog claims stay aligned",
   },{}));
   assert.ok(perGroup.length===8&&perGroup.every((count)=>count===25));
 
-  assert.match(read("pages/index.html"),/ranks 200 resistance exercises across 8 muscle groups and 26 sub-muscle targets/i);
+  assert.match(read("pages/index.html"),/STRATA — Your Next Workout, Ready/i);
   assert.match(read("pages/index.html"),/id="catalogTotal">200</);
   assert.match(read("pages/discover.html"),/id="catalogTotal">200</);
   assert.match(read("pages/planner.html"),/id="libraryCount">200</);

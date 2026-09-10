@@ -135,7 +135,7 @@ let browser;
     await page.goto(`${BASE_URL}/`,{waitUntil:"networkidle"});
     const publicHeaderLinks=await page.locator(".desktop-nav a").evaluateAll((nodes)=>nodes.map((node)=>[node.getAttribute("href"),node.textContent.trim()]));
     assert.deepEqual(publicHeaderLinks,[["#rankings","Rankings"],["/discover.html","Strata+"],["/workout.html","Train"],["/pricing","Pricing"]],"Homepage desktop navigation must expose its four primary destinations");
-    assert.match((await page.locator(".discovery-offer").textContent())||"",/30 minutes[\s\S]*\$0\.99 USD per month[\s\S]*renews monthly until canceled/i);
+    assert.match((await page.locator(".discovery-offer").textContent())||"",/7 days[\s\S]*\$0\.99 USD per month[\s\S]*renews monthly until canceled/i);
     for(const [label,control] of [["homepage primary action",page.locator(".hero .button-accent").first()]]){
       const ratio=await contrastRatio(control);assert.ok(ratio>=4.5,`${label} text contrast is ${ratio.toFixed(2)}:1; expected at least 4.5:1`);
     }
@@ -237,7 +237,7 @@ let browser;
     assert.ok([200,201].includes(trialResponse.status()),`Trial activation returned unexpected HTTP ${trialResponse.status()}`);
     await page.locator("#openDiscovery").waitFor({state:"visible"});
     snapshot.trialStatus=((await page.locator("#purchaseStatus").textContent())||"").trim();
-    assert.match(snapshot.trialStatus,/free 30-minute Strata\+ trial is active/i,"Pricing must confirm the active 30-minute trial");
+    assert.match(snapshot.trialStatus,/free Strata\+ trial is active/i,"Pricing must confirm the active 7-day trial");
     await Promise.all([
       page.waitForURL(url=>url.pathname.endsWith("/discover.html")),
       page.locator("#openDiscovery").click()

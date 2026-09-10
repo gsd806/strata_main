@@ -127,11 +127,11 @@ test("one-time Strata+ trials grant temporary access without becoming purchases"
     assert.equal(await store.discoveryTrial("user-1"),null);
     assert.equal(await store.hasDiscoveryAccess("user-1",null,999),false);
     const trial=await store.startDiscoveryTrial("user-1",1_000,1_000+STRATA_PLUS_TRIAL_MS);
-    assert.deepEqual(trial,{user_id:"user-1",started_at:1_000,expires_at:1_801_000});
+    assert.deepEqual(trial,{user_id:"user-1",started_at:1_000,expires_at:1_000+STRATA_PLUS_TRIAL_MS});
     assert.equal(await store.hasPaidDiscoveryAccess("user-1"),false);
-    assert.equal(await store.hasDiscoveryAccess("user-1",null,1_800_999),true);
-    assert.equal(await store.hasDiscoveryAccess("user-1",null,1_801_000),false,"access expires on the exact server timestamp");
-    assert.equal(await store.startDiscoveryTrial("user-1",2_000_000,2_000_000+STRATA_PLUS_TRIAL_MS),null,"a used trial cannot restart or extend");
+    assert.equal(await store.hasDiscoveryAccess("user-1",null,999+STRATA_PLUS_TRIAL_MS),true);
+    assert.equal(await store.hasDiscoveryAccess("user-1",null,1_000+STRATA_PLUS_TRIAL_MS),false,"access expires on the exact server timestamp");
+    assert.equal(await store.startDiscoveryTrial("user-1",2_000+STRATA_PLUS_TRIAL_MS,2_000+2*STRATA_PLUS_TRIAL_MS),null,"a used trial cannot restart or extend");
     assert.deepEqual(await store.discoveryTrial("user-1"),trial);
   }finally{await close();}
 });

@@ -1,5 +1,6 @@
 // @ts-check
 "use strict";
+const {ACCESS_CONTROLS_SQL}=require("./access-controls-schema");
 
 const {BILLING_SQL}=require("./billing-schema");
 
@@ -70,6 +71,7 @@ function createLocalBillingMethods({db,statements,plainRow}){
     async insertPendingPurchase(purchase){
       return purchaseRow(statements.insertPendingPurchase.get(purchase.transactionId,purchase.priceId,purchase.productId,purchase.paddleStatus||"ready",purchase.createdAt,purchase.updatedAt,purchase.userId,purchase.updatedAt));
     },
+    async recordClaimedPurchase(purchase,claimId){return purchaseRow(statements.recordClaimedPurchase.get(purchase.priceId,purchase.productId,purchase.paddleStatus||"ready",purchase.createdAt,purchase.updatedAt,purchase.userId,claimId,purchase.transactionId,purchase.priceId));},
     async replacePendingPurchaseCatalog(purchase,replacement){return purchaseRow(statements.replacePendingPurchaseCatalog.get(replacement.priceId,replacement.productId,replacement.paddleStatus,replacement.updatedAt,purchase.transaction_id,purchase.user_id,purchase.price_id,purchase.product_id,purchase.updated_at,purchase.paddle_status,replacement.paddleStatus,replacement.updatedAt));},
     async completePurchaseCatalogMigration(purchase,replacement){return purchaseRow(statements.completePurchaseCatalogMigration.get(replacement.priceId,replacement.productId,replacement.customerId||null,replacement.subscriptionId||null,replacement.completedAt,replacement.updatedAt,purchase.transaction_id,purchase.user_id,purchase.price_id,purchase.product_id,purchase.paddle_status,purchase.updated_at,replacement.subscriptionId||null,replacement.customerId||null));},
     async checkoutCreationForUser(userId){return checkoutRow(statements.checkoutCreationForUser.get(userId));},
@@ -113,7 +115,7 @@ function createLocalBillingMethods({db,statements,plainRow}){
     },
     async hasPaidDiscoveryAccess(userId,priceId=null,now=Date.now()){return Boolean(statements.hasDiscoveryAccess.get(now,userId,priceId,priceId));},
     async hasCurrentPaidDiscoveryAccess(userId,priceId,productId,now=Date.now()){return Boolean(statements.hasCurrentDiscoveryAccess.get(now,userId,priceId,productId));},
-    async hasDiscoveryAccess(userId,priceId=null,now=Date.now()){return Boolean(statements.hasDiscoveryAccess.get(now,userId,priceId,priceId)||statements.activeDiscoveryTrial.get(userId,now));},
+    async hasDiscoveryAccess(userId,priceId=null,now=Date.now()){return Boolean(statements.hasDiscoveryAccess.get(now,userId,priceId,priceId)||statements.activeDiscoveryTrial.get(userId,now)||statements.activeAdminGrant.get(userId,now,now));},
     async discoveryTrial(userId){return trialRow(statements.discoveryTrial.get(userId));},
     async startDiscoveryTrial(userId,startedAt,expiresAt){return trialRow(statements.startDiscoveryTrial.get(startedAt,expiresAt,userId));},
     async discoveryAccessSummary(userId,priceId=null,now=Date.now()){return accessSummary(plainRow(statements.discoveryAccessSummary.get(now,userId,priceId,priceId)));},
@@ -156,6 +158,7 @@ function createTursoBillingMethods({client,first,run,all,plainRow}){
     async pendingPurchasesForUser(userId){return Number((await first(BILLING_SQL.pendingPurchasesForUser,[userId]))?.pending_count||0);},
     unsettledPurchasesForUser:(userId)=>allPurchases(BILLING_SQL.unsettledPurchasesForUser,[userId]),
     insertPendingPurchase:(purchase)=>returnedPurchase(BILLING_SQL.insertPendingPurchase,[purchase.transactionId,purchase.priceId,purchase.productId,purchase.paddleStatus||"ready",purchase.createdAt,purchase.updatedAt,purchase.userId,purchase.updatedAt]),
+    recordClaimedPurchase:(purchase,claimId)=>returnedPurchase(BILLING_SQL.recordClaimedPurchase,[purchase.priceId,purchase.productId,purchase.paddleStatus||"ready",purchase.createdAt,purchase.updatedAt,purchase.userId,claimId,purchase.transactionId,purchase.priceId]),
     replacePendingPurchaseCatalog:(purchase,replacement)=>returnedPurchase(BILLING_SQL.replacePendingPurchaseCatalog,[replacement.priceId,replacement.productId,replacement.paddleStatus,replacement.updatedAt,purchase.transaction_id,purchase.user_id,purchase.price_id,purchase.product_id,purchase.updated_at,purchase.paddle_status,replacement.paddleStatus,replacement.updatedAt]),
     completePurchaseCatalogMigration:(purchase,replacement)=>returnedPurchase(BILLING_SQL.completePurchaseCatalogMigration,[replacement.priceId,replacement.productId,replacement.customerId||null,replacement.subscriptionId||null,replacement.completedAt,replacement.updatedAt,purchase.transaction_id,purchase.user_id,purchase.price_id,purchase.product_id,purchase.paddle_status,purchase.updated_at,replacement.subscriptionId||null,replacement.customerId||null]),
     checkoutCreationForUser:(userId)=>firstCheckout(BILLING_SQL.checkoutCreationForUser,[userId]),
@@ -191,8 +194,8 @@ function createTursoBillingMethods({client,first,run,all,plainRow}){
     async hasPaidDiscoveryAccess(userId,priceId=null,now=Date.now()){return Boolean(await first(BILLING_SQL.hasDiscoveryAccess,[now,userId,priceId,priceId]));},
     async hasCurrentPaidDiscoveryAccess(userId,priceId,productId,now=Date.now()){return Boolean(await first(BILLING_SQL.hasCurrentDiscoveryAccess,[now,userId,priceId,productId]));},
     async hasDiscoveryAccess(userId,priceId=null,now=Date.now()){
-      const [paid,trial]=await Promise.all([first(BILLING_SQL.hasDiscoveryAccess,[now,userId,priceId,priceId]),first(BILLING_SQL.activeDiscoveryTrial,[userId,now])]);
-      return Boolean(paid||trial);
+      const [paid,trial,grant]=await Promise.all([first(BILLING_SQL.hasDiscoveryAccess,[now,userId,priceId,priceId]),first(BILLING_SQL.activeDiscoveryTrial,[userId,now]),first(ACCESS_CONTROLS_SQL.activeAdminGrant,[userId,now,now])]);
+      return Boolean(paid||trial||grant);
     },
     discoveryTrial:(userId)=>firstTrial(BILLING_SQL.discoveryTrial,[userId]),
     startDiscoveryTrial:(userId,startedAt,expiresAt)=>returnedTrial(BILLING_SQL.startDiscoveryTrial,[startedAt,expiresAt,userId]),
