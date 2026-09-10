@@ -102,6 +102,11 @@ button:disabled { cursor:not-allowed; opacity:.56; }
 .attention-grid dt { color:var(--muted); text-transform:uppercase; font:500 10px/1.4 var(--mono); letter-spacing:.04em; }
 .attention-grid dd { margin:0; font:600 19px/1 var(--display); font-variant-numeric:tabular-nums; }
 .system-panel { margin-top:10px; padding:24px; }
+.activation-panel { margin-top:10px; padding:24px; }
+.activation-grid { display:grid; grid-template-columns:1fr; gap:1px; margin:20px 0 0; padding:1px; background:var(--line); border-radius:10px; overflow:hidden; }
+.activation-grid div { min-width:0; padding:17px; background:var(--white); }
+.activation-grid dt { color:var(--muted); font-size:12px; line-height:1.4; }
+.activation-grid dd { margin:10px 0 0; font:650 28px/1 var(--display); font-variant-numeric:tabular-nums; }
 .product-signal-panel { margin-top:10px; padding:24px; }
 .signal-range { display:grid; gap:7px; min-width:160px; color:var(--muted); font:500 10px/1.4 var(--mono); text-transform:uppercase; letter-spacing:.05em; }
 .signal-range select { min-height:44px; padding:10px 34px 10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--paper); color:var(--ink); font:600 12px/1.2 var(--display); }
@@ -225,6 +230,7 @@ dialog::backdrop { background:rgba(10,11,9,.8); backdrop-filter:blur(4px); }
   .admin-hero { grid-template-columns:minmax(0,1fr) minmax(260px,360px); }
   .stat-grid,.system-grid,.fact-grid,.action-grid,.dialog-actions { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .product-signal-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .activation-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .attention-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .attention-grid div:nth-child(odd) { border-right:1px solid var(--line); }
   .attention-grid div:nth-last-child(2) { border-bottom:0; }
@@ -256,13 +262,14 @@ dialog::backdrop { background:rgba(10,11,9,.8); backdrop-filter:blur(4px); }
   .section-nav { top:calc(74px + env(safe-area-inset-top)); margin-bottom:56px; }
   .stat-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
   .product-signal-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .activation-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
   .attention-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
   .attention-grid div { border-right:1px solid var(--line); border-bottom:0; }
   .attention-grid div:last-child { border-right:0; }
   .stat-card { padding:27px; }
   .stat-card strong { font-size:66px; }
   .panel-heading { grid-template-columns:1fr auto; align-items:end; }
-  .system-panel { padding:30px; }
+  .system-panel,.activation-panel { padding:30px; }
   .product-signal-panel { padding:30px; }
   .record-card>button { grid-template-columns:minmax(0,1fr) auto; }
   .action-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
@@ -315,8 +322,8 @@ dialog::backdrop { background:rgba(10,11,9,.8); backdrop-filter:blur(4px); }
 }
 
 /* Admin content includes account IDs, emails, provider references, and support copy. */
-:where(.admin-header > *,.admin-shell,.admin-hero > *,.admin-identity,.dashboard,.admin-section,.section-heading > *,.stat-grid > *,.attention-grid > *,.panel-heading > *,.system-grid > *,.product-signal-grid > *,.filter-panel > *,.support-filter > *,.result-toolbar > *,.record-card > button > *,.record-primary,.record-meta,.audit-item > *,.dialog-header > *,.dialog-body,.fact-grid > *,.action-grid > *,.dialog-actions > *) { min-width:0; }
-:where(.admin-identity,.global-message,.dialog-message,.access-panel,.elevation-panel,.section-heading h2,.section-lede,.stat-card,.attention-grid dt,.system-grid,.signal-boundary,.product-signal-grid dt,.panel-heading,.field-hint,.result-toolbar > p,.section-status,.record-primary,.badge,.empty-state,.audit-item,.dialog-lede,.fact-grid dd,.action-zone,.action-grid button,.ticket-message,.admin-footer) { overflow-wrap:anywhere; }
+:where(.admin-header > *,.admin-shell,.admin-hero > *,.admin-identity,.dashboard,.admin-section,.section-heading > *,.stat-grid > *,.attention-grid > *,.panel-heading > *,.system-grid > *,.activation-grid > *,.product-signal-grid > *,.filter-panel > *,.support-filter > *,.result-toolbar > *,.record-card > button > *,.record-primary,.record-meta,.audit-item > *,.dialog-header > *,.dialog-body,.fact-grid > *,.action-grid > *,.dialog-actions > *) { min-width:0; }
+:where(.admin-identity,.global-message,.dialog-message,.access-panel,.elevation-panel,.section-heading h2,.section-lede,.stat-card,.attention-grid dt,.system-grid,.signal-boundary,.activation-grid dt,.product-signal-grid dt,.panel-heading,.field-hint,.result-toolbar > p,.section-status,.record-primary,.badge,.empty-state,.audit-item,.dialog-lede,.fact-grid dd,.action-zone,.action-grid button,.ticket-message,.admin-footer) { overflow-wrap:anywhere; }
 .button,.pagination button,.section-nav button { height:auto; padding-top:10px; padding-bottom:10px; white-space:normal; }
 @media(max-width:900px){.admin-header{background:var(--ink)}}
 

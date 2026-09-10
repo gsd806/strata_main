@@ -13,17 +13,17 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icons/strata-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="/fonts.css?v=7.7.1" />
-    <link rel="stylesheet" href="/site-info.css?v=7.7.1" />
-    <link rel="stylesheet" href="/product-signals.css?v=7.7.1" />
-    <link rel="stylesheet" href="/experience.css?v=7.7.1" />
-    <script src="/motion.js?v=7.7.1"></script>
+    <link rel="stylesheet" href="/fonts.css?v=7.8.0" />
+    <link rel="stylesheet" href="/site-info.css?v=7.8.0" />
+    <link rel="stylesheet" href="/product-signals.css?v=7.8.0" />
+    <link rel="stylesheet" href="/experience.css?v=7.8.0" />
+    <script src="/motion.js?v=7.8.0"></script>
   </head>
   <body class="pricing-page">
     <a class="skip-link" href="#main">Skip to pricing</a>
     <header class="info-header">
       <a class="brand" href="/" aria-label="STRATA home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>STRATA</span></a>
-      <nav class="info-nav" aria-label="Primary navigation"><a href="/">Rankings</a><a href="/discover.html">Strata+</a><a href="/planner.html">Plan</a><a href="/workout.html">Train</a><a href="/pricing" aria-current="page">Pricing</a><a href="/policies">Policies</a></nav>
+      <nav class="info-nav" aria-label="Primary navigation"><a href="/">Rankings</a><a href="/discover.html">Strata+</a><a href="/planner.html">Plan</a><a href="/workout.html">Train</a></nav>
     </header>
 
     <main id="main">
@@ -33,6 +33,18 @@
           <div>
             <p class="info-lede">Your next workout is ready. Your last workout is remembered. Strata+ puts your plan, previous sets, and workout log in one place—so each session starts with less guessing. Try a full week free, with no card. Keep it for $0.99 USD per month only if it helps.</p>
             <div class="hero-facts" aria-label="Strata+ subscription facts"><span><strong>7 days</strong>Free, no-card trial</span><span><strong>$0.99 USD</strong>Per month</span><span><strong>Cancel</strong>Through Paddle</span></div>
+            <div class="purchase-panel hero-purchase-panel" id="purchasePanel" aria-busy="false">
+              <div class="button-row purchase-actions">
+                <a class="button button-dark" id="purchaseSignup" href="/account.html?mode=signup&amp;next=pricing">Create my free account <span aria-hidden="true">→</span></a>
+                <a class="button button-light" id="purchaseLogin" href="/account.html?mode=login&amp;next=pricing">Already have an account? Sign in</a>
+                <button class="button button-dark" id="trialDiscovery" type="button" aria-describedby="purchaseStatus" hidden disabled>Try 7 days free · no card <span aria-hidden="true">→</span></button>
+                <button class="button button-dark" id="buyDiscovery" type="button" aria-describedby="purchaseStatus" hidden disabled>Subscribe · $0.99 USD / month <span aria-hidden="true">→</span></button>
+                <a class="button button-dark" id="openDiscovery" href="/discover.html" hidden>Open Strata+ <span aria-hidden="true">→</span></a>
+                <a class="button button-light" id="manageSubscription" href="/account.html#accountBilling" hidden>Manage subscription <span aria-hidden="true">→</span></a>
+                <button class="button button-light" id="checkAccess" type="button" aria-describedby="purchaseStatus" hidden>Check access <span aria-hidden="true">↻</span></button>
+              </div>
+              <p class="purchase-status" id="purchaseStatus" role="status" aria-live="polite" aria-atomic="true" tabindex="-1">Sign in to start your free 7-day trial or explicitly subscribe for $0.99 USD per month.</p>
+            </div>
           </div>
         </div>
       </section>
@@ -44,23 +56,11 @@
             <h2 class="sr-only" id="discoveryPlanTitle">Strata+</h2>
             <div class="price" aria-label="$0.99 USD per month"><strong>$0.99</strong><span>USD / month</span></div>
             <p class="price-subtitle">A recurring monthly subscription. Renews every month until canceled.</p>
-            <ol class="access-path" aria-label="How Strata+ access works">
+            <details class="pricing-disclosure access-disclosure"><summary>How the trial and subscription work</summary><ol class="access-path" aria-label="How Strata+ access works">
               <li><span>01</span><div><strong>Create an account</strong><small>Your account’s synced weekly Plan stays free even if you do not keep Strata+.</small></div></li>
               <li><span>02</span><div><strong>Train for a full week</strong><small>Build your week, log a workout, and return to see your previous sets. No card and no automatic charge.</small></div></li>
               <li><span>03</span><div><strong>Subscribe only if it helps</strong><small>Choose checkout explicitly, then pay $0.99 USD each month until you cancel.</small></div></li>
-            </ol>
-            <div class="purchase-panel" id="purchasePanel" aria-busy="false">
-              <div class="button-row purchase-actions">
-                <a class="button button-dark" id="purchaseSignup" href="/account.html?mode=signup&amp;next=pricing">Create my free account <span aria-hidden="true">→</span></a>
-                <a class="button button-light" id="purchaseLogin" href="/account.html?mode=login&amp;next=pricing">Already have an account? Sign in</a>
-                <button class="button button-dark" id="trialDiscovery" type="button" aria-describedby="purchaseStatus" hidden disabled>Start my free 7-day trial <span aria-hidden="true">→</span></button>
-                <button class="button button-dark" id="buyDiscovery" type="button" aria-describedby="purchaseStatus" hidden disabled>Subscribe · $0.99 USD / month <span aria-hidden="true">→</span></button>
-                <a class="button button-dark" id="openDiscovery" href="/discover.html" hidden>Open Strata+ <span aria-hidden="true">→</span></a>
-                <a class="button button-light" id="manageSubscription" href="/account.html#accountBilling" hidden>Manage subscription <span aria-hidden="true">→</span></a>
-                <button class="button button-light" id="checkAccess" type="button" aria-describedby="purchaseStatus" hidden>Check access <span aria-hidden="true">↻</span></button>
-              </div>
-              <p class="purchase-status" id="purchaseStatus" role="status" aria-live="polite" aria-atomic="true" tabindex="-1">Sign in to start your free 7-day trial or explicitly subscribe for $0.99 USD per month.</p>
-            </div>
+            </ol></details>
             <ul class="feature-list plus-benefits">
               <li><span><strong>Know what’s next.</strong> Today opens your next planned session or resumes an unfinished workout.</span></li>
               <li><span><strong>Remember last time.</strong> Training Memory shows previous sets, reps, and loads for the same movement and format. Reuse values, then log what you actually do.</span></li>
@@ -98,8 +98,9 @@
           </article>
         </div>
 
-        <section class="info-container plan-comparison" aria-labelledby="planComparisonTitle">
-          <h2 id="planComparisonTitle">A useful free plan. A reason to keep Plus.</h2>
+        <details class="info-container plan-comparison pricing-disclosure">
+          <summary><span id="planComparisonTitle">Compare Free and Strata+</span><small>Your weekly Plan stays free.</small></summary>
+          <h2>A useful free plan. A reason to keep Plus.</h2>
           <table><caption>Choose what you need</caption><thead><tr><th scope="col">Your training</th><th scope="col">Free</th><th scope="col">Strata+</th></tr></thead><tbody>
             <tr><th scope="row">Exercise rankings and technique guides</th><td>Included</td><td>Included</td></tr>
             <tr><th scope="row">Manual weekly plan and optional account sync</th><td>Included</td><td>Included</td></tr>
@@ -108,12 +109,12 @@
             <tr><th scope="row">Personalized recommendations and 31-day planning</th><td>—</td><td>Included</td></tr>
           </tbody></table>
           <p>Your manual weekly plan stays available when a trial or subscription ends. New trials last 7 consecutive days from the moment you start them; existing trials keep their original expiry. Trials never charge you automatically. A subscription renews monthly until canceled; applicable tax is shown at checkout.</p>
-        </section>
-        <div class="info-container decision-strip" aria-label="Subscription assurances" data-reveal>
+        </details>
+        <details class="info-container assurance-disclosure pricing-disclosure"><summary><span>Subscription assurances</span><small>No card for the trial. Explicit checkout. Cancellation stays available.</small></summary><div class="decision-strip" aria-label="Subscription assurances">
           <article><span>01 / Try first</span><strong>No card for the trial.</strong><p>The eligible 7-day trial starts only when you choose it and never converts into an automatic charge.</p></article>
           <article><span>02 / See the total</span><strong>Checkout stays explicit.</strong><p>Paddle shows applicable tax and the final total before payment, then handles the receipt as merchant of record.</p></article>
           <article><span>03 / Stay in control</span><strong>Manage renewal anytime.</strong><p>Open Account to manage payment or request cancellation through Paddle. Cancellation and refunds are separate actions. <a href="/refunds">Read the policy</a>.</p></article>
-        </div>
+        </div></details>
         <div class="signal-consent-host" data-product-signals-consent-host></div>
       </section>
     </main>
@@ -122,12 +123,17 @@
       <div class="info-container info-footer-grid">
         <div><a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>STRATA</span></a><p class="footer-tagline">Make every working set intentional.</p></div>
         <nav class="footer-nav" aria-label="Footer navigation"><a href="/">Rankings</a><a href="/discover.html">Strata+</a><a href="/pricing">Pricing</a><a href="/contact">Contact</a><a href="/policies">Policies</a><a href="/install">Install</a></nav>
-        <p class="footer-meta">© 2026 Strata Index<br />Build 7.7.1</p>
+        <p class="footer-meta">© 2026 Strata Index<br />Build 7.8.0</p>
       </div>
     </footer>
     <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
-    <script src="/pwa.js?v=7.7.1"></script>
-    <script src="/product-signals.js?v=7.7.1"></script>
-    <script src="/pricing.js?v=7.7.1"></script>
+    <script src="/pwa.js?v=7.8.0"></script>
+    <script src="/product-signals.js?v=7.8.0"></script>
+    <script src="/pricing-logic.js?v=7.8.0"></script>
+    <script src="/pricing-state.js?v=7.8.0"></script>
+    <script src="/pricing-api.js?v=7.8.0"></script>
+    <script src="/pricing-render.js?v=7.8.0"></script>
+    <script src="/pricing-events.js?v=7.8.0"></script>
+    <script src="/pricing.js?v=7.8.0"></script>
   </body>
 </html>

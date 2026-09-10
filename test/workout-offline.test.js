@@ -5,7 +5,7 @@ const assert=require("node:assert/strict");
 const {readFileSync}=require("node:fs");
 const {join}=require("node:path");
 
-const BUILD="7.7.1";
+const BUILD="7.8.0";
 const ROOT=join(__dirname,".."),read=(path)=>readFileSync(join(ROOT,path),"utf8");
 
 test("the service worker uses a generic offline workout shell without caching private pages or APIs",()=>{
@@ -19,7 +19,7 @@ test("the service worker uses a generic offline workout shell without caching pr
 });
 
 test("offline continuation is bound to a prior account, expiry, exact draft, and online re-verification",()=>{
-  const normal=read("public/scripts/workout.js"),core=read("public/scripts/workout-core.js"),offline=read("public/scripts/workout-offline.js"),html=read("public/pages/workout-offline.html");
+  const normal=["public/scripts/workout-state.js","public/scripts/workout.js"].map(read).join("\n"),core=read("public/scripts/workout-core.js"),offline=read("public/scripts/workout-offline.js"),html=read("public/pages/workout-offline.html");
   assert.match(normal,/OFFLINE_CONTEXT_KEY="strata_workout_offline_context_v1"/);
   assert.match(normal,/W\.offlineAccessUntil\(discovery\)/);
   assert.match(core,/now\+24\*60\*60\*1000/);

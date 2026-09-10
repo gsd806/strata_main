@@ -1,5 +1,16 @@
 # Changelog
 
+## 7.8.0 — One clear training path
+
+- Join preview, verified account, deliberate seven-day trial, Plan review, training, and completed-workout evidence into one consistent product journey with stable Rankings, Strata+, Plan, and Train navigation.
+- Make Training Memory useful during the first week, simplify workout logging and compact-screen planning, add useful Progress empty states, and protect all changed layouts with real-browser geometry checks.
+- Split Home, Strata+, Plan, Train, Pricing, Account, and Admin into enforced pure-logic, state, same-origin API, rendering, event, and coordinator boundaries, with additional focused leaves where responsibilities remain distinct.
+- Require password plus registered-email MFA for production owner elevation, rotate the session after verification, clear hidden private Admin and Account DOM, and add aggregate activation milestones without exposing workout contents.
+- Test the Paddle entitlement lifecycle from validated payment through renewal, replay, and cancellation; add an explicit real-provider acceptance checklist while keeping live provider claims separate from local fakes.
+- Raise useful frontend boundary coverage to 94.35% lines, 79.26% branches, and 89.20% functions across 642 passing Node tests, with the complete high-risk browser suite and performance budgets enforced by `npm run check`.
+
+See [release guide](docs/release-7.8.0.md) and [current verification](docs/release-readiness.md).
+
 ## 7.7.1 — Pricing benefit layout
 
 - Keep every pricing benefit heading and description together in the full content column while retaining its separate checkmark column.

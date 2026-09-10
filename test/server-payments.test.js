@@ -16,6 +16,12 @@ const PRICE_ID="pri_01monthlyfixture00000000000000";
 const CLIENT_TOKEN="live_browser_token_for_server_payment_test";
 const API_KEY="pdl_live_apikey_01serverpaymentfixture0000_fixture_secret_123";
 const WEBHOOK_SECRET="pdl_ntfset_live_server_payment_test_secret";
+const DAY_MS=24*60*60*1000;
+const BILLING_CLOCK=Date.now();
+const INITIAL_PERIOD_START_AT=new Date(BILLING_CLOCK-DAY_MS).toISOString();
+const INITIAL_PERIOD_END_AT=new Date(BILLING_CLOCK+31*DAY_MS).toISOString();
+const RENEWAL_PERIOD_START_AT=INITIAL_PERIOD_END_AT;
+const RENEWAL_PERIOD_END_AT=new Date(BILLING_CLOCK+62*DAY_MS).toISOString();
 
 let app;
 let fakePaddle;
@@ -270,7 +276,12 @@ function completedEvent({id,transactionId,userId}) {
   };
 }
 
-function subscriptionEvent({id,transactionId,userId,status="active",sequence=0,scheduledChange=null,eventType="subscription.created",priceId=PRICE_ID,customerId="ctm_00000000000000000000000001"}){
+function subscriptionEvent({
+  id,transactionId,userId,status="active",sequence=0,scheduledChange=null,
+  eventType="subscription.created",priceId=PRICE_ID,
+  customerId="ctm_00000000000000000000000001",
+  periodStartsAt=INITIAL_PERIOD_START_AT,periodEndsAt=INITIAL_PERIOD_END_AT
+}){
   const occurredAt=new Date(Date.now()+sequence*1_000).toISOString();
   return {
     event_id:id,event_type:eventType,occurred_at:occurredAt,notification_id:`ntf_${id.slice(4)}`,
@@ -281,7 +292,7 @@ function subscriptionEvent({id,transactionId,userId,status="active",sequence=0,s
       billing_cycle:{interval:"month",frequency:1},
       items:[{quantity:1,recurring:true,price:{id:priceId,product_id:PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}}],
       scheduled_change:scheduledChange,
-      current_billing_period:["active","trialing","past_due"].includes(status)?{starts_at:"2026-09-01T00:00:00Z",ends_at:"2026-10-01T00:00:00Z"}:null,
+      current_billing_period:["active","trialing","past_due"].includes(status)?{starts_at:periodStartsAt,ends_at:periodEndsAt}:null,
       updated_at:occurredAt
     }
   };
@@ -463,7 +474,7 @@ test("live monthly checkout grants, manages, updates, and revokes Strata+ secure
   assert.equal(subscriptionStatus.response.headers.get("cache-control"),"private, no-store");
   assert.deepEqual(subscriptionStatus.data.subscription,{
     id:subscriptionId(prepared.data.transactionId),status:"active",active:true,pastDue:false,
-    scheduledChange:null,currentPeriodEndsAt:Date.parse("2026-10-01T00:00:00Z")
+    scheduledChange:null,currentPeriodEndsAt:Date.parse(INITIAL_PERIOD_END_AT)
   });
   {
     const db=new DatabaseSync(join(runtimeDir,"strata.sqlite"));
@@ -474,7 +485,7 @@ test("live monthly checkout grants, manages, updates, and revokes Strata+ secure
   assert.equal((await request("/api/billing/subscription",{headers:{Cookie:account.cookie}})).data.subscription.active,false,"subscription summary must match effective entitlement");
   {
     const db=new DatabaseSync(join(runtimeDir,"strata.sqlite"));
-    db.prepare("UPDATE paddle_subscriptions SET current_period_ends_at=? WHERE subscription_id=?").run(Date.parse("2026-10-01T00:00:00Z"),subscriptionId(prepared.data.transactionId));
+    db.prepare("UPDATE paddle_subscriptions SET current_period_ends_at=? WHERE subscription_id=?").run(Date.parse(INITIAL_PERIOD_END_AT),subscriptionId(prepared.data.transactionId));
     db.close();
   }
   const managed=await request("/api/billing/portal",{
@@ -490,7 +501,7 @@ test("live monthly checkout grants, manages, updates, and revokes Strata+ secure
 
   const scheduledCancel=await signedWebhook(subscriptionEvent({
     id:eventId("subcancel",2),transactionId:prepared.data.transactionId,userId:account.user.id,eventType:"subscription.updated",sequence:2,
-    scheduledChange:{action:"cancel",effective_at:"2026-10-01T00:00:00Z"}
+    scheduledChange:{action:"cancel",effective_at:INITIAL_PERIOD_END_AT}
   }));
   assert.equal(scheduledCancel.data.outcome,"subscription-updated");
   const scheduledMe=await request("/api/me",{headers:{Cookie:account.cookie}});
@@ -709,6 +720,57 @@ test("completed webhook trust boundaries reject mismatches and keep an existing 
   assert.equal(purchase.customer_id,valid.data.customer_id,"a later completion cannot replace the durable customer identity");
   assert.equal(purchaseCount,1,"duplicate and later completion notifications cannot duplicate the purchase ledger");
   assert.equal(eventCount,2,"distinct signed notifications remain auditable even when they describe one transaction");
+});
+
+test("an ordered renewal extends access and a later terminal cancellation ends it",async()=>{
+  const account=await signup({
+    name:"Renewal Lifecycle Tester",
+    email:"renewal-lifecycle@example.test",
+    password:"renewal-lifecycle-password-123"
+  });
+  const prepared=await checkout(account);
+  assert.equal(prepared.response.status,201);
+
+  const completed=completedEvent({
+    id:eventId("renewpay",90),transactionId:prepared.data.transactionId,userId:account.user.id
+  });
+  assert.equal((await signedWebhook(completed)).data.outcome,"subscription-payment-recorded");
+  assert.equal((await signedWebhook(subscriptionEvent({
+    id:eventId("renewsub",91),transactionId:prepared.data.transactionId,userId:account.user.id,sequence:91
+  }))).data.outcome,"subscription-created");
+
+  const renewal=subscriptionEvent({
+    id:eventId("renewed",92),transactionId:prepared.data.transactionId,userId:account.user.id,
+    eventType:"subscription.updated",sequence:92,
+    periodStartsAt:RENEWAL_PERIOD_START_AT,periodEndsAt:RENEWAL_PERIOD_END_AT
+  });
+  const renewed=await signedWebhook(renewal);
+  assert.equal(renewed.response.status,200);
+  assert.equal(renewed.data.outcome,"subscription-updated");
+  const renewedStatus=await request("/api/billing/subscription",{headers:{Cookie:account.cookie}});
+  assert.equal(renewedStatus.data.subscription.active,true);
+  assert.equal(renewedStatus.data.subscription.currentPeriodEndsAt,Date.parse(RENEWAL_PERIOD_END_AT));
+
+  const replayedRenewal=await signedWebhook(renewal);
+  assert.equal(replayedRenewal.data.outcome,"replayed","a retried renewal notification must remain idempotent");
+  const beforeCancellation=await request("/api/discovery",{headers:{Cookie:account.cookie}});
+  assert.equal(beforeCancellation.response.status,200);
+
+  const canceled=await signedWebhook(subscriptionEvent({
+    id:eventId("renewcan",93),transactionId:prepared.data.transactionId,userId:account.user.id,
+    eventType:"subscription.updated",status:"canceled",sequence:93
+  }));
+  assert.equal(canceled.response.status,200);
+  assert.equal(canceled.data.outcome,"subscription-updated");
+  const canceledStatus=await request("/api/billing/subscription",{headers:{Cookie:account.cookie}});
+  assert.equal(canceledStatus.data.subscription.status,"canceled");
+  assert.equal(canceledStatus.data.subscription.active,false);
+  assert.equal((await request("/api/discovery",{headers:{Cookie:account.cookie}})).response.status,402);
+
+  const db=database({readOnly:true});
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM paddle_webhook_events WHERE event_id=?").get(renewal.event_id).count,1);
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM paddle_subscriptions WHERE subscription_id=?").get(subscriptionId(prepared.data.transactionId)).count,1);
+  db.close();
 });
 
 test("concurrent checkout requests create only one Paddle transaction",async() => {

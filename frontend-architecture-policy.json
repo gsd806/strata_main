@@ -1,0 +1,107 @@
+{
+  "pages": {
+    "home": {
+      "html": "public/pages/index.html",
+      "modules": [
+        {"file":"public/scripts/discovery-core.js","role":"logic","global":"StrataDiscovery","maxLines":400},
+        {"file":"public/scripts/preview-core.js","role":"logic","global":"StrataPreview","maxLines":170},
+        {"file":"public/scripts/onboarding-core.js","role":"logic","global":"StrataOnboarding","maxLines":350},
+        {"file":"public/scripts/activation-core.js","role":"logic","global":"StrataActivation","maxLines":150},
+        {"file":"public/scripts/activation-home.js","role":"logic","global":"StrataHomeActivation","maxLines":220},
+        {"file":"public/scripts/home-logic.js","role":"logic","global":"StrataHomeLogic","maxLines":140},
+        {"file":"public/scripts/home-state.js","role":"state","global":"StrataHomeState","maxLines":50},
+        {"file":"public/scripts/home-api.js","role":"api","global":"StrataHomeApi","maxLines":50},
+        {"file":"public/scripts/home-render.js","role":"render","global":"StrataHomeRender","maxLines":160},
+        {"file":"public/scripts/home-events.js","role":"events","global":"StrataHomeEvents","maxLines":90},
+        {"file":"public/scripts/app.js","role":"entry","maxLines":170}
+      ]
+    },
+    "strata-plus": {
+      "html": "public/pages/discover.html",
+      "modules": [
+        {"file":"public/scripts/discovery-core.js","role":"logic","global":"StrataDiscovery","maxLines":400},
+        {"file":"public/scripts/monthly-plan-core.js","role":"logic","global":"StrataMonthlyPlan","maxLines":330},
+        {"file":"public/scripts/training-block-core.js","role":"logic","global":"StrataTrainingBlock","maxLines":160},
+        {"file":"public/scripts/discover-state.js","role":"state","global":"StrataDiscoverState","maxLines":80},
+        {"file":"public/scripts/discover-api.js","role":"api","global":"StrataDiscoverApi","maxLines":70},
+        {"file":"public/scripts/discover-navigation.js","role":"logic","global":"StrataDiscoverNavigation","maxLines":120},
+        {"file":"public/scripts/discover-progress.js","role":"logic","global":"StrataDiscoverProgress","maxLines":100},
+        {"file":"public/scripts/discover-render.js","role":"render","global":"StrataDiscoverRender","maxLines":70},
+        {"file":"public/scripts/discover-catalog.js","role":"render","global":"StrataDiscoverCatalog","maxLines":110},
+        {"file":"public/scripts/discover-detail.js","role":"render","global":"StrataDiscoverDetail","maxLines":75},
+        {"file":"public/scripts/discover-community.js","role":"render","global":"StrataDiscoverCommunity","maxLines":75},
+        {"file":"public/scripts/discover-session.js","role":"events","global":"StrataDiscoverSession","maxLines":70},
+        {"file":"public/scripts/discover-sharing.js","role":"events","global":"StrataDiscoverSharing","maxLines":55},
+        {"file":"public/scripts/discover-events.js","role":"events","global":"StrataDiscoverEvents","maxLines":90},
+        {"file":"public/scripts/discover.js","role":"entry","maxLines":730}
+      ]
+    },
+    "planner": {
+      "html": "public/pages/planner.html",
+      "modules": [
+        {"file":"public/scripts/discovery-core.js","role":"logic","global":"StrataDiscovery","maxLines":400},
+        {"file":"public/scripts/activation-core.js","role":"logic","global":"StrataActivation","maxLines":150},
+        {"file":"public/scripts/plan-insights-core.js","role":"logic","global":"StrataPlanInsights","maxLines":110},
+        {"file":"public/scripts/planner-logic.js","role":"logic","global":"StrataPlannerLogic","maxLines":110},
+        {"file":"public/scripts/planner-state.js","role":"state","global":"StrataPlannerState","maxLines":60},
+        {"file":"public/scripts/planner-api.js","role":"api","global":"StrataPlannerApi","maxLines":60},
+        {"file":"public/scripts/planner-render.js","role":"render","global":"StrataPlannerRender","maxLines":90},
+        {"file":"public/scripts/planner-conflicts.js","role":"events","global":"StrataPlannerConflicts","maxLines":125},
+        {"file":"public/scripts/planner-templates.js","role":"events","global":"StrataPlannerTemplates","maxLines":105},
+        {"file":"public/scripts/planner-sharing.js","role":"events","global":"StrataPlannerSharing","maxLines":140},
+        {"file":"public/scripts/planner-activation.js","role":"events","global":"StrataPlannerActivation","maxLines":115},
+        {"file":"public/scripts/planner-events.js","role":"events","global":"StrataPlannerEvents","maxLines":170},
+        {"file":"public/scripts/planner.js","role":"entry","maxLines":680}
+      ]
+    },
+    "workout": {
+      "html": "public/pages/workout.html",
+      "modules": [
+        {"file":"public/scripts/workout-core.js","role":"logic","global":"StrataWorkout","maxLines":300},
+        {"file":"public/scripts/discovery-core.js","role":"logic","global":"StrataDiscovery","maxLines":400},
+        {"file":"public/scripts/workout-state.js","role":"state","global":"StrataWorkoutState","maxLines":80},
+        {"file":"public/scripts/workout-api.js","role":"api","global":"StrataWorkoutApi","maxLines":80},
+        {"file":"public/scripts/workout-calendar.js","role":"logic","global":"StrataWorkoutCalendar","maxLines":50},
+        {"file":"public/scripts/workout-render.js","role":"render","global":"StrataWorkoutRender","maxLines":90},
+        {"file":"public/scripts/workout-guidance.js","role":"render","global":"StrataWorkoutGuidance","maxLines":130},
+        {"file":"public/scripts/workout-history.js","role":"render","global":"StrataWorkoutHistory","maxLines":130},
+        {"file":"public/scripts/workout-events.js","role":"events","global":"StrataWorkoutEvents","maxLines":120},
+        {"file":"public/scripts/workout.js","role":"entry","maxLines":450}
+      ]
+    },
+    "pricing": {
+      "html": "public/pages/pricing.html",
+      "modules": [
+        {"file":"public/scripts/pricing-logic.js","role":"logic","global":"StrataPricingLogic","maxLines":80},
+        {"file":"public/scripts/pricing-state.js","role":"state","global":"StrataPricingState","maxLines":40},
+        {"file":"public/scripts/pricing-api.js","role":"api","global":"StrataPricingApi","maxLines":50},
+        {"file":"public/scripts/pricing-render.js","role":"render","global":"StrataPricingRender","maxLines":130},
+        {"file":"public/scripts/pricing-events.js","role":"events","global":"StrataPricingEvents","maxLines":40},
+        {"file":"public/scripts/pricing.js","role":"entry","maxLines":220}
+      ]
+    },
+    "account": {
+      "html": "public/pages/account.html",
+      "modules": [
+        {"file":"public/scripts/account-logic.js","role":"logic","global":"StrataAccountLogic","maxLines":270},
+        {"file":"public/scripts/account-state.js","role":"state","global":"StrataAccountState","maxLines":50},
+        {"file":"public/scripts/account-api.js","role":"api","global":"StrataAccountApi","maxLines":100},
+        {"file":"public/scripts/account-render.js","role":"render","global":"StrataAccountRender","maxLines":210},
+        {"file":"public/scripts/account-events.js","role":"events","global":"StrataAccountEvents","maxLines":70},
+        {"file":"public/scripts/account.js","role":"entry","maxLines":280}
+      ]
+    },
+    "admin": {
+      "html": "public/pages/admin.html",
+      "modules": [
+        {"file":"public/scripts/admin-state.js","role":"state","global":"StrataAdminState","maxLines":70},
+        {"file":"public/scripts/admin-logic.js","role":"logic","global":"StrataAdminLogic","maxLines":120},
+        {"file":"public/scripts/admin-api.js","role":"api","global":"StrataAdminApi","maxLines":70},
+        {"file":"public/scripts/admin-render.js","role":"render","global":"StrataAdminRender","maxLines":210},
+        {"file":"public/scripts/admin-session.js","role":"events","global":"StrataAdminSession","maxLines":70},
+        {"file":"public/scripts/admin-events.js","role":"events","global":"StrataAdminEvents","maxLines":80},
+        {"file":"public/scripts/admin.js","role":"entry","maxLines":260}
+      ]
+    }
+  }
+}

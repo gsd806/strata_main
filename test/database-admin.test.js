@@ -85,6 +85,11 @@ function pendingPurchase(transactionId,userId,createdAt,status="ready") {
   };
 }
 
+function completedWorkoutRecord(userId,id,startedAt){
+  const summary={id,title:`Workout ${id}`,planDay:"Monday",date:"2026-01-01",status:"completed",startedAt,completedAt:startedAt+1000,elapsedSeconds:1000,totalSets:1,completedSets:1,exerciseCount:1,exerciseSummaries:[]};
+  return {userId,id,workoutJson:JSON.stringify({...summary,entries:[{id:`entry-${id}`,sets:[]}]}),summaryJson:JSON.stringify(summary),createHash:`create-${id}`,startedAt,updatedAt:startedAt+1000};
+}
+
 function accountAction(requestId,userId,purpose,createdAt) {
   return {
     requestId,
@@ -468,6 +473,9 @@ test("admin overview, user search, detail, and support queries are accurate and 
   const paid=user("user-paid",now,{name:"Paid Person",email:"paid@example.test"});
   try {
     for(const entry of [percent,underscore,slash,paid])await store.insertUser(entry);
+    await store.insertWorkout(completedWorkoutRecord(percent.id,"percent-first",now-8*24*60*60*1000));
+    await store.insertWorkout(completedWorkoutRecord(percent.id,"percent-second",now));
+    await store.insertWorkout(completedWorkoutRecord(paid.id,"paid-first",now));
     assert.equal(await store.insertSession(session("percent-a",percent.id,now)),true);
     assert.equal(await store.insertSession(session("percent-b",percent.id,now+1)),true);
     assert.equal(await store.insertSession(session("percent-expired",percent.id,now-2*60*60*1000,1,{expiresAt:now-1})),true);
@@ -480,7 +488,12 @@ test("admin overview, user search, detail, and support queries are accurate and 
     await store.upsertAccountAction(accountAction("query-delete",percent.id,"account_delete",now+4));
 
     await store.insertPendingPurchase(pendingPurchase("txn-paid-user",paid.id,now+4));
-    await store.completePurchase("txn-paid-user",{customerId:"ctm-paid",completedAt:now+5,updatedAt:now+5});
+    await store.completePurchase("txn-paid-user",{customerId:"ctm-paid",subscriptionId:"sub-renewed-query",completedAt:now+5,updatedAt:now+5});
+    await store.createPaddleSubscription({
+      subscriptionId:"sub-renewed-query",userId:paid.id,transactionId:"txn-paid-user",customerId:"ctm-paid",
+      status:"active",priceId:PRICE_ID,productId:PRODUCT_ID,scheduledChangeAction:null,scheduledChangeAt:null,
+      currentPeriodEndsAt:now+64*24*60*60*1000,eventOccurredAt:now+5,createdAt:now+5,updatedAt:now+5
+    });
     assert.ok(await store.suspendUser(paid.id,now+6));
 
     await store.insertPendingPurchase(pendingPurchase("txn-canceled-subscription",slash.id,now+4));
@@ -542,7 +555,13 @@ test("admin overview, user search, detail, and support queries are accurate and 
       discovery_users:1,
       pending_payments:1,
       pending_deletions:1,
-      open_support:1
+      open_support:1,
+      first_workout_users:2,
+      second_workout_users:1,
+      day_eight_return_users:1,
+      trial_users:0,
+      paid_users:3,
+      renewed_subscriptions:1
     });
 
     assert.equal(firstTicket.status,"new");

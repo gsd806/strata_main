@@ -149,6 +149,22 @@ test("session builder rotates strong choices around exercises already in the sav
   assert.ok(rotated.items.some((item)=>item.reasons.includes("was not yet in your saved week when this session was generated")));
 });
 
+test("session anchors repeat only compatible roles without creating duplicate movements",()=>{
+  const allEquipment=[...new Set(exercises.map((exercise)=>exercise.equipment))],profile={...preferences,equipment:allEquipment};
+  const first=Core.buildSession({exercises,preferences:profile,focus:"full",minutes:35});
+  const next=Core.buildSession({exercises,preferences:profile,focus:"full",minutes:35,weeklyPlan:{days:Object.fromEntries(Core.WEEKDAYS.map((day)=>[day,day==="Monday"?first.items:[]]))}});
+  const anchored=Core.repeatSessionAnchors(next,first.items.slice(0,2),2);
+  assert.deepEqual(anchored.anchorExerciseIds,first.items.slice(0,2).map((item)=>item.exerciseId));
+  assert.equal(new Set(anchored.items.map((item)=>item.exerciseId)).size,anchored.items.length);
+  for(const anchor of first.items.slice(0,2)){
+    const repeated=anchored.items.find((item)=>item.exerciseId===anchor.exerciseId);
+    assert.equal(repeated.role,anchor.role);
+    assert.ok(repeated.reasons.includes("repeated anchor for Training Memory"));
+    assert.equal(Core.personalResult(repeated.exercise,profile).eligible,true);
+  }
+  assert.equal(anchored.workingSets,anchored.items.reduce((total,item)=>total+item.sets,0));
+});
+
 test("session merge adds the complete routine without mutating or duplicating a day",()=>{
   const allEquipment={...preferences,equipment:[...new Set(exercises.map((exercise)=>exercise.equipment))]},session=Core.buildSession({exercises,preferences:allEquipment,focus:"full",minutes:35});
   const days=Object.fromEntries(Core.WEEKDAYS.map((day)=>[day,[]]));

@@ -197,7 +197,7 @@ test("funnel pages load both isolated signal assets and use the strict event con
   const integrations={
     "public/scripts/onboarding.js":["onboarding_previewed","onboarding_saved"],
     "public/scripts/planner.js":["plan_saved"],
-    "public/scripts/workout.js":["workout_started","workout_completed"],
+    "public/scripts/workout-events.js":["workout_started","workout_completed"],
     "public/scripts/pricing.js":["upgrade_viewed","trial_started","checkout_opened","upgrade_activated"]
   };
   for(const [file,names] of Object.entries(integrations)){

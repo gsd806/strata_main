@@ -236,3 +236,55 @@
   .calculator-row,.plate-fields{grid-template-columns:1fr}.calculator-row .button{width:100%}
   .workout-memory .button{width:100%}
 }
+
+/* Build 7.8: the main path stays focused; configuration remains available on demand. */
+.plan-preview-details{margin-top:18px;border-top:1px solid var(--line)}
+.plan-preview-details>summary{display:flex;align-items:center;min-height:48px;color:var(--muted);cursor:pointer;text-transform:uppercase;font:500 .69rem/1.4 var(--mono);letter-spacing:.055em}
+.plan-preview-details[open]>summary{color:var(--lime)}
+.plan-preview-details .plan-preview{padding-top:4px}
+.workout-memory{grid-template-columns:1fr;margin-bottom:18px}
+.workout-memory>div{background:linear-gradient(135deg,rgba(212,245,120,.055),#141611 58%)}
+.exercise-more{margin-top:14px;border-top:1px solid var(--line)}
+.exercise-more>summary{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:52px;color:var(--lime);cursor:pointer;text-transform:uppercase;font:500 .7rem/1.4 var(--mono);letter-spacing:.05em}
+.exercise-more>summary small{color:var(--muted);text-align:right;text-transform:none;font:400 .72rem/1.4 var(--body);letter-spacing:0}
+.exercise-more-body{padding:2px 0 4px}
+.exercise-more .exercise-actions{margin:6px 0 16px}
+.exercise-more .memory-target{padding:16px;margin-bottom:4px;border:1px solid var(--line);border-radius:9px;background:#141611}
+.exercise-more .memory-target>span{display:block;margin-bottom:8px;color:var(--lime);text-transform:uppercase;font:500 .65rem/1.4 var(--mono);letter-spacing:.06em}
+.exercise-more .memory-target ol{display:grid;gap:5px;margin:0 0 12px;padding:0;list-style:none;color:var(--muted);font-size:.76rem}
+.exercise-more .memory-target li{display:flex;gap:8px;overflow-wrap:anywhere}.exercise-more .memory-target li b{flex:0 0 auto;color:var(--text)}
+.exercise-more .memory-target p{margin:0 0 12px;color:var(--muted);font-size:.75rem}
+.sets-table th:last-child,.sets-table td:last-child{width:190px}
+.set-actions{display:grid;grid-template-columns:minmax(104px,1fr) auto;align-items:start;gap:6px}
+.set-more>summary{display:grid;place-items:center;min-width:58px;min-height:44px;padding:8px;color:var(--muted);border:1px solid var(--line);border-radius:8px;cursor:pointer;font-size:.7rem}
+.set-more[open]>summary{color:var(--lime);border-color:#6d8448}
+.set-more-actions{display:grid;gap:4px;margin-top:5px}
+.set-more-actions .button{min-height:44px;white-space:nowrap}
+.calendar-next{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;align-items:center;width:min(760px,100%);margin:26px auto;padding:18px;text-align:left;border:1px solid var(--line);border-radius:10px;background:#141611}
+.calendar-next div{min-width:0}.calendar-next span,.calendar-next strong,.calendar-next small{display:block}.calendar-next span{color:var(--lime);text-transform:uppercase;font:500 .63rem/1.4 var(--mono);letter-spacing:.06em}.calendar-next strong{margin:4px 0}.calendar-next small{color:var(--muted)}
+.calendar-next p{grid-column:1/-1;margin:0;padding-top:13px;border-top:1px solid var(--line);font-size:.72rem!important}.calendar-next .button{white-space:nowrap}
+
+@media(max-width:760px){
+  .workout-page.has-workout-access .hero{display:none}
+  .workout-page.has-workout-access .shell{padding-top:6px}
+  .workout-page.has-workout-access .mode-notice{padding:4px 0 8px;font-size:.72rem;line-height:1.45}
+  .workout-page.has-workout-access .mode-notice a{min-height:36px;margin-left:4px}
+  .workout-page .start-panel{padding:18px 16px}
+  .workout-page .start-panel .section-heading{margin-bottom:12px}
+  .workout-page .start-panel .section-heading h2{font-size:1.65rem}
+  .workout-page .start-panel .day-field{margin-bottom:12px}
+  .workout-page .start-panel .session-brief{margin-bottom:12px}
+  .workout-page .start-panel .start-bottom{margin-top:12px;padding-top:14px}
+  .workout-page .start-panel .start-actions{width:100%}
+  .workout-page .start-panel .start-actions .button{width:100%}
+  .plan-preview-details{margin-top:12px}
+  .exercise-more>summary{align-items:flex-start;flex-direction:column;justify-content:center;gap:1px}
+  .exercise-more>summary small{text-align:left}
+  .calendar-next{grid-template-columns:1fr}.calendar-next .button{width:100%}
+}
+@media(max-width:420px){
+  .workout-page .start-panel .start-bottom>p{display:none}
+  .sets-table td.set-actions-cell{grid-column:1}
+  .set-actions{grid-template-columns:minmax(0,1fr) auto}
+  .set-more>summary{min-width:54px}
+}

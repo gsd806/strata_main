@@ -7,7 +7,7 @@ const {join}=require("node:path");
 
 const ROOT=join(__dirname,"..");
 const read=(...parts)=>fs.readFileSync(join(ROOT,"public",...parts),"utf8");
-const html=read("pages","workout.html"),source=read("scripts","workout.js"),catalog=JSON.parse(read("data","exercises.json"));
+const html=read("pages","workout.html"),sources=["workout-state.js","workout-api.js","workout-calendar.js","workout-render.js","workout-guidance.js","workout-history.js","workout-events.js","workout.js"].map((name)=>[name,read("scripts",name)]),catalog=JSON.parse(read("data","exercises.json"));
 const Workout=require(join(ROOT,"public/scripts/workout-core")),Discovery=require(join(ROOT,"public/scripts/discovery-core"));
 const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map((match)=>match[1]);
 
@@ -32,7 +32,7 @@ const plan={version:1,restDay:"Sunday",restDays:["Sunday"],days:Object.fromEntri
 const past=Workout.createWorkout(plan,"Monday",catalog,1_700_000_000_000);past.id="runtime-history";past.date="2026-08-31";past.status="completed";past.completedAt=past.startedAt+1000;past.elapsedSeconds=1;past.entries[0].sets[0]={reps:10,weight:42.5,seconds:null,completed:true,effort:null};
 const history=[Workout.summary(past)];
 const storage=new Map();
-const document={visibilityState:"visible",getElementById:(id)=>elements.get(id)||null,addEventListener(){}};
+const previewDetails=new Element("planPreviewDetails"),document={visibilityState:"visible",body:new Element("body"),getElementById:(id)=>elements.get(id)||null,querySelector:(selector)=>selector===".plan-preview-details"?previewDetails:null,addEventListener(){}};
 const location={search:"?day=Monday",hash:"",href:"http://strata.test/workout.html?day=Monday",reload(){}};
 const context={
   console,document,location,history:{replaceState(){}},URL,URLSearchParams,AbortController,Blob,
@@ -50,7 +50,7 @@ const context={
   setTimeout:()=>1,clearTimeout(){},setInterval:()=>1,confirm:()=>true
 };
 context.globalThis=context;context.window.document=document;context.window.location=location;
-vm.createContext(context);vm.runInContext(source,context,{filename:"workout.js"});
+vm.createContext(context);for(const [name,source] of sources)vm.runInContext(source,context,{filename:name});
 
 (async()=>{
   for(let index=0;index<8&&!elements.get("trainingRoom").hidden;index++)await new Promise(setImmediate);
@@ -59,11 +59,12 @@ vm.createContext(context);vm.runInContext(source,context,{filename:"workout.js"}
   const startHandlers=elements.get("startWorkout").listeners.click||[];assert.equal(startHandlers.length,1);
   startHandlers[0]();
   const markup=elements.get("sessionEntries").innerHTML;
-  assert.match(markup,/Training memory and suggested target/);
+  assert.match(markup,/Previous performance/);
   assert.match(markup,/data-use-last/);assert.match(markup,/data-apply-target/);
   assert.match(markup,/data-add-set/);assert.match(markup,/data-duplicate-set/);assert.match(markup,/data-remove-set/);
   assert.match(markup,/data-entry-note/);assert.match(markup,/Effort \(optional\)/);
-  assert.match(markup,/Advanced · warm-ups &amp; plates/);assert.match(markup,/data-calc-warmup/);assert.match(markup,/data-calc-plates/);
+  assert.match(markup,/More options/);assert.match(markup,/Warm-ups &amp; plate calculator/);assert.match(markup,/data-calc-warmup/);assert.match(markup,/data-calc-plates/);
+  assert.match(markup,/Complete set/);
   assert.match(markup,/data-toggle-superset/);assert.match(markup,/data-open-swap/);
   assert.match(html,/No workout or Plan changes until/);assert.match(html,/Approve Plan &amp; workout change/);
   console.log("Workout Memory runtime smoke passed: explicit memory, logging, calculator, superset, and replacement controls rendered.");

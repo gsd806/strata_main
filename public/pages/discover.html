@@ -13,11 +13,11 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icons/strata-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="/fonts.css?v=7.7.1" />
-    <link rel="stylesheet" href="/experience.css?v=7.7.1" />
-    <link rel="stylesheet" href="discover.css?v=7.7.1" />
-    <link rel="stylesheet" href="/product-signals.css?v=7.7.1" />
-    <script src="/motion.js?v=7.7.1"></script>
+    <link rel="stylesheet" href="/fonts.css?v=7.8.0" />
+    <link rel="stylesheet" href="/experience.css?v=7.8.0" />
+    <link rel="stylesheet" href="discover.css?v=7.8.0" />
+    <link rel="stylesheet" href="/product-signals.css?v=7.8.0" />
+    <script src="/motion.js?v=7.8.0"></script>
   </head>
   <body class="plus-studio">
     <a class="skip-link" href="#todayWorkspace">Skip to today’s training</a>
@@ -119,37 +119,38 @@
             </div>
             <p id="trainingBlockReviewStatus" role="status" aria-live="polite">Nothing changes until you review and confirm an action.</p>
           </section>
-          <div class="context-tools"><div><p class="kicker">Only when you need them</p><h3>MORE PLANNING TOOLS</h3></div><nav aria-label="Additional planning tools"><a href="#sessionBuilder" data-feature-target="session"><span>Session builder</span><small>Handle a change in time, focus, or equipment.</small><b aria-hidden="true">→</b></a><a href="#monthlyPlan" data-feature-target="monthly"><span>Dated 31-day schedule</span><small>Export a calendar-style month when dates matter.</small><b aria-hidden="true">→</b></a></nav></div>
+          <details class="context-tools"><summary><span><small class="kicker">Only when you need them</small><strong>More planning tools</strong></span><b aria-hidden="true">+</b></summary><nav aria-label="Additional planning tools"><a href="#sessionBuilder" data-feature-target="session"><span>Session builder</span><small>Handle a change in time, focus, or equipment.</small><b aria-hidden="true">→</b></a><a href="#monthlyPlan" data-feature-target="monthly"><span>Dated 31-day schedule</span><small>Export a calendar-style month when dates matter.</small><b aria-hidden="true">→</b></a></nav></details>
         </div>
       </section>
 
       <section class="progress-workspace feature-panel" id="progressWorkspace" data-feature-panel="progress" aria-labelledby="progressWorkspaceTitle">
         <div class="studio-container">
           <div class="workspace-heading"><div><p class="kicker">Progress · based on your logs</p><h2 id="progressWorkspaceTitle" tabindex="-1">SEE THE WORK. <em>NOT A MADE-UP SCORE.</em></h2></div><p>These summaries use sessions you recorded in Strata+. They describe training history—not recovery, injury risk, or guaranteed results.</p></div>
-          <div class="progress-metric-grid" aria-label="Training progress summary">
-            <article><span>This week</span><strong id="progressAdherence">—</strong><p id="progressAdherenceDetail">Loading planned and completed days…</p></article>
-            <article><span>Logged load volume</span><strong id="progressVolume">—</strong><p id="progressVolumeDetail">External and assisted loads are kept in their recorded units.</p></article>
-            <article><span>Consistency</span><strong id="progressConsistency">—</strong><p id="progressConsistencyDetail">Weeks with at least one completed session, last four weeks.</p></article>
-            <article><span>Saved sessions</span><strong id="progressSessions">—</strong><p id="progressSessionsDetail">Completed sessions in the loaded history window.</p></article>
+          <section class="progress-first-workout" id="progressFirstWorkout" aria-labelledby="progressFirstWorkoutTitle" hidden><span aria-hidden="true">01</span><div><p class="kicker">Your first useful signal</p><h3 id="progressFirstWorkoutTitle">COMPLETE YOUR FIRST WORKOUT TO UNLOCK PROGRESS.</h3><p>Log the work you actually complete. Strata+ will then reveal your first training record and build comparisons only when the same movement returns.</p></div><a class="button button-accent" href="/workout.html">Start working out <span aria-hidden="true">→</span></a></section>
+          <div id="progressHistoryContent">
+            <div class="progress-metric-grid" aria-label="Training progress summary">
+              <article><span>This week</span><strong id="progressAdherence">—</strong><p id="progressAdherenceDetail">Loading planned and completed days…</p></article>
+              <article><span>Logged load volume</span><strong id="progressVolume">—</strong><p id="progressVolumeDetail">External loads stay in their recorded units.</p></article>
+              <article><span>Consistency</span><strong id="progressConsistency">—</strong><p id="progressConsistencyDetail">Weeks with at least one completed session, last four weeks.</p></article>
+              <article><span>Saved sessions</span><strong id="progressSessions">—</strong><p id="progressSessionsDetail">Completed sessions in the loaded history window.</p></article>
+            </div>
+            <div class="progress-detail-grid">
+              <section aria-labelledby="repeatImprovementTitle"><p class="kicker" id="repeatImprovementScope">Comparable sessions</p><h3 id="repeatImprovementTitle">REPEAT IMPROVEMENTS</h3><div id="repeatImprovementList" class="progress-list"><p class="progress-empty">Repeat an exercise in two completed sessions to see a like-for-like change.</p></div></section>
+              <section aria-labelledby="personalBestTitle"><p class="kicker" id="personalBestScope">From your recorded history</p><h3 id="personalBestTitle">LOGGED PERSONAL BESTS</h3><div id="personalBestList" class="progress-list"><p class="progress-empty">Your strongest comparable performances will appear after you log workouts.</p></div></section>
+            </div>
+            <div class="progress-footnote"><p><strong>How to read this:</strong> load volume is load × repetitions from completed sets when available. Personal bests compare the same exercise, measurement, load type, and unit. They are training records, not a health assessment.</p><a class="small-button" href="/workout.html#historySection">Open full workout history <span aria-hidden="true">→</span></a></div>
           </div>
-          <div class="progress-detail-grid">
-            <section aria-labelledby="repeatImprovementTitle"><p class="kicker" id="repeatImprovementScope">Comparable sessions</p><h3 id="repeatImprovementTitle">REPEAT IMPROVEMENTS</h3><div id="repeatImprovementList" class="progress-list"><p class="progress-empty">Repeat an exercise in two completed sessions to see a like-for-like change.</p></div></section>
-            <section aria-labelledby="personalBestTitle"><p class="kicker" id="personalBestScope">From your recorded history</p><h3 id="personalBestTitle">LOGGED PERSONAL BESTS</h3><div id="personalBestList" class="progress-list"><p class="progress-empty">Your strongest comparable performances will appear after you log workouts.</p></div></section>
-          </div>
-          <div class="progress-footnote"><p><strong>How to read this:</strong> load volume is load × repetitions from completed sets when available. Personal bests compare the same exercise, measurement, load type, and unit. They are training records, not a health assessment.</p><a class="small-button" href="/workout.html#historySection">Open full workout history <span aria-hidden="true">→</span></a></div>
         </div>
       </section>
 
       <section class="explore-workspace feature-panel" id="exploreWorkspace" data-feature-panel="explore" aria-labelledby="exploreWorkspaceTitle">
         <div class="studio-container">
           <div class="workspace-heading"><div><p class="kicker">Explore · use a tool with purpose</p><h2 id="exploreWorkspaceTitle" tabindex="-1">FIND WHAT YOU NEED. <em>KEEP THE REST QUIET.</em></h2></div><p>Open one focused tool at a time. Recommendations use your preferences; the official FitScore remains unchanged.</p></div>
-          <nav class="feature-grid explore-tool-grid" aria-label="Exercise and community tools">
+          <nav class="feature-grid explore-tool-grid explore-primary-tools" aria-label="Primary Explore tools">
             <a class="feature-block" href="#recommendations" data-feature-target="recommendations" aria-controls="recommendations" aria-expanded="false"><span>Recommendations</span><strong>Find your strongest fits</strong><small>Ranked for your goal, experience, equipment, and constraints.</small><b aria-hidden="true">↗</b></a>
             <a class="feature-block" href="#exerciseExplorer" data-feature-target="library" aria-controls="exerciseExplorer" aria-expanded="false"><span>Library</span><strong>Explore every movement</strong><small>Search <span id="catalogTotal">200</span> exercises and inspect each trade-off.</small><b aria-hidden="true">↗</b></a>
-            <a class="feature-block" href="#battle" data-feature-target="battle" aria-controls="battle" aria-expanded="false"><span>Compare</span><strong>Make a clear choice</strong><small>Put two to four movements side by side before committing.</small><b aria-hidden="true">↗</b></a>
-            <a class="feature-block" href="#communityPlans" data-feature-target="community" aria-controls="communityPlans" aria-expanded="false"><span>Community</span><strong>Discover a shared week</strong><small>Preview every day before choosing to replace your own week.</small><b aria-hidden="true">↗</b></a>
-            <a class="feature-block" href="#profile" data-feature-target="profile" aria-controls="profile" aria-expanded="false"><span>Preferences</span><strong>Tune your ranking lens</strong><small>Control the rules behind your personal matches.</small><b aria-hidden="true">↗</b></a>
           </nav>
+          <details class="explore-advanced-tools"><summary><span><small class="kicker">Advanced Explore tools</small><strong>Compare, browse community plans, or tune preferences</strong></span><b aria-hidden="true">+</b></summary><nav class="feature-grid explore-tool-grid" aria-label="Advanced Explore tools"><a class="feature-block" href="#battle" data-feature-target="battle" aria-controls="battle" aria-expanded="false"><span>Compare</span><strong>Make a clear choice</strong><small>Put two to four movements side by side before committing.</small><b aria-hidden="true">↗</b></a><a class="feature-block" href="#communityPlans" data-feature-target="community" aria-controls="communityPlans" aria-expanded="false"><span>Community</span><strong>Discover a shared week</strong><small>Preview every day before choosing to replace your own week.</small><b aria-hidden="true">↗</b></a><a class="feature-block" href="#profile" data-feature-target="profile" aria-controls="profile" aria-expanded="false"><span>Preferences</span><strong>Tune your ranking lens</strong><small>Control the rules behind your personal matches.</small><b aria-hidden="true">↗</b></a></nav></details>
         </div>
       </section>
 
@@ -345,7 +346,7 @@
 
     </main>
 
-    <footer class="build-footer">STRATA · Build 7.7.1 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
+    <footer class="build-footer">STRATA · Build 7.8.0 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
 
     <aside class="compare-tray" id="compareTray" hidden aria-label="Exercise comparison tray">
       <div><span>EXERCISE BATTLE</span><p id="compareNames">Choose 2–4 exercises</p></div>
@@ -378,11 +379,22 @@
     </dialog>
     <noscript><div class="no-script-note" role="status"><strong>Strata+ needs JavaScript for personalized tools.</strong> The page content remains available, but saving, filtering, comparing, and plan building require JavaScript.</div></noscript>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=7.7.1"></script>
-    <script src="/product-signals.js?v=7.7.1"></script>
-    <script src="discovery-core.js?v=7.7.1"></script>
-    <script src="monthly-plan-core.js?v=7.7.1"></script>
-    <script src="training-block-core.js?v=7.7.1"></script>
-    <script src="discover.js?v=7.7.1"></script>
+    <script src="/pwa.js?v=7.8.0"></script>
+    <script src="/product-signals.js?v=7.8.0"></script>
+    <script src="discovery-core.js?v=7.8.0"></script>
+    <script src="monthly-plan-core.js?v=7.8.0"></script>
+    <script src="training-block-core.js?v=7.8.0"></script>
+    <script src="discover-state.js?v=7.8.0"></script>
+    <script src="discover-api.js?v=7.8.0"></script>
+    <script src="discover-navigation.js?v=7.8.0"></script>
+    <script src="discover-progress.js?v=7.8.0"></script>
+    <script src="discover-render.js?v=7.8.0"></script>
+    <script src="discover-catalog.js?v=7.8.0"></script>
+    <script src="discover-detail.js?v=7.8.0"></script>
+    <script src="discover-community.js?v=7.8.0"></script>
+    <script src="discover-session.js?v=7.8.0"></script>
+    <script src="discover-sharing.js?v=7.8.0"></script>
+    <script src="discover-events.js?v=7.8.0"></script>
+    <script src="discover.js?v=7.8.0"></script>
   </body>
 </html>

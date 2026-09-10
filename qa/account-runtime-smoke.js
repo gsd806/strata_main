@@ -13,6 +13,10 @@ const readPublic=(...parts)=>fs.readFileSync(join(PROJECT_ROOT,"public",...parts
 const html=readPublic("pages","index.html");
 const catalog=JSON.parse(readPublic("data","exercises.json"));
 const appSource=readPublic("scripts","app.js");
+const homeModuleNames=["home-logic.js","home-state.js","home-api.js","home-render.js","home-events.js"];
+const homeModuleSources=homeModuleNames.map((name)=>readPublic("scripts",name));
+const Discovery=require(join(PROJECT_ROOT,"public","scripts","discovery-core"));
+const Preview=require(join(PROJECT_ROOT,"public","scripts","preview-core"));
 const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map((match)=>match[1]);
 class ClassList{
   constructor(){this.values=new Set();}
@@ -44,7 +48,7 @@ const navigations=[];
 const fetches=[];
 const context={
   console,document,location:{search:""},history:{replaceState(){}},requestAnimationFrame:(callback)=>callback(),setTimeout,clearTimeout,URLSearchParams,
-  window:{location:{assign:(path)=>navigations.push(path)}},
+  window:{location:{assign:(path)=>navigations.push(path)},StrataDiscovery:Discovery,StrataPreview:Preview},
   FormData:class{constructor(form){this.values=form.values||{};}get(key){return this.values[key]||null;}},
   fetch:async(path)=>{
     fetches.push(path);
@@ -55,6 +59,7 @@ const context={
 };
 context.globalThis=context;
 vm.createContext(context);
+for(let index=0;index<homeModuleSources.length;index+=1)vm.runInContext(homeModuleSources[index],context,{filename:homeModuleNames[index]});
 vm.runInContext(appSource,context,{filename:"app.js"});
 
 (async()=>{

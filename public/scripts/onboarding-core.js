@@ -45,6 +45,12 @@
       ready:availability.length>=1&&availability.length<=6&&equipment.length>0&&minutes>0,message
     };
   }
+  function uniqueInstanceId(day,index,exerciseId,used,makeId){
+    const requested=typeof makeId==="function"?String(makeId(exerciseId,index,day)||""):"",stem=`setup-${day}-${index}-${exerciseId}`.replace(/[^a-zA-Z0-9_-]/g,"-").slice(0,92);
+    let candidate=/^[a-zA-Z0-9_-]{6,100}$/.test(requested)&&!used.has(requested)?requested:stem,suffix=2;
+    while(used.has(candidate))candidate=`${stem.slice(0,96-String(suffix).length)}-${suffix++}`;
+    used.add(candidate);return candidate;
+  }
   function buildWeek(profile,exercises,discovery,makeId){
     const days=DAYS.filter(day=>profile?.availability?.includes(day));
     if(days.length<1||days.length>6)throw new Error("Choose one to six training days, leaving at least one recovery day.");
@@ -59,11 +65,16 @@
       limitations:uniqueAllowed(profile.limitations,LIMITATION_OPTIONS)
     };
     const plan={version:1,restDay:DAYS.find(day=>!days.includes(day))??null,restDays:DAYS.filter(day=>!days.includes(day)),days:Object.fromEntries(DAYS.map(day=>[day,[]]))};
-    const sessions=[];
+    const sessions=[],anchorsByFocus=new Map(),usedInstanceIds=new Set(),anchorLimit=minutes===20||days.length>=4?1:2;
     for(const [index,day] of days.entries()){
       const focus=days.length>=4?(index%2===0?"upper":"lower"):"full";
-      const session=discovery.buildSession({exercises,preferences,focus,minutes,weeklyPlan:plan});
-      plan.days[day]=session.items.map((item,i)=>({instanceId:makeId?makeId():`setup-${day}-${i}-${item.exerciseId}`,exerciseId:item.exerciseId,sets:item.sets,reps:item.reps}));
+      let session=discovery.buildSession({exercises,preferences,focus,minutes,weeklyPlan:plan});
+      if(days.length>=3){
+        const anchors=anchorsByFocus.get(focus);
+        if(anchors?.length)session=discovery.repeatSessionAnchors(session,anchors,anchorLimit);
+        else anchorsByFocus.set(focus,session.items.slice(0,anchorLimit));
+      }
+      plan.days[day]=session.items.map((item,i)=>({instanceId:uniqueInstanceId(day,i,item.exerciseId,usedInstanceIds,makeId),exerciseId:item.exerciseId,sets:item.sets,reps:item.reps}));
       sessions.push({day,...session});
     }
     return {plan,sessions,preferences};

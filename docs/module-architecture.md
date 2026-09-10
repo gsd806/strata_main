@@ -1,8 +1,8 @@
 # Module architecture evidence
 
-Build 7.7.1 keeps extraction as an enforceable boundary, not a file-count exercise. `npm run architecture:check` recursively inventories server JavaScript and reports physical lines, nonblank lines, bytes, reviewed line budgets, and every statically analyzable local dependency. It fails when a module exceeds its budget, gains an unapproved dependency, is omitted from the policy, references a missing local module, introduces a dependency cycle, or uses module loading that cannot be audited.
+Build 7.8.0 keeps extraction as an enforceable boundary, not a file-count exercise. `npm run architecture:check` inventories both server JavaScript and the seven largest interactive browser surfaces. It reports physical lines, nonblank lines, bytes, reviewed line budgets, and every statically analyzable local dependency. It fails when a module exceeds its budget, gains an unapproved dependency, is omitted from the relevant policy, loads out of dependency order, references a missing local module, introduces a dependency cycle, or uses server module loading that cannot be audited.
 
-The policy lives in `architecture-policy.json`; it should change only with an intentional architecture review. A larger line budget is not the default response to a failure: first decide whether the module has accumulated another responsibility.
+The policies live in `architecture-policy.json` and `frontend-architecture-policy.json`; they should change only with an intentional architecture review. A larger line budget is not the default response to a failure: first decide whether the module has accumulated another responsibility.
 
 ## Dependency direction
 
@@ -19,7 +19,8 @@ root bootstrap
           │                             └── Paddle transaction boundary
           │                                   ├── subscription/portal validation
           │                                   └── signature/source validation
-          ├── admin/support/setup/training services
+          ├── admin service ──────────── email boundary ── admin MFA delivery leaf
+          ├── support/setup/training services
           ├── product-signal boundary
           ├── database adapter ─────────┬── account self-service store ── account query catalog
           │                             ├── billing store ─────────────── billing schema
@@ -33,30 +34,53 @@ root bootstrap
 
 The HTTP root supplies services and adapters through explicit factories. Domain services do not import the composition root or instantiate storage. The billing service points down to HTTP, provider, bounded text-validation, and a focused retired-checkout policy; the latter points only to the Paddle transaction boundary and cannot reach upward into billing. The database adapter delegates account, billing, and training-loop behavior to focused parity modules. Schema leaves have no upward dependencies.
 
-## Current 7.7.1 boundary
+## Current 7.8.0 server boundary
 
-The 7.5.0 extraction remains intact: the current composition root is 735 physical lines after trial, checkout, webhook, entitlement, subscription, portal, and reconciliation policy moved into focused billing modules. The dual adapter is now 1,189 lines after adding atomic SQLite/Turso administrator-control cleanup, still below its reviewed 1,200-line ceiling; recurring billing, administrator controls, and account self-service storage remain in dedicated parity modules. `src/payments.js` owns provider transactions and points only to focused subscription/portal and webhook-trust leaves, while `src/legacy-checkout.js` isolates the exact Build 7.4 catalog exception and its atomic migration rules.
+The 7.5.0 extraction remains intact: the current composition root is 783 physical lines after trial, checkout, webhook, entitlement, subscription, portal, and reconciliation policy moved into focused billing modules. Its explicit public-file allowlist grew with the new browser leaves but remains below its reviewed 800-line ceiling. The dual adapter is now 1,189 lines after adding atomic SQLite/Turso administrator-control cleanup, still below its reviewed 1,200-line ceiling; recurring billing, administrator controls, and account self-service storage remain in dedicated parity modules. `src/payments.js` owns provider transactions and points only to focused subscription/portal and webhook-trust leaves, while `src/legacy-checkout.js` isolates the exact Build 7.4 catalog exception and its atomic migration rules.
 
 Account session/export work is not hidden inside the HTTP root: `src/auth.js` constructs a narrow injected account-self-service service, `src/account-export.js` owns bounded serialization and workout keyset streaming, and the database adapter delegates its queries and mutations to `src/account-self-service-store.js`. `src/migrations.js` owns ordered schema evolution instead of leaving version checks scattered across startup code. `src/observability.js` remains an independent transport-safe leaf.
 
-The result is 38 inventoried modules, zero dependency cycles, and zero policy violations. Several files remain substantial—especially authentication, billing, the database adapter, and the composition root—but each has an explicit responsibility, allowed edge set, and reviewed ceiling.
+The result is 39 inventoried server modules, zero dependency cycles, and zero policy violations. The new administrator MFA leaf owns session-bound code derivation and email delivery, while the Admin service retains authorization and elevation orchestration. Several files remain substantial—especially authentication, billing, the database adapter, and the composition root—but each has an explicit responsibility, allowed edge set, and reviewed ceiling.
 
-The 7.7.0 account controls live in focused grant state, schema, and storage modules. Administrator mutations and checkout reconciliation are extracted into their own modules so existing administrator and billing size ceilings remain unchanged.
+The 7.7.0 account controls remain in focused grant state, schema, and storage modules. Administrator mutations and checkout reconciliation stay extracted into their own modules; Build 7.8.0 adds the separate MFA boundary without widening those responsibilities.
 
 ## Browser boundaries
 
-The server inventory deliberately covers the process bootstrap and `src/**/*.js`; it does not misrepresent browser entry scripts as server modules. Browser boundaries are tested separately:
+`frontend-architecture-policy.json` now enforces a one-way, page-local boundary for Home, Strata+, Plan, Train, Pricing, Account, and Admin. Each page must provide pure/domain logic, mutable state, same-origin API access, rendering, event binding, and exactly one final coordinator. Shared domain cores load first; state, API, rendering, and event leaves may depend only on modules loaded before them; the coordinator loads last. The report resolves both CommonJS imports and published `Strata*` globals, fails cycles and reversed edges, and verifies the actual HTML script order.
 
-- `activation-core.js` validates and fingerprints the browser-local preview, scopes remembered decisions to the account and both Plan copies, and keeps claim/compare/keep separate from the server write.
-- `plan-insights-core.js` derives explainable muscle, pattern, and equipment signals and creates reviewable copy-day merge/replace proposals without mutating its input.
-- `workout-core.js` owns Training Memory comparisons, target application, set operations, warm-up and plate calculations, superset data, and workout/Plan swap proposals.
-- `training-block-core.js` derives block week, planned/completed evidence, records/improvements/skips/replacements, and explicit block-only actions.
-- `workout-offline.js` is a public-shell controller that accepts only a matching unexpired account-scoped device context and returns to the online revision check for sync.
-- DOM entry scripts keep account identity, CSRF, revision, focus, save-state, and no-silent-write decisions visible at the user boundary.
+The extraction is deliberately incremental. It preserves the current HTML/CSS application and public URLs instead of replacing it with a framework rewrite. DOM-heavy coordinators still own page composition, account/revision checks, and orchestration; reusable calculations, transport, state construction, rendering helpers, and listener registration now have separately testable homes.
+
+```text
+shared domain logic
+    → page logic
+    → page state
+    → same-origin API
+    → rendering
+    → event binding
+    → page coordinator
+```
+
+The enforced load graph is page-specific rather than a license for leaves to call sideways into unrelated pages. Shared modules such as `discovery-core.js`, `activation-core.js`, and `workout-core.js` stay dependency-light and appear before each consumer.
+
+### Browser size result
+
+The largest coordinator reductions and their extracted leaves are:
+
+| Page | Coordinator before → after | Extracted modules (physical lines) |
+| --- | ---: | --- |
+| Home | `app.js` 626 → 132 | logic 110; state 25; API 24; render 129; events 63 |
+| Strata+ | `discover.js` 1,364 → 699 | state 52; API 45; navigation 98; progress logic 74; base render 36; catalog 86; detail 54; community 52; session 49; sharing 31; events 64 |
+| Plan | `planner.js` 1,233 → 638 | logic 82; state 35; API 36; render 66; conflicts 106; templates 82; sharing 120; activation 96; events 140 |
+| Train | `workout.js` 784 → 420 | state 57; API 52; calendar logic 29; base render 61; guidance 107; history 110; events 96 |
+| Pricing | `pricing.js` 414 → 213 | logic 56; state 17; API 30; render 109; events 22 |
+| Account | `account.js` 835 → 271 | logic 238; state 31; API 68; render 186; events 44 |
+| Admin | `admin.js` 848 → 244 | state 55; logic 97; API 47; render 190; session 54; events 55 |
+
+These totals are not presented as deleted functionality: much of the former coordinator code moved into named leaves, and new user-facing behavior was added. The evidence of improvement is the enforced direction, independent tests, smaller orchestration roots, and zero-cycle report—not a lower aggregate line count. `node scripts/frontend-architecture-report.js` prints the exact live line/nonblank/byte table and every resolved dependency for all 68 policy entries covering 64 unique browser modules.
 
 ## Resulting module sizes
 
-The command-generated table below is the Build 7.7.1 snapshot. CI generates the same table on every architecture check, while the policy enforces budgets and edges against the live sources.
+The command-generated table below is the Build 7.8.0 server snapshot. CI generates the same table on every architecture check, while the policy enforces budgets and edges against the live sources.
 
 | Module | Responsibility | Lines | Nonblank | Size | Line budget | Local dependencies |
 | --- | --- | ---: | ---: | ---: | ---: | --- |
@@ -68,15 +92,16 @@ The command-generated table below is the Build 7.7.1 snapshot. CI generates the 
 | `src/account-self-service-schema.js` | Account self-service query catalog | 34 | 32 | 4.3 KiB | 55 | — |
 | `src/account-self-service-store.js` | SQLite and Turso account self-service storage parity | 72 | 67 | 4.2 KiB | 95 | `src/account-self-service-schema.js` |
 | `src/account-self-service.js` | Authenticated session inventory, revocation, and privacy-safe data export | 84 | 80 | 6.2 KiB | 150 | `src/account-export.js` |
+| `src/admin-mfa.js` | Session-bound administrator email MFA challenge and delivery | 62 | 55 | 4.6 KiB | 100 | — |
 | `src/admin-user-actions.js` | Audited administrator account and payment actions | 86 | 85 | 9.2 KiB | 160 | `src/access-controls.js`, `src/plans.js` |
-| `src/admin.js` | Administrative authorization and actions | 222 | 207 | 13.8 KiB | 280 | `src/access-controls.js`, `src/admin-user-actions.js`, `src/plans.js` |
+| `src/admin.js` | Administrative authorization and actions | 276 | 257 | 18.4 KiB | 280 | `src/access-controls.js`, `src/admin-user-actions.js`, `src/email.js`, `src/plans.js` |
 | `src/auth.js` | Authentication and account lifecycle | 812 | 769 | 53.4 KiB | 840 | `src/account-self-service.js`, `src/email.js`, `src/plans.js` |
 | `src/billing-schema.js` | Commercial entitlement and recurring-subscription schema | 121 | 115 | 15.4 KiB | 140 | — |
 | `src/billing-store.js` | SQLite and Turso commercial storage parity | 210 | 202 | 19.7 KiB | 240 | `src/access-controls-schema.js`, `src/billing-schema.js` |
 | `src/billing.js` | Commercial entitlement, checkout, trial, webhook, and reconciliation service | 662 | 635 | 39.7 KiB | 720 | `src/access-controls.js`, `src/checkout-reconciliation.js`, `src/http.js`, `src/legacy-checkout.js`, `src/payments.js`, `src/plans.js` |
 | `src/checkout-reconciliation.js` | Validated checkout closure and settlement reconciliation | 86 | 85 | 6.8 KiB | 130 | `src/legacy-checkout.js`, `src/payments.js`, `src/plans.js` |
 | `src/database.js` | SQLite and Turso store adapters | 1189 | 1162 | 63.3 KiB | 1200 | `src/access-controls-store.js`, `src/account-self-service-store.js`, `src/billing-store.js`, `src/migrations.js`, `src/schema.js`, `src/store-contract.js`, `src/training-loop-store.js` |
-| `src/email.js` | Resend integration and email security | 387 | 354 | 19.9 KiB | 400 | — |
+| `src/email.js` | Resend integration and email security | 388 | 355 | 19.9 KiB | 400 | `src/admin-mfa.js` |
 | `src/http.js` | HTTP transport helpers | 170 | 155 | 5.9 KiB | 180 | — |
 | `src/legacy-checkout.js` | Strict retired-checkout migration and completion policy | 54 | 49 | 6.3 KiB | 75 | `src/payments.js` |
 | `src/migrations.js` | Ordered, idempotent SQLite and Turso schema migration ledger | 133 | 120 | 7.0 KiB | 145 | `src/billing-schema.js` |
@@ -87,8 +112,8 @@ The command-generated table below is the Build 7.7.1 snapshot. CI generates the 
 | `src/plans.js` | Plan domain validation | 355 | 321 | 18.5 KiB | 380 | — |
 | `src/product-signals-schema.js` | Aggregate product-activity schema and statements | 23 | 20 | 1.4 KiB | 35 | — |
 | `src/product-signals.js` | Consent-gated aggregate product-activity boundary | 135 | 122 | 5.5 KiB | 140 | — |
-| `src/schema.js` | Shared storage schema and statements | 359 | 353 | 43.3 KiB | 390 | `src/access-controls-schema.js`, `src/account-self-service-schema.js`, `src/billing-schema.js`, `src/product-signals-schema.js`, `src/training-loop-schema.js` |
-| `src/server.js` | HTTP composition root | 735 | 710 | 38.7 KiB | 800 | `src/access-controls.js`, `src/admin.js`, `src/auth.js`, `src/billing.js`, `src/database.js`, `src/email.js`, `src/http.js`, `src/observability.js`, `src/payments.js`, `src/plans.js`, `src/product-signals.js`, `src/service-composition.js`, `src/setup.js`, `src/static-assets.js`, `src/support.js`, `src/training.js`, `src/workouts.js` |
+| `src/schema.js` | Shared storage schema and statements | 361 | 355 | 44.3 KiB | 390 | `src/access-controls-schema.js`, `src/account-self-service-schema.js`, `src/billing-schema.js`, `src/product-signals-schema.js`, `src/training-loop-schema.js` |
+| `src/server.js` | HTTP composition root | 783 | 758 | 41.1 KiB | 800 | `src/access-controls.js`, `src/admin.js`, `src/auth.js`, `src/billing.js`, `src/database.js`, `src/email.js`, `src/http.js`, `src/observability.js`, `src/payments.js`, `src/plans.js`, `src/product-signals.js`, `src/service-composition.js`, `src/setup.js`, `src/static-assets.js`, `src/support.js`, `src/training.js`, `src/workouts.js` |
 | `src/service-composition.js` | Typed auth/admin/support composition | 40 | 38 | 1.8 KiB | 60 | — |
 | `src/setup.js` | Atomic weekly-plan and preference setup | 84 | 77 | 4.9 KiB | 105 | `src/plans.js` |
 | `src/static-assets.js` | Bounded public asset representations | 46 | 41 | 1.9 KiB | 65 | `src/http.js` |
@@ -99,7 +124,7 @@ The command-generated table below is the Build 7.7.1 snapshot. CI generates the 
 | `src/training.js` | Check-ins, deterministic progression, blocks, and approved adaptations | 448 | 433 | 29.8 KiB | 450 | `src/plans.js`, `src/workouts.js` |
 | `src/workouts.js` | Workout validation, history summaries, and authenticated lifecycle | 214 | 208 | 14.3 KiB | 230 | `src/plans.js` |
 
-Snapshot result: 38 modules, zero dependency cycles, and zero policy violations.
+Snapshot result: 39 server modules, zero dependency cycles, and zero policy violations. The separate browser report covers seven page boundaries, 68 policy entries, and 64 unique browser modules with zero cycles and zero violations.
 
 ## Static boundary types
 

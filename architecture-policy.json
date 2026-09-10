@@ -50,8 +50,14 @@
       "allowedDependencies": [
         "src/access-controls.js",
         "src/admin-user-actions.js",
+        "src/email.js",
         "src/plans.js"
       ]
+    },
+    "src/admin-mfa.js": {
+      "role": "Session-bound administrator email MFA challenge and delivery",
+      "maxLines": 100,
+      "allowedDependencies": []
     },
     "src/support.js": {
       "role": "Public and administrative support workflow",
@@ -154,7 +160,9 @@
     "src/email.js": {
       "role": "Resend integration and email security",
       "maxLines": 400,
-      "allowedDependencies": []
+      "allowedDependencies": [
+        "src/admin-mfa.js"
+      ]
     },
     "src/billing.js": {
       "role": "Commercial entitlement, checkout, trial, webhook, and reconciliation service",

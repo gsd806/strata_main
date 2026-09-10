@@ -11,6 +11,9 @@ const RELEASE=require(path.join(PROJECT_ROOT,"package.json"));
 const BUILD=RELEASE.strataBuild||RELEASE.version;
 const html=fs.readFileSync(path.join(PROJECT_ROOT,"public","pages","index.html"),"utf8");
 const appSource=fs.readFileSync(path.join(PROJECT_ROOT,"public","scripts","app.js"),"utf8");
+const homeModuleNames=["home-logic.js","home-state.js","home-api.js","home-render.js","home-events.js"];
+const homeModuleSources=homeModuleNames.map(name=>fs.readFileSync(path.join(PROJECT_ROOT,"public","scripts",name),"utf8"));
+const homeRenderSource=homeModuleSources[3];
 const catalog=JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT,"public","data","exercises.json"),"utf8"));
 const Discovery=require(path.join(PROJECT_ROOT,"public","scripts","discovery-core"));
 const Preview=require(path.join(PROJECT_ROOT,"public","scripts","preview-core"));
@@ -55,9 +58,10 @@ function createRuntime({meResponse,guestPlan=null,serverUser=null,activation=fal
   const elements=new Map(ids.map((id)=>[id,new Element(id)]));
   const starters=["dumbbells","bodyweight","barbell"].map(name=>{const button=new Element(name);button.dataset.previewStarter=name;return button;});
   const storage=new Map();
-  const documentListeners={};
+  const documentListeners={},windowListeners={};
   const document={
     body:new Element("body"),
+    visibilityState:"visible",
     getElementById(id){return elements.get(id)||null;},
     addEventListener(type,handler){(documentListeners[type]||=[]).push(handler);},
     querySelectorAll(selector){return selector==="[data-preview-starter]"?starters:[];}
@@ -76,7 +80,7 @@ function createRuntime({meResponse,guestPlan=null,serverUser=null,activation=fal
   }
   const context={
     console,document,location:{search:""},history:{replaceState(){}},requestAnimationFrame:(callback)=>callback(),setTimeout,clearTimeout,URLSearchParams,
-    window:{location:{assign(){}},StrataDiscovery:Discovery,StrataPreview:Preview},
+    window:{location:{assign(){}},StrataDiscovery:Discovery,StrataPreview:Preview,addEventListener(type,handler){(windowListeners[type]||=[]).push(handler);}},
     localStorage:{getItem(key){return key==="strata_guest_plan_v1"&&guestPlan!==null?guestPlan:storage.get(key)??null;},setItem(key,value){storage.set(key,value);},removeItem(key){storage.delete(key);}},
     fetch:async(pathname)=>{
       if(pathname==="/api/me")return typeof meResponse==="function"?meResponse():meResponse;
@@ -92,8 +96,13 @@ function createRuntime({meResponse,guestPlan=null,serverUser=null,activation=fal
     for(const script of ["activation-core.js","activation-home.js"])vm.runInContext(fs.readFileSync(path.join(PROJECT_ROOT,"public/scripts",script),"utf8"),context,{filename:script});
     context.window.StrataHomeActivation=context.StrataHomeActivation;
   }
+  for(let index=0;index<homeModuleNames.length;index+=1)vm.runInContext(homeModuleSources[index],context,{filename:homeModuleNames[index]});
   vm.runInContext(appSource,context,{filename:"app.js"});
-  return{context,elements,starters};
+  return{
+    context,elements,starters,
+    emitVisibility(value){document.visibilityState=value;for(const handler of documentListeners.visibilitychange||[])handler();},
+    emitWindow(type,event={}){for(const handler of windowListeners[type]||[])handler(event);}
+  };
 }
 
 async function settle(){
@@ -139,6 +148,74 @@ test("homepage treats a confirmed 401 as signed out and counts the saved guest p
   assert.equal(elements.get("discoverButton").hidden,true);
   assert.equal(elements.get("planCount").textContent,3);
   assert.equal(elements.get("planButton").getAttribute("aria-label"),"Open weekly planner, 3 exercises");
+});
+
+test("homepage clears stale account chrome on foreground before confirming a switched account",async()=>{
+  const next=deferred(),responses=[jsonResponse(200,{user:{id:"first",name:"First Member",planCount:7,discovery:{active:true}}}),next.promise];
+  const guestPlan=JSON.stringify({days:{Monday:[{exerciseId:catalog[0].id},{exerciseId:catalog[1].id}]}});
+  const r=createRuntime({meResponse:()=>responses.shift(),guestPlan});await settle();
+  assert.equal(r.elements.get("accountButton").textContent,"First profile");
+  assert.equal(r.elements.get("planCount").textContent,7);
+  r.elements.get("quickPreviewSummary").textContent="My private device preview";
+  r.emitVisibility("hidden");
+  assert.equal(r.elements.get("accountButton").textContent,"First profile");
+  r.emitVisibility("visible");
+  r.emitWindow("focus");
+  assert.equal(responses.length,0,"paired visibility and focus events share one account request");
+  assert.equal(r.elements.get("accountButton").textContent,"Log in");
+  assert.equal(r.elements.get("planCount").textContent,2);
+  assert.equal(r.elements.get("quickPreviewSummary").textContent,"My private device preview");
+  assert.match(r.elements.get("quickPreviewContinue").innerHTML,/Keep this exact week/);
+  next.resolve(jsonResponse(200,{user:{id:"second",name:"Second Member",planCount:3,discovery:{active:false}}}));await settle();
+  assert.equal(r.elements.get("accountButton").textContent,"Second profile");
+  assert.equal(r.elements.get("planCount").textContent,3);
+});
+
+test("homepage window focus clears and restores the same account without touching its guest preview",async()=>{
+  const same=deferred(),member={id:"same",name:"Same Member",planCount:4,discovery:{active:true}},responses=[jsonResponse(200,{user:member}),same.promise];
+  const r=createRuntime({meResponse:()=>responses.shift()});await settle();
+  r.elements.get("quickPreviewSummary").textContent="Keep this preview";
+  r.emitWindow("focus");
+  assert.equal(r.elements.get("accountButton").textContent,"Log in");
+  assert.equal(r.elements.get("quickPreviewSummary").textContent,"Keep this preview");
+  same.resolve(jsonResponse(200,{user:member}));await settle();
+  assert.equal(r.elements.get("accountButton").textContent,"Same profile");
+  assert.equal(r.elements.get("planCount").textContent,4);
+});
+
+test("homepage foreground logout settles on guest-safe chrome without clearing its preview",async()=>{
+  const responses=[jsonResponse(200,{user:{id:"member",name:"Signed Member",planCount:5,discovery:{active:true}}}),jsonResponse(401,{error:"Not signed in."})];
+  const r=createRuntime({meResponse:()=>responses.shift()});await settle();
+  r.elements.get("quickPreviewResults").innerHTML="<li>Preserved preview</li>";
+  r.emitVisibility("visible");await settle();
+  assert.equal(vm.runInContext("state.accountStatus",r.context),"anonymous");
+  assert.equal(r.elements.get("accountButton").textContent,"Log in");
+  assert.equal(r.elements.get("signupButton").hidden,false);
+  assert.equal(r.elements.get("planCount").textContent,0);
+  assert.equal(r.elements.get("quickPreviewResults").innerHTML,"<li>Preserved preview</li>");
+});
+
+test("homepage persisted pageshow rechecks logout while ordinary pageshow stays calm",async()=>{
+  let requests=0;
+  const responses=[jsonResponse(200,{user:{id:"member",name:"Cached Member",planCount:5,discovery:{active:true}}}),jsonResponse(401,{error:"Not signed in."})];
+  const r=createRuntime({meResponse:()=>{requests+=1;return responses.shift();}});await settle();
+  r.emitWindow("pageshow",{persisted:false});await settle();
+  assert.equal(requests,1);
+  assert.equal(r.elements.get("accountButton").textContent,"Cached profile");
+  r.emitWindow("pageshow",{persisted:true});await settle();
+  assert.equal(requests,2);
+  assert.equal(r.elements.get("accountButton").textContent,"Log in");
+});
+
+test("homepage ignores a stale initial identity response after a newer focus recheck",async()=>{
+  const stale=deferred(),fresh=deferred(),responses=[stale.promise,fresh.promise];
+  const r=createRuntime({meResponse:()=>responses.shift(),serverUser:{name:"Server",planCount:8}});await settle();
+  r.emitWindow("focus");
+  fresh.resolve(jsonResponse(200,{user:{id:"fresh",name:"Fresh Member",planCount:2,discovery:{active:false}}}));await settle();
+  assert.equal(r.elements.get("accountButton").textContent,"Fresh profile");
+  stale.resolve(jsonResponse(200,{user:{id:"stale",name:"Stale Member",planCount:9,discovery:{active:true}}}));await settle();
+  assert.equal(r.elements.get("accountButton").textContent,"Fresh profile");
+  assert.equal(r.elements.get("planCount").textContent,2);
 });
 
 test("homepage comparison scroller is a labeled keyboard-focusable region",async()=>{
@@ -188,7 +265,7 @@ test("homepage has one score ring and lets JavaScript create the equipment defau
   const equipmentSelect=html.match(/<select id="equipmentFilter">([\s\S]*?)<\/select>/);
   assert.ok(equipmentSelect,"equipment select");
   assert.doesNotMatch(equipmentSelect[1],/All equipment/);
-  assert.equal((appSource.match(/<option value="all">All equipment<\/option>/g)||[]).length,1);
+  assert.equal((homeRenderSource.match(/<option value="all">All equipment<\/option>/g)||[]).length,1);
 });
 
 test("each starter builds and preserves a real three-day week using its stated equipment",async()=>{

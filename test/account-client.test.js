@@ -7,6 +7,7 @@ const vm=require("node:vm");
 
 const html=fs.readFileSync(require.resolve("../public/pages/account.html"),"utf8");
 const script=fs.readFileSync(require.resolve("../public/scripts/account.js"),"utf8");
+const moduleScripts=["account-logic","account-state","account-api","account-render","account-events"].map((name)=>({name,source:fs.readFileSync(require.resolve(`../public/scripts/${name}.js`),"utf8")}));
 
 class ClassList{
   constructor(){this.values=new Set();}
@@ -40,6 +41,7 @@ function jsonResponse(status,data){
 function exportResponse(data){
   return{ok:true,status:200,headers:{get:(name)=>({"content-type":"application/json; charset=utf-8","content-disposition":'attachment; filename="strata-account-export-2026-09-08.json"',"x-strata-export":"account-v1"}[name.toLowerCase()]||null)},blob:async()=>new Blob([JSON.stringify(data)],{type:"application/json"})};
 }
+function deferred(){let resolve;const promise=new Promise((done)=>{resolve=done;});return{promise,resolve};}
 
 function createPage({search="",route}){
   const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map((match)=>match[1]);
@@ -49,13 +51,14 @@ function createPage({search="",route}){
   elements.get("signupMessage").hidden=true;
   elements.get("loginMessage").hidden=true;
   elements.get("storageState").statusText=new Element("storageText");
-  const authGrid=new Element("authGrid"),body=new Element("body"),navigations=[],requests=[],replaced=[],reloads=[],downloads=[],objectUrls=[];
+  const authGrid=new Element("authGrid"),body=new Element("body"),navigations=[],requests=[],replaced=[],reloads=[],downloads=[],objectUrls=[],windowListeners={},documentListeners={};
   const location={search,href:`http://strata.test/account.html${search}`,assign:(path)=>navigations.push(path),replace:(path)=>navigations.push(path),reload:()=>reloads.push(true)};
   const document={
-    body,
+    body,hidden:false,
     getElementById:(id)=>elements.get(id)||null,
     querySelector:(selector)=>selector===".auth-grid"?authGrid:null,
-    createElement:(tag)=>{const node=new Element(tag);node.click=()=>downloads.push({href:node.href,download:node.download});return node;}
+    createElement:(tag)=>{const node=new Element(tag);node.click=()=>downloads.push({href:node.href,download:node.download});return node;},
+    addEventListener:(type,handler)=>{(documentListeners[type]||=[]).push(handler);}
   };
   class BrowserURL extends URL{}
   BrowserURL.createObjectURL=(blob)=>{const value=`blob:strata-${objectUrls.length+1}`;objectUrls.push({value,blob});return value;};
@@ -68,12 +71,14 @@ function createPage({search="",route}){
     console,document,location,URL:BrowserURL,URLSearchParams,FormData:FakeFormData,Blob,setTimeout,
     history:{replaceState:(...args)=>replaced.push(args)},
     requestAnimationFrame:(callback)=>callback(),matchMedia:()=>({matches:false}),
+    addEventListener:(type,handler)=>{(windowListeners[type]||=[]).push(handler);},
     fetch:async(path,options={})=>{requests.push({path,options});return route(path,options,requests);}
   };
   context.globalThis=context;
   vm.createContext(context);
+  for(const moduleScript of moduleScripts)vm.runInContext(moduleScript.source,context,{filename:`${moduleScript.name}.js`});
   vm.runInContext(script,context,{filename:"account.js"});
-  return {elements,requests,navigations,replaced,reloads,downloads,objectUrls};
+  return {elements,requests,navigations,replaced,reloads,downloads,objectUrls,setHidden(value){document.hidden=value===true;},async emitDocument(type,event={}){for(const handler of documentListeners[type]||[])await handler(event);},async emitWindow(type,event={}){for(const handler of windowListeners[type]||[])await handler(event);}};
 }
 
 async function settle(){
@@ -111,16 +116,126 @@ test("native forms remain available without the JavaScript enhancement",()=>{
   assert.doesNotMatch(script,/accountRetry/);
 });
 
+test("a persisted account-page restore clears private DOM before reloading the current session",async()=>{
+  const periodEnd=Date.now()+30*24*60*60*1000,user=memberFixture({name:"PRIVATE ACCOUNT SENTINEL",email:"private-sentinel@example.test",planCount:1,workoutDays:1,discovery:{active:true,accessType:"subscription",pendingPurchaseCount:0,subscription:{id:"sub-private",status:"active",active:true,pastDue:false,scheduledChange:null,currentPeriodEndsAt:periodEnd}}});
+  const page=createPage({route:async(path)=>{
+    if(path==="/api/status")return jsonResponse(200,{persistent:true});
+    if(path==="/healthz")return jsonResponse(200,{ok:true});
+    if(path==="/api/me")return jsonResponse(200,{csrfToken:"private-csrf",user});
+    if(path==="/api/plan")return jsonResponse(200,{csrfToken:"private-csrf",user,plan:planFixture({Monday:1}),planUpdatedAt:1});
+    if(path==="/api/workouts?limit=100&offset=0")return jsonResponse(200,{csrfToken:"private-csrf",hasMore:false,workouts:[workoutFixture({title:"PRIVATE WORKOUT SENTINEL"})]});
+    if(path==="/api/account/sessions")return jsonResponse(200,{userId:user.id,sessions:[{id:"PRIVATE-SESSION-SENTINEL",current:true,createdAt:1_700_000_000_000,expiresAt:1_800_000_000_000}]});
+    throw new Error(`Unexpected route ${path}`);
+  }});
+  await settle();
+  assert.match(page.elements.get("signedInIdentity").textContent,/PRIVATE ACCOUNT SENTINEL/);
+  assert.match(page.elements.get("accountWinsList").innerHTML,/PRIVATE WORKOUT SENTINEL/);
+  await page.emitWindow("pageshow",{persisted:false});assert.equal(page.reloads.length,0);
+  await page.emitWindow("pageshow",{persisted:true});assert.equal(page.reloads.length,1);
+  assert.equal(page.elements.get("signedInCard").hidden,true);assert.equal(page.elements.get("accountLoading").hidden,false);
+  const privateDom=[...page.elements.values()].map((node)=>`${node.textContent} ${node.innerHTML} ${node.href}`).join(" ");
+  assert.doesNotMatch(privateDom,/PRIVATE ACCOUNT SENTINEL|private-sentinel@example\.test|PRIVATE WORKOUT SENTINEL|PRIVATE-SESSION-SENTINEL|sub-private/);
+});
+
+test("Account foreground recheck supersedes a delayed initial identity without exposing it",async()=>{
+  const stale=deferred(),staleUser=memberFixture({id:"stale-initial",name:"STALE INITIAL ACCOUNT",email:"stale-initial@example.test"});
+  const currentUser=memberFixture({id:"current-after-focus",name:"CURRENT ACCOUNT",email:"current@example.test",discovery:{active:false,accessType:null,pendingPurchaseCount:0}});
+  let identityReads=0;
+  const page=createPage({route:async(path)=>{
+    if(path==="/api/status")return jsonResponse(200,{persistent:true});if(path==="/healthz")return jsonResponse(200,{ok:true});
+    if(path==="/api/me"){identityReads+=1;return identityReads===1?stale.promise:jsonResponse(200,{csrfToken:"current-csrf",user:currentUser});}
+    if(path==="/api/plan")return jsonResponse(200,{csrfToken:"current-csrf",user:currentUser,plan:planFixture(),planUpdatedAt:0});
+    if(path==="/api/account/sessions")return jsonResponse(200,{userId:currentUser.id,sessions:[]});
+    throw new Error(`Unexpected route ${path}`);
+  }});
+  const focus=page.emitWindow("focus"),visibility=page.emitDocument("visibilitychange");
+  await Promise.all([focus,visibility]);await settle();
+  assert.equal(identityReads,2,"paired foreground events share one fresh identity request");
+  assert.match(page.elements.get("signedInIdentity").textContent,/CURRENT ACCOUNT/);
+  stale.resolve(jsonResponse(200,{csrfToken:"stale-csrf",user:staleUser}));await settle();
+  const rendered=[...page.elements.values()].map((node)=>`${node.textContent} ${node.innerHTML}`).join(" ");
+  assert.doesNotMatch(rendered,/STALE INITIAL ACCOUNT|stale-initial@example\.test/);assert.match(rendered,/CURRENT ACCOUNT/);
+});
+
+test("ordinary Account foreground restores purge first and reopen only the same user",async()=>{
+  const original=memberFixture({id:"foreground-original",name:"FOREGROUND PRIVATE SENTINEL",email:"foreground-private@example.test",planCount:1,workoutDays:1});
+  for(const scenario of [
+    {name:"focus with same account",event:"focus",next:original,reopens:true},
+    {name:"visibility with changed account",event:"visibilitychange",next:memberFixture({id:"foreground-replacement",name:"REPLACEMENT PRIVATE SENTINEL"}),reopens:false}
+  ]){
+    let identityReads=0;const pending=deferred(),page=createPage({route:async(path)=>{
+      if(path==="/api/status")return jsonResponse(200,{persistent:true});if(path==="/healthz")return jsonResponse(200,{ok:true});
+      if(path==="/api/me"){identityReads+=1;return identityReads<=2?jsonResponse(200,{csrfToken:identityReads===1?"foreground-one":"foreground-two",user:original}):pending.promise;}
+      if(path==="/api/plan")return jsonResponse(200,{csrfToken:"foreground-two",user:original,plan:planFixture({Monday:1}),planUpdatedAt:1});
+      if(path==="/api/workouts?limit=100&offset=0")return jsonResponse(200,{csrfToken:"foreground-two",hasMore:false,workouts:[workoutFixture({title:"FOREGROUND WORKOUT SENTINEL"})]});
+      if(path==="/api/account/sessions")return jsonResponse(200,{userId:original.id,sessions:[{id:"FOREGROUND-SESSION-SENTINEL",current:true}]});
+      throw new Error(`Unexpected route ${path}`);
+    }});
+    await settle();const identityReadsBeforeForeground=identityReads;assert.match(page.elements.get("signedInIdentity").textContent,/FOREGROUND PRIVATE SENTINEL/,scenario.name);
+    if(scenario.event==="visibilitychange"){page.setHidden(true);await page.emitDocument("visibilitychange");assert.match(page.elements.get("signedInIdentity").textContent,/FOREGROUND PRIVATE SENTINEL/);page.setHidden(false);}
+    const foreground=scenario.event==="focus"?page.emitWindow("focus"):page.emitDocument("visibilitychange");
+    assert.equal(page.elements.get("signedInCard").hidden,true,`${scenario.name} must lock synchronously`);assert.equal(page.elements.get("accountLoading").hidden,false,scenario.name);
+    const lockedDom=[...page.elements.values()].map((node)=>`${node.textContent} ${node.innerHTML} ${node.href}`).join(" ");assert.doesNotMatch(lockedDom,/FOREGROUND PRIVATE SENTINEL|foreground-private@example\.test|FOREGROUND WORKOUT SENTINEL|FOREGROUND-SESSION-SENTINEL/,scenario.name);
+    await settle();assert.equal(identityReads,identityReadsBeforeForeground+1,scenario.name);
+    pending.resolve(jsonResponse(200,{csrfToken:"foreground-two",user:scenario.next}));await foreground;await settle();
+    assert.equal(page.elements.get("signedInCard").hidden,!scenario.reopens,scenario.name);
+    if(scenario.reopens)assert.match(page.elements.get("signedInIdentity").textContent,/FOREGROUND PRIVATE SENTINEL/,scenario.name);
+    else{assert.equal(page.elements.get("accountLoadingTitle").textContent,"ACCOUNT ACCESS CHANGED.",scenario.name);assert.doesNotMatch([...page.elements.values()].map((node)=>`${node.textContent} ${node.innerHTML}`).join(" "),/REPLACEMENT PRIVATE SENTINEL/,scenario.name);}
+  }
+});
+
+test("delayed private operation responses cannot outlive an account-page invalidation",async()=>{
+  const user=memberFixture({discovery:{active:false,accessType:null,pendingPurchaseCount:0,subscription:{id:"sub-private-operation",status:"paused",active:false,pastDue:false,scheduledChange:null,currentPeriodEndsAt:Date.now()+86400000}}});
+  const scenarios=[
+    {name:"export",button:"accountExportData",path:"/api/account/export",response:()=>exportResponse({private:"DELAYED-PRIVATE-EXPORT"})},
+    {name:"portal",button:"accountManageSubscription",path:"/api/billing/portal",response:()=>jsonResponse(200,{overviewUrl:"https://customer-portal.paddle.com/cpl_delayed_private"})},
+    {name:"security email",button:"accountDeleteRequest",path:"/api/account/delete/request",response:()=>jsonResponse(202,{maskedEmail:"DELAYED-PRIVATE-EMAIL"})}
+  ];
+  for(const scenario of scenarios){
+    const pending=deferred(),page=createPage({route:async(path)=>{
+      if(path==="/api/status")return jsonResponse(200,{persistent:true});if(path==="/healthz")return jsonResponse(200,{ok:true});
+      if(path==="/api/me")return jsonResponse(200,{csrfToken:"operation-csrf",user});if(path==="/api/plan")return jsonResponse(200,{csrfToken:"operation-csrf",user,plan:planFixture(),planUpdatedAt:0});
+      if(path==="/api/account/sessions")return jsonResponse(200,{userId:user.id,sessions:[]});if(path===scenario.path)return pending.promise;
+      throw new Error(`Unexpected route ${path}`);
+    }});
+    await settle();const button=page.elements.get(scenario.button),click=button.emit("click",{currentTarget:button});await settle();
+    assert.equal(page.requests.some(({path})=>path===scenario.path),true,scenario.name);await page.emitWindow("pageshow",{persisted:true});pending.resolve(scenario.response());await click;await settle();
+    assert.equal(page.reloads.length,1,scenario.name);assert.deepEqual(page.downloads,[],scenario.name);assert.deepEqual(page.navigations,[],scenario.name);assert.equal(page.objectUrls.length,0,scenario.name);
+    assert.equal(page.elements.get("accountSecurityStatus").textContent,"",scenario.name);assert.equal(page.elements.get("accountDeleteCancel").hidden,true,scenario.name);
+    const privateDom=[...page.elements.values()].map((node)=>`${node.textContent} ${node.innerHTML} ${node.href}`).join(" ");assert.doesNotMatch(privateDom,/DELAYED-PRIVATE|cpl_delayed_private/,scenario.name);
+  }
+});
+
+test("exports and Paddle portal links require the original account identity immediately before use",async()=>{
+  const original=memberFixture({id:"original-operation-owner",discovery:{active:false,accessType:null,pendingPurchaseCount:0,subscription:{id:"sub-original",status:"paused",active:false,pastDue:false,scheduledChange:null,currentPeriodEndsAt:Date.now()+86400000}}}),changed=memberFixture({id:"replacement-operation-owner"});
+  const scenarios=[
+    {name:"export",button:"accountExportData",path:"/api/account/export",response:()=>exportResponse({private:"CROSS-ACCOUNT-EXPORT"})},
+    {name:"portal",button:"accountManageSubscription",path:"/api/billing/portal",response:()=>jsonResponse(200,{overviewUrl:"https://customer-portal.paddle.com/cpl_cross_account"})}
+  ];
+  for(const scenario of scenarios){
+    let identityReads=0;const page=createPage({route:async(path)=>{
+      if(path==="/api/status")return jsonResponse(200,{persistent:true});if(path==="/healthz")return jsonResponse(200,{ok:true});
+      if(path==="/api/me"){identityReads+=1;return jsonResponse(200,{csrfToken:`identity-${identityReads}`,user:identityReads===1?original:changed});}
+      if(path==="/api/plan")return jsonResponse(200,{csrfToken:"identity-1",user:original,plan:planFixture(),planUpdatedAt:0});
+      if(path==="/api/account/sessions")return jsonResponse(200,{userId:original.id,sessions:[]});if(path===scenario.path)return scenario.response();
+      throw new Error(`Unexpected route ${path}`);
+    }});
+    await settle();const button=page.elements.get(scenario.button);await button.emit("click",{currentTarget:button});await settle();
+    assert.equal(identityReads,2,scenario.name);assert.deepEqual(page.downloads,[],scenario.name);assert.deepEqual(page.navigations,[],scenario.name);assert.equal(page.objectUrls.length,0,scenario.name);
+    assert.equal(page.elements.get("signedInCard").hidden,true,scenario.name);assert.equal(page.elements.get("accountLoadingTitle").textContent,"ACCOUNT ACCESS CHANGED.",scenario.name);
+  }
+});
+
 test("signed-in session and JSON export controls are accessible and CSRF protected",async()=>{
   assert.match(html,/id="accountSessionsTitle"/);assert.match(html,/id="accountSessionList"[^>]*aria-label="Active signed-in sessions"/);
   assert.match(html,/id="accountRevokeOtherSessions"[^>]*aria-describedby="accountSessionStatus"/);
   assert.match(html,/id="accountExportData"[^>]*aria-describedby="accountExportStatus"/);
-  const user=memberFixture({discovery:{active:false,accessType:null,pendingPurchaseCount:0}}),current={id:"session-current",current:true,createdAt:1_700_000_000_000,expiresAt:1_800_000_000_000},other={id:"session-other",current:false,createdAt:1_710_000_000_000,expiresAt:1_810_000_000_000};
+  const user=memberFixture({discovery:{active:false,accessType:null,pendingPurchaseCount:0}}),current={id:"session-current",current:true,createdAt:1_700_000_000_000,expiresAt:1_800_000_000_000},other={id:"session-other",current:false,createdAt:1_710_000_000_000,expiresAt:1_810_000_000_000};let identityReads=0;
   const page=createPage({route:async(path,options)=>{
     if(path==="/api/status")return jsonResponse(200,{persistent:true});
     if(path==="/healthz")return jsonResponse(200,{ok:true});
-    if(path==="/api/me")return jsonResponse(200,{csrfToken:"csrf-self-service",user});
-    if(path==="/api/plan")return jsonResponse(200,{csrfToken:"csrf-self-service",user,plan:planFixture(),planUpdatedAt:0});
+    if(path==="/api/me"){identityReads+=1;return jsonResponse(200,{csrfToken:identityReads===1?"csrf-self-service":"csrf-plan-rotated",user});}
+    if(path==="/api/plan")return jsonResponse(200,{csrfToken:"csrf-plan-rotated",user,plan:planFixture(),planUpdatedAt:0});
     if(path==="/api/account/sessions"&&(!options.method||options.method==="GET"))return jsonResponse(200,{userId:user.id,sessions:[current,other],otherCount:1});
     if(path==="/api/account/sessions/revoke-others")return jsonResponse(200,{ok:true,revoked:1,sessions:[current],otherCount:0});
     if(path==="/api/account/export")return exportResponse({format:"strata-account-export",schemaVersion:1,exportedAt:"2026-09-08T00:00:00.000Z",account:{id:user.id}});
@@ -133,12 +248,12 @@ test("signed-in session and JSON export controls are accessible and CSRF protect
   await page.elements.get("accountRevokeOtherSessions").emit("click",{currentTarget:page.elements.get("accountRevokeOtherSessions")});
   await settle();
   const revoke=page.requests.find(({path})=>path==="/api/account/sessions/revoke-others");
-  assert.equal(revoke.options.headers["X-CSRF-Token"],"csrf-self-service");assert.equal(revoke.options.body,"{}");
+  assert.equal(revoke.options.headers["X-CSRF-Token"],"csrf-plan-rotated");assert.equal(revoke.options.body,"{}");
   assert.match(page.elements.get("accountSessionStatus").textContent,/1 other session/);
   await page.elements.get("accountExportData").emit("click",{currentTarget:page.elements.get("accountExportData")});
   await settle();
   const exported=page.requests.find(({path})=>path==="/api/account/export");
-  assert.equal(exported.options.method,"POST");assert.equal(exported.options.headers["X-CSRF-Token"],"csrf-self-service");
+  assert.equal(exported.options.method,"POST");assert.equal(exported.options.headers["X-CSRF-Token"],"csrf-plan-rotated");
   assert.deepEqual(page.downloads,[{href:"blob:strata-1",download:"strata-account-export-2026-09-08.json"}]);
   assert.equal(page.objectUrls.length,1);assert.match(page.elements.get("accountExportStatus").textContent,/downloaded/i);
 });
@@ -349,9 +464,9 @@ test("signed-in dashboard distinguishes access and plan states with a useful nex
   }
 });
 
-test("subscription controls use the CSRF-protected Paddle portal and reject unsafe links",async()=>{
+test("subscription controls use the CSRF-protected Paddle portal and clear private data when access expires",async()=>{
   const user=memberFixture({discovery:{active:true,accessType:"subscription",pendingPurchaseCount:0,subscription:{id:"sub-active",status:"active",active:true,pastDue:false,scheduledChange:null,currentPeriodEndsAt:Date.now()+30*24*60*60*1000}}});
-  let unsafe=false;
+  let unsafe=false,sessionExpired=false;
   const page=createPage({route:async(path,options)=>{
     if(path==="/api/status")return jsonResponse(200,{persistent:true});
     if(path==="/healthz")return jsonResponse(200,{ok:true});
@@ -360,6 +475,7 @@ test("subscription controls use the CSRF-protected Paddle portal and reject unsa
     if(path==="/api/workouts?limit=100&offset=0")return jsonResponse(200,{workouts:[],hasMore:false,csrfToken:"billing-csrf"});
     if(path==="/api/billing/portal"){
       assert.equal(options.method,"POST");assert.equal(options.headers["X-CSRF-Token"],"billing-csrf");assert.equal(options.body,"{}");
+      if(sessionExpired)return jsonResponse(403,{error:"Security check expired."});
       return jsonResponse(200,{overviewUrl:unsafe?"https://attacker.test/cpl_bad":"https://customer-portal.paddle.com/cpl_overview",cancelUrl:"https://customer-portal.paddle.com/cpl_cancel",updatePaymentMethodUrl:"https://customer-portal.paddle.com/cpl_payment"});
     }
     throw new Error(`Unexpected route ${path}`);
@@ -374,6 +490,8 @@ test("subscription controls use the CSRF-protected Paddle portal and reject unsa
   assert.equal(page.navigations.length,2,"an off-origin portal URL must never be opened");
   assert.match(page.elements.get("accountBillingStatus").textContent,/invalid subscription-management link/i);
   assert.equal(page.elements.get("accountBillingStatus").classList.contains("bad"),true);
+  sessionExpired=true;await page.elements.get("accountManageSubscription").emit("click",{currentTarget:page.elements.get("accountManageSubscription")});await settle();
+  assert.equal(page.elements.get("signedInCard").hidden,true);assert.equal(page.elements.get("accountLoadingTitle").textContent,"ACCOUNT ACCESS CHANGED.");assert.equal(page.elements.get("signedInIdentity").textContent,"");assert.equal(page.elements.get("accountBillingDetail").textContent,"");
 });
 
 test("returning dashboard prioritizes an in-progress workout as the single next action",async()=>{
@@ -477,7 +595,7 @@ test("free and temporarily unavailable dashboards never invent completion progre
 });
 
 test("dashboard refuses to combine plan or workout data across account changes",async()=>{
-  const original=memberFixture({id:"original",planCount:1,workoutDays:1}),changed=memberFixture({id:"changed",planCount:1,workoutDays:1});
+  const original=memberFixture({id:"original",name:"ORIGINAL PRIVATE SENTINEL",email:"original-private@example.test",planCount:1,workoutDays:1}),changed=memberFixture({id:"changed",planCount:1,workoutDays:1});
   const page=createPage({route:async(path)=>{
     if(path==="/api/status")return jsonResponse(200,{persistent:true});
     if(path==="/healthz")return jsonResponse(200,{ok:true});
@@ -489,8 +607,9 @@ test("dashboard refuses to combine plan or workout data across account changes",
   assert.equal(page.requests.some(({path})=>path.startsWith("/api/workouts")),false);
   assert.equal(page.elements.get("signedInCard").hidden,true);
   assert.equal(page.elements.get("accountLoading").hidden,false);
-  assert.equal(page.elements.get("accountLoadingTitle").textContent,"ACCOUNT CHANGED.");
+  assert.equal(page.elements.get("accountLoadingTitle").textContent,"ACCOUNT ACCESS CHANGED.");
   assert.equal(page.elements.get("accountReload").hidden,false);
+  assert.equal(page.elements.get("signedInIdentity").textContent,"");assert.equal(page.elements.get("accountGreeting").textContent,"");assert.equal(page.elements.get("accountPlanCount").textContent,"");
   await page.elements.get("accountReload").emit("click");
   assert.equal(page.reloads.length,1);
 });
@@ -508,7 +627,7 @@ test("dashboard rechecks identity after workout history before combining private
   await settle();
   assert.equal(identityReads,2);
   assert.equal(page.elements.get("signedInCard").hidden,true);
-  assert.equal(page.elements.get("accountLoadingTitle").textContent,"ACCOUNT CHANGED.");
+  assert.equal(page.elements.get("accountLoadingTitle").textContent,"ACCOUNT ACCESS CHANGED.");
   assert.doesNotMatch(page.elements.get("accountWinsList").innerHTML,/CHANGED ACCOUNT PRIVATE TITLE/);
 });
 

@@ -7,6 +7,7 @@ const vm=require("node:vm");
 
 const accountHtml=fs.readFileSync(require.resolve("../public/pages/account.html"),"utf8");
 const accountScript=fs.readFileSync(require.resolve("../public/scripts/account.js"),"utf8");
+const accountModules=["account-logic","account-state","account-api","account-render","account-events"].map((name)=>({name,source:fs.readFileSync(require.resolve(`../public/scripts/${name}.js`),"utf8")}));
 const verifyHtml=fs.readFileSync(require.resolve("../public/pages/verify-email.html"),"utf8");
 const verifyScript=fs.readFileSync(require.resolve("../public/scripts/verify-email.js"),"utf8");
 
@@ -70,6 +71,7 @@ function accountPage(route){
   };
   context.globalThis=context;
   vm.createContext(context);
+  for(const moduleScript of accountModules)vm.runInContext(moduleScript.source,context,{filename:`${moduleScript.name}.js`});
   vm.runInContext(accountScript,context,{filename:"account.js"});
   return {elements,requests,navigations,sessionStorage};
 }

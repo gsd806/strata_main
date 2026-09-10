@@ -8,6 +8,7 @@ const {createHash}=require("node:crypto");
 const {mkdirSync,mkdtempSync,rmSync}=require("node:fs");
 const {join}=require("node:path");
 const {DatabaseSync}=require("node:sqlite");
+const {adminMfaChallenge,getEmailVerificationConfig}=require("../src/email");
 
 const PROJECT_ROOT=join(__dirname,"..");
 const ADMIN_EMAIL="stratafitness.official@gmail.com";
@@ -54,7 +55,7 @@ async function startProvider(){
   providerBase=await listen(provider);
 }
 
-function appEnvironment(dataDir,adminEmail,{verificationEnabled="true"}={}){
+function appEnvironment(dataDir,adminEmail,{verificationEnabled="true",adminMfaRequired="false"}={}){
   const env={
     ...process.env,
     PORT:"0",HOST:"127.0.0.1",NODE_ENV:"test",TRUST_PROXY:"true",
@@ -69,6 +70,7 @@ function appEnvironment(dataDir,adminEmail,{verificationEnabled="true"}={}){
     EMAIL_REPLY_TO:ADMIN_EMAIL,SUPPORT_EMAIL:ADMIN_EMAIL,
     EMAIL_VERIFICATION_SECRET:EMAIL_SECRET,RESEND_API_BASE:providerBase
   };
+  env.ADMIN_EMAIL_MFA_REQUIRED=adminMfaRequired;
   if(adminEmail===undefined)delete env.ADMIN_EMAIL;
   else env.ADMIN_EMAIL=adminEmail;
   return env;
@@ -252,7 +254,7 @@ async function adminAction(admin,targetId,action,confirmation,reason="Customer r
 
 test.before(async()=>{
   await startProvider();
-  const launched=await launchApp("  STRATAFITNESS.OFFICIAL@GMAIL.COM  ");
+  const launched=await launchApp("  STRATAFITNESS.OFFICIAL@GMAIL.COM  ","admin-http-",{adminMfaRequired:"true"});
   app=launched.child;
   base=launched.base;
   runtimeDir=launched.dataDir;
@@ -354,6 +356,45 @@ test("an unverified exact email, aliases, forged role fields, and anonymous call
   assert.equal(nonAdminPage.response.headers.get("cache-control"),"no-store");
 });
 
+test("administrator email MFA fails closed when account-email delivery is disabled",async()=>{
+  const initial=await launchApp(ADMIN_EMAIL,"admin-mfa-unavailable-",{verificationEnabled:"false",adminMfaRequired:"true"});
+  let restarted;
+  try{
+    const signup=await requestAt(initial.base,"/api/signup",{
+      method:"POST",headers:{"Content-Type":"application/json",Origin:initial.base},
+      body:JSON.stringify({name:"Unavailable MFA Owner",email:ADMIN_EMAIL,password:ADMIN_PASSWORD})
+    });
+    assert.equal(signup.response.status,201);
+    await stopChild(initial.child);
+    const database=new DatabaseSync(join(initial.dataDir,"strata.sqlite"));
+    database.prepare("UPDATE users SET email_verified_at=? WHERE email=?").run(Date.now(),ADMIN_EMAIL);
+    database.close();
+
+    restarted=await launchAppInDirectory(ADMIN_EMAIL,initial.dataDir,{verificationEnabled:"false",adminMfaRequired:"true"});
+    const loggedIn=await requestAt(restarted.base,"/api/login",{
+      method:"POST",headers:{"Content-Type":"application/json",Origin:restarted.base},
+      body:JSON.stringify({email:ADMIN_EMAIL,password:ADMIN_PASSWORD})
+    });
+    assert.equal(loggedIn.response.status,200);
+    const cookie=cookieValue(loggedIn.setCookie,"strata_session");
+    const identity=await requestAt(restarted.base,"/api/me",{headers:{Cookie:cookie}});
+    assert.equal(identity.response.status,200);
+    assert.equal(identity.data.user.isAdmin,true);
+    const elevation=await requestAt(restarted.base,"/api/admin/elevate",{
+      method:"POST",headers:{"Content-Type":"application/json",Origin:restarted.base,Cookie:cookie,"X-CSRF-Token":identity.data.csrfToken},
+      body:JSON.stringify({password:ADMIN_PASSWORD})
+    });
+    assert.equal(elevation.response.status,503);
+    assert.equal(elevation.data.code,"ADMIN_MFA_UNAVAILABLE");
+    const adminSession=await requestAt(restarted.base,"/api/admin/session",{headers:{Cookie:cookie}});
+    assert.equal(adminSession.response.status,200);
+    assert.equal(adminSession.data.elevated,false,"failed email delivery must never fall back to password-only elevation");
+  }finally{
+    await stopChild(restarted?.child||initial.child);
+    rmSync(initial.dataDir,{recursive:true,force:true});
+  }
+});
+
 test("the verified exact address binds ownership, forces a fresh login, and requires password elevation",async()=>{
   const firstSession=await verifiedSignup({
     name:"STRATA Owner",
@@ -406,8 +447,33 @@ test("the verified exact address binds ownership, forces a fresh login, and requ
 
   const preElevationCookie=admin.cookie;
   const preElevationCsrf=admin.csrf;
-  const elevated=await jsonRequest("/api/admin/elevate",{password:ADMIN_PASSWORD},{cookie:admin.cookie,csrf:admin.csrf});
-  assert.equal(elevated.response.status,200);
+  const passwordStep=await jsonRequest("/api/admin/elevate",{password:ADMIN_PASSWORD},{cookie:admin.cookie,csrf:admin.csrf});
+  assert.equal(passwordStep.response.status,202);
+  assert.equal(passwordStep.data.mfaRequired,true);
+  assert.match(passwordStep.data.maskedEmail,/gmail\.com$/);
+  const mfaCookie=cookieValue(passwordStep.setCookie,"strata_admin_mfa");
+  assert.ok(mfaCookie,"password confirmation must issue an HttpOnly, session-bound MFA challenge");
+  assert.match(passwordStep.setCookie,/\bHttpOnly\b/);
+  assert.match(passwordStep.setCookie,/\bSameSite=Strict\b/);
+  assert.equal((await request("/api/admin/session",{headers:{Cookie:admin.cookie}})).data.elevated,false,"password alone must not elevate Admin");
+  const adminCode=verificationCode(latestDelivery("Your STRATA Admin security code"));
+  const challengeCookie=`${admin.cookie}; ${mfaCookie}`;
+  const crossSession=await jsonRequest("/api/admin/elevate/verify",{code:adminCode},{cookie:`${parallelAdminSession.cookie}; ${mfaCookie}`,csrf:parallelAdminSession.csrf});
+  assert.equal(crossSession.response.status,401,"an MFA code must stay bound to the session that requested it");
+  assert.equal(crossSession.data.code,"ADMIN_MFA_INCORRECT");
+  const expiredChallenge=adminMfaChallenge(getEmailVerificationConfig(appEnvironment(runtimeDir,ADMIN_EMAIL,{adminMfaRequired:"true"})),{
+    sessionTokenHash:sha256(cookieToken(admin.cookie)),challengeId:"expired-admin-code-0001",expiresAt:Date.now()-1
+  });
+  const expiredCookie=`${admin.cookie}; strata_admin_mfa=${expiredChallenge.challengeId}.${expiredChallenge.expiresAt}.${expiredChallenge.signature}`;
+  const expiredCode=await jsonRequest("/api/admin/elevate/verify",{code:expiredChallenge.code},{cookie:expiredCookie,csrf:admin.csrf});
+  assert.equal(expiredCode.response.status,410);
+  assert.equal(expiredCode.data.code,"ADMIN_MFA_EXPIRED");
+  const wrongCode=await jsonRequest("/api/admin/elevate/verify",{code:adminCode==="000000"?"000001":"000000"},{cookie:challengeCookie,csrf:admin.csrf});
+  assert.equal(wrongCode.response.status,401);
+  assert.equal(wrongCode.data.code,"ADMIN_MFA_INCORRECT");
+  assert.equal((await request("/api/admin/session",{headers:{Cookie:admin.cookie}})).data.elevated,false);
+  const elevated=await jsonRequest("/api/admin/elevate/verify",{code:adminCode},{cookie:challengeCookie,csrf:admin.csrf});
+  assert.equal(elevated.response.status,200,JSON.stringify(elevated.data));
   assert.ok(Number(elevated.data.elevatedUntil)>Date.now());
   const rotatedCookie=cookieValue(elevated.setCookie,"strata_session");
   assert.ok(rotatedCookie,"successful elevation must issue a replacement session cookie");
@@ -441,6 +507,22 @@ test("the verified exact address binds ownership, forces a fresh login, and requ
   const parallelOverview=await request("/api/admin/overview",{headers:{Cookie:parallelAdminSession.cookie}});
   assert.equal(parallelOverview.response.status,428);
   assert.equal(parallelOverview.data.code,"ADMIN_ELEVATION_REQUIRED");
+
+  const parallelPasswordStep=await jsonRequest("/api/admin/elevate",{password:ADMIN_PASSWORD},{cookie:parallelAdminSession.cookie,csrf:parallelAdminSession.csrf});
+  assert.equal(parallelPasswordStep.response.status,202);
+  const parallelMfaCookie=cookieValue(parallelPasswordStep.setCookie,"strata_admin_mfa");
+  const parallelCode=verificationCode(latestDelivery("Your STRATA Admin security code"));
+  const parallelChallengeCookie=`${parallelAdminSession.cookie}; ${parallelMfaCookie}`;
+  const incorrectParallelCode=parallelCode==="000000"?"000001":"000000";
+  // Four attempts above already used this account-level bucket. Four more
+  // distinct forwarded addresses reach the limit; changing IP cannot reset it.
+  for(let attempt=0;attempt<4;attempt+=1){
+    const denied=await jsonRequest("/api/admin/elevate/verify",{code:incorrectParallelCode},{cookie:parallelChallengeCookie,csrf:parallelAdminSession.csrf});
+    assert.equal(denied.response.status,401);
+  }
+  const identityLimited=await jsonRequest("/api/admin/elevate/verify",{code:incorrectParallelCode},{cookie:parallelChallengeCookie,csrf:parallelAdminSession.csrf});
+  assert.equal(identityLimited.response.status,429);
+  assert.equal(identityLimited.data.code,"ADMIN_MFA_RATE_LIMIT");
 
   const freshAdmin=await login(ADMIN_EMAIL,ADMIN_PASSWORD);
   assert.equal(freshAdmin.response.status,200);

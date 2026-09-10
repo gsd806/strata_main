@@ -104,6 +104,34 @@ test("pricing benefits keep their descriptions in the readable content column",{
   }finally{await page.close();await browser.close();}
 });
 
+test("pricing hero and collapsed decisions keep actions readable at release breakpoints",{timeout:30_000},async()=>{
+  const options={headless:true};
+  if(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH)options.executablePath=resolve(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH);
+  const browser=await chromium.launch(options),page=await browser.newPage({viewport:{width:1440,height:900}});
+  try{
+    const pricing=read("public/pages/pricing.html"),hero=pricing.match(/<section class="info-hero"[\s\S]*?<\/section>/)?.[0];
+    assert.ok(hero,"pricing page must include its purchase hero");
+    const disclosures=[...pricing.matchAll(/<details class="[^"]*pricing-disclosure[^"]*"[\s\S]*?<\/details>/g)].map(match=>match[0]);
+    assert.ok(disclosures.length>=3,"pricing must keep secondary decisions in collapsed disclosures");
+    const styles=`${read("public/styles/site-info.css")}\n${read("public/styles/experience.css")}`;
+    for(const width of [1440,981,800,768,430,390,360,320]){
+      await page.setViewportSize({width,height:844});
+      await page.setContent(`<style>${styles}</style><body class="pricing-page"><main>${hero}<section class="info-main">${disclosures.join("")}</section></main></body>`);
+      const result=await layout(page),container=await rect(page,".info-hero .info-container"),actions=await rect(page,".purchase-actions"),status=await rect(page,"#purchaseStatus"),primary=await rect(page,"#purchaseSignup");
+      assert.ok(result.overflow<=1,`pricing hero overflows ${width}px by ${result.overflow}px`);
+      inside(actions,container,`pricing actions at ${width}px`);inside(status,container,`pricing status at ${width}px`);
+      assert.ok(actions.bottom<=status.top+1,`pricing status overlaps its actions at ${width}px`);
+      assert.ok(primary.width>=44&&primary.height>=44,`pricing primary action is too small at ${width}px`);
+      for(const summary of await rects(page,".pricing-disclosure > summary")){
+        assert.ok(summary.width>=44&&summary.height>=44,`pricing disclosure control is too small at ${width}px`);
+      }
+      const collapsed=await page.locator(".pricing-disclosure:not([open])").evaluateAll(nodes=>nodes.every(node=>{const box=node.getBoundingClientRect(),summary=node.querySelector(":scope > summary")?.getBoundingClientRect();return Boolean(summary)&&box.height<=summary.height+2;}));
+      assert.equal(collapsed,true,`closed pricing details must not add visual clutter at ${width}px`);
+      if(width<=430)assert.ok(primary.bottom<=844,`pricing primary action must appear in the first mobile viewport at ${width}px`);
+    }
+  }finally{await page.close();await browser.close();}
+});
+
 test("workout controls give long movement names and narrow inputs their own rows",{timeout:30_000},async()=>{
   const options={headless:true};
   if(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH)options.executablePath=resolve(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH);

@@ -18,6 +18,26 @@ test("first week honors availability, valid plan limits, and distinct session mo
   for(const session of result.sessions)assert.equal(new Set(session.items.map(item=>item.exerciseId)).size,session.items.length);
   const {sanitizePlan}=require("../src/plans");assert.deepEqual(sanitizePlan(result.plan),result.plan);
 });
+test("three-plus-day starter weeks repeat bounded anchors so Training Memory appears",()=>{
+  const threeDay=core.buildWeek(base,exercises,discovery),firstAnchors=threeDay.sessions[0].items.slice(0,2).map(item=>item.exerciseId);
+  for(const session of threeDay.sessions.slice(1)){
+    assert.deepEqual(session.anchorExerciseIds,firstAnchors);
+    assert.equal(new Set(session.items.map(item=>item.exerciseId)).size,session.items.length);
+  }
+  const fourDay=core.buildWeek({...base,availability:["Monday","Tuesday","Thursday","Friday"]},exercises,discovery);
+  assert.equal(fourDay.sessions[2].anchorExerciseIds.length,1);
+  assert.equal(fourDay.sessions[3].anchorExerciseIds.length,1);
+  assert.ok(fourDay.sessions[2].anchorExerciseIds.every(id=>fourDay.sessions[0].items.some(item=>item.exerciseId===id)));
+  assert.ok(fourDay.sessions[3].anchorExerciseIds.every(id=>fourDay.sessions[1].items.some(item=>item.exerciseId===id)));
+  assert.equal(new Set(fourDay.sessions.flatMap(session=>session.anchorExerciseIds||[])).size,2,"upper/lower weeks should expose only two stable Training Memory anchors");
+  const planIds=core.DAYS.flatMap(day=>fourDay.plan.days[day].map(item=>item.instanceId));
+  assert.equal(new Set(planIds).size,planIds.length,"every repeated exercise instance still needs a unique plan identity");
+});
+test("starter weeks recover from duplicate custom instance IDs",()=>{
+  const result=core.buildWeek(base,exercises,discovery,()=>"same-id"),ids=core.DAYS.flatMap(day=>result.plan.days[day].map(item=>item.instanceId));
+  assert.equal(new Set(ids).size,ids.length);
+  assert.ok(ids.every(id=>/^[a-zA-Z0-9_-]{6,100}$/.test(id)));
+});
 test("first week filters equipment and movement limitations without silently relaxing them",()=>{
   const profile={...base,minutes:20,equipment:["Dumbbells","Bodyweight"],limitations:["no-overhead"]};
   const result=core.buildWeek(profile,exercises,discovery);

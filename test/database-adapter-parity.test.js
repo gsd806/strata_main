@@ -305,6 +305,7 @@ async function parityScenario(store) {
     signalCounts,
     deletedSignals,
     retainedSignalCounts,
+    adminOverview:await store.adminOverview(8_000),
     activeAdminDelete,
     adminDeleted,
     adminDeletedUser:await store.userById(deletionTarget.id),
@@ -325,6 +326,9 @@ test("SQLite and Turso adapters expose matching values, mutation results, and se
       "ratingResult","verificationSendResult","deleteSessionResult"
     ]) assert.equal(localResult[key],undefined,`${key} must have one documented void result across adapters`);
     assert.equal(localResult.replayed,null,"a provider completion cannot replace the durable customer identity");
+    assert.deepEqual(Object.keys(localResult.adminOverview).sort(),[
+      "active_sessions","day_eight_return_users","discovery_users","first_workout_users","open_support","paid_users","pending_deletions","pending_payments","renewed_subscriptions","second_workout_users","suspended_users","total_users","trial_users","verified_users"
+    ].sort(),"the shared owner-overview contract must expose the same activation metrics through both adapters");
     assert.equal(localResult.completed.customer_id,"ctm_original");
     assert.equal(localResult.completed.completed_at,1_900);
     assert.equal(localResult.migratedDraft.price_id,"pri_parity_monthly");

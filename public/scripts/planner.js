@@ -1,48 +1,35 @@
 "use strict";
 
 const INSIGHTS=globalThis.StrataPlanInsights;
-const DAYS=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
-const GROUPS=["all","chest","back","shoulders","arms","legs","glutes","calves","core"];
+const LOGIC=globalThis.StrataPlannerLogic;
+const STATE=globalThis.StrataPlannerState;
+const API=globalThis.StrataPlannerApi;
+const RENDER=globalThis.StrataPlannerRender;
+const EVENTS=globalThis.StrataPlannerEvents;
+const CONFLICTS=globalThis.StrataPlannerConflicts;
+const TEMPLATES=globalThis.StrataPlannerTemplates;
+const SHARING=globalThis.StrataPlannerSharing;
+const ACTIVATION=globalThis.StrataPlannerActivation;
+if(!LOGIC||!STATE||!API||!RENDER||!EVENTS||!CONFLICTS||!TEMPLATES||!SHARING||!ACTIVATION)throw new Error("Planner modules are unavailable. Reload Plan to try again.");
+const DAYS=LOGIC.DAYS;
+const GROUPS=LOGIC.GROUPS;
 const LIBRARY_DESKTOP_PAGE_SIZE=32;
 const LIBRARY_MOBILE_PAGE_SIZE=16;
 const SEARCH_DEBOUNCE_MS=180;
 const GUEST_PLAN_KEY="strata_guest_plan_v1";
-const MAX_DAY_ITEMS=30;
-const MAX_WEEK_ITEMS=140;
-const TEMPLATE_PREFIX="strata_week_template_v1:";
-const DRAFT_PREFIX="strata_plan_draft_v1:";
-const MAX_TEMPLATES=12;
-const state={
-  exercises:[],plan:null,user:null,query:"",group:"all",drag:null,selectedDay:"Monday",
-  ready:false,guest:false,guestRaw:null,saveTimer:null,savePromise:null,lastSaveError:null,planUpdatedAt:0,revision:0,savedRevision:0,navigating:false,libraryLimit:LIBRARY_DESKTOP_PAGE_SIZE,
-  accountChanged:false,undoRemoval:null,replacement:null,templatePreview:null,draftKey:"",draftValue:"",recoverySource:null,recoveredDrafts:[],draftStorageError:false,
-  conflictDraft:null,conflictLatest:null,conflictReview:false,csrfToken:"",sharedPlans:[],sharedPlansLoaded:false,sharedPlansRequest:0,shareBusy:false,pendingUnpublish:"",
-  activationCandidates:[],activationCandidateId:"",activationBusy:false,copyPreview:null,copyTrigger:null
-};
+const MAX_DAY_ITEMS=LOGIC.MAX_DAY_ITEMS;
+const MAX_WEEK_ITEMS=LOGIC.MAX_WEEK_ITEMS;
+const state=STATE.createState({desktopPageSize:LIBRARY_DESKTOP_PAGE_SIZE});
 const el=(id)=>document.getElementById(id);
 const signal=name=>globalThis.StrataSignals?.record?.(name);
+const apiClient=API.createClient({
+  fetchImpl:(...args)=>fetch(...args),
+  getSession:()=>({guest:state.guest,csrfToken:state.csrfToken,userId:state.user?.id}),
+  verifyIdentity:()=>verifyPlannerIdentity(),
+  onAccountChanged:()=>lockChangedAccount()
+});
 
-async function api(path,options={}) {
-  const method=String(options.method||"GET").toUpperCase(),changesState=method!=="GET"&&method!=="HEAD";
-  if(changesState&&!state.guest)await verifyPlannerIdentity();
-  let response;
-  try {
-    response=await fetch(path,{
-      ...options,
-      credentials:"same-origin",
-      headers:{Accept:"application/json",...(options.body?{"Content-Type":"application/json"}:{}),...(changesState&&state.csrfToken?{"X-CSRF-Token":state.csrfToken}:{}),...(changesState&&state.user?.id?{"X-Strata-User":String(state.user.id)}:{}),...(options.headers||{})}
-    });
-  } catch(cause) {
-    throw Object.assign(new Error("Could not reach STRATA. Check your connection and try again."),{code:"NETWORK_ERROR",cause});
-  }
-  const data=await response.json().catch(()=>({}));
-  if(!response.ok) {
-    const error=Object.assign(new Error(data.error||"Request failed."),{status:response.status,code:data.code||"REQUEST_FAILED",data});
-    if(error.code==="ACCOUNT_CHANGED")lockChangedAccount();
-    throw error;
-  }
-  return data;
-}
+async function api(path,options={}){return apiClient.request(path,options);}
 
 function lockChangedAccount(){
   persistAccountDraft();state.accountChanged=true;state.csrfToken="";clearTimeout(state.saveTimer);
@@ -57,25 +44,16 @@ async function verifyPlannerIdentity(){
   state.csrfToken=String(identity.csrfToken||state.csrfToken||"");
 }
 
-function planSaveError(error){
-  if(error?.code==="GUEST_PLAN_CHANGED")return "Your free device week changed in another tab. This draft is still unsaved. Export this week, then reload to compare the saved copy; retry will not overwrite it.";
-  if(error?.code==="NETWORK_ERROR")return "STRATA is offline. Your changes are still unsaved; check your connection and retry.";
-  if(error?.status===401)return "Your session ended before the plan was saved. Sign in again, then retry.";
-  if(error?.status===403)return "The secure save token expired. Refresh this page, review your plan, and retry.";
-  if(error?.status===413)return "This plan is too large to save. Remove a few movements, then retry.";
-  if([400,422].includes(error?.status)&&error?.message&&error.message!=="Request failed.")return error.message;
-  if(Number(error?.status)>=500)return "STRATA could not save right now. Your changes are still here; retry in a moment.";
-  return error?.message&&error.message!=="Request failed."?error.message:"Your plan was not saved. Review your changes and retry.";
-}
+function planSaveError(error){return LOGIC.saveErrorMessage(error);}
 
-function escapeHtml(value){return String(value??"").replace(/[&<>'"]/g,(char)=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[char]));}
+function escapeHtml(value){return RENDER.escapeHtml(value);}
 function exerciseById(id){return state.exercises.find((exercise)=>exercise.id===id);}
 function itemByInstance(day,instanceId){return state.plan?.days?.[day]?.find((item)=>item.instanceId===instanceId);}
 function makeId(){return globalThis.crypto?.randomUUID?.()||`item-${Date.now()}-${Math.random().toString(16).slice(2)}`;}
-function restDays(plan=state.plan){return Array.isArray(plan?.restDays)?DAYS.filter(day=>plan.restDays.includes(day)):DAYS.includes(plan?.restDay)?[plan.restDay]:[];}
-function isRestDay(day,plan=state.plan){return restDays(plan).includes(day);}
-function updateRestDays(plan,days){plan.restDays=DAYS.filter(day=>days.includes(day));plan.restDay=plan.restDays[0]??null;}
-function emptyPlan(){return{version:1,restDay:"Sunday",restDays:["Sunday"],days:Object.fromEntries(DAYS.map((day)=>[day,[]]))};}
+function restDays(plan=state.plan){return LOGIC.restDays(plan);}
+function isRestDay(day,plan=state.plan){return LOGIC.isRestDay(plan,day);}
+function updateRestDays(plan,days){return LOGIC.updateRestDays(plan,days);}
+function emptyPlan(){return LOGIC.emptyPlan();}
 function guestPlan(){
   let input=null;
   state.guestRaw=null;
@@ -110,76 +88,16 @@ async function saveGuestPlan(plan,expectedRaw){
   // raw comparison remains best effort; account plans retain server-side CAS.
   return globalThis.navigator?.locks?.request?await navigator.locks.request("strata-guest-week-save",write):write();
 }
-function copyPlan(plan){return JSON.parse(JSON.stringify(plan));}
-function storageScope(){return state.guest?"guest":`user-${encodeURIComponent(String(state.user?.id||""))}`;}
-function storageEntries(prefix){
-  const entries=[];
-  try{for(let index=0;index<localStorage.length;index+=1){const key=localStorage.key(index);if(key?.startsWith(prefix)){const value=localStorage.getItem(key);try{entries.push({key,value,data:JSON.parse(value)});}catch{/* Ignore malformed entries without deleting them. */}}}}catch{/* Storage may be blocked. */}
-  return entries;
-}
-function deleteStoredSnapshot(snapshot){
-  if(!snapshot?.key)return;
-  try{if(localStorage.getItem(snapshot.key)===snapshot.value)localStorage.removeItem(snapshot.key);}catch{/* Keep the recoverable copy when storage is blocked. */}
-}
+function copyPlan(plan){return LOGIC.copyPlan(plan);}
 function validateWeekPlan(plan,{limits=true}={}){
-  if(!plan||plan.version!==1||!plan.days||typeof plan.days!=="object")throw new Error("This file does not contain a supported STRATA week.");
-  const raw=Object.hasOwn(plan,"restDays")?plan.restDays:plan.restDay===null?[]:[plan.restDay];
-  if(!Array.isArray(raw)||raw.length>7||raw.some(day=>!DAYS.includes(day))||new Set(raw).size!==raw.length)throw new Error("Choose valid, unique rest days.");
-  if(Object.hasOwn(plan,"restDays")&&Object.hasOwn(plan,"restDay")&&plan.restDay!==(restDays(plan)[0]??null))throw new Error("The week contains conflicting rest-day fields.");
-  const known=new Set(state.exercises.map((exercise)=>exercise.id)),seen=new Set();let total=0;
-  for(const day of DAYS){
-    const items=plan.days[day];
-    if(!Array.isArray(items))throw new Error(`The week is missing ${day}.`);
-    if(limits&&items.length>MAX_DAY_ITEMS)throw new Error(`${day} exceeds the ${MAX_DAY_ITEMS}-exercise limit.`);
-    total+=items.length;
-    for(const item of items){
-      if(!item||!known.has(item.exerciseId))throw new Error("The week contains an exercise that is unavailable in this library.");
-      if(typeof item.instanceId!=="string"||!/^[a-zA-Z0-9_-]{1,100}$/.test(item.instanceId)||seen.has(item.instanceId))throw new Error("The week contains a missing or repeated exercise entry ID.");
-      seen.add(item.instanceId);
-      if(!Number.isInteger(item.sets)||item.sets<1||item.sets>10||typeof item.reps!=="string"||!item.reps.trim()||item.reps.length>20)throw new Error("The week contains an invalid set or repetition prescription.");
-    }
-  }
-  if(total>(limits?MAX_WEEK_ITEMS:2000))throw new Error(`The week exceeds the ${limits?MAX_WEEK_ITEMS:2000}-exercise limit.`);
-  if(limits&&restDays(plan).some(day=>plan.days[day].length))throw new Error("Clear the recovery day before saving or using a week template.");
-  const result=copyPlan(plan);updateRestDays(result,restDays(plan));return result;
+  return LOGIC.validateWeekPlan(plan,new Set(state.exercises.map(exercise=>exercise.id)),{limits});
 }
-function persistAccountDraft(){
-  if(state.guest||!state.user?.id||!state.plan)return true;
-  if(!state.draftKey)state.draftKey=`${DRAFT_PREFIX}${storageScope()}:${makeId()}`;
-  const value=JSON.stringify({format:"strata-plan-draft",version:1,userId:String(state.user.id),plan:state.conflictDraft||state.plan,baseUpdatedAt:state.planUpdatedAt,updatedAt:Date.now()});
-  try{localStorage.setItem(state.draftKey,value);state.draftValue=value;state.draftStorageError=false;el("draftStorageNotice").hidden=true;return true;}
-  catch{state.draftStorageError=true;el("draftStorageNotice").hidden=false;return false;}
-}
-function clearSavedDraft(){
-  deleteStoredSnapshot({key:state.draftKey,value:state.draftValue});
-  deleteStoredSnapshot(state.recoverySource);
-  state.draftValue="";state.recoverySource=null;
-}
-function recoveredDrafts(){
-  if(state.guest)return[];
-  return storageEntries(`${DRAFT_PREFIX}${storageScope()}:`).filter((entry)=>{
-    const draft=entry.data;
-    if(draft?.format!=="strata-plan-draft"||draft.version!==1||draft.userId!==String(state.user.id)||!Number.isSafeInteger(draft.baseUpdatedAt)||draft.baseUpdatedAt<0)return false;
-    try{validateWeekPlan(draft.plan,{limits:false});}catch{return false;}
-    if(JSON.stringify(draft.plan)===JSON.stringify(state.plan)){deleteStoredSnapshot(entry);return false;}
-    return true;
-  }).sort((a,b)=>(Number(b.data.updatedAt)||0)-(Number(a.data.updatedAt)||0));
-}
-function selectRecoveredDraft(key){
-  const entry=state.recoveredDrafts.find((draft)=>draft.key===key);
-  if(!entry||state.conflictReview)return false;
-  state.recoverySource={key:entry.key,value:entry.value};
-  state.conflictDraft=copyPlan(entry.data.plan);state.conflictLatest=copyPlan(state.plan);
-  state.revision=Math.max(state.revision,state.savedRevision+1);state.undoRemoval=null;
-  el("plannerShell").inert=true;renderPlanConflict();renderUndo();
-  setSaveStatus("Device draft found · choose a copy",true);
-  el("planConflictMessage").textContent=`A recoverable draft was found on this device (${new Date(entry.data.updatedAt).toLocaleString()}). Compare it with your account plan. Reviewing does not save anything; Save reviewed changes explicitly replaces the account week and checks for newer changes again.`;
-  focusSoon("#planConflictTitle");return true;
-}
-function offerRecoveredDraft(){
-  state.recoveredDrafts=recoveredDrafts();
-  return state.recoveredDrafts.length?selectRecoveredDraft(state.recoveredDrafts[0].key):false;
-}
+const conflictActions=CONFLICTS.createController({
+  state,el,storage:localStorage,makeId,copyPlan,validateWeekPlan,planMovementCount,planConflictSummary,escapeHtml,
+  readSelectedDay:STATE.readSelectedDay,persistSelectedDay,selectionContext:plannerSelectionContext,api,renderWeek,renderLibrary,renderUndo,setSaveStatus,showToast,focusSoon,
+  offerDevicePlan:()=>activationActions.offerDevicePlan()
+});
+const{persistAccountDraft,clearSavedDraft,selectRecoveredDraft,offerRecoveredDraft,clearPlanConflict,recoverPlanConflict,reviewConflictDraft,keepLatestPlan}=conflictActions;
 function renderUndo(){const button=el("undoPlanRemoval");button.disabled=!state.ready||!state.undoRemoval||Boolean(state.conflictDraft);}
 function removeItem(day,instanceId){
   if(!state.ready||state.conflictDraft||!DAYS.includes(day))return false;
@@ -222,65 +140,10 @@ function confirmReplacement(){
   if(!exerciseById(id)||id===item.exerciseId)return false;
   item.exerciseId=id;state.replacement=null;el("replaceExerciseDialog").close();renderWeek(instanceSelector("data-replace-item",item.instanceId));queueSave();showToast("Exercise replaced. Sets and reps were retained; adjust them for this movement.");return true;
 }
-function weekTemplates(){
-  return storageEntries(`${TEMPLATE_PREFIX}${storageScope()}:`).filter((entry)=>entry.data?.format==="strata-week-template"&&entry.data.version===1&&typeof entry.data.name==="string").sort((a,b)=>(Number(b.data.updatedAt)||0)-(Number(a.data.updatedAt)||0));
-}
-function renderTemplates(){
-  const templates=weekTemplates();
-  el("weekTemplateSelect").innerHTML='<option value="">Choose a saved week</option>'+templates.map((entry)=>`<option value="${escapeHtml(entry.key)}">${escapeHtml(entry.data.name)}</option>`).join("");
-  el("weekTemplateSelect").value="";el("previewWeekTemplate").disabled=true;
-  el("templateStatus").textContent=templates.length?`${templates.length} of ${MAX_TEMPLATES} templates saved for this ${state.guest?"guest":"account"} on this device.`:"No saved templates yet. Name your current week to reuse it later.";
-}
-function openTemplates(){
-  if(!state.ready||state.conflictDraft)return false;
-  state.templatePreview=null;el("templatePreview").hidden=true;el("weekTemplateName").value="";el("templateFile").value="";renderTemplates();el("weekTemplatesDialog").showModal();focusSoon("#weekTemplateName");return true;
-}
-function saveWeekTemplate(){
-  if(!state.ready||state.conflictDraft)return false;
-  const name=el("weekTemplateName").value.trim();
-  if(!name||name.length>60){el("templateStatus").textContent="Give your template a name using 1–60 characters.";el("weekTemplateName").focus();return false;}
-  const templates=weekTemplates();
-  if(templates.length>=MAX_TEMPLATES){el("templateStatus").textContent=`You have ${MAX_TEMPLATES} templates. Export and delete one before saving another.`;return false;}
-  if(templates.some((entry)=>entry.data.name.toLowerCase()===name.toLowerCase())){el("templateStatus").textContent="That name is already saved. Choose a different name to preserve both weeks.";return false;}
-  try{
-    const plan=validateWeekPlan(state.plan),key=`${TEMPLATE_PREFIX}${storageScope()}:${makeId()}`;
-    localStorage.setItem(key,JSON.stringify({format:"strata-week-template",version:1,name,updatedAt:Date.now(),plan}));
-    renderTemplates();el("weekTemplateSelect").value=key;el("previewWeekTemplate").disabled=false;el("templateStatus").textContent=`“${name}” saved on this device. Export the week to keep a portable copy.`;return true;
-  }catch(error){el("templateStatus").textContent=error.message||"The browser could not save this template.";return false;}
-}
-function previewTemplate(plan,name,key=""){
-  try{
-    state.templatePreview={plan:validateWeekPlan(plan),name:String(name).slice(0,60),key,revision:state.revision};
-    el("templatePreviewTitle").textContent=state.templatePreview.name;
-    el("templatePreviewSummary").innerHTML=planConflictSummary(state.templatePreview.plan);
-    el("confirmUseTemplate").checked=false;el("applyWeekTemplate").disabled=true;el("deleteWeekTemplate").hidden=!key;el("deleteWeekTemplate").textContent="Delete saved template";el("templatePreview").hidden=false;
-    el("templateStatus").textContent="Review this week. Using it replaces the current editable week; it does not create a calendar entry.";return true;
-  }catch(error){state.templatePreview=null;el("templatePreview").hidden=true;el("templateStatus").textContent=error.message;return false;}
-}
-async function importWeekTemplate(file){
-  if(!file)return false;
-  state.templatePreview=null;el("templatePreview").hidden=true;
-  if(file.size>512000){el("templateStatus").textContent="Choose a STRATA JSON week smaller than 500 KB.";return false;}
-  try{
-    const parsed=JSON.parse(await file.text());
-    if(!["strata-weekly-plan","strata-week-template"].includes(parsed?.format)||parsed.version!==1)throw new Error("Choose a supported STRATA weekly-plan JSON export.");
-    return previewTemplate(parsed.plan,parsed.name||file.name.replace(/\.json$/i,""));
-  }catch(error){el("templateStatus").textContent=error.message||"This file could not be imported.";return false;}
-}
-function useWeekTemplate(){
-  const preview=state.templatePreview;
-  if(!preview||!el("confirmUseTemplate").checked||!state.ready||state.conflictDraft)return false;
-  if(state.revision!==preview.revision){el("templateStatus").textContent="Your current week changed after the preview opened. Preview the template again before replacing it.";return false;}
-  const plan=validateWeekPlan(preview.plan);
-  for(const day of DAYS)for(const item of plan.days[day])item.instanceId=makeId();
-  state.plan=plan;state.undoRemoval=null;state.templatePreview=null;state.selectedDay=DAYS.find((day)=>!isRestDay(day,plan))||"Monday";
-  el("weekTemplatesDialog").close();renderWeek();renderLibrary();queueSave();renderUndo();showToast("Template copied into your editable week. Changes follow your usual save status.");return true;
-}
-function deleteWeekTemplate(){
-  const preview=state.templatePreview;if(!preview?.key)return false;
-  if(el("deleteWeekTemplate").textContent!=="Confirm delete template"){el("deleteWeekTemplate").textContent="Confirm delete template";return false;}
-  try{localStorage.removeItem(preview.key);state.templatePreview=null;el("templatePreview").hidden=true;renderTemplates();return true;}catch{el("templateStatus").textContent="This browser could not delete the template.";return false;}
-}
+const templateActions=TEMPLATES.createController({
+  state,el,storage:localStorage,days:DAYS,makeId,escapeHtml,validateWeekPlan,planConflictSummary,firstTrainingDay:STATE.firstTrainingDay,persistSelectedDay,renderWeek,renderLibrary,queueSave,renderUndo,showToast,focusSoon
+});
+const{weekTemplates,openTemplates,saveWeekTemplate,previewTemplate,importWeekTemplate,useWeekTemplate,deleteWeekTemplate}=templateActions;
 function focusSoon(selector){if(!selector)return;requestAnimationFrame(()=>document.querySelector(selector)?.focus());}
 function instanceSelector(attribute,instanceId){return `[${attribute}="${String(instanceId).replace(/[^a-zA-Z0-9_-]/g,"")}"]`;}
 
@@ -302,11 +165,18 @@ function renderDayNav(){
   const nav=el("plannerDayNav");
   if(!state.plan){nav.innerHTML="";return;}
   el("quickAddDayValue").textContent=state.selectedDay;
-  nav.innerHTML=DAYS.map((day)=>{
-    const selected=state.selectedDay===day,rest=isRestDay(day);
-    const label=rest?`${day}, recovery day`:selected?`${day}, selected for new exercises`:`Add new exercises to ${day}`;
-    return `<button class="planner-day-chip ${selected?"active":""} ${rest?"recovery":""}" data-select-day="${day}" data-day-chip="${day}" type="button" aria-label="${label}" aria-pressed="${selected}" ${rest?"disabled":""}>${day.slice(0,3)}</button>`;
-  }).join("");
+  nav.innerHTML=RENDER.dayNavMarkup(DAYS,{selectedDay:state.selectedDay,restDays:restDays()});
+  renderMobileHandoff();
+}
+
+function plannerSelectionContext(){return{guest:state.guest,userId:state.user?.id};}
+function persistSelectedDay(){return STATE.writeSelectedDay(localStorage,plannerSelectionContext(),state.plan,state.selectedDay);}
+function renderMobileHandoff(){
+  if(!state.plan)return;
+  const handoff=LOGIC.selectedDayHandoff(state.plan,state.selectedDay);
+  el("mobileAddDestination").textContent=handoff.addLabel;
+  el("mobileWeekLink").textContent=handoff.viewLabel;
+  el("mobileWeekLink").href=`#day-title-${DAYS.indexOf(handoff.day)}`;
 }
 
 function downloadWeeklyPlan(){
@@ -320,205 +190,36 @@ function downloadWeeklyPlan(){
 }
 
 function planMovementCount(plan=state.plan){
-  return DAYS.reduce((total,day)=>total+(Array.isArray(plan?.days?.[day])?plan.days[day].length:0),0);
+  return LOGIC.planMovementCount(plan);
 }
 
 function nextScheduledDay(plan=state.plan,now=new Date()){
-  const todayIndex=(now.getDay()+6)%7;
-  const ordered=[...DAYS.slice(todayIndex),...DAYS.slice(0,todayIndex)];
-  const day=ordered.find((name)=>Array.isArray(plan?.days?.[name])&&plan.days[name].length>0);
-  return day?{day,movements:plan.days[day].length,isToday:day===DAYS[todayIndex]}:null;
+  return LOGIC.nextScheduledDay(plan,now);
 }
 
-function setShareStatus(message="",type=""){
-  const status=el("sharePlanStatus");
-  status.textContent=message;
-  status.classList.toggle("error",type==="error");
-  status.classList.toggle("success",type==="success");
-}
-
-function shareDate(value){
-  const date=new Date(value);
-  if(!Number.isFinite(date.getTime()))return "Recently updated";
-  try{return `Updated ${new Intl.DateTimeFormat(undefined,{dateStyle:"medium"}).format(date)}`;}
-  catch{return `Updated ${date.toISOString().slice(0,10)}`;}
-}
-
-function currentSharedPlan(){
-  return state.sharedPlans.find((plan)=>plan&&plan.published!==false)||null;
-}
-
-function syncShareForm(plan=currentSharedPlan()){
-  const publishButton=el("publishWeeklyPlan");
-  publishButton.innerHTML=plan?'Update Strata+ copy <span aria-hidden="true">↗</span>':'Publish to Strata+ <span aria-hidden="true">↗</span>';
-  if(!plan)return;
-  if(!el("sharePlanTitle").value.trim())el("sharePlanTitle").value=String(plan.title||"").slice(0,80);
-  if(!el("sharePlanDescription").value.trim())el("sharePlanDescription").value=String(plan.description||"").slice(0,240);
-  el("shareDescriptionCount").textContent=`${el("sharePlanDescription").value.length} / 240`;
-}
-
-function renderOwnSharedPlans({focusId=""}={}){
-  const container=el("ownSharedPlans"),plans=state.sharedPlans.filter((plan)=>plan&&plan.published!==false);
-  if(!plans.length){
-    state.pendingUnpublish="";
-    container.innerHTML='<p class="share-list-empty">You have not shared a week yet. Publish the plan on this page when it is ready.</p>';
-    syncShareForm(null);
-    return;
-  }
-  container.innerHTML=plans.map((plan)=>{
-    const id=escapeHtml(plan.id),title=escapeHtml(plan.title||"Shared week"),description=escapeHtml(plan.description||"No description added."),movementCount=planMovementCount(plan.plan),confirming=state.pendingUnpublish===String(plan.id);
-    return `<article class="own-share-card"><div><h4>${title}</h4><p>${description}</p></div><div class="own-share-meta"><span>${movementCount} movement${movementCount===1?"":"s"}</span><span>${escapeHtml(shareDate(plan.updatedAt||plan.createdAt))}</span><span>By ${escapeHtml(plan.authorName||state.user?.name||"You")}</span></div><button class="unpublish-plan" data-unpublish-plan="${id}" type="button" ${state.shareBusy?"disabled":""}>${confirming?"Confirm unpublish":"Unpublish"}</button></article>`;
-  }).join("");
-  syncShareForm(plans[0]);
-  if(focusId)focusSoon(`[data-unpublish-plan="${String(focusId).replace(/[^a-zA-Z0-9_-]/g,"")}"]`);
-}
-
-function renderShareAccess(){
-  el("sharePlanGuest").hidden=!state.guest;
-  el("sharePlanAccount").hidden=state.guest;
-  if(!state.guest){
-    if(state.sharedPlansLoaded)renderOwnSharedPlans();
-    else el("ownSharedPlans").innerHTML='<p class="share-list-empty">Loading your shared plan…</p>';
-  }
-}
-
-async function loadSharedPlans({announce=false}={}){
-  if(state.guest||state.shareBusy)return false;
-  const requestId=++state.sharedPlansRequest;
-  const container=el("ownSharedPlans");
-  container.setAttribute("aria-busy","true");
-  if(!state.sharedPlansLoaded)container.innerHTML='<p class="share-list-empty">Loading your shared plan…</p>';
-  try{
-    await verifyPlannerIdentity();
-    const result=await api("/api/community-plans/mine");
-    await verifyPlannerIdentity();
-    if(requestId!==state.sharedPlansRequest)return false;
-    if(result.userId&&String(result.userId)!==String(state.user.id)){lockChangedAccount();throw new Error("The signed-in account changed. Reload to review its shared plans.");}
-    state.sharedPlans=Array.isArray(result.plans)?result.plans:result.plan?[result.plan]:[];
-    state.sharedPlansLoaded=true;state.pendingUnpublish="";
-    renderOwnSharedPlans();
-    if(announce)setShareStatus("Your shared plan is up to date.","success");
-    return true;
-  }catch(error){
-    if(requestId!==state.sharedPlansRequest)return false;
-    container.innerHTML=`<p class="share-list-empty">${escapeHtml(error.message||"Your shared plan could not be loaded.")}</p>`;
-    if(announce){setShareStatus(error.message||"Your shared plan could not be loaded.","error");showToast(error.message||"Could not refresh your shared plan.");}
-    return false;
-  }finally{if(requestId===state.sharedPlansRequest)container.setAttribute("aria-busy","false");}
-}
-
-function openSharePanel(){
-  const panel=el("shareWeeklyPanel");
-  panel.hidden=false;
-  el("shareWeeklyPlan").setAttribute("aria-expanded","true");
-  renderShareAccess();
-  focusSoon("#shareWeeklyTitle");
-  panel.scrollIntoView?.({behavior:window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches?"auto":"smooth",block:"start"});
-  if(!state.guest&&!state.sharedPlansLoaded)void loadSharedPlans();
-}
-
-function closeSharePanel(){
-  el("shareWeeklyPanel").hidden=true;
-  el("shareWeeklyPlan").setAttribute("aria-expanded","false");
-  el("shareWeeklyPlan").focus?.();
-}
-
-function shareValidation(){
-  const title=el("sharePlanTitle").value.trim(),description=el("sharePlanDescription").value.trim();
-  if(state.guest)return{error:"Sign in to publish your week."};
-  if(!state.csrfToken)return{error:"Your secure session is not ready. Refresh the page and try again."};
-  if(title.length<3)return{error:"Give your plan a title using at least 3 characters.",focus:"sharePlanTitle"};
-  if(title.length>80)return{error:"Keep the plan title to 80 characters or fewer.",focus:"sharePlanTitle"};
-  if(description.length>240)return{error:"Keep the description to 240 characters or fewer.",focus:"sharePlanDescription"};
-  if(planMovementCount()===0)return{error:"Add at least one workout to your week before publishing."};
-  if(hasRestConflict())return{error:`Move all exercises off ${restDays().join(", ")} before publishing.`};
-  if(!el("sharePlanConfirm").checked)return{error:"Confirm the community privacy notice before publishing.",focus:"sharePlanConfirm"};
-  return{title,description};
-}
-
-function clearShareValidation(){
-  for(const control of [el("sharePlanTitle"),el("sharePlanDescription"),el("sharePlanConfirm")])control.removeAttribute?.("aria-invalid");
-}
-
-async function publishWeeklyPlan(){
-  if(state.shareBusy)return;
-  clearShareValidation();
-  const input=shareValidation();
-  if(input.error){setShareStatus(input.error,"error");if(input.focus){el(input.focus).setAttribute?.("aria-invalid","true");el(input.focus).focus?.();}return;}
-  state.shareBusy=true;el("publishWeeklyPlan").disabled=true;el("refreshSharedPlans").disabled=true;
-  state.sharedPlansRequest+=1;
-  setShareStatus("Saving your private plan before publishing…");
-  try{
-    if(!await flushSave({silent:true}))throw state.lastSaveError||new Error("Your private plan could not be saved. Fix that first, then publish again.");
-    setShareStatus("Publishing your week to Strata+…");
-    const result=await api("/api/community-plans",{method:"POST",body:JSON.stringify({title:input.title,description:input.description,expectedPlanUpdatedAt:state.planUpdatedAt})});
-    const shared=result.plan||result.communityPlan;
-    if(shared)state.sharedPlans=[shared];
-    else await loadSharedPlans();
-    state.sharedPlansLoaded=true;state.pendingUnpublish="";el("sharePlanConfirm").checked=false;clearShareValidation();
-    setShareStatus("Your week is now available in the Strata+ community library.","success");
-    showToast("Your week was published to Strata+.");
-  }catch(error){
-    if(error.status===401)setShareStatus("Your session ended. Sign in again before publishing.","error");
-    else if(error.code==="COMMUNITY_PLAN_CHANGED"||error.code==="PLAN_CHANGED")setShareStatus("Your saved Plan changed on another device or tab. Refresh this page and review it before publishing.","error");
-    else setShareStatus(error.message||"Your week could not be published.","error");
-    showToast(error.message||"Your week could not be published.");
-  }finally{
-    state.shareBusy=false;el("publishWeeklyPlan").disabled=false;el("refreshSharedPlans").disabled=false;el("ownSharedPlans").setAttribute("aria-busy","false");renderOwnSharedPlans();
-  }
-}
-
-async function unpublishSharedPlan(id){
-  const plan=state.sharedPlans.find((item)=>String(item?.id)===String(id));
-  if(!plan||state.shareBusy)return;
-  if(state.pendingUnpublish!==String(id)){
-    state.pendingUnpublish=String(id);renderOwnSharedPlans({focusId:id});
-    setShareStatus("Press Confirm unpublish to remove this week from Strata+. Your private Plan will stay unchanged.");
-    return;
-  }
-  state.shareBusy=true;state.sharedPlansRequest+=1;el("publishWeeklyPlan").disabled=true;el("refreshSharedPlans").disabled=true;renderOwnSharedPlans();setShareStatus("Removing your week from Strata+…");
-  let removed=false;
-  try{
-    await api(`/api/community-plans/${encodeURIComponent(id)}`,{method:"DELETE"});
-    state.sharedPlans=state.sharedPlans.filter((item)=>String(item?.id)!==String(id));state.pendingUnpublish="";
-    setShareStatus("Your week was removed from Strata+. Your private Plan is unchanged.","success");showToast("Shared week unpublished.");removed=true;
-  }catch(error){
-    state.pendingUnpublish="";setShareStatus(error.message||"Your shared week could not be removed.","error");showToast(error.message||"Could not unpublish the week.");
-  }finally{state.shareBusy=false;el("publishWeeklyPlan").disabled=false;el("refreshSharedPlans").disabled=false;el("ownSharedPlans").setAttribute("aria-busy","false");renderOwnSharedPlans();if(removed)el("refreshSharedPlans").focus?.();}
-}
+const shareActions=SHARING.createController({
+  state,el,api,escapeHtml,planMovementCount,restDays,hasRestConflict,verifyIdentity:verifyPlannerIdentity,lockChangedAccount,flushSave,showToast,focusSoon,browserWindow:window
+});
+const{renderShareAccess,loadSharedPlans,openSharePanel,closeSharePanel,publishWeeklyPlan,unpublishSharedPlan}=shareActions;
 
 function renderFilters(focusGroup=null){
-  el("plannerFilters").innerHTML=GROUPS.map((group)=>`<button class="planner-filter ${state.group===group?"active":""}" data-library-group="${group}" type="button" aria-pressed="${state.group===group}">${group==="all"?"All":group}</button>`).join("");
+  el("plannerFilters").innerHTML=RENDER.filterMarkup(GROUPS,state.group);
   if(focusGroup)focusSoon(`[data-library-group="${focusGroup}"]`);
 }
 
 function filteredExercises(){
-  const query=state.query.trim().toLowerCase();
-  return state.exercises
-    .filter((exercise)=>state.group==="all"||exercise.group===state.group)
-    .filter((exercise)=>!query||`${exercise.name} ${exercise.sub} ${exercise.equipment}`.toLowerCase().includes(query))
-    .sort((a,b)=>b.score-a.score);
+  return LOGIC.filterExercises(state.exercises,{group:state.group,query:state.query});
 }
 
 function libraryPageSize(){return window.matchMedia?.("(max-width: 760px)")?.matches?LIBRARY_MOBILE_PAGE_SIZE:LIBRARY_DESKTOP_PAGE_SIZE;}
 function resetLibraryWindow(){state.libraryLimit=libraryPageSize();}
 
 function renderLibrary(){
-  const items=filteredExercises(),visibleItems=items.slice(0,state.libraryLimit),remaining=Math.max(0,items.length-visibleItems.length),nextCount=Math.min(libraryPageSize(),remaining);
+  const items=filteredExercises(),visibleItems=items.slice(0,state.libraryLimit);
   el("libraryCount").textContent=items.length;
   el("libraryResultStatus").textContent=items.length?`Showing ${visibleItems.length} of ${items.length} matching movement${items.length===1?"":"s"}.`:`No matching movements.`;
-  el("libraryList").innerHTML=items.length?visibleItems.map((exercise,index)=>{
-    const id=escapeHtml(exercise.id),name=escapeHtml(exercise.name),sub=escapeHtml(exercise.sub),equipment=escapeHtml(exercise.equipment),youtube=escapeHtml(exercise.youtube);
-    return `<article class="library-card" draggable="true" data-library-id="${id}" data-library-index="${index}"><div class="library-score"><span aria-hidden="true">${escapeHtml(exercise.score)}</span><span class="sr-only">STRATA score ${escapeHtml(exercise.score)}</span></div><div><h3>${name}</h3><p>${sub} · ${equipment}</p></div><div class="library-actions"><button data-quick-add="${id}" type="button" aria-label="Add ${name} to ${escapeHtml(state.selectedDay)}">Add</button><button class="guide-button" data-guide-exercise="${id}" type="button" aria-label="Open setup and technique guide for ${name}">Guide</button><a class="yt-link" href="${youtube}" target="_blank" rel="noreferrer" aria-label="Find ${name} tutorials on YouTube">Video</a></div></article>`;
-  }).join("")+(!remaining?"":`<div class="library-load-more"><span>${visibleItems.length} of ${items.length}</span><button data-load-more-library type="button" aria-controls="libraryList">Load ${nextCount} more <span aria-hidden="true">↓</span></button></div>`):`<div class="library-empty"><strong>No matching movements</strong><span>Try another search or choose a different muscle group.</span></div>`;
-}
-
-function scheduledMarkup(item,day,index,count){
-  const exercise=exerciseById(item.exerciseId);
-  if(!exercise)return"";
-  const instanceId=escapeHtml(item.instanceId),name=escapeHtml(exercise.name),titleId=`scheduled-${instanceId}`;
-  const options=DAYS.map((option)=>`<option value="${option}" ${option===day?"selected":""}>${option}${isRestDay(option)?" — recovery":""}</option>`).join("");
-  return `<article class="scheduled-card" draggable="true" data-instance-id="${instanceId}" aria-labelledby="${titleId}"><div class="scheduled-card-head"><div><h3 id="${titleId}">${name}</h3><small>${escapeHtml(exercise.sub)} · ${escapeHtml(exercise.equipment)}</small></div><div class="card-actions"><button data-guide-exercise="${escapeHtml(exercise.id)}" type="button" aria-label="Open setup and technique guide for ${name}">?</button><a href="${escapeHtml(exercise.youtube)}" target="_blank" rel="noreferrer" aria-label="Find ${name} tutorials on YouTube">▶</a><button data-remove-item="${instanceId}" type="button" aria-label="Remove ${name} from ${day}">×</button></div></div><button class="replace-exercise-button" data-replace-item="${instanceId}" type="button" aria-label="Replace ${name} on ${day}">Replace exercise</button><div class="prescription"><label>Sets<input data-item-sets="${instanceId}" type="number" min="1" max="10" step="1" inputmode="numeric" value="${escapeHtml(item.sets)}" aria-label="Sets for ${name} on ${day}" /></label><label>Reps / time<input data-item-reps="${instanceId}" type="text" maxlength="20" value="${escapeHtml(item.reps)}" aria-label="Reps or time for ${name} on ${day}" /></label></div><div class="card-move"><label><span>Day</span><select data-item-day="${instanceId}" aria-label="Move ${name} to another day">${options}</select></label><div class="move-buttons" role="group" aria-label="Reorder ${name}"><button data-move-item="${instanceId}" data-move-direction="-1" type="button" aria-label="Move ${name} earlier on ${day}" ${index===0?"disabled":""}>↑</button><button data-move-item="${instanceId}" data-move-direction="1" type="button" aria-label="Move ${name} later on ${day}" ${index===count-1?"disabled":""}>↓</button></div></div></article>`;
+  el("libraryList").innerHTML=RENDER.libraryMarkup(items,{selectedDay:state.selectedDay,visibleLimit:state.libraryLimit,pageSize:libraryPageSize()});
+  renderMobileHandoff();
 }
 
 let exerciseGuideTrigger=null;
@@ -533,13 +234,7 @@ function openExerciseGuide(id,trigger=null){
 }
 
 function renderWeek(focusSelector=null){
-  el("weekBoard").innerHTML=DAYS.map((day,index)=>{
-    const items=state.plan.days[day],rest=isRestDay(day),selected=state.selectedDay===day,conflict=rest&&items.length>0;
-    const targetText=rest?"Recovery day":selected?"Adding here":"Add here";
-    const restText=rest?"Remove rest day":items.length?"Clear day to make rest":"Add rest day";
-    const emptyText=rest?"Recovery day · keep clear":selected?'Ready for exercises · use “Add” in the library':'Choose “Add here,” then add an exercise';
-    return `<section class="day-column ${rest?"rest-day":""} ${selected?"selected-day":""} ${conflict?"rest-conflict":""}" data-day="${day}" aria-labelledby="day-title-${index}"><header class="day-head"><div class="day-index"><span>Day ${String(index+1).padStart(2,"0")}</span><span>${items.length} movement${items.length===1?"":"s"}</span></div><div class="day-title-row"><h2 id="day-title-${index}" tabindex="-1">${day}</h2><button class="day-target ${selected?"active":""}" data-select-day="${day}" type="button" aria-pressed="${selected}" ${rest?"disabled":""}>${targetText}</button></div>${rest?`<span class="rest-badge">${conflict?"Recovery day needs clearing":"Rest day"}</span>`:""}</header><button class="rest-toggle" data-set-rest="${day}" type="button" aria-pressed="${rest}" ${!rest&&items.length?"disabled":""}>${restText}</button>${rest?`<div class="rest-callout"><strong>${conflict?"Clear this day":"Recover"}</strong><p>${conflict?"Move every scheduled exercise to another day before saving further recovery changes.":"Keep this day free or use gentle mobility and walking."}</p></div>`:""}<div class="day-dropzone" data-drop-day="${day}" aria-label="${day} exercises">${items.length?items.map((item,itemIndex)=>scheduledMarkup(item,day,itemIndex,items.length)).join(""):`<div class="day-empty">${emptyText}</div>`}</div></section>`;
-  }).join("");
+  el("weekBoard").innerHTML=RENDER.weekBoardMarkup({plan:state.plan,days:DAYS,selectedDay:state.selectedDay,restDays:restDays(),exerciseById});
   renderDayNav();
   renderSummary();
   renderUndo();
@@ -563,7 +258,7 @@ function renderSummary(){
     readiness={
       tone:noRecovery?"review-recovery":"ready",label:noRecovery?"Recovery check":plusActive?"Train-ready":"Free plan ready",title:noRecovery?"Your week is built. Recovery is unmarked.":plusActive?"Your week is ready to train.":"Your free week is ready.",
       detail:plusActive?nextDetail:`${nextDetail} Guided workouts and set logging are included in Strata+.`,
-      action:plusActive?"Start working out":"See guided workout tools",href:plusActive?`/workout.html?day=${encodeURIComponent(next?.day||DAYS.find((day)=>state.plan.days[day].length))}`:"/pricing"
+      action:plusActive?`Review ${next?.day||DAYS.find((day)=>state.plan.days[day].length)} workout`:"See guided workout tools",href:plusActive?`/workout.html?day=${encodeURIComponent(next?.day||DAYS.find((day)=>state.plan.days[day].length))}`:"/pricing"
     };
   }
   el("weekSummary").innerHTML=`<div class="summary-stat"><span>Scheduled movements</span><strong>${total}</strong></div><div class="summary-stat"><span>Training days</span><strong>${trainingDays}</strong></div><div class="summary-stat"><span>Working sets</span><strong>${totalSets}</strong></div><div class="summary-stat ${restConflict?"summary-warning":""}"><span>Rest days</span><strong>${restDays().length}${restConflict?" · clear":""}</strong></div><div class="week-distribution" role="img" aria-label="Weekly exercise distribution. ${distribution}">${DAYS.map((day)=>`<div aria-hidden="true"><span>${state.plan.days[day].length}</span><div class="week-bar-track"><i style="height:${Math.max(3,state.plan.days[day].length/peak*100)}%" class="${isRestDay(day)?"is-rest":""}"></i></div><small>${day.slice(0,3)}</small></div>`).join("")}</div><section class="week-readiness ${readiness.tone}" aria-label="Plan guidance"><div><span>${readiness.label}</span><strong>${readiness.title}</strong><p>${readiness.detail}</p></div>${readiness.href?`<a href="${readiness.href}">${readiness.action} <span aria-hidden="true">→</span></a>`:""}</section>`;
@@ -644,6 +339,7 @@ function setRestDay(day){
   updateRestDays(state.plan,removing?restDays().filter(name=>name!==day):[...restDays(),day]);
   if(removing)state.selectedDay=day;
   else if(state.selectedDay===day)state.selectedDay=DAYS.find(name=>!isRestDay(name))||"Monday";
+  persistSelectedDay();
   renderWeek(`[data-set-rest="${day}"]`);renderLibrary();queueSave();
   showToast(removing?`${day} is open for training.`:`${day} set as a rest day.`);
   return true;
@@ -681,7 +377,7 @@ function moveItem(sourceDay,targetDay,instanceId,{focus=true}={}){
   const recovery=prepareRecoveryForTarget(targetDay);
   if(!recovery.ok){source.splice(index,0,item);return false;}
   state.plan.days[targetDay].push(item);
-  if(isRestDay(state.selectedDay))state.selectedDay=targetDay;
+  if(isRestDay(state.selectedDay)){state.selectedDay=targetDay;persistSelectedDay();}
   renderWeek(focus?instanceSelector("data-item-day",instanceId):null);
   renderLibrary();
   queueSave();
@@ -706,7 +402,7 @@ function queueSave(){
   clearTimeout(state.saveTimer);
   if(hasRestConflict()){setSaveStatus("Clear recovery day to save",true);return;}
   if(state.conflictReview){setSaveStatus("Review recovered changes · save when ready",true);return;}
-  setSaveStatus("Unsaved changes");
+  setSaveStatus("Saving…");
   state.saveTimer=setTimeout(()=>{void flushSave();},500);
 }
 
@@ -722,176 +418,15 @@ function setSaveStatus(message,error=false){
 }
 
 function planConflictSummary(plan){
-  const rows=DAYS.map((day)=>{
-    const items=Array.isArray(plan?.days?.[day])?plan.days[day]:[];
-    const detail=items.length?items.map((item)=>{
-      const exercise=exerciseById(item.exerciseId);
-      return `${escapeHtml(exercise?.name||"Unknown movement")} <span>${escapeHtml(item.sets)} × ${escapeHtml(item.reps)}</span>`;
-    }).join(", "):"No movements";
-    return `<li><strong>${escapeHtml(day)}${isRestDay(day,plan)?" · recovery":""}</strong><p>${detail}</p></li>`;
-  }).join("");
-  return `<p class="plan-conflict-total">${planMovementCount(plan)} movement${planMovementCount(plan)===1?"":"s"} · ${restDays(plan).length} rest days</p><ul>${rows}</ul>`;
+  return RENDER.planConflictSummaryMarkup({plan,days:DAYS,restDays:restDays(plan),exerciseById,movementCount:planMovementCount(plan)});
 }
 
-function selectedActivationCandidate(){return state.activationCandidates.find((candidate)=>candidate.id===state.activationCandidateId)||state.activationCandidates[0]||null;}
-function setActivationStatus(message,error=false){const node=el("devicePlanStatus");node.textContent=message;node.dataset.state=error?"error":"";}
-function activationOverview(candidate){
-  const accountCount=planMovementCount(state.plan),deviceCount=planMovementCount(candidate.plan),profile=candidate.profile;
-  return `<div><span>Device source</span><strong>${escapeHtml(candidate.label)}</strong></div><div><span>Device week</span><strong>${deviceCount} movement${deviceCount===1?"":"s"}</strong></div><div><span>Account week</span><strong>${accountCount} movement${accountCount===1?"":"s"}</strong></div>${profile?`<div><span>Goal</span><strong>${escapeHtml(String(profile.goal).replace("-"," "))}</strong></div><div><span>Schedule</span><strong>${profile.availability.length} days · ${profile.minutes} min</strong></div><div><span>Equipment</span><strong>${escapeHtml(profile.equipment.join(", "))}</strong></div>`:""}`;
-}
-function renderActivationCandidate(){
-  const candidate=selectedActivationCandidate();if(!candidate)return false;
-  el("devicePlanOverview").innerHTML=activationOverview(candidate);
-  el("deviceCandidateTitle").textContent=candidate.label;
-  el("deviceAccountPlanSummary").innerHTML=planConflictSummary(state.plan);
-  el("deviceCandidatePlanSummary").innerHTML=planConflictSummary(candidate.plan);
-  el("devicePlanComparison").hidden=true;
-  el("devicePlanConfirmLabel").hidden=true;
-  el("devicePlanConfirm").checked=false;
-  el("claimDevicePlan").disabled=true;
-  el("compareDevicePlan").setAttribute("aria-expanded","false");
-  el("compareDevicePlan").innerHTML='Compare both weeks <span aria-hidden="true">↘</span>';
-  setActivationStatus("No decision has been made. Both copies remain unchanged.");
-  return true;
-}
-function hideActivationPanel(){state.activationCandidates=[];state.activationCandidateId="";el("devicePlanPanel").hidden=true;}
-function offerDevicePlan(){
-  const activation=globalThis.StrataActivation;
-  if(state.guest||!state.user?.id||!state.plan||!activation?.deviceCandidates){hideActivationPanel();return false;}
-  let candidates=[];
-  try{
-    candidates=activation.deviceCandidates(localStorage).flatMap((candidate)=>{
-      try{return[{...candidate,plan:validateWeekPlan(candidate.plan)}];}catch{return[];}
-    }).filter((candidate)=>activation.shouldOffer(localStorage,{userId:state.user.id,accountRevision:state.planUpdatedAt,accountPlan:state.plan,candidate}));
-  }catch{candidates=[];}
-  if(!candidates.length){hideActivationPanel();return false;}
-  state.activationCandidates=candidates;state.activationCandidateId=candidates[0].id;
-  const source=el("devicePlanSource");
-  source.innerHTML=candidates.map((candidate)=>`<option value="${escapeHtml(candidate.id)}">${escapeHtml(candidate.label)} · ${planMovementCount(candidate.plan)} movements</option>`).join("");
-  source.value=state.activationCandidateId;el("devicePlanSourceLabel").hidden=candidates.length<2;
-  renderActivationCandidate();el("devicePlanPanel").hidden=false;
-  focusSoon("#devicePlanTitle");return true;
-}
-function toggleActivationComparison(){
-  const comparison=el("devicePlanComparison"),opening=comparison.hidden;
-  comparison.hidden=!opening;el("devicePlanConfirmLabel").hidden=!opening;
-  el("compareDevicePlan").setAttribute("aria-expanded",String(opening));
-  el("compareDevicePlan").innerHTML=opening?'Hide comparison <span aria-hidden="true">↖</span>':'Compare both weeks <span aria-hidden="true">↘</span>';
-  setActivationStatus(opening?"Comparison open. Review every day before choosing a week.":"Comparison hidden. No decision has been made.");
-  if(opening)focusSoon("#deviceCandidateTitle");
-}
-function storeActivationBackup(candidate,reason){
-  const activation=globalThis.StrataActivation;
-  if(!activation?.backup)throw new Error("The device-week safety tools are unavailable. Reload before choosing a week.");
-  return activation.backup(localStorage,{userId:state.user.id,accountRevision:state.planUpdatedAt,accountPlan:state.plan,candidate,reason});
-}
-function acknowledgeActivation(candidate,decision,accountPlan=state.plan){
-  const activation=globalThis.StrataActivation;
-  activation?.acknowledge?.(localStorage,{userId:state.user.id,accountRevision:state.planUpdatedAt,accountPlan,candidate,decision});
-}
-function keepAccountActivationPlan(){
-  const candidate=selectedActivationCandidate();if(!candidate||state.activationBusy)return false;
-  try{storeActivationBackup(candidate,"keep-account");acknowledgeActivation(candidate,"kept-account");}
-  catch(error){setActivationStatus(error.message||"This browser could not create the safety copy. Export your account week and try again.",true);return false;}
-  hideActivationPanel();showToast("Account week kept. The device week remains in a local safety copy.");focusSoon("#weekTitle");
-  return true;
-}
-async function claimActivationPlan(){
-  const candidate=selectedActivationCandidate();
-  if(!candidate||state.activationBusy||!el("devicePlanConfirm").checked)return false;
-  state.activationBusy=true;for(const id of ["compareDevicePlan","keepAccountPlan","claimDevicePlan","devicePlanSource"])el(id).disabled=true;
-  setActivationStatus("Saving a safety copy, then checking the latest account revision…");
-  try{
-    const devicePlan=validateWeekPlan(candidate.plan);
-    if(!await flushSave({silent:true}))throw new Error("Finish saving or resolving the current account week before replacing it.");
-    storeActivationBackup(candidate,"claim");
-    const result=await api("/api/plan",{method:"PUT",body:JSON.stringify({plan:devicePlan,expectedPlanUpdatedAt:state.planUpdatedAt,expectedUserId:String(state.user.id)})});
-    state.plan=validateWeekPlan(result.plan||devicePlan);state.planUpdatedAt=Number(result.planUpdatedAt)||state.planUpdatedAt;
-    state.revision+=1;state.savedRevision=state.revision;state.lastSaveError=null;state.undoRemoval=null;clearSavedDraft();
-    try{acknowledgeActivation(candidate,"claimed",state.plan);}catch{/* The source week remains local and equality prevents a repeated prompt. */}
-    hideActivationPanel();renderWeek();renderLibrary();setSaveStatus("Saved");showToast("Device week saved to your account. The earlier copies remain in a local safety backup.");focusSoon("#weekTitle");signal("plan_saved");return true;
-  }catch(error){
-    if(error.status===409&&error.code==="PLAN_CHANGED")setActivationStatus("Your account week changed in another tab or device. Nothing was overwritten. Reload to compare the latest account week before trying again.",true);
-    else setActivationStatus(error.message||"The device week could not be saved. Both copies are still available.",true);
-    return false;
-  }finally{
-    state.activationBusy=false;for(const id of ["compareDevicePlan","keepAccountPlan","devicePlanSource"])el(id).disabled=false;
-    el("claimDevicePlan").disabled=!el("devicePlanConfirm").checked;
-  }
-}
-
-function renderPlanConflict(){
-  const panel=el("planConflictPanel"),local=state.conflictDraft||state.conflictReview&&state.plan;
-  if(!state.conflictLatest||!local){panel.hidden=true;return;}
-  el("latestPlanSummary").innerHTML=planConflictSummary(state.conflictLatest);
-  el("localPlanSummary").innerHTML=planConflictSummary(local);
-  el("reviewLocalPlan").hidden=state.conflictReview;
-  el("draftRecoveryLabel").hidden=state.recoveredDrafts.length<2||state.conflictReview;
-  el("draftRecoverySelect").innerHTML=state.recoveredDrafts.map((entry,index)=>`<option value="${escapeHtml(entry.key)}">Draft ${index+1} · ${escapeHtml(new Date(entry.data.updatedAt).toLocaleString())} · ${planMovementCount(entry.data.plan)} movements</option>`).join("");
-  el("draftRecoverySelect").value=state.recoverySource?.key||"";
-  panel.hidden=false;
-}
-
-function clearPlanConflict(){
-  state.conflictDraft=null;
-  state.conflictLatest=null;
-  state.conflictReview=false;
-  el("planConflictPanel").hidden=true;
-  el("plannerShell").inert=false;
-}
-
-async function recoverPlanConflict(error,{silent=false}={}){
-  let latest=error.data;
-  if(!latest?.plan?.days||!Number.isSafeInteger(latest.planUpdatedAt)||latest.planUpdatedAt<0)latest=await api("/api/plan");
-  if(!latest?.plan?.days||!Number.isSafeInteger(latest.planUpdatedAt)||latest.planUpdatedAt<0)throw new Error("The newer account plan could not be loaded. Refresh this page before editing again.");
-  persistAccountDraft();
-  state.undoRemoval=null;
-  state.conflictDraft=copyPlan(state.plan);
-  state.conflictLatest=copyPlan(latest.plan);
-  el("planConflictMessage").textContent="Your account changed in another tab or device. Compare both copies, then keep the account version or review your unsaved changes before explicitly saving them.";
-  state.conflictReview=false;
-  state.plan=copyPlan(latest.plan);
-  state.planUpdatedAt=latest.planUpdatedAt;
-  state.lastSaveError=error;
-  el("plannerShell").inert=true;
-  renderWeek();renderLibrary();renderPlanConflict();
-  setSaveStatus("Plan changed elsewhere · latest copy loaded",true);
-  if(!silent)showToast("A newer account plan was loaded. Your unsaved changes are ready to review.");
-  focusSoon("#planConflictTitle");
-}
-
-function reviewConflictDraft(){
-  if(state.accountChanged)return false;
-  if(!state.conflictDraft)return false;
-  state.plan=copyPlan(state.conflictDraft);
-  state.conflictDraft=null;
-  state.conflictReview=true;
-  state.revision+=1;
-  state.lastSaveError=null;
-  persistAccountDraft();
-  el("plannerShell").inert=false;
-  renderWeek();renderLibrary();renderPlanConflict();
-  setSaveStatus("Review recovered changes · save when ready",true);
-  showToast("Your unsaved changes are restored for review. Save them when you are ready.");
-  focusSoon("#weekTitle");
-  return true;
-}
-
-function keepLatestPlan(){
-  if(state.accountChanged)return false;
-  if(!state.conflictLatest)return false;
-  state.plan=copyPlan(state.conflictLatest);
-  state.savedRevision=state.revision;
-  state.lastSaveError=null;
-  clearSavedDraft();
-  clearPlanConflict();
-  renderWeek();renderLibrary();
-  setSaveStatus("Latest account plan kept");
-  showToast("The latest account plan was kept. Your unsaved copy was discarded.");
-  focusSoon("#weekTitle");
-  if(!offerRecoveredDraft())offerDevicePlan();
-  return true;
-}
+const activationActions=ACTIVATION.createController({
+  state,el,storage:localStorage,activation:globalThis.StrataActivation,logic:LOGIC,escapeHtml,planMovementCount,validateWeekPlan,planConflictSummary,
+  renderActivationOverview:RENDER.activationOverviewMarkup,flushSave,api,readSelectedDay:STATE.readSelectedDay,selectionContext:plannerSelectionContext,persistSelectedDay,clearSavedDraft,
+  renderWeek,renderLibrary,setSaveStatus,showToast,focusSoon,signal
+});
+const{setActivationStatus,renderActivationCandidate,hideActivationPanel,offerDevicePlan,toggleActivationComparison,keepAccountActivationPlan,claimActivationPlan}=activationActions;
 
 async function performSave({keepalive=true,silent=false}={}){
   if(state.savePromise)return state.savePromise;
@@ -915,7 +450,7 @@ async function performSave({keepalive=true,silent=false}={}){
       state.planUpdatedAt=Number(result.planUpdatedAt)||state.planUpdatedAt;state.lastSaveError=null;
       if(state.savedRevision===state.revision)clearSavedDraft();else persistAccountDraft();
       if(state.conflictReview&&state.savedRevision===state.revision)clearPlanConflict();
-      setSaveStatus(state.savedRevision===state.revision?"Saved":"Unsaved changes");
+      setSaveStatus(state.savedRevision===state.revision?"Saved":"Saving…");
       signal("plan_saved");
       return true;
     }catch(error){
@@ -989,9 +524,10 @@ function showToast(message){
 function handlePendingAdd(){
   const id=new URLSearchParams(location.search).get("add");
   if(!id||!exerciseById(id))return;
-  const day=DAYS.find((name)=>!isRestDay(name));
+  const day=DAYS.includes(state.selectedDay)&&!isRestDay(state.selectedDay)?state.selectedDay:DAYS.find(name=>!isRestDay(name));
   if(!day){showToast("Remove a rest day to choose where this exercise should go.");return;}
   state.selectedDay=day;
+  persistSelectedDay();
   if(!addExercise(id,day))return;
   history.replaceState({},"","/planner.html");
 }
@@ -1009,50 +545,6 @@ function renderLoadError(error){
   el("weekBoard").innerHTML=`<div class="planner-load-state planner-error" role="alert"><strong>Plan unavailable</strong><p>${message}</p><button type="button" data-retry-init>Try again</button>${localOption}</div>`;
   el("weekBoard").setAttribute("aria-busy","false");
 }
-
-document.addEventListener("dragstart",(event)=>{
-  if(event.target.closest("button,a,input,select")){event.preventDefault();return;}
-  const library=event.target.closest("[data-library-id]"),scheduled=event.target.closest("[data-instance-id]");
-  if(library){state.drag={type:"library",exerciseId:library.dataset.libraryId};event.dataTransfer.effectAllowed="copy";}
-  else if(scheduled){const day=scheduled.closest("[data-day]").dataset.day;state.drag={type:"schedule",day,instanceId:scheduled.dataset.instanceId};event.dataTransfer.effectAllowed="move";}
-  else return;
-  event.dataTransfer?.setData("text/plain",JSON.stringify(state.drag));
-});
-document.addEventListener("dragover",(event)=>{const zone=event.target.closest("[data-drop-day]");if(!zone||!state.ready)return;event.preventDefault();zone.closest(".day-column").classList.add("drag-over");});
-document.addEventListener("dragleave",(event)=>{const column=event.target.closest(".day-column");if(column&&!column.contains(event.relatedTarget))column.classList.remove("drag-over");});
-document.addEventListener("drop",(event)=>{
-  const zone=event.target.closest("[data-drop-day]");
-  if(!zone||!state.drag||!state.ready)return;
-  event.preventDefault();
-  document.querySelectorAll(".drag-over").forEach((node)=>node.classList.remove("drag-over"));
-  const day=zone.dataset.dropDay,previousTarget=state.selectedDay;
-  state.selectedDay=day;
-  const moved=state.drag.type==="library"?addExercise(state.drag.exerciseId,day):moveItem(state.drag.day,day,state.drag.instanceId,{focus:false});
-  if(!moved)state.selectedDay=previousTarget;
-  else renderLibrary();
-  state.drag=null;
-});
-document.addEventListener("dragend",()=>{state.drag=null;document.querySelectorAll(".drag-over").forEach((node)=>node.classList.remove("drag-over"));});
-
-document.addEventListener("click",(event)=>{
-  if(event.target.closest("[data-open-guest]")){void init({guestOnly:true});return;}
-  const guide=event.target.closest("[data-guide-exercise]"),replace=event.target.closest("[data-replace-item]"),filter=event.target.closest("[data-library-group]"),quick=event.target.closest("[data-quick-add]"),select=event.target.closest("[data-select-day]"),remove=event.target.closest("[data-remove-item]"),rest=event.target.closest("[data-set-rest]"),move=event.target.closest("[data-move-item]"),loadMore=event.target.closest("[data-load-more-library]"),retry=event.target.closest("[data-retry-init]"),unpublish=event.target.closest("[data-unpublish-plan]");
-  if(guide)openExerciseGuide(guide.dataset.guideExercise,guide);
-  else if(filter){state.group=filter.dataset.libraryGroup;resetLibraryWindow();renderFilters(state.group);renderLibrary();}
-  else if(quick){addExercise(quick.dataset.quickAdd,state.selectedDay);}
-  else if(select){
-    state.selectedDay=select.dataset.selectDay;
-    const focusSelector=select.dataset.dayChip!==undefined?instanceSelector("data-day-chip",state.selectedDay):`#weekBoard ${instanceSelector("data-select-day",state.selectedDay)}`;
-    renderWeek(focusSelector);renderLibrary();showToast(`New exercises will be added to ${state.selectedDay}.`);
-  }
-  else if(replace){openReplacement(replace.closest("[data-day]").dataset.day,replace.dataset.replaceItem);}
-  else if(remove){removeItem(remove.closest("[data-day]").dataset.day,remove.dataset.removeItem);}
-  else if(rest){setRestDay(rest.dataset.setRest);}
-  else if(move){const day=move.closest("[data-day]").dataset.day;moveWithinDay(day,move.dataset.moveItem,Number(move.dataset.moveDirection));}
-  else if(loadMore){const firstNewIndex=state.libraryLimit;state.libraryLimit+=libraryPageSize();renderLibrary();requestAnimationFrame(()=>el("libraryList").querySelector(`[data-library-index="${firstNewIndex}"] [data-quick-add]`)?.focus());}
-  else if(retry){void init();}
-  else if(unpublish){void unpublishSharedPlan(unpublish.dataset.unpublishPlan);}
-});
 
 function updatePrescriptionInput(event,{normalize=false}={}){
   const column=event.target.closest("[data-day]");
@@ -1079,103 +571,15 @@ function updatePrescriptionInput(event,{normalize=false}={}){
   return true;
 }
 
-// Capture edits as they are typed so a background/pagehide save cannot miss a
-// value merely because the field has not blurred and emitted `change` yet.
-document.addEventListener("input",(event)=>{updatePrescriptionInput(event);});
-document.addEventListener("change",(event)=>{
-  const column=event.target.closest("[data-day]");
-  if(!column||!state.ready)return;
-  if(event.target.dataset.itemDay){
-    const sourceDay=column.dataset.day,targetDay=event.target.value,instanceId=event.target.dataset.itemDay;
-    if(sourceDay!==targetDay&&!moveItem(sourceDay,targetDay,instanceId))event.target.value=sourceDay;
-    return;
-  }
-  updatePrescriptionInput(event,{normalize:true});
-});
+function restoreExerciseGuideFocus(){const trigger=exerciseGuideTrigger;exerciseGuideTrigger=null;requestAnimationFrame(()=>trigger?.focus?.());}
 
-let librarySearchTimer=null;
-el("plannerSearch").addEventListener("input",(event)=>{const query=event.target.value;clearTimeout(librarySearchTimer);librarySearchTimer=setTimeout(()=>{state.query=query;resetLibraryWindow();renderLibrary();},SEARCH_DEBOUNCE_MS);});
-el("exportAccountDraft").addEventListener("click",downloadWeeklyPlan);
-el("reloadPlannerAccount").addEventListener("click",()=>window.location.reload());
-el("undoPlanRemoval").addEventListener("click",undoLastRemoval);
-el("manageWeekTemplates").addEventListener("click",openTemplates);
-el("saveWeekTemplate").addEventListener("click",saveWeekTemplate);
-el("weekTemplateSelect").addEventListener("change",()=>{el("previewWeekTemplate").disabled=!el("weekTemplateSelect").value;});
-el("previewWeekTemplate").addEventListener("click",()=>{const entry=weekTemplates().find((item)=>item.key===el("weekTemplateSelect").value);if(entry)previewTemplate(entry.data.plan,entry.data.name,entry.key);});
-el("templateFile").addEventListener("change",(event)=>void importWeekTemplate(event.target.files?.[0]));
-el("confirmUseTemplate").addEventListener("change",()=>{el("applyWeekTemplate").disabled=!el("confirmUseTemplate").checked;});
-el("applyWeekTemplate").addEventListener("click",useWeekTemplate);
-el("deleteWeekTemplate").addEventListener("click",deleteWeekTemplate);
-el("closeWeekTemplates").addEventListener("click",()=>el("weekTemplatesDialog").close());
-el("copySourceDay").addEventListener("change",syncCopyDayOptions);
-el("previewCopyDay").addEventListener("click",(event)=>openCopyDayPreview(event.currentTarget));
-el("confirmCopyDay").addEventListener("change",(event)=>{el("applyCopyDay").disabled=!event.target.checked||!state.copyPreview?.changed;el("copyDayStatus").textContent=event.target.checked?"Ready to apply this reviewed copy. Nothing changes until you choose Apply reviewed copy.":"No changes applied.";});
-el("applyCopyDay").addEventListener("click",applyCopyDayPreview);
-el("closeCopyDay").addEventListener("click",closeCopyDayPreview);
-el("copyDayDialog").addEventListener("close",()=>{const trigger=state.copyTrigger;state.copyPreview=null;state.copyTrigger=null;requestAnimationFrame(()=>trigger?.focus?.());});
-el("replaceExerciseSearch").addEventListener("input",renderReplacementOptions);
-el("replaceExerciseSelect").addEventListener("change",()=>{el("confirmReplaceExercise").disabled=!el("replaceExerciseSelect").value;});
-el("confirmReplaceExercise").addEventListener("click",confirmReplacement);
-el("closeReplaceExercise").addEventListener("click",()=>el("replaceExerciseDialog").close());
-el("closeExerciseGuide").addEventListener("click",()=>el("exerciseGuideDialog").close());
-el("exerciseGuideDialog").addEventListener("close",()=>{const trigger=exerciseGuideTrigger;exerciseGuideTrigger=null;requestAnimationFrame(()=>trigger?.focus?.());});
-el("draftRecoverySelect").addEventListener("change",(event)=>selectRecoveredDraft(event.target.value));
-el("exportWeeklyPlan").addEventListener("click",downloadWeeklyPlan);
-el("retryPlanSave").addEventListener("click",async(event)=>{
-  const button=event.currentTarget;
-  if(state.conflictDraft){reviewConflictDraft();return;}
-  button.disabled=true;
-  setSaveStatus("Saving…");
-  try{await flushSave({confirmConflict:state.conflictReview});}
-  finally{button.disabled=false;}
-});
-el("reviewLocalPlan").addEventListener("click",reviewConflictDraft);
-el("keepLatestPlan").addEventListener("click",keepLatestPlan);
-el("devicePlanSource").addEventListener("change",(event)=>{state.activationCandidateId=event.target.value;renderActivationCandidate();});
-el("compareDevicePlan").addEventListener("click",toggleActivationComparison);
-el("devicePlanConfirm").addEventListener("change",(event)=>{el("claimDevicePlan").disabled=!event.target.checked||state.activationBusy;setActivationStatus(event.target.checked?"Ready to replace the account week. The write will check for newer account changes first.":"No decision has been made. Both copies remain unchanged.");});
-el("keepAccountPlan").addEventListener("click",keepAccountActivationPlan);
-el("claimDevicePlan").addEventListener("click",()=>void claimActivationPlan());
-el("shareWeeklyPlan").addEventListener("click",()=>{
-  if(el("shareWeeklyPanel").hidden)openSharePanel();else closeSharePanel();
-});
-el("closeShareWeekly").addEventListener("click",closeSharePanel);
-el("sharePlanTitle").addEventListener("input",(event)=>event.target.removeAttribute?.("aria-invalid"));
-el("sharePlanDescription").addEventListener("input",(event)=>{event.target.removeAttribute?.("aria-invalid");el("shareDescriptionCount").textContent=`${event.target.value.length} / 240`;});
-el("sharePlanConfirm").addEventListener("change",(event)=>event.target.removeAttribute?.("aria-invalid"));
-el("sharePlanForm").addEventListener("submit",(event)=>{event.preventDefault();void publishWeeklyPlan();});
-el("refreshSharedPlans").addEventListener("click",()=>void loadSharedPlans({announce:true}));
-el("logoutButton").addEventListener("click",async(event)=>{
-  const button=event.currentTarget;
-  button.disabled=true;
-  const saved=await flushSave();
-  if(!saved){button.disabled=false;showToast("Your plan is still unsaved. Retry saving before signing out.");return;}
-  try{await api("/api/logout",{method:"POST"});window.location.replace("/");}
-  catch(error){if(error.status===401)window.location.replace("/");else{button.disabled=false;showToast("Could not sign out. Check your connection and try again.");}}
-});
-
-document.addEventListener("click",(event)=>{
-  if(event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
-  const link=event.target.closest("a[href]");
-  if(!link||link.target||link.hasAttribute("download"))return;
-  const destination=new URL(link.href,location.href);
-  if(destination.origin!==location.origin)return;
-  // A native second click would otherwise leave while the first click is still
-  // waiting for its compare-and-swap save (and possibly a follow-up revision).
-  if(state.navigating){event.preventDefault();return;}
-  if(!state.ready||state.savedRevision>=state.revision)return;
-  event.preventDefault();
-  state.navigating=true;
-  void (async()=>{
-    const saved=await flushSave();
-    if(saved)location.assign(destination.href);
-    else{state.navigating=false;showToast("Your plan is still unsaved. Retry before leaving this page.");}
-  })();
-});
-
-document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")sendKeepaliveSave();});
-window.addEventListener("pagehide",sendKeepaliveSave);
-window.addEventListener("beforeunload",(event)=>{if(state.ready&&state.savedRevision<state.revision){sendKeepaliveSave();event.preventDefault();event.returnValue="";}});
+function bindPlannerUIEvents(){
+  EVENTS.bindPlannerEvents({document,window,location,el,state,searchDebounceMs:SEARCH_DEBOUNCE_MS,actions:{
+    api,init,addExercise,moveItem,persistSelectedDay,renderLibrary,renderFilters,resetLibraryWindow,openExerciseGuide,instanceSelector,renderWeek,showToast,openReplacement,removeItem,setRestDay,moveWithinDay,libraryPageSize,unpublishSharedPlan,updatePrescriptionInput,
+    downloadWeeklyPlan,undoLastRemoval,openTemplates,saveWeekTemplate,weekTemplates,previewTemplate,importWeekTemplate,useWeekTemplate,deleteWeekTemplate,syncCopyDayOptions,openCopyDayPreview,applyCopyDayPreview,closeCopyDayPreview,renderReplacementOptions,confirmReplacement,restoreExerciseGuideFocus,selectRecoveredDraft,
+    setSaveStatus,flushSave,reviewConflictDraft,keepLatestPlan,renderActivationCandidate,toggleActivationComparison,setActivationStatus,keepAccountActivationPlan,claimActivationPlan,openSharePanel,closeSharePanel,publishWeeklyPlan,loadSharedPlans,sendKeepaliveSave
+  }});
+}
 
 async function init({guestOnly=false}={}){
   setReady(false);
@@ -1187,7 +591,7 @@ async function init({guestOnly=false}={}){
   el("weekSummary").innerHTML="";
   el("weekBoard").innerHTML='<div class="planner-load-state">Loading your weekly plan…</div>';
   try{
-    const exercises=await api("/exercises.json?v=7.7.1");
+    const exercises=await api("/exercises.json?v=7.8.0");
     if(!Array.isArray(exercises))throw new Error("STRATA returned an incomplete exercise library.");
     state.exercises=exercises;
     let result;
@@ -1200,7 +604,7 @@ async function init({guestOnly=false}={}){
     state.revision=0;state.savedRevision=0;state.savePromise=null;state.lastSaveError=null;
     const storedAccountPlan=copyPlan(state.plan);
     const repairedRest=repairLegacyRestDay();
-    state.selectedDay=DAYS.find((day)=>!isRestDay(day))||"Monday";
+    state.selectedDay=STATE.readSelectedDay(localStorage,plannerSelectionContext(),state.plan);
     el("userName").textContent="Account";
     if(!state.guest&&result.user.name)el("userName").setAttribute("aria-label",`${result.user.name} account`);
     else el("userName").removeAttribute("aria-label");
@@ -1230,4 +634,5 @@ async function init({guestOnly=false}={}){
   }
 }
 
+bindPlannerUIEvents();
 init();

@@ -65,7 +65,7 @@ Every response includes a validated incoming or server-generated `X-Request-ID`.
 
 ## Resend account email
 
-Resend delivers signup verification, password reset, account-deletion confirmation, support acknowledgments and notifications, and administrator replies. It never stores account passwords.
+Resend delivers signup verification, password reset, account-deletion confirmation, support acknowledgments and notifications, administrator replies, and the primary owner's short-lived Admin security code. It never stores account passwords.
 
 1. Verify the dedicated sending subdomain in Resend and finish its DNS authentication.
 2. Create a restricted sending API key.
@@ -83,7 +83,9 @@ Test the complete flow with a non-owner address: sign up, receive and submit the
 
 `SUPPORT_EMAIL` is the notification destination for new Contact and help-desk requests. `EMAIL_REPLY_TO` controls the reply-to address on mail sent through the same Resend configuration; no Gmail API or separate administrator password is needed.
 
-After owner setup, verify password step-up, the 30-minute elevation expiry, session rotation, primary-owner self-protection, support responses, and the redacted audit trail. Permanent deletion requires one explicit destructive confirmation with the exact stored email. The server then pauses the non-owner account, revokes its sessions, reconciles supported unfinished checkouts, and performs the guarded deletion. Resolve or cancel any live Paddle subscription first; a billing blocker leaves the account paused for an explicit retry or restore. The final database operation requires the same still-live elevated owner session and rechecks suspension and billing state atomically.
+After owner setup, verify the production two-step elevation: the correct password sends a six-digit code only to the owner's registered address, password confirmation alone does not elevate, a wrong or expired code fails, and the code cannot be reused from another session. Successful verification rotates the session and CSRF credential before the 30-minute elevation window begins. Also verify primary-owner self-protection, support responses, and the redacted audit trail. If Resend is unavailable, production Admin elevation intentionally fails closed.
+
+Permanent deletion requires one explicit destructive confirmation with the exact stored email. The server then pauses the non-owner account, revokes its sessions, reconciles supported unfinished checkouts, and performs the guarded deletion. Resolve or cancel any live Paddle subscription first; a billing blocker leaves the account paused for an explicit retry or restore. The final database operation requires the same still-live elevated owner session and rechecks suspension and billing state atomically.
 
 ## Member account controls
 
@@ -147,7 +149,7 @@ After deployment:
 2. Confirm account, protected-page, service-worker, and manifest responses have the expected cache policy.
 3. Complete a signup/login and plan-save round trip.
 4. Exercise provider flows after changing Resend or Paddle configuration.
-5. Run `STRATA_SMOKE_BASE_URL=https://your-host.example STRATA_EXPECTED_BUILD=7.7.1 npm run smoke:deploy` to check status/build/provider flags, durable Turso reporting, storage readiness, the public home and manifest, security headers, and signed-out private-route handling.
+5. Run `STRATA_SMOKE_BASE_URL=https://your-host.example STRATA_EXPECTED_BUILD=7.8.0 npm run smoke:deploy` to check status/build/provider flags, durable Turso reporting, storage readiness, the public home and manifest, security headers, and signed-out private-route handling.
 6. Confirm GitHub Actions is green before tagging or announcing a release.
 
 The deployment smoke is read-only and does not create an account, send email, buy a subscription, process a webhook, or mutate production data. Complete authorized provider-backed smoke separately and record its result; never describe local provider fakes or configuration-shape checks as live credential evidence.
@@ -156,4 +158,4 @@ The deployment smoke is read-only and does not create an account, send email, bu
 
 Free Render services can sleep and take time to wake. The installed PWA may show its public offline explanation or a generic continuation shell for an already-authorized device workout during a cold start, but authentication, new private reads, entitlement, Plan changes, and sync still require the live server. Free services and Turso/Resend/Paddle plans also have usage limits; select appropriate tiers and monitoring before relying on the service for real users.
 
-The current administrator model has one password-stepped-up owner and no MFA or delegated roles. Support has no attachments or real-time chat. Treat these as operating limits rather than silently broadening privileges or storing new sensitive content.
+The current administrator model has one password-and-registered-email-code owner and no delegated roles, authenticator-app MFA, or hardware-key MFA. Support has no attachments or real-time chat. Treat these as operating limits rather than silently broadening privileges or storing new sensitive content.

@@ -8,6 +8,9 @@ const vm=require("node:vm");
 
 const PROJECT_ROOT=path.join(__dirname,"..");
 const read=(name)=>fs.readFileSync(path.join(PROJECT_ROOT,name),"utf8");
+const homeClient=()=>["home-logic.js","home-state.js","home-api.js","home-render.js","home-events.js","app.js"].map(name=>read(`public/scripts/${name}`)).join("\n");
+const discoverClient=()=>["discover-api.js","discover-navigation.js","discover-progress.js","discover-render.js","discover-catalog.js","discover-detail.js","discover-community.js","discover-session.js","discover-sharing.js","discover-events.js","discover.js"].map(name=>read(`public/scripts/${name}`)).join("\n");
+const workoutClient=()=>["workout-state.js","workout-api.js","workout-calendar.js","workout-render.js","workout-guidance.js","workout-history.js","workout-events.js","workout.js"].map(name=>read(`public/scripts/${name}`)).join("\n");
 
 test("homepage styles keep live comparison UI and omit retired modal families",()=>{
   const css=read("public/styles/styles.css");
@@ -26,7 +29,7 @@ test("homepage navigation and exercise controls expose 44px touch targets",()=>{
 
 test("the focusable horizontal comparison region has a visible focus treatment",()=>{
   const css=read("public/styles/styles.css");
-  const app=read("public/scripts/app.js");
+  const app=homeClient();
   assert.match(app,/class="compare-table-wrap" role="region"[^>]*tabindex="0"/);
   assert.match(css,/\.compare-table-wrap:focus-visible\s*\{[^}]*outline:\s*3px solid var\(--orange-text\);[^}]*box-shadow:/);
 });
@@ -59,12 +62,12 @@ test("every native dialog has an accessible name and restores its trigger",()=>{
     assert.ok(dialogs.length,`${page} should contain a dialog`);
     for(const [,attributes] of dialogs)assert.match(attributes,/\baria-(?:label|labelledby)="[^"]+"/,`${page} dialog needs an accessible name`);
   }
-  assert.match(read("public/scripts/app.js"),/dialogReturnFocus/);
+  assert.match(homeClient(),/dialogReturnFocus/);
   assert.match(read("public/scripts/discover.js"),/dialogReturnFocus/);
 });
 
 test("plan-saving surfaces use consistent announced states and actionable errors",()=>{
-  const plannerHtml=read("public/pages/planner.html"),planner=read("public/scripts/planner.js"),discover=read("public/scripts/discover.js");
+  const plannerHtml=read("public/pages/planner.html"),planner=read("public/scripts/planner.js"),discover=discoverClient();
   assert.match(plannerHtml,/id="saveStatus"[^>]*role="status"[^>]*aria-live="polite"/);
   for(const state of ["Saving…","Saved","Couldn't save — Retry"])assert.ok(planner.includes(state),`planner must expose ${state}`);
   for(const state of ["Saving…","Saved","Couldn't save — Retry"])assert.ok(discover.includes(state),`Strata+ must expose ${state}`);
@@ -106,7 +109,7 @@ test("planner and workout share clear Plan and Train navigation at mobile widths
 
 test("workout empty days and planner mobile hand-offs expose useful 44px actions",()=>{
   const plannerHtml=read("public/pages/planner.html"),plannerCss=read("public/styles/planner.css");
-  const workoutHtml=read("public/pages/workout.html"),workout=read("public/scripts/workout.js"),workoutCss=read("public/styles/workout.css");
+  const workoutHtml=read("public/pages/workout.html"),workout=workoutClient(),workoutCss=read("public/styles/workout.css");
   assert.match(workoutHtml,/id="chooseScheduledDay" hidden/);assert.match(workoutHtml,/id="openPlannerFromEmpty"[^>]*hidden/);
   assert.match(workout,/startButton\.hidden=!items\.length/);assert.match(workout,/You already have a workout in progress/);
   assert.match(workout,/record\?\.dirty\)items\.push/);assert.match(workout,/status!=="active"\|\|!recoveryIds\.has/);assert.match(workout,/recoveryIndex>=0/);
@@ -139,7 +142,7 @@ test("workout empty days and planner mobile hand-offs expose useful 44px actions
 test("planner only offers workout logging to active Strata+ accounts",()=>{
   const planner=read("public/scripts/planner.js");
   assert.match(planner,/plusActive=state\.user\?\.discovery\?\.active===true/);
-  assert.match(planner,/action:plusActive\?"Start working out":"See guided workout tools"/);
+  assert.match(planner,/action:plusActive\?`Review \$\{next\?\.day\|\|DAYS\.find/);
   assert.match(planner,/href:plusActive\?`\/workout\.html\?day=/);
   assert.match(planner,/Free device plan/);
   assert.match(planner,/Free synced plan/);

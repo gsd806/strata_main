@@ -1,6 +1,6 @@
 {
   "name": "strata-workout-index",
-  "version": "7.7.1",
+  "version": "7.8.0",
   "private": true,
   "description": "Evidence-informed exercise rankings with Strata+ personalization, session building, community weekly plans, ratings, and 31-day planning.",
   "scripts": {
@@ -11,9 +11,10 @@
     "test:integration": "node scripts/run-test-layer.js integration",
     "test:contract": "node scripts/run-test-layer.js contract",
     "test:e2e": "node scripts/run-test-layer.js e2e",
+    "test:visual": "node --test qa/e2e/responsive-content.js qa/e2e/navigation-layout.js",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc -p tsconfig.boundaries.json",
-    "architecture:check": "node scripts/architecture-report.js",
+    "architecture:check": "node scripts/architecture-report.js && node scripts/frontend-architecture-report.js",
     "coverage": "node scripts/coverage-check.js",
     "performance": "node scripts/performance-check.js",
     "preflight:production": "node --env-file-if-exists=.env scripts/config-preflight.js --require-all",

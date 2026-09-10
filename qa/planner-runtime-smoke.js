@@ -83,6 +83,9 @@ const context={
 context.globalThis=context;
 context.StrataDiscovery=Discovery;
 vm.createContext(context);
+for(const script of ["activation-core.js","planner-logic.js","planner-state.js","planner-api.js","planner-render.js","planner-conflicts.js","planner-templates.js","planner-sharing.js","planner-activation.js","planner-events.js"]){
+  vm.runInContext(readPublic("scripts",script),context,{filename:script});
+}
 vm.runInContext(readPublic("scripts","planner.js"),context,{filename:"planner.js"});
 
 function renderedIds(){
@@ -124,7 +127,7 @@ function clickSelectDay(day){
   assert.equal(new Set(initialIds).size,32,"Initial planner page must not contain duplicate cards");
   assert.match(initialMarkup,/data-load-more-library/,"Expanded catalog should expose Load more");
   assert.match(initialMarkup,/Load 32 more/,"Desktop Load more should reveal the next 32 cards");
-  assert.match(initialMarkup,/>Add<\/button>/,"Library actions should use a clear text label instead of an unexplained symbol");
+  assert.match(initialMarkup,/>Add to Monday<\/button>/,"Library actions should name the selected destination day");
   assert.match(initialMarkup,/>Video<\/a>/,"Tutorial actions should use a clear text label instead of an unexplained symbol");
   assert.match(initialMarkup,/data-guide-exercise=/,"Every planner movement should expose its catalog-backed setup guide");
   for(const day of DAYS){
@@ -147,12 +150,16 @@ function clickSelectDay(day){
   assert.match(html,/Build a weekly plan in three steps/,"Planner workflow should describe its purpose to assistive technology");
   assert.match(plannerCss,/\.day-empty::before\s*\{[^}]*content:"\+"/,"Empty days should have a visible add cue");
   assert.match(elements.get("weekSummary").innerHTML,/class="week-readiness ready"/,"A valid week should render clear train-ready guidance");
-  assert.match(elements.get("weekSummary").innerHTML,/>Start working out/,"A signed-in train-ready week should expose one clear next action");
+  assert.match(elements.get("weekSummary").innerHTML,/>Review Monday workout/,"A signed-in train-ready week should expose one clear review action before the final start");
   assert.match(elements.get("weekSummary").innerHTML,/class="week-distribution"/,"The planner should render its weekly distribution as a deliberate summary graphic");
 
   clickSelectDay("Tuesday");
   assert.equal(vm.runInContext("state.selectedDay",context),"Tuesday","Day chips must update the quick-add target");
   assert.match(elements.get("libraryList").innerHTML,/aria-label="Add [^"]+ to Tuesday"/,"Library add controls must announce the selected day");
+  assert.match(elements.get("libraryList").innerHTML,/>Add to Tuesday<\/button>/,"Visible add copy must keep the destination clear");
+  assert.equal(elements.get("mobileAddDestination").textContent,"Add to Tuesday");
+  assert.equal(elements.get("mobileWeekLink").textContent,"View Tuesday · 0 exercises");
+  assert.equal(storedValues.get("strata_planner_selected_day_v1:user-u1"),"Tuesday","The selected day should survive a return to the planner");
   assert.equal(elements.has("recommendRest"),false,"Rest recommendations must be removed");
   vm.runInContext("setRestDay('Sunday')",context);
   assert.equal(vm.runInContext("restDays().length",context),0,"The final rest marker can be removed");
@@ -378,7 +385,7 @@ function clickSelectDay(day){
   const fixture=()=>({version:1,restDay:"Sunday",days:Object.fromEntries(DAYS.map((day)=>[day,day==="Monday"?[{instanceId:"editing-item",exerciseId:exercises[0].id,sets:4,reps:"6–8"}]:[]]))});
   const reset=({guest=true,userId="u1",plan=fixture(),stamp=100}={})=>{
     context.fixturePlan=plan;context.fixtureUserId=userId;context.fixtureGuest=guest;context.fixtureStamp=stamp;
-    run("clearTimeout(state.saveTimer);clearPlanConflict();state.ready=true;state.accountChanged=false;state.guest=fixtureGuest;state.guestRaw=localStorage.getItem(GUEST_PLAN_KEY);state.user=fixtureGuest?null:{id:fixtureUserId,name:'Runtime user'};state.plan=copyPlan(fixturePlan);state.revision=0;state.savedRevision=0;state.planUpdatedAt=fixtureStamp;state.lastSaveError=null;state.savePromise=null;state.undoRemoval=null;state.draftKey='';state.draftValue='';state.recoverySource=null;state.recoveredDrafts=[];state.csrfToken='planner-csrf';renderWeek();");
+    run("clearTimeout(state.saveTimer);clearPlanConflict();hideActivationPanel();state.ready=true;state.accountChanged=false;state.guest=fixtureGuest;state.guestRaw=localStorage.getItem(GUEST_PLAN_KEY);state.user=fixtureGuest?null:{id:fixtureUserId,name:'Runtime user'};state.plan=copyPlan(fixturePlan);state.revision=0;state.savedRevision=0;state.planUpdatedAt=fixtureStamp;state.lastSaveError=null;state.savePromise=null;state.undoRemoval=null;state.draftKey='';state.draftValue='';state.recoverySource=null;state.recoveredDrafts=[];state.csrfToken='planner-csrf';renderWeek();");
   };
   context.localStorage.getItem=(key)=>storedValues.get(key)||null;
   storedValues.clear();reset();
@@ -576,6 +583,34 @@ function clickSelectDay(day){
   assert.equal(run("undoLastRemoval()"),false);
   assert.equal(snapshot().days.Monday[0].reps,"2–4");
   run("clearTimeout(state.saveTimer)");
+
+  // A first account with no movements gets one explicit save action instead
+  // of a fake conflict comparison. Existing account weeks retain that review.
+  storedValues.clear();const deviceWeek=fixture();deviceWeek.days.Monday[0].instanceId="device-activation";storedValues.set("strata_guest_plan_v1",JSON.stringify(deviceWeek));
+  reset({guest:false,plan:JSON.parse(run("JSON.stringify(emptyPlan())")),stamp:0});
+  assert.equal(run("offerDevicePlan()"),true);
+  assert.equal(run("state.activationDirectClaim"),true);
+  assert.equal(elements.get("compareDevicePlan").hidden,true);
+  assert.equal(elements.get("keepAccountPlan").hidden,true);
+  assert.equal(elements.get("devicePlanConfirmLabel").hidden,true);
+  assert.equal(elements.get("claimDevicePlan").disabled,false);
+  assert.match(elements.get("claimDevicePlan").innerHTML,/Save week to my account/i);
+  let activationBody;
+  context.fetch=async(path,options={})=>{
+    if(path==="/api/me")return{ok:true,json:async()=>({user:{id:"u1"},csrfToken:"planner-csrf"})};
+    if(path==="/api/plan"&&options.method==="PUT"){activationBody=JSON.parse(options.body);return{ok:true,json:async()=>({plan:activationBody.plan,planUpdatedAt:1})};}
+    return{ok:false,status:404,json:async()=>({error:"Not found"})};
+  };
+  assert.equal(await run("claimActivationPlan()"),true,"an empty account can explicitly save without checking a replacement confirmation");
+  assert.equal(activationBody.expectedPlanUpdatedAt,0);
+  assert.equal(snapshot().days.Monday.length,1);
+
+  storedValues.clear();storedValues.set("strata_guest_plan_v1",JSON.stringify(deviceWeek));reset({guest:false,plan:fixture(),stamp:20});
+  assert.equal(run("offerDevicePlan()"),true);
+  assert.equal(run("state.activationDirectClaim"),false);
+  assert.equal(elements.get("compareDevicePlan").hidden,false,"an existing account week still requires comparison");
+  assert.equal(elements.get("keepAccountPlan").hidden,false);
+  assert.equal(elements.get("claimDevicePlan").disabled,true);
 
   // A userless shared-plan response cannot supply a replacement account's CSRF.
   storedValues.clear();reset({guest:false});

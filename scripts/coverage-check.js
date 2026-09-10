@@ -1,6 +1,8 @@
 "use strict";
 
 const {spawnSync}=require("node:child_process");
+const {readFileSync}=require("node:fs");
+const {join}=require("node:path");
 
 // These floors are deliberately based on the Build 6.9.9.007 Node 24
 // server/core baseline (91.33% lines, 78.91% branches, 85.47% functions).
@@ -30,6 +32,19 @@ const args=[
   "--test-coverage-include=public/scripts/plan-insights-core.js",
   "--test-coverage-include=public/scripts/training-block-core.js"
 ];
+
+// Browser domain, state, and transport leaves belong in the measured
+// denominator. Render/event modules execute in VM and real-browser realms,
+// where Node's process-level collector cannot measure them faithfully; their
+// behavior is instead required by focused runtime and E2E tests.
+const frontendPolicy=JSON.parse(readFileSync(join(__dirname,"..","frontend-architecture-policy.json"),"utf8"));
+for(const page of Object.values(frontendPolicy.pages||{})){
+  for(const module of page.modules||[]){
+    if(!["logic","state","api"].includes(module.role))continue;
+    const include=`--test-coverage-include=${module.file}`;
+    if(!args.includes(include))args.push(include);
+  }
+}
 
 function runCoverage() {
   const result=spawnSync(process.execPath,args,{stdio:"inherit"});

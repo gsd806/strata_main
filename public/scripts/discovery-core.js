@@ -287,6 +287,32 @@
     return {focus,focusLabel:focusConfig.label,minutes:lengthConfig.minutes,timeLabel:lengthConfig.label,estimatedMinutes:lengthConfig.minutes,workingSets,items,summary:`${items.length} movements · ${workingSets} working sets · about ${lengthConfig.minutes} minutes`};
   }
 
+  function repeatSessionAnchors(session,anchors,limit=2){
+    const sourceItems=Array.isArray(session?.items)?session.items:[],requested=Math.max(0,Math.min(2,Math.round(Number(limit)||0)));
+    if(!sourceItems.length||!requested)return session;
+    const items=sourceItems.map((item)=>({...item,reasons:Array.isArray(item.reasons)?[...item.reasons]:[]})),used=new Set(items.map((item)=>String(item.exerciseId||""))),seen=new Set(),repeated=[];
+    for(const anchor of Array.isArray(anchors)?anchors:[]){
+      const exerciseId=String(anchor?.exerciseId||anchor?.exercise?.id||"");
+      if(!exerciseId||seen.has(exerciseId)||!anchor?.exercise||!anchor?.role)continue;
+      seen.add(exerciseId);
+      const existingIndex=items.findIndex((item)=>item.exerciseId===exerciseId&&item.role===anchor.role);
+      if(existingIndex>=0){
+        const existing=items[existingIndex];
+        if(!existing.reasons.includes("repeated anchor for Training Memory"))existing.reasons.push("repeated anchor for Training Memory");
+        repeated.push(exerciseId);
+      }else{
+        const targetIndex=items.findIndex((item)=>item.role===anchor.role&&!repeated.includes(item.exerciseId));
+        if(targetIndex<0||used.has(exerciseId))continue;
+        const target=items[targetIndex];used.delete(String(target.exerciseId||""));used.add(exerciseId);
+        items[targetIndex]={...anchor,sets:target.sets,reasons:[...(Array.isArray(anchor.reasons)?anchor.reasons:[]).filter((reason)=>reason!=="repeated anchor for Training Memory"),"repeated anchor for Training Memory"]};
+        repeated.push(exerciseId);
+      }
+      if(repeated.length>=requested)break;
+    }
+    const workingSets=items.reduce((sum,item)=>sum+clamp(Math.round(Number(item?.sets)||0),0,10),0);
+    return{...session,workingSets,items,anchorExerciseIds:repeated,summary:`${items.length} movements · ${workingSets} working sets · about ${session.minutes} minutes`};
+  }
+
   function planItemCount(plan){return WEEKDAYS.reduce((sum,day)=>sum+(Array.isArray(plan?.days?.[day])?plan.days[day].length:0),0);}
   function sessionPlanError(message,code){return Object.assign(new Error(message),{code});}
   function sessionInstanceId(day,exerciseId,index,used,makeInstanceId){
@@ -331,5 +357,5 @@
     return {day:selected.day,isToday,offset,movements,workingSets,scheduledDays,targetDays,progressPercent,eyebrow:isToday?"Today in your week":"Next in your week",title:`${when.toUpperCase()} · ${movements} MOVEMENT${movements===1?"":"S"}.`,detail:`${selected.day} · ${workingSets} working sets · ${scheduledDays} scheduled training day${scheduledDays===1?"":"s"} vs ${targetDays}-day profile target.`,actionLabel:"Open weekly plan"};
   }
 
-  return {FACTOR_KEYS,TRAIT_KEYS,ISOLATION,UNILATERAL,OVERHEAD,DEEP_KNEE,UNSUPPORTED_HINGE,FLOOR,WEEKDAYS,SESSION_LENGTHS,SESSION_FOCUSES,hasTrait,movementClass,round,clamp,levelNumber,averageMetric,setupScore,setupLabel,resistanceProfile,practicality,factorWeights,weightedBaseline,scoreAdjustment,excludedByLimitations,personalResult,similarity,targetsCompatible,alternativesFor,exerciseGuidance,gainsAndLosses,normalizeShortlist,filterExercises,comparisonRecommendation,sessionRoleMatches,sessionFocusMatches,buildSession,mergeSessionIntoPlan,weeklyPulse};
+  return {FACTOR_KEYS,TRAIT_KEYS,ISOLATION,UNILATERAL,OVERHEAD,DEEP_KNEE,UNSUPPORTED_HINGE,FLOOR,WEEKDAYS,SESSION_LENGTHS,SESSION_FOCUSES,hasTrait,movementClass,round,clamp,levelNumber,averageMetric,setupScore,setupLabel,resistanceProfile,practicality,factorWeights,weightedBaseline,scoreAdjustment,excludedByLimitations,personalResult,similarity,targetsCompatible,alternativesFor,exerciseGuidance,gainsAndLosses,normalizeShortlist,filterExercises,comparisonRecommendation,sessionRoleMatches,sessionFocusMatches,buildSession,repeatSessionAnchors,mergeSessionIntoPlan,weeklyPulse};
 });

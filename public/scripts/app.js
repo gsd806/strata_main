@@ -1,626 +1,132 @@
-const groups = {
-  chest: {
-    name: "Chest", description: "Pressing, adduction, and protraction across the pectorals and serratus.",
-    subs: ["Upper chest", "Mid / lower chest", "Serratus anterior"]
-  },
-  back: {
-    name: "Back", description: "Vertical and horizontal pulling for lats, scapular retractors, and spinal extensors.",
-    subs: ["Latissimus dorsi", "Upper back", "Spinal erectors"]
-  },
-  shoulders: {
-    name: "Shoulders", description: "Raise, press, and rotate through all three deltoid regions and the cuff.",
-    subs: ["Front delts", "Side delts", "Rear delts", "Rotator cuff"]
-  },
-  arms: {
-    name: "Arms", description: "Elbow flexion and extension for biceps, brachialis, triceps, and forearms.",
-    subs: ["Biceps", "Brachialis", "Triceps long head", "Triceps lateral / medial", "Forearms"]
-  },
-  legs: {
-    name: "Legs", description: "Knee- and hip-dominant patterns for thighs and adductors.",
-    subs: ["Quadriceps", "Hamstrings", "Adductors"]
-  },
-  glutes: {
-    name: "Glutes", description: "Hip extension and abduction for glute max, medius, and minimus.",
-    subs: ["Glute max", "Glute med / min"]
-  },
-  calves: {
-    name: "Lower leg", description: "Straight- and bent-knee plantar flexion plus active dorsiflexion.",
-    subs: ["Gastrocnemius", "Soleus", "Tibialis anterior"]
-  },
-  core: {
-    name: "Core", description: "Spinal flexion plus anti-extension and anti-rotation trunk control.",
-    subs: ["Rectus abdominis", "Obliques", "Deep core"]
-  }
-};
+"use strict";
 
-let exercises = [];
+const LOGIC=globalThis.StrataHomeLogic;
+const STATE=globalThis.StrataHomeState;
+const API=globalThis.StrataHomeApi;
+const RENDER=globalThis.StrataHomeRender;
+const EVENTS=globalThis.StrataHomeEvents;
+if(!LOGIC||!STATE||!API||!RENDER||!EVENTS)throw new Error("Homepage modules are unavailable. Reload STRATA to try again.");
 
-const metricWeights = {
-  stimulus:.3, stability:.2, progression:.2, range:.2, fatigue:.1
-};
-const PLAN_DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
-const GUEST_PLAN_KEY = "strata_guest_plan_v1";
+const state=STATE.createState();
+const el=id=>document.getElementById(id);
+const groupTabs=el("groupTabs");
+const submuscleFilters=el("submuscleFilters");
+const exerciseList=el("exerciseList");
+const apiClient=API.createClient({fetchImpl:(...args)=>fetch(...args)});
 
-function normalizeExercise(exercise) {
-  if (!exercise || typeof exercise !== "object" || !groups[exercise.group]) {
-    throw new Error("The exercise catalog contains an unsupported entry.");
-  }
-
-  const metrics = {};
-  for (const key of Object.keys(metricWeights)) {
-    const value = Number(exercise.metrics?.[key]);
-    if (!Number.isFinite(value) || value < 0 || value > 100) {
-      throw new Error(`The exercise catalog contains an invalid ${key} score.`);
-    }
-    metrics[key] = value;
-  }
-
-  const score = Number(exercise.score);
-  if (!exercise.id || !exercise.name || !Number.isFinite(score) || score < 0 || score > 100) {
-    throw new Error("The exercise catalog contains incomplete scoring data.");
-  }
-
-  const weightedBaseline = Math.round(
-    Object.entries(metricWeights).reduce((total,[key,weight]) => total + metrics[key] * weight,0)
-  );
-
-  return {
-    ...exercise,
-    score,
-    metrics,
-    youtube:exercise.youtube || `https://www.youtube.com/results?search_query=${encodeURIComponent(`${exercise.name} exercise form tutorial`)}`,
-    weightedBaseline,
-    editorialAdjustment:score - weightedBaseline
-  };
+async function api(path,options={}){return apiClient.request(path,options);}
+function previewGroup(){return LOGIC.validPreviewGroup(el("quickPreviewGroup").value);}
+function quickPreviewProfile(){
+  return LOGIC.previewProfile({
+    goal:el("quickPreviewGoal").value,group:el("quickPreviewGroup").value,equipment:el("quickPreviewEquipment").value,
+    level:el("quickPreviewLevel").value,days:el("quickPreviewDays").value,minutes:el("quickPreviewMinutes").value
+  });
+}
+function guestPlanCount(){
+  let raw=null;
+  try{raw=localStorage.getItem(LOGIC.GUEST_PLAN_KEY);}catch{/* Device storage is optional. */}
+  return LOGIC.guestPlanCount(raw,state.catalogStatus==="ready"?state.exercises:null);
 }
 
-function normalizeCatalog(catalog) {
-  if (!Array.isArray(catalog) || catalog.length === 0) {
-    throw new Error("The exercise catalog is empty or unavailable.");
-  }
-  const normalized = catalog.map(normalizeExercise);
-  const ids = new Set(normalized.map((exercise) => exercise.id));
-  if (ids.size !== normalized.length) throw new Error("The exercise catalog contains duplicate IDs.");
-  return normalized;
-}
+const renderer=RENDER.createRenderer({document,window,state,readPreviewProfile:quickPreviewProfile,guestPlanCount});
+function renderSubfilters(){renderer.renderSubfilters();}
+function renderExercises(){renderer.renderExercises();}
+function updateCompareDock(){renderer.updateCompareDock();}
+function updateAccountUI(){renderer.updateAccountUI();}
+function renderAll(){renderer.renderAll();}
+function previewPlaceholder(message){renderer.previewPlaceholder(message);}
+function updatePreviewEquipmentOptions(options){renderer.updatePreviewEquipmentOptions(options);}
+function previewResultMarkup(item){return RENDER.previewResultMarkup(item);}
+function openDetail(id){renderer.openDetail(id);}
+function openComparison(){renderer.openComparison();}
+function closeModal(dialog){renderer.closeModal(dialog);}
+function showToast(message){renderer.showToast(message);}
 
-const groupOrder = Object.keys(groups);
-const state = {
-  group:"chest", sub:"all", query:"", equipment:"all", level:"all", sort:"score",
-  compare:[], user:null, accountStatus:"loading", catalogStatus:"loading"
-};
-
-const el = (id) => document.getElementById(id);
-const groupTabs = el("groupTabs");
-const musclePanel = el("musclePanel");
-const submuscleFilters = el("submuscleFilters");
-const exerciseList = el("exerciseList");
-const detailDialog = el("detailDialog");
-const compareDialog = el("compareDialog");
-
-function escapeHtml(value) {
-  return String(value ?? "").replace(/[&<>'"]/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[char]));
-}
-
-async function api(path, options = {}) {
-  const headers = { Accept:"application/json", ...(options.body ? {"Content-Type":"application/json"} : {}), ...(options.headers || {}) };
-  let response;
-  try {
-    response = await fetch(path, {...options, headers, credentials:"same-origin"});
-  } catch (cause) {
-    throw Object.assign(new Error("Could not reach STRATA. Check your connection and try again."),{code:"NETWORK_ERROR",cause});
-  }
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw Object.assign(new Error(data.error || "Request failed."),{status:response.status,code:data.code || "REQUEST_FAILED",data});
-  return data;
-}
-
-function renderTabs() {
-  groupTabs.innerHTML = groupOrder.map((key) => {
-    const selected = state.group === key;
-    return `<button class="group-tab" id="group-tab-${key}" type="button" role="tab" aria-selected="${selected}" aria-controls="rankingsPanel" tabindex="${selected ? "0" : "-1"}" data-group="${key}">${groups[key].name}</button>`;
-  }).join("");
-  el("rankingsPanel").setAttribute("aria-labelledby", `group-tab-${state.group}`);
-}
-
-function renderPanel() {
-  const group = groups[state.group];
-  const count = state.catalogStatus === "ready" ? exercises.filter((exercise) => exercise.group === state.group).length : "—";
-  const index = String(groupOrder.indexOf(state.group) + 1).padStart(2,"0");
-  musclePanel.innerHTML = `<div class="panel-index"><span>REGION ${index}</span><span>TARGET LAYERS</span></div><div class="panel-number">${index}</div><h3>${group.name}</h3><p>${group.description}</p><div class="target-matrix">${group.subs.map((sub,i) => `<span><i>${String(i+1).padStart(2,"0")}</i>${sub}</span>`).join("")}</div><div class="panel-stat"><span>Targets <b>${group.subs.length}</b></span><span>Movements <b>${count}</b></span></div>`;
-}
-
-function renderSubfilters() {
-  const chips = ["all", ...groups[state.group].subs];
-  submuscleFilters.innerHTML = chips.map((sub) => {
-    const active = state.sub === sub;
-    return `<button type="button" class="filter-chip ${active ? "active" : ""}" aria-pressed="${active}" data-sub="${sub}">${sub === "all" ? "All targets" : sub}</button>`;
-  }).join("");
-}
-
-function updateEquipmentOptions() {
-  const select = el("equipmentFilter");
-  const values = [...new Set(exercises.filter((exercise) => exercise.group === state.group).map((exercise) => exercise.equipment))].sort();
-  if (state.equipment !== "all" && !values.includes(state.equipment)) state.equipment = "all";
-  select.innerHTML = `<option value="all">All equipment</option>${values.map((value) => `<option value="${value}">${value}</option>`).join("")}`;
-  select.value = state.equipment;
-}
-
-function filteredExercises() {
-  const query = state.query.trim().toLowerCase();
-  const metric = state.sort === "score" ? "score" : state.sort;
-  return exercises.filter((exercise) => exercise.group === state.group)
-    .filter((exercise) => state.sub === "all" || exercise.sub === state.sub)
-    .filter((exercise) => state.equipment === "all" || exercise.equipment === state.equipment)
-    .filter((exercise) => state.level === "all" || exercise.level === state.level)
-    .filter((exercise) => !query || `${exercise.name} ${exercise.sub} ${exercise.equipment} ${exercise.pattern}`.toLowerCase().includes(query))
-    .sort((a,b) => state.sort === "score" ? b.score-a.score : b.metrics[metric]-a.metrics[metric]);
-}
-
-function setEmptyStateCopy(title,message,buttonLabel,buttonHidden) {
-  const heading = el("emptyState").querySelector("h3");
-  const description = el("emptyState").querySelector("p");
-  const button = el("clearFilters");
-  if (heading) heading.textContent = title;
-  if (description) description.textContent = message;
-  button.textContent = buttonLabel;
-  button.hidden = buttonHidden;
-}
-
-function renderExercises() {
-  if (state.catalogStatus !== "ready") {
-    const failed = state.catalogStatus === "error";
-    el("resultCount").textContent = "0";
-    el("resultNoun").textContent = "exercises";
-    el("activeTarget").textContent = `${groups[state.group].name} · ${failed ? "Library unavailable" : "Loading library"}`;
-    el("resetActiveFilters").hidden = true;
-    exerciseList.innerHTML = "";
-    el("emptyState").hidden = false;
-    setEmptyStateCopy(
-      failed ? "Exercise library unavailable." : "Loading exercise library…",
-      failed ? "Check your connection, then try loading the library again." : "Preparing the latest rankings and exercise details.",
-      failed ? "Try again" : "Reset filters",
-      !failed
-    );
-    return;
-  }
-
-  setEmptyStateCopy("No movement found.","Clear a filter or search another exercise.","Reset filters",false);
-  const rows = filteredExercises();
-  const activeFilters = [
-    state.sub !== "all" ? `Target: ${state.sub}` : "",
-    state.equipment !== "all" ? `Equipment: ${state.equipment}` : "",
-    state.level !== "all" ? `Experience: ${state.level}` : "",
-    state.query.trim() ? `Search: “${state.query.trim()}”` : ""
-  ].filter(Boolean);
-  el("resultCount").textContent = rows.length;
-  el("resultNoun").textContent = rows.length === 1 ? "exercise" : "exercises";
-  el("activeTarget").textContent = `${groups[state.group].name} · ${activeFilters.length ? activeFilters.join(" · ") : "All targets"}`;
-  el("resetActiveFilters").hidden = activeFilters.length === 0;
-  el("emptyState").hidden = rows.length !== 0;
-  exerciseList.innerHTML = rows.map((exercise,index) => {
-    const compared = state.compare.includes(exercise.id);
-    return `<article class="exercise-row" role="listitem">
-    <div class="rank-number"><span aria-hidden="true">${String(index+1).padStart(2,"0")}</span><span class="sr-only">Rank ${index+1}</span></div>
-    <div class="exercise-title"><button type="button" data-detail="${exercise.id}"><h3>${exercise.name}</h3><p>${exercise.pattern} · ${exercise.level}</p><p class="mobile-exercise-meta">${exercise.sub} · ${exercise.equipment}</p><span class="details-cue">View details <span aria-hidden="true">↘</span></span></button></div>
-    <div><span class="target-pill">${exercise.sub}</span></div>
-    <div class="exercise-cell"><small>Equipment</small><strong>${exercise.equipment}</strong></div>
-    <div class="score-badge ${exercise.score >= 94 ? "top" : ""}" role="img" aria-label="FitScore ${exercise.score} out of 100" style="--score:${exercise.score}%"><strong>${exercise.score}</strong><span aria-hidden="true">/100</span></div>
-    <div class="row-actions">
-      <a class="action-icon youtube-action" href="${exercise.youtube}" target="_blank" rel="noreferrer" title="Watch tutorials" aria-label="Find ${exercise.name} tutorials on YouTube"><span aria-hidden="true">▶</span></a>
-      <button class="action-icon ${compared ? "active" : ""}" data-compare="${exercise.id}" type="button" title="${compared ? "Remove from comparison" : "Add to comparison"}" aria-pressed="${compared}" aria-label="${compared ? "Remove" : "Add"} ${exercise.name} ${compared ? "from" : "to"} comparison"><span aria-hidden="true">⇄</span></button>
-      <button class="action-icon" data-add-planner="${exercise.id}" type="button" title="Add to planner" aria-label="Add ${exercise.name} to weekly planner"><span aria-hidden="true">+</span></button>
-    </div>
-  </article>`;
-  }).join("");
-}
-
-function previewPlaceholder(message) {
-  el("quickPreviewSummary").textContent = "Ready when you are";
-  el("quickPreviewResults").innerHTML = ["Recommendation","Recommendation","Recommendation"].map((label,index) => `<li class="preview-placeholder"><span>${String(index+1).padStart(2,"0")}</span><div><strong>${label}</strong><p>${escapeHtml(message)}</p></div></li>`).join("");
-  if(window.StrataHomeActivation?.hide)window.StrataHomeActivation.hide();else el("quickWeekPreview").hidden=true;
-  el("quickPreviewActions").hidden = true;
-}
-
-function previewGroup() {
-  const value = el("quickPreviewGroup").value;
-  return groups[value] ? value : "chest";
-}
-
-function updatePreviewEquipmentOptions({announce=false} = {}) {
-  const select = el("quickPreviewEquipment");
-  const submit = el("quickPreviewSubmit");
-  for(const button of document.querySelectorAll("[data-preview-starter]")) button.disabled=state.catalogStatus!=="ready";
-  if (state.catalogStatus !== "ready") {
-    select.disabled = true;
-    submit.disabled = true;
-    select.innerHTML = `<option>${state.catalogStatus === "error" ? "Library unavailable" : "Loading equipment…"}</option>`;
-    return;
-  }
-  const group = previewGroup();
-  el("quickPreviewGroup").value = group;
-  const allOptions = [...new Set(exercises.filter((exercise) => exercise.group === group).map((exercise) => exercise.equipment))].sort();
-  const home = window.StrataHomeActivation;
-  const options = typeof home?.canBuild === "function" ? allOptions.filter((equipment) => home.canBuild({
-    exercises,
-    sample:{
-      goal:el("quickPreviewGoal").value || "balanced",group,equipment,
-      level:el("quickPreviewLevel").value || "Intermediate",
-      days:Math.max(2,Math.min(5,Number(el("quickPreviewDays").value)||3)),
-      minutes:[20,35,50].includes(Number(el("quickPreviewMinutes").value))?Number(el("quickPreviewMinutes").value):35
-    }
-  })) : allOptions;
-  const previous = select.value;
-  const preferred = options.includes(previous) ? previous : options.includes("Dumbbells") ? "Dumbbells" : options.includes("Bodyweight") ? "Bodyweight" : options[0];
-  select.innerHTML = options.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join("");
-  select.value = preferred || "";
-  select.disabled = options.length === 0;
-  submit.disabled = options.length === 0;
-  el("quickPreviewOutput").setAttribute("aria-busy","false");
-  el("quickPreviewStatus").textContent = options.length ? (announce ? `${groups[group].name} selected. Choose your equipment, then show your shortlist.` : "Ready. Change any choice or generate this starting point.") : `No equipment options are available for ${groups[group].name}.`;
-}
-
-function applyPreviewStarter(name) {
-  const presets={
-    dumbbells:{equipment:"Dumbbells",level:"Intermediate",minutes:35,goal:"balanced"},
-    bodyweight:{equipment:"Bodyweight",level:"Intermediate",minutes:20,goal:"balanced"},
-    barbell:{equipment:"Barbell / Smith",level:"Intermediate",minutes:50,goal:"strength"}
-  };
-  const preset=Object.hasOwn(presets,name)?presets[name]:null;
-  if(!preset||state.catalogStatus!=="ready")return;
-  el("quickPreviewGoal").value=preset.goal;
-  el("quickPreviewGroup").value="chest";
-  el("quickPreviewLevel").value=preset.level;
-  el("quickPreviewDays").value="3";
-  el("quickPreviewMinutes").value=String(preset.minutes);
+function applyPreviewStarter(name){
+  const preset=LOGIC.previewStarter(name);if(!preset||state.catalogStatus!=="ready")return;
+  el("quickPreviewGoal").value=preset.goal;el("quickPreviewGroup").value="chest";el("quickPreviewLevel").value=preset.level;el("quickPreviewDays").value="3";el("quickPreviewMinutes").value=String(preset.minutes);
   updatePreviewEquipmentOptions();
   if(![...el("quickPreviewEquipment").options].some(option=>option.value===preset.equipment)){
-    previewPlaceholder("This starting point is unavailable. Choose your equipment below.");
-    el("quickPreviewStatus").textContent="Choose available equipment, then build your week.";
-    return;
+    previewPlaceholder("This starting point is unavailable. Choose your equipment below.");el("quickPreviewStatus").textContent="Choose available equipment, then build your week.";return;
   }
-  el("quickPreviewEquipment").value=preset.equipment;
-  generateQuickPreview();
+  el("quickPreviewEquipment").value=preset.equipment;generateQuickPreview();
 }
 
-function quickPreviewProfile() {
-  return {
-    goal:el("quickPreviewGoal").value || "balanced",
-    group:previewGroup(),
-    equipment:el("quickPreviewEquipment").value,
-    level:el("quickPreviewLevel").value || "Intermediate",
-    days:Math.max(2,Math.min(5,Number(el("quickPreviewDays").value)||3)),
-    minutes:[20,35,50].includes(Number(el("quickPreviewMinutes").value))?Number(el("quickPreviewMinutes").value):35
-  };
+function applyActivationProfile(profile){
+  el("quickPreviewGoal").value=profile.goal;el("quickPreviewGroup").value=profile.focusGroup&&LOGIC.GROUPS[profile.focusGroup]?profile.focusGroup:"chest";el("quickPreviewLevel").value=profile.level;
+  el("quickPreviewDays").value=String(profile.availability.length);el("quickPreviewMinutes").value=String(profile.minutes);updatePreviewEquipmentOptions();
+  const options=[...el("quickPreviewEquipment").options],selected=profile.equipment.find(value=>options.some(option=>option.value===value));if(selected)el("quickPreviewEquipment").value=selected;
 }
 
-function applyActivationProfile(profile) {
-  el("quickPreviewGoal").value=profile.goal;
-  el("quickPreviewGroup").value=profile.focusGroup&&groups[profile.focusGroup]?profile.focusGroup:"chest";
-  el("quickPreviewLevel").value=profile.level;
-  el("quickPreviewDays").value=String(profile.availability.length);
-  el("quickPreviewMinutes").value=String(profile.minutes);
-  updatePreviewEquipmentOptions();
-  if([...el("quickPreviewEquipment").options].some((option)=>profile.equipment.includes(option.value)))el("quickPreviewEquipment").value=profile.equipment.find((value)=>[...el("quickPreviewEquipment").options].some((option)=>option.value===value));
-}
-
-function previewResultMarkup(item) {
-  const exercise=item.exercise;
-  return `<li class="preview-result">
-    <span class="preview-rank" aria-label="Rank ${item.rank}">${String(item.rank).padStart(2,"0")}</span>
-    <div class="preview-result-copy">
-      <div class="preview-result-title"><h3>${escapeHtml(exercise.name)}</h3><span>${escapeHtml(exercise.sub)} · ${escapeHtml(exercise.equipment)}</span></div>
-      <p>${escapeHtml(exercise.why)}</p>
-      <ul class="preview-reasons" aria-label="Why this moved up">${item.reasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>
-      <p class="preview-tradeoff"><strong>Trade-off:</strong> ${escapeHtml(item.tradeoffText)}.</p>
-    </div>
-    <div class="preview-scores" aria-label="${item.match} percent personal match and ${item.officialScore} official FitScore"><span><b>${item.match}%</b><small>Personal match</small></span><span><b>${item.officialScore}</b><small>FitScore</small></span></div>
-  </li>`;
-}
-
-function generateQuickPreview() {
-  const output=el("quickPreviewOutput"),submit=el("quickPreviewSubmit");
-  output.setAttribute("aria-busy","true");submit.disabled=true;el("quickPreviewStatus").textContent="Building all seven days…";
-  try {
+function generateQuickPreview(){
+  const output=el("quickPreviewOutput"),submit=el("quickPreviewSubmit");output.setAttribute("aria-busy","true");submit.disabled=true;el("quickPreviewStatus").textContent="Building all seven days…";
+  try{
     const sample=quickPreviewProfile(),home=window.StrataHomeActivation;
     if(!home?.generate){
-      const fallback=window.StrataPreview.buildPreview({exercises,profile:sample,discovery:window.StrataDiscovery,limit:3});
+      const fallback=window.StrataPreview.buildPreview({exercises:state.exercises,profile:sample,discovery:window.StrataDiscovery,limit:3});
       el("quickPreviewSummary").textContent=fallback.summary;el("quickPreviewResults").innerHTML=fallback.items.map(previewResultMarkup).join("");el("quickPreviewActions").hidden=false;el("quickPreviewStatus").textContent="Shortlist ready. Reload before continuing if the complete-week preview does not appear.";return;
     }
-    const result=home.generate({exercises,sample,previewResultMarkup});
+    const result=home.generate({exercises:state.exercises,sample,previewResultMarkup});
     if(!result.stored)el("quickPreviewStatus").textContent="Your complete week is visible, but this browser blocked the private device draft. Keep this page open while you create or sign in to an account.";
     el("quickPreviewSummary").focus({preventScroll:false});
-    try { window.dispatchEvent?.(new CustomEvent("strata:milestone",{detail:{name:"preview_generated"}})); } catch {}
-  } catch (error) {
-    previewPlaceholder(error.message || "This preview could not be generated. Adjust a choice and try again.");
-    el("quickPreviewStatus").textContent=error.message || "This preview could not be generated. Adjust a choice and try again.";
-  } finally {
-    output.setAttribute("aria-busy","false");submit.disabled=state.catalogStatus!=="ready";
-  }
+    try{window.dispatchEvent?.(new CustomEvent("strata:milestone",{detail:{name:"preview_generated"}}));}catch{/* Product signals are best effort. */}
+  }catch(error){
+    previewPlaceholder(error.message||"This preview could not be generated. Adjust a choice and try again.");el("quickPreviewStatus").textContent=error.message||"This preview could not be generated. Adjust a choice and try again.";
+  }finally{output.setAttribute("aria-busy","false");submit.disabled=state.catalogStatus!=="ready";}
 }
 
-function guestPlanCount() {
-  try {
-    const plan = JSON.parse(localStorage.getItem(GUEST_PLAN_KEY) || "null");
-    const knownIds = state.catalogStatus === "ready" ? new Set(exercises.map((exercise) => exercise.id)) : null;
-    return PLAN_DAYS.reduce((total,day) => {
-      const items = Array.isArray(plan?.days?.[day]) ? plan.days[day].slice(0,40) : [];
-      return total + items.filter((item) => {
-        const exerciseId = item && typeof item === "object" ? String(item.exerciseId || "") : "";
-        return Boolean(exerciseId) && (!knownIds || knownIds.has(exerciseId));
-      }).length;
-    },0);
-  } catch {
-    return 0;
-  }
+function selectGroup(group,restoreFocus=true){
+  if(!STATE.selectGroup(state,group))return;renderAll();if(restoreFocus)renderer.focusRenderedControl(groupTabs,"data-group",group);
+}
+function selectSubfilter(sub,restoreFocus=true){
+  if(!STATE.selectSubfilter(state,sub))return;renderSubfilters();renderExercises();if(restoreFocus)renderer.focusRenderedControl(submuscleFilters,"data-sub",sub);
+}
+function addToPlanner(id){window.location.assign(LOGIC.plannerUrl(id));}
+function toggleCompare(id){
+  const detailWasOpen=renderer.detailDialog.open,result=LOGIC.toggleComparison(state.compare,id);
+  if(result.full){showToast("Comparison tray is full");return;}
+  state.compare=result.compare;updateCompareDock();renderExercises();
+  if(detailWasOpen){renderer.detailDialog.close();requestAnimationFrame(()=>{openDetail(id);renderer.focusRenderedControl(renderer.detailDialog,"data-compare",id);});}
+  else renderer.focusRenderedControl(exerciseList,"data-compare",id);
 }
 
-function updateAccountUI() {
-  if (state.accountStatus === "loading" || state.accountStatus === "unavailable") return;
-  const button = el("accountButton");
-  const signup = el("signupButton");
-  const discoveryButton = el("discoverButton");
-  const discoveryActive = state.user?.discovery?.active === true;
-  button.textContent = state.user ? `${state.user.name.split(/\s+/)[0]} profile` : "Log in";
-  button.href = state.user ? "/account.html" : "/account.html?mode=login";
-  button.classList.toggle("signed-in", Boolean(state.user));
-  signup.hidden = Boolean(state.user);
-  discoveryButton.hidden = !state.user;
-  discoveryButton.href = discoveryActive ? "/discover.html" : "/pricing";
-  discoveryButton.textContent = discoveryActive ? "Strata+" : "Unlock Strata+";
-  const previewLogin=el("quickPreviewLogin"),previewContinue=el("quickPreviewContinue");
-  previewLogin.hidden=Boolean(state.user);
-  previewContinue.href=state.user?"/planner.html":"/account.html?mode=signup&next=planner";
-  if(state.user)previewContinue.innerHTML="<strong>Compare with my account</strong><span>Choose which week to keep →</span>";
-  const planCount = state.user ? (Number(state.user.planCount) || 0) : guestPlanCount();
-  el("planCount").textContent = planCount;
-  el("planButton").href = "/planner.html";
-  el("planButton").setAttribute("aria-label", `Open weekly planner, ${planCount} ${planCount === 1 ? "exercise" : "exercises"}`);
+function resetFilters(){
+  if(state.catalogStatus==="error"){void initializeCatalog();return;}
+  STATE.resetFilters(state);el("searchInput").value="";el("levelFilter").value="all";renderAll();requestAnimationFrame(()=>el("searchInput").focus());
 }
+function clearCompare(){state.compare=[];updateCompareDock();renderExercises();requestAnimationFrame(()=>el("searchInput").focus());}
 
-function renderAll() {
-  renderTabs(); renderPanel(); renderSubfilters(); updateEquipmentOptions(); renderExercises(); updateCompareDock(); updateAccountUI();
-}
-
-function focusRenderedControl(container, attribute, value) {
-  requestAnimationFrame(() => {
-    const control = [...container.querySelectorAll(`[${attribute}]`)].find((item) => item.getAttribute(attribute) === value);
-    control?.focus();
-  });
-}
-
-function selectGroup(group, restoreFocus = true) {
-  if (!groups[group]) return;
-  state.group = group;
-  state.sub = "all";
-  renderAll();
-  if (restoreFocus) focusRenderedControl(groupTabs, "data-group", group);
-}
-
-function selectSubfilter(sub, restoreFocus = true) {
-  state.sub = sub;
-  renderSubfilters();
-  renderExercises();
-  if (restoreFocus) focusRenderedControl(submuscleFilters, "data-sub", sub);
-}
-
-function metricMarkup(exercise) {
-  const labels = {stimulus:"Stimulus",stability:"Stability",progression:"Progression",range:"Useful range",fatigue:"Low fatigue"};
-  return Object.entries(exercise.metrics).map(([key,value]) => `<div class="metric"><div class="metric-head"><span>${labels[key]}</span><b>${value}</b></div><div class="metric-track" aria-hidden="true"><i style="width:${value}%"></i></div></div>`).join("");
-}
-
-function adjustmentLabel(value) {
-  if (value === 0) return "0";
-  return `${value > 0 ? "+" : ""}${value}`;
-}
-
-function syncDialogState() {
-  document.body.classList.toggle("dialog-open", detailDialog.open || compareDialog.open);
-}
-
-const dialogReturnFocus = new WeakMap();
-function restoreModalFocus(dialog) {
-  const control = dialogReturnFocus.get(dialog);
-  dialogReturnFocus.delete(dialog);
-  if (control && control.isConnected !== false && !control.hidden && !control.disabled) requestAnimationFrame(() => control.focus());
-}
-function openModal(dialog) {
-  if (!dialog.open) {
-    const active = document.activeElement;
-    if (active && active !== document.body && typeof active.focus === "function" && !dialog.contains?.(active)) dialogReturnFocus.set(dialog,active);
-    dialog.showModal();
-  }
-  syncDialogState();
-  requestAnimationFrame(() => dialog.querySelector?.("[data-close-dialog],button,[href],input,select,textarea")?.focus());
-}
-function closeModal(dialog) {
-  if (dialog?.open) dialog.close();
-  syncDialogState();
-  if (dialog) restoreModalFocus(dialog);
-}
-
-function openDetail(id) {
-  const exercise = exercises.find((item) => item.id === id);
-  if (!exercise) return;
-  const compared = state.compare.includes(id);
-  const guidance = window.StrataDiscovery.exerciseGuidance(exercise,exercises);
-  const alternatives = guidance.alternatives.map(({exercise:alternative,reason}) => `<li><button type="button" data-detail="${escapeHtml(alternative.id)}"><strong>${escapeHtml(alternative.name)}</strong><span>${escapeHtml(alternative.equipment)}</span></button><small>${escapeHtml(reason)}</small></li>`).join("");
-  el("detailContent").innerHTML = `<div class="detail-hero">
-    <button class="icon-button detail-close" data-close-dialog="detailDialog" type="button" aria-label="Close details">×</button>
-    <div class="detail-hero-copy"><p class="kicker">${groups[exercise.group].name} / ${exercise.sub}</p><h2 id="detailTitle">${exercise.name}</h2><p>${exercise.why}</p></div>
-    <div class="detail-score" role="img" aria-label="FitScore ${exercise.score} out of 100"><span>FIT SCORE</span><strong>${exercise.score}</strong><span>OUT OF 100</span></div>
-  </div><div class="detail-body">
-    <div class="detail-meta"><div><span>Sets</span><strong>${exercise.sets}</strong></div><div><span>Reps</span><strong>${exercise.reps}</strong></div><div><span>Rest</span><strong>${exercise.rest}</strong></div><div><span>Level</span><strong>${exercise.level}</strong></div></div>
-    <div class="metric-grid">${metricMarkup(exercise)}</div>
-    <p class="detail-score-build"><strong>Score build</strong><span>Weighted baseline ${exercise.weightedBaseline}</span><span>Editorial adjustment ${adjustmentLabel(exercise.editorialAdjustment)}</span></p>
-    <div class="detail-columns exercise-guidance"><div><h3>Set up</h3><p class="detail-rationale">${escapeHtml(guidance.setup)}</p><h3>Technique cues</h3><ul>${guidance.cues.map((cue) => `<li>${escapeHtml(cue)}</li>`).join("")}</ul></div><div><h3>Purpose &amp; working range</h3><p class="detail-rationale">${escapeHtml(guidance.purpose)}</p><p class="guidance-prescription"><strong>General catalog range</strong><span>${escapeHtml(guidance.prescription)}</span></p><p class="detail-note"><strong>Caution / Common mistake:</strong> ${escapeHtml(guidance.mistake)}</p></div></div>
-    <section class="guidance-alternatives" aria-labelledby="guidanceAlternativesTitle"><div><h3 id="guidanceAlternativesTitle">Same target, different equipment</h3><p>Equivalent purpose does not mean identical feel. Review the setup and choose the option that matches your available equipment.</p></div><ul>${alternatives}</ul></section>
-    <div class="detail-footer"><button class="button button-dark" data-add-planner="${exercise.id}" type="button">Add to weekly planner<span aria-hidden="true">+</span></button><a class="button detail-youtube" href="${exercise.youtube}" target="_blank" rel="noreferrer">YouTube tutorials <span aria-hidden="true">▶</span></a><button class="button" style="border-color:var(--ink)" data-compare="${exercise.id}" type="button" aria-pressed="${compared}">${compared ? "Remove comparison" : "Compare exercise"}<span aria-hidden="true">⇄</span></button></div>
-  </div>`;
-  openModal(detailDialog);
-}
-
-function plannerUrl(exerciseId = null) {
-  return exerciseId ? `/planner.html?add=${encodeURIComponent(exerciseId)}` : "/planner.html";
-}
-
-function addToPlanner(id) {
-  window.location.assign(plannerUrl(id));
-}
-
-async function initializeAccount() {
-  try {
-    const result = await api("/api/me");
-    state.user = result.user || null;
-    state.accountStatus = state.user ? "authenticated" : "anonymous";
-  } catch (error) {
-    if (error.status === 401) {
-      state.user = null;
-      state.accountStatus = "anonymous";
-    } else {
-      state.accountStatus = "unavailable";
-    }
-  }
+let accountRequestId=0,accountRecheck=null;
+async function initializeAccount({recheck=false}={}){
+  const requestId=++accountRequestId;
+  if(recheck){STATE.beginAccountRecheck(state);updateAccountUI();}
+  try{const result=await api("/api/me",{cache:"no-store"});if(requestId!==accountRequestId)return;STATE.setAccount(state,result.user);}
+  catch(error){if(requestId!==accountRequestId)return;if(error.status===401)STATE.setAccount(state,null);else state.accountStatus="unavailable";}
   updateAccountUI();
-  const requestedSignin = new URLSearchParams(location.search).get("signin") === "1";
-  if (requestedSignin && state.accountStatus !== "unavailable") {
-    history.replaceState({},"","/");
-    if (state.user) window.location.assign("/planner.html");
-    else window.location.assign("/account.html?mode=login");
-  } else if (requestedSignin) {
-    showToast("Could not confirm your account. Check your connection and try again.");
+  const requestedSignin=new URLSearchParams(location.search).get("signin")==="1";
+  if(requestedSignin&&state.accountStatus!=="unavailable"){
+    history.replaceState({},"","/");window.location.assign(state.user?"/planner.html":"/account.html?mode=login");
+  }else if(requestedSignin)showToast("Could not confirm your account. Check your connection and try again.");
+}
+function recheckAccount(){
+  if(accountRecheck)return accountRecheck;
+  accountRecheck=initializeAccount({recheck:true}).finally(()=>{accountRecheck=null;});return accountRecheck;
+}
+
+async function initializeCatalog(){
+  state.catalogStatus="loading";renderAll();
+  try{STATE.setCatalog(state,await api("/exercises.json?v=7.8.0"));el("catalogTotal").textContent=state.exercises.length;}
+  catch{STATE.failCatalog(state);}
+  renderAll();updatePreviewEquipmentOptions();window.StrataHomeActivation?.restore?.({exercises:state.exercises,applyProfile:applyActivationProfile,readSample:quickPreviewProfile,previewResultMarkup});
+}
+
+EVENTS.bindHomeEvents({
+  document,window,state,groupOrder:LOGIC.GROUP_ORDER,
+  actions:{
+    addToPlanner,applyPreviewStarter,clearCompare,closeModal,dialogs:[renderer.detailDialog,renderer.compareDialog],generateQuickPreview,openComparison,openDetail,previewGroup,previewPlaceholder,
+    recheckAccount,renderExercises,resetFilters,restoreModalFocus:renderer.restoreModalFocus,selectGroup,selectSubfilter,syncDialogState:renderer.syncDialogState,toggleCompare,updatePreviewEquipmentOptions
   }
-}
-
-async function initializeCatalog() {
-  state.catalogStatus = "loading";
-  renderAll();
-  try {
-    exercises = normalizeCatalog(await api("/exercises.json?v=7.7.1"));
-    state.catalogStatus = "ready";
-    el("catalogTotal").textContent = exercises.length;
-  } catch {
-    exercises = [];
-    state.compare = [];
-    state.catalogStatus = "error";
-  }
-  renderAll();
-  updatePreviewEquipmentOptions();
-  window.StrataHomeActivation?.restore?.({exercises,applyProfile:applyActivationProfile,readSample:quickPreviewProfile,previewResultMarkup});
-}
-
-function toggleCompare(id) {
-  const detailWasOpen = detailDialog.open;
-  const index = state.compare.indexOf(id);
-  if (index >= 0) state.compare.splice(index,1);
-  else if (state.compare.length < 2) state.compare.push(id);
-  else { showToast("Comparison tray is full"); return; }
-  updateCompareDock(); renderExercises();
-  if (detailWasOpen) {
-    detailDialog.close();
-    requestAnimationFrame(() => {
-      openDetail(id);
-      focusRenderedControl(detailDialog, "data-compare", id);
-    });
-  } else {
-    focusRenderedControl(exerciseList, "data-compare", id);
-  }
-}
-
-function updateCompareDock() {
-  el("compareDock").hidden = state.compare.length === 0;
-  document.body?.classList.toggle("compare-open", state.compare.length > 0);
-  el("compareCount").textContent = `${state.compare.length}/2`;
-  el("openCompare").disabled = state.compare.length !== 2;
-  el("compareNames").textContent = state.compare.length ? state.compare.map((id) => exercises.find((exercise) => exercise.id === id)?.name).join(" vs ") : "Choose two exercises";
-}
-
-function openComparison() {
-  const [a,b] = state.compare.map((id) => exercises.find((exercise) => exercise.id === id));
-  if (!a || !b) return;
-  const row = (label,left,right,className="") => `<tr><th scope="row">${label}</th><td class="${className}">${left}</td><td class="${className}">${right}</td></tr>`;
-  el("compareContent").innerHTML = `<div class="compare-table-wrap" role="region" aria-label="${escapeHtml(a.name)} and ${escapeHtml(b.name)} comparison table" tabindex="0"><table class="compare-table">
-    <caption class="sr-only">Comparison of ${escapeHtml(a.name)} and ${escapeHtml(b.name)}</caption>
-    <thead><tr><th scope="col">Measure</th><th scope="col" class="compare-name">${escapeHtml(a.name)}</th><th scope="col" class="compare-name">${escapeHtml(b.name)}</th></tr></thead>
-    <tbody>
-      ${row("FitScore",a.score,b.score,"compare-score")}
-      ${row("Weighted baseline",a.weightedBaseline,b.weightedBaseline)}
-      ${row("Editorial adjustment",adjustmentLabel(a.editorialAdjustment),adjustmentLabel(b.editorialAdjustment))}
-      ${row("Target",escapeHtml(a.sub),escapeHtml(b.sub))}
-      ${row("Equipment",escapeHtml(a.equipment),escapeHtml(b.equipment))}
-      ${row("Level",escapeHtml(a.level),escapeHtml(b.level))}
-      ${row("Stimulus",`${a.metrics.stimulus}/100`,`${b.metrics.stimulus}/100`)}
-      ${row("Stability",`${a.metrics.stability}/100`,`${b.metrics.stability}/100`)}
-      ${row("Useful range",`${a.metrics.range}/100`,`${b.metrics.range}/100`)}
-      ${row("Progression",`${a.metrics.progression}/100`,`${b.metrics.progression}/100`)}
-      ${row("Low fatigue",`${a.metrics.fatigue}/100`,`${b.metrics.fatigue}/100`)}
-    </tbody>
-  </table></div>`;
-  openModal(compareDialog);
-}
-
-let toastTimer;
-function showToast(message) {
-  const toast = el("toast"); toast.textContent = message; toast.classList.add("show");
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove("show"),3000);
-}
-
-document.addEventListener("click", (event) => {
-  const groupButton=event.target.closest("[data-group]"), subButton=event.target.closest("[data-sub]"), detailButton=event.target.closest("[data-detail]"), addButton=event.target.closest("[data-add-planner]"), compareButton=event.target.closest("[data-compare]"), closeButton=event.target.closest("[data-close-dialog]");
-  if (groupButton) selectGroup(groupButton.dataset.group);
-  else if (subButton) selectSubfilter(subButton.dataset.sub);
-  else if (detailButton) openDetail(detailButton.dataset.detail);
-  else if (addButton) addToPlanner(addButton.dataset.addPlanner);
-  else if (compareButton) toggleCompare(compareButton.dataset.compare);
-  else if (closeButton) closeModal(document.getElementById(closeButton.dataset.closeDialog));
 });
 
-groupTabs.addEventListener("keydown", (event) => {
-  if (!["ArrowLeft","ArrowRight","Home","End"].includes(event.key)) return;
-  const currentButton = event.target.closest("[data-group]");
-  if (!currentButton) return;
-  event.preventDefault();
-  const current = groupOrder.indexOf(currentButton.dataset.group);
-  let next = current;
-  if (event.key === "ArrowRight") next = (current + 1) % groupOrder.length;
-  if (event.key === "ArrowLeft") next = (current - 1 + groupOrder.length) % groupOrder.length;
-  if (event.key === "Home") next = 0;
-  if (event.key === "End") next = groupOrder.length - 1;
-  selectGroup(groupOrder[next]);
-});
-
-el("searchInput").addEventListener("input", (event) => { state.query=event.target.value; renderExercises(); });
-el("equipmentFilter").addEventListener("change", (event) => { state.equipment=event.target.value; renderExercises(); });
-el("levelFilter").addEventListener("change", (event) => { state.level=event.target.value; renderExercises(); });
-el("sortSelect").addEventListener("change", (event) => { state.sort=event.target.value; renderExercises(); });
-function resetFilters() {
-  if (state.catalogStatus === "error") { initializeCatalog(); return; }
-  state.sub="all";state.equipment="all";state.level="all";state.query="";el("searchInput").value="";el("levelFilter").value="all";renderAll();requestAnimationFrame(()=>el("searchInput").focus());
-}
-el("clearFilters").addEventListener("click", resetFilters);
-el("resetActiveFilters").addEventListener("click", resetFilters);
-el("clearCompare").addEventListener("click", () => { state.compare=[];updateCompareDock();renderExercises();requestAnimationFrame(()=>el("searchInput").focus()); });
-el("openCompare").addEventListener("click", openComparison);
-el("quickPreviewForm").addEventListener("submit", (event) => { event.preventDefault();generateQuickPreview(); });
-for(const button of document.querySelectorAll("[data-preview-starter]"))button.addEventListener("click",()=>applyPreviewStarter(button.dataset.previewStarter));
-el("quickPreviewForm").addEventListener("change", (event) => {
-  if (["quickPreviewGoal","quickPreviewGroup","quickPreviewLevel","quickPreviewDays","quickPreviewMinutes"].includes(event.target.id)) updatePreviewEquipmentOptions({announce:event.target.id === "quickPreviewGroup"});
-  previewPlaceholder("Your choices changed. Generate again to refresh this shortlist.");
-  el("quickPreviewStatus").textContent="Choices updated. Show your shortlist to apply them.";
-});
-el("quickPreviewRankings").addEventListener("click", () => {
-  selectGroup(previewGroup(),false);
-  const target=el("rankings");
-  target.scrollIntoView?.({behavior:window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches?"auto":"smooth",block:"start"});
-  requestAnimationFrame(()=>target.focus?.({preventScroll:true}));
-});
-[detailDialog,compareDialog].forEach((dialog) => {
-  dialog.addEventListener("close", () => { syncDialogState();restoreModalFocus(dialog); });
-  dialog.addEventListener("click", (event) => {
-    const rect=dialog.getBoundingClientRect();
-    if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)closeModal(dialog);
-  });
-});
-
-initializeCatalog();
-initializeAccount();
+void initializeCatalog();
+void initializeAccount();

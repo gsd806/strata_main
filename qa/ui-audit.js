@@ -134,7 +134,7 @@ let browser;
 
     await page.goto(`${BASE_URL}/`,{waitUntil:"networkidle"});
     const publicHeaderLinks=await page.locator(".desktop-nav a").evaluateAll((nodes)=>nodes.map((node)=>[node.getAttribute("href"),node.textContent.trim()]));
-    assert.deepEqual(publicHeaderLinks,[["#rankings","Rankings"],["/discover.html","Strata+"],["/workout.html","Train"],["/pricing","Pricing"]],"Homepage desktop navigation must expose its four primary destinations");
+    assert.deepEqual(publicHeaderLinks,[["#rankings","Rankings"],["/discover.html","Strata+"],["/planner.html","Plan"],["/workout.html","Train"]],"Homepage desktop navigation must match the four product destinations used everywhere else");
     assert.match((await page.locator(".discovery-offer").textContent())||"",/7 days[\s\S]*\$0\.99 USD per month[\s\S]*renews monthly until canceled/i);
     for(const [label,control] of [["homepage primary action",page.locator(".hero .button-accent").first()]]){
       const ratio=await contrastRatio(control);assert.ok(ratio>=4.5,`${label} text contrast is ${ratio.toFixed(2)}:1; expected at least 4.5:1`);
@@ -192,10 +192,10 @@ let browser;
     await page.goto(`${BASE_URL}/pricing`,{waitUntil:"networkidle"});
     await page.locator("#purchaseStatus").waitFor();
     snapshot.checkoutStatus=((await page.locator("#purchaseStatus").textContent())||"").trim();
+    snapshot.trialVisible=await page.locator("#trialDiscovery").isVisible();
     snapshot.buyVisible=await page.locator("#buyDiscovery").isVisible();
-    snapshot.buyDisabled=await page.locator("#buyDiscovery").isDisabled();
-    assert.equal(snapshot.buyVisible,true,"A signed-in unpaid account should see the Strata+ purchase control");
-    assert.equal(snapshot.buyDisabled,true,"Checkout must stay disabled when Paddle configuration is off");
+    assert.equal(snapshot.trialVisible,true,"An eligible signed-in account should see the no-card trial as its one primary start");
+    assert.equal(snapshot.buyVisible,false,"Checkout must not compete with the eligible account's trial action");
     assert.match(snapshot.checkoutStatus,/eligible for one free|temporarily unavailable|not configured correctly/i,"Pricing must explain either the available no-card trial or the disabled checkout state");
     await capture(page,"pricing-locked-desktop.png",{fullPage:true});
 

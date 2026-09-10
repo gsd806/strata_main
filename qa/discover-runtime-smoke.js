@@ -75,9 +75,10 @@ vm.createContext(context);
 vm.runInContext(readPublic("scripts","discovery-core.js"),context,{filename:"discovery-core.js"});
 vm.runInContext(readPublic("scripts","monthly-plan-core.js"),context,{filename:"monthly-plan-core.js"});
 vm.runInContext(readPublic("scripts","training-block-core.js"),context,{filename:"training-block-core.js"});
+for(const name of ["discover-state.js","discover-api.js","discover-navigation.js","discover-progress.js","discover-render.js","discover-catalog.js","discover-detail.js","discover-community.js","discover-session.js","discover-sharing.js","discover-events.js"])vm.runInContext(readPublic("scripts",name),context,{filename:name});
 vm.runInContext(readPublic("scripts","discover.js"),context,{filename:"discover.js"});
 assert.equal(vm.runInContext("state.activeFeature",context),"today","feature navigation must initialize before discovery data resolves");
-assert.equal(vm.runInContext('Object.keys(FEATURE_CONFIG).filter((name)=>featurePanel(name).hidden).length',context),10,"only the default workspace should remain visible during discovery loading");
+assert.equal(vm.runInContext('Object.keys(FEATURE_CONFIG).filter((name)=>featureNavigation.featurePanel(name).hidden).length',context),10,"only the default workspace should remain visible during discovery loading");
 
 (async()=>{
   await new Promise(setImmediate);
@@ -89,6 +90,9 @@ assert.equal(vm.runInContext('Object.keys(FEATURE_CONFIG).filter((name)=>feature
   assert.equal(elements.get("discoveryLoadError").hidden,true,"a successful retry must clear the error UI");
   const todayComparable=/Flat Dumbbell Press/.test(elements.get("todayPreviousValue").textContent);
   const progressRendered=elements.get("progressSessions").textContent==="1"&&/kg·reps/.test(elements.get("progressVolume").textContent);
+  vm.runInContext("globalThis.savedProgressWorkouts=state.workouts;state.workouts=[];renderProgress();",context);
+  const firstWorkoutState=elements.get("progressFirstWorkout").hidden===false&&elements.get("progressHistoryContent").hidden===true;
+  vm.runInContext("state.workouts=savedProgressWorkouts;renderProgress();",context);
   // A saved week is not completed training; duplicates and unscheduled sessions
   // cannot inflate completed planned days.
   vm.runInContext(`
@@ -107,11 +111,11 @@ assert.equal(vm.runInContext('Object.keys(FEATURE_CONFIG).filter((name)=>feature
   assert.match(elements.get("weeklyPulseDays").textContent,/History unavailable/);
   vm.runInContext("state.workoutHistoryAvailable=true;state.workouts=savedProgressWorkouts;renderWeeklyPulse();",context);
   vm.runInContext(`
-    globalThis.featureAudit={defaultFeature:state.activeFeature,defaultVisible:!el("todayWorkspace").hidden,defaultHidden:Object.keys(FEATURE_CONFIG).filter((name)=>featurePanel(name).hidden).length};
+    globalThis.featureAudit={defaultFeature:state.activeFeature,defaultVisible:!el("todayWorkspace").hidden,defaultHidden:Object.keys(FEATURE_CONFIG).filter((name)=>featureNavigation.featurePanel(name).hidden).length};
     activateFeature("library");
-    featureAudit.explorerFeature=state.activeFeature;featureAudit.explorerVisible=!el("exerciseExplorer").hidden;featureAudit.explorerHidden=Object.keys(FEATURE_CONFIG).filter((name)=>featurePanel(name).hidden).length;
+    featureAudit.explorerFeature=state.activeFeature;featureAudit.explorerVisible=!el("exerciseExplorer").hidden;featureAudit.explorerHidden=Object.keys(FEATURE_CONFIG).filter((name)=>featureNavigation.featurePanel(name).hidden).length;
     globalThis.location.hash="#alternativeSection";
-    restoreFeatureFromHistory();
+    featureNavigation.restore();
   `,context);
   await new Promise(setImmediate);
   vm.runInContext(`
@@ -122,7 +126,7 @@ assert.equal(vm.runInContext('Object.keys(FEATURE_CONFIG).filter((name)=>feature
     renderCompareTray();
     openComparison();
     openDetail("flat-dumbbell-press");
-    globalThis.audit={recommendations:state.recommendations.length,results:discoveryResults().length,renderedResults:(el("exerciseGrid").innerHTML.match(/class="exercise-card"/g)||[]).length,hasLoadMore:/data-load-more-exercises/.test(el("exerciseGrid").innerHTML),compareCount:state.compare.length,detailOpen:el("detailDialog").open,bodyLocked:document.body.classList.contains("dialog-open")};
+    globalThis.audit={recommendations:state.recommendations.length,results:catalog.discoveryResults().length,renderedResults:(el("exerciseGrid").innerHTML.match(/class="exercise-card"/g)||[]).length,hasLoadMore:/data-load-more-exercises/.test(el("exerciseGrid").innerHTML),compareCount:state.compare.length,detailOpen:el("detailDialog").open,bodyLocked:document.body.classList.contains("dialog-open")};
   `,context);
   const draftValues={comfort:1,pump:2,enjoyment:4,stability:5,setup:2,overall:4},draftForm=new Element("ratingDraft");
   draftForm.dataset.ratingForm="flat-dumbbell-press";
@@ -198,7 +202,7 @@ assert.equal(vm.runInContext('Object.keys(FEATURE_CONFIG).filter((name)=>feature
     sessionConflictHandled,
     weeklyPulse:/planned movement/.test(elements.get("weeklyPulseDetail").textContent)&&/^width:\d+(?:\.\d+)?%$/.test(elements.get("weeklyPulseBar").attributes.style),
     todayComparable,
-    progressRendered,
+    progressRendered,firstWorkoutState,
     trainingBlockSaved:Boolean(blockRequest&&blockRequest.options.headers["X-CSRF-Token"]==="csrf"&&blockBody.expectedRevision===3&&blockBody.expectedUserId==="u1"&&blockBody.block.weeks===8&&blockBody.block.currentWeek===2&&blockBody.block.status==="active"&&blockBody.block.lightWeek===8&&blockBody.block.startDate===trainingBlock.startDate),
     trainingBlockReview:!elements.get("trainingBlockReview").hidden&&elements.get("trainingBlockWorkoutCount").textContent==="1 / 1"&&/Chest/.test(elements.get("trainingBlockMuscles").innerHTML)&&!/explicitly skipped|explicitly replaced/.test(elements.get("trainingBlockSignals").innerHTML),
     blockControlsWorked,
@@ -229,6 +233,6 @@ assert.equal(vm.runInContext('Object.keys(FEATURE_CONFIG).filter((name)=>feature
   assert.equal(result.unknownHashFeature,"library");
   assert.equal(result.battleSlots,4);
   assert.ok(result.battleRows>=10);
-  for(const key of ["discoveryFetch","battleBuilder","battleTable","battleVisible","battleStatus","detailOpen","bodyLocked","scoreAudit","evidence","alternatives","ratings","ratingDraftPreserved","communityFetch","communityRendered","communitySevenDayPreview","communityConfirmation","communityApplied","communityPlanLink","sessionGenerated","sessionOptions","sessionAdded","sessionPlanRevision","sessionPlanLink","sessionConflictHandled","weeklyPulse","todayComparable","progressRendered","trainingBlockSaved","trainingBlockReview","blockControlsWorked","progressionFormatted","progressionAccepted","dismissRaceSafe","focusPrivacyCleared","focusAccountSafe"])assert.equal(result[key],true,key);
+  for(const key of ["discoveryFetch","battleBuilder","battleTable","battleVisible","battleStatus","detailOpen","bodyLocked","scoreAudit","evidence","alternatives","ratings","ratingDraftPreserved","communityFetch","communityRendered","communitySevenDayPreview","communityConfirmation","communityApplied","communityPlanLink","sessionGenerated","sessionOptions","sessionAdded","sessionPlanRevision","sessionPlanLink","sessionConflictHandled","weeklyPulse","todayComparable","progressRendered","firstWorkoutState","trainingBlockSaved","trainingBlockReview","blockControlsWorked","progressionFormatted","progressionAccepted","dismissRaceSafe","focusPrivacyCleared","focusAccountSafe"])assert.equal(result[key],true,key);
   console.log(JSON.stringify(result,null,2));
 })().catch(error=>{console.error(error);process.exitCode=1;});

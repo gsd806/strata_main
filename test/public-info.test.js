@@ -60,7 +60,7 @@ test("core footers use the policy directory instead of repeating every legal pag
 });
 
 test("published Strata+ price and refund promise are exact and consistent",()=>{
-  assert.equal(BUILD,"7.7.1");
+  assert.equal(BUILD,"7.8.0");
   const pricingHtml=read("pricing.html"),pricing=text("pricing.html"),refunds=text("refunds.html"),terms=text("terms.html");
   assert.match(pricing,/Strata\+/);
   assert.match(pricing,/\$0\.99 USD/i);
@@ -167,9 +167,10 @@ test("public copy describes recurring checkout, cancellation, and grandfathered 
   assert.match(text("privacy.html"),/Paddle handles checkout, recurring payment/i);
   assert.match(text("privacy.html"),/current billing-period end/i);
   assert.match(text("refunds.html"),/Refunding the charge may end the paid Strata\+ access/i);
-  const pricingClient=fs.readFileSync(path.join(PUBLIC_ROOT,"scripts","pricing.js"),"utf8");
+  const pricingClient=["pricing-logic.js","pricing-render.js","pricing.js"].map(name=>fs.readFileSync(path.join(PUBLIC_ROOT,"scripts",name),"utf8")).join("\n");
   assert.doesNotMatch(pricingClient,/permanently unlocked/i);
-  assert.match(pricingClient,/Skip trial — subscribe · \$0\.99 USD \/ month/);
+  assert.doesNotMatch(pricingClient,/Skip trial — subscribe/i);
+  assert.match(pricingClient,/buyButton\.hidden=!canSubscribe\|\|trialEligible/);
   assert.match(pricingClient,/monthly subscription is active and renews on/);
   assert.match(pricingClient,/previous monthly subscription is canceled and will not renew/);
   assert.match(pricingClient,/error\.code==="CHECKOUT_PREPARING"/);

@@ -13,11 +13,11 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icons/strata-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="/fonts.css?v=7.7.1" />
-    <link rel="stylesheet" href="planner.css?v=7.7.1" />
-    <link rel="stylesheet" href="/product-signals.css?v=7.7.1" />
-    <link rel="stylesheet" href="/experience.css?v=7.7.1" />
-    <script src="/motion.js?v=7.7.1"></script>
+    <link rel="stylesheet" href="/fonts.css?v=7.8.0" />
+    <link rel="stylesheet" href="planner.css?v=7.8.0" />
+    <link rel="stylesheet" href="/product-signals.css?v=7.8.0" />
+    <link rel="stylesheet" href="/experience.css?v=7.8.0" />
+    <script src="/motion.js?v=7.8.0"></script>
   </head>
   <body>
     <a class="skip-link" href="#weekTitle">Skip to weekly plan</a>
@@ -33,8 +33,8 @@
 
     <section class="plan-conflict-panel device-plan-panel" id="devicePlanPanel" aria-labelledby="devicePlanTitle" hidden>
       <div class="plan-conflict-heading">
-        <div><p class="eyebrow">Your preview survived</p><h2 id="devicePlanTitle" tabindex="-1">BRING YOUR <em>WEEK WITH YOU.</em></h2></div>
-        <p>Your account and this browser have different weeks. Nothing has been copied or overwritten. Compare both, then explicitly claim the device week or keep the account week.</p>
+        <div><p class="eyebrow" id="devicePlanEyebrow">Your preview survived</p><h2 id="devicePlanTitle" tabindex="-1">BRING YOUR <em>WEEK WITH YOU.</em></h2></div>
+        <p id="devicePlanLead">Your account and this browser have different weeks. Nothing has been copied or overwritten. Compare both, then explicitly claim the device week or keep the account week.</p>
       </div>
       <label class="device-plan-source" id="devicePlanSourceLabel" hidden>Device week to review<select id="devicePlanSource"></select></label>
       <div class="device-plan-overview" id="devicePlanOverview"></div>
@@ -78,10 +78,12 @@
           <div class="planner-day-picker-heading"><span id="quickAddDayLabel">Add exercises to</span><strong id="quickAddDayValue">Monday</strong></div>
           <div class="planner-day-chips" id="plannerDayNav" role="group" aria-labelledby="quickAddDayLabel"></div>
         </div>
-        <div class="planner-filters" id="plannerFilters" role="group" aria-label="Exercise muscle filters"></div>
+        <div class="planner-filter-heading"><span>Filter movements</span><small>Swipe for more <span aria-hidden="true">→</span></small></div>
+        <div class="planner-filter-rail"><div class="planner-filters" id="plannerFilters" role="group" aria-label="Exercise muscle filters"></div></div>
         <p class="drag-note"><span aria-hidden="true">↗</span><span class="drag-note-wide">Drag onto any day, or choose a quick-add day and select Add. Use each card’s day and arrow controls to move it without dragging.</span><span class="drag-note-compact">Choose a day, select Add, then <a class="planner-jump-link" href="#weekTitle">view my week <span aria-hidden="true">↓</span></a></span></p>
         <p class="sr-only" id="libraryResultStatus" role="status" aria-live="polite" aria-atomic="true"></p>
         <div class="library-list" id="libraryList"><div class="loading">Loading movements…</div></div>
+        <div class="planner-mobile-handoff" aria-live="polite"><span id="mobileAddDestination">Add to Monday</span><a id="mobileWeekLink" href="#day-title-0">View Monday · 0 exercises</a></div>
       </aside>
 
       <section class="week-section" aria-labelledby="weekTitle">
@@ -191,13 +193,22 @@
       <button class="dark-button" id="applyCopyDay" type="button" disabled>Apply reviewed copy</button>
     </dialog>
 
-    <footer class="build-footer">STRATA · Build 7.7.1 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
+    <footer class="build-footer">STRATA · Build 7.8.0 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
     <div class="planner-toast" id="plannerToast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=7.7.1"></script>
-    <script src="/product-signals.js?v=7.7.1"></script>
-    <script src="/discovery-core.js?v=7.7.1"></script>
-    <script src="/activation-core.js?v=7.7.1"></script>
-    <script src="/plan-insights-core.js?v=7.7.1"></script>
-    <script src="planner.js?v=7.7.1"></script>
+    <script src="/pwa.js?v=7.8.0"></script>
+    <script src="/product-signals.js?v=7.8.0"></script>
+    <script src="/discovery-core.js?v=7.8.0"></script>
+    <script src="/activation-core.js?v=7.8.0"></script>
+    <script src="/plan-insights-core.js?v=7.8.0"></script>
+    <script src="/planner-logic.js?v=7.8.0"></script>
+    <script src="/planner-state.js?v=7.8.0"></script>
+    <script src="/planner-api.js?v=7.8.0"></script>
+    <script src="/planner-render.js?v=7.8.0"></script>
+    <script src="/planner-conflicts.js?v=7.8.0"></script>
+    <script src="/planner-templates.js?v=7.8.0"></script>
+    <script src="/planner-sharing.js?v=7.8.0"></script>
+    <script src="/planner-activation.js?v=7.8.0"></script>
+    <script src="/planner-events.js?v=7.8.0"></script>
+    <script src="planner.js?v=7.8.0"></script>
   </body>
 </html>

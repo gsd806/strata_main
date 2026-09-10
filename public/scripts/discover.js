@@ -6,64 +6,33 @@ const Monthly=globalThis.StrataMonthlyPlan;
 if(!Monthly)throw new Error("The Strata+ monthly-plan engine did not load.");
 const BlockCore=globalThis.StrataTrainingBlock;
 if(!BlockCore)throw new Error("The Strata+ training-block engine did not load.");
-const GROUP_LABELS={chest:"Chest",back:"Back",shoulders:"Shoulders",arms:"Arms",legs:"Legs",glutes:"Glutes",calves:"Calves",core:"Core"};
-const PREFERENCE_OPTIONS={stable:"Stable setup","long-range":"Long-range friendly","simple-setup":"Simple setup",compound:"Compound lifts",isolation:"Isolation work"};
-const LIMITATION_OPTIONS={"no-overhead":"Avoid overhead positions","no-deep-knee":"Avoid deep knee flexion","no-unsupported-hinge":"Avoid unsupported hinges","no-floor":"Avoid floor exercises","no-unilateral":"Avoid unilateral work"};
-const EXPLORER_DESKTOP_PAGE_SIZE=24;
-const EXPLORER_MOBILE_PAGE_SIZE=12;
-const SEARCH_DEBOUNCE_MS=180;
-const RATINGS_REFRESH_MIN_INTERVAL_MS=15_000;
-const COMMUNITY_PAGE_SIZE=12;
-const MOVEMENT_BOARD_LIMIT=4;
-const MOVEMENT_BOARD_STORAGE_PREFIX="strata_plus_movement_board_v1";
-const FEATURE_DEFAULT="today";
-const FEATURE_CONFIG=Object.freeze({
-  today:{panelId:"todayWorkspace",headingId:"todayTitle",label:"Today"},
-  plan:{panelId:"planWorkspace",headingId:"planWorkspaceTitle",label:"Plan"},
-  progress:{panelId:"progressWorkspace",headingId:"progressWorkspaceTitle",label:"Progress"},
-  explore:{panelId:"exploreWorkspace",headingId:"exploreWorkspaceTitle",label:"Explore"},
-  recommendations:{panelId:"recommendations",headingId:"recommendationTitle",label:"Best exercises for you"},
-  library:{panelId:"exerciseExplorer",headingId:"explorerTitle",label:"Exercise library"},
-  battle:{panelId:"battle",headingId:"battleTitle",label:"Compare exercises"},
-  profile:{panelId:"profile",headingId:"profileTitle",label:"Personalize recommendations"},
-  community:{panelId:"communityPlans",headingId:"communityPlansTitle",label:"Browse community plans"},
-  monthly:{panelId:"monthlyPlan",headingId:"monthlyPlanTitle",label:"Build a 31-day plan"},
-  session:{panelId:"sessionBuilder",headingId:"sessionBuilderTitle",label:"Build a session"}
-});
-const state={exercises:[],methodology:null,sources:[],limited:new Set(),preferences:null,user:null,csrfToken:"",aggregate:new Map(),userRatings:new Map(),ratingsRefreshedAt:0,ratingsRefreshPromise:null,ratingSaving:new Set(),compare:[],shortlist:[],collection:"all",query:"",group:"all",equipment:"all",pattern:"all",level:"all",sort:"personal",recommendations:[],activeExercise:null,activeFeature:null,explorerLimit:EXPLORER_DESKTOP_PAGE_SIZE,weeklyPlan:null,weeklyPlanUpdatedAt:0,workouts:[],workoutHistoryAvailable:false,workoutHistoryHasMore:false,trainingBlock:null,trainingBlockRevision:0,trainingBlockAction:null,progressionSuggestion:null,session:null,sessionSaving:false,sessionDayInitialized:false,monthlyPlan:null,monthlyPlanUpdatedAt:0,monthlySchedule:null,monthlySource:"muscle-schedule",communityPlans:[],communityLoaded:false,communityLoading:false,communityError:"",communityNextOffset:0,communityQuery:"",communityPendingId:null,communityAppliedId:null,communityAppliedUpdatedAt:0};
+const StateCore=globalThis.StrataDiscoverState;
+if(!StateCore)throw new Error("The Strata+ state module did not load.");
+const ApiCore=globalThis.StrataDiscoverApi;
+if(!ApiCore)throw new Error("The Strata+ API module did not load.");
+const NavigationCore=globalThis.StrataDiscoverNavigation;
+if(!NavigationCore)throw new Error("The Strata+ navigation module did not load.");
+const ProgressCore=globalThis.StrataDiscoverProgress;
+if(!ProgressCore)throw new Error("The Strata+ progress module did not load.");
+const RenderCore=globalThis.StrataDiscoverRender;if(!RenderCore)throw new Error("The Strata+ rendering module did not load.");
+const EventsCore=globalThis.StrataDiscoverEvents;if(!EventsCore)throw new Error("The Strata+ event module did not load.");
+const CatalogCore=globalThis.StrataDiscoverCatalog;if(!CatalogCore)throw new Error("The Strata+ catalog module did not load.");
+const DetailCore=globalThis.StrataDiscoverDetail;if(!DetailCore)throw new Error("The Strata+ detail module did not load.");
+const CommunityCore=globalThis.StrataDiscoverCommunity;if(!CommunityCore)throw new Error("The Strata+ community module did not load.");
+const SessionCore=globalThis.StrataDiscoverSession;if(!SessionCore)throw new Error("The Strata+ session module did not load.");
+const SharingCore=globalThis.StrataDiscoverSharing;if(!SharingCore)throw new Error("The Strata+ sharing module did not load.");
+const {FEATURE_CONFIG,FEATURE_DEFAULT,GROUP_LABELS,LIMITATION_OPTIONS,MOVEMENT_BOARD_STORAGE_PREFIX,PREFERENCE_OPTIONS}=StateCore;
+const EXPLORER_DESKTOP_PAGE_SIZE=StateCore.LIMITS.explorerDesktopPageSize;
+const EXPLORER_MOBILE_PAGE_SIZE=StateCore.LIMITS.explorerMobilePageSize;
+const SEARCH_DEBOUNCE_MS=StateCore.LIMITS.searchDebounceMs;
+const RATINGS_REFRESH_MIN_INTERVAL_MS=StateCore.LIMITS.ratingsRefreshMinIntervalMs;
+const COMMUNITY_PAGE_SIZE=StateCore.LIMITS.communityPageSize;
+const MOVEMENT_BOARD_LIMIT=StateCore.LIMITS.movementBoard;
+const state=StateCore.createState();
 let workspaceGeneration=0,workspaceReady=false,workspaceRevalidating=false;
 const el=(id)=>document.getElementById(id);
-
-async function api(path,options={}) {
-  const requestGeneration=workspaceGeneration,method=String(options.method||"GET").toUpperCase(),changesState=method!=="GET"&&method!=="HEAD";
-  let response;
-  try{
-    response=await fetch(path,{...options,credentials:"same-origin",headers:{Accept:"application/json",...(options.body?{"Content-Type":"application/json"}:{}),...(changesState&&state.csrfToken?{"X-CSRF-Token":state.csrfToken}:{}),...(options.headers||{})}});
-  }catch(cause){
-    throw Object.assign(new Error("Could not reach STRATA. Check your connection, then try again."),{code:"NETWORK_ERROR",cause});
-  }
-  const data=await response.json().catch(()=>({}));
-  if(requestGeneration!==workspaceGeneration)throw Object.assign(new Error("This response belongs to an earlier account workspace."),{code:"STALE_WORKSPACE_RESPONSE",stale:true});
-  if(!response.ok){
-    const error=Object.assign(new Error(data.error||"Request failed."),{status:response.status,code:data.code||"REQUEST_FAILED",payload:data});
-    if(response.status===401){error.redirecting=true;window.location.replace("/account.html?mode=login&next=discover");}
-    else if(response.status===402||data.code==="DISCOVERY_ACCESS_REQUIRED"){error.redirecting=true;window.location.replace("/pricing?reason=access-revoked");}
-    throw error;
-  }
-  return data;
-}
-
-function saveErrorDetail(error){
-  if(error?.name==="AbortError")return "The request timed out, so the change was not confirmed. Check the current plan before retrying.";
-  if(error?.code==="NETWORK_ERROR")return "STRATA is offline. Your change was not confirmed; check your connection and retry.";
-  if(error?.status===401)return "Your session ended before this change was saved. Sign in again, then retry.";
-  if(error?.status===403)return "The secure save token expired. Refresh this page, review your changes, and retry.";
-  if(error?.status===409||error?.code==="PLAN_CHANGED")return "Your plan changed in another tab or device. Review the latest copy before retrying.";
-  if([400,422].includes(error?.status)&&error?.message&&error.message!=="Request failed.")return error.message;
-  if(Number(error?.status)>=500)return "STRATA could not save right now. Your changes are still on screen; retry in a moment.";
-  return error?.message&&error.message!=="Request failed."?error.message:"The change was not saved. Review it and retry.";
-}
-function saveRetryMessage(error){return `Couldn't save — Retry. ${saveErrorDetail(error)}`;}
+const api=ApiCore.createClient({fetchImpl:fetch,getCsrfToken:()=>state.csrfToken,getGeneration:()=>workspaceGeneration,redirect:(path)=>window.location.replace(path)});
+const saveRetryMessage=ApiCore.saveRetryMessage;
 function redirectedOrChangedAccount(error){
   if(error?.redirecting)return true;
   if(["ACCOUNT_CHANGED","TRAINING_ACCOUNT_CHANGED"].includes(error?.code)){dashboardAccountChanged();return true;}
@@ -82,86 +51,22 @@ function saveMovementBoard(){
   try{globalThis.localStorage?.setItem(movementBoardStorageKey(),JSON.stringify(state.shortlist));return true;}
   catch{return false;}
 }
-function featureName(value){
-  const raw=String(value||"").replace(/^#/,"");
-  if(Object.hasOwn(FEATURE_CONFIG,raw))return raw;
-  return Object.keys(FEATURE_CONFIG).find((name)=>FEATURE_CONFIG[name].panelId===raw)||null;
-}
-function featureFromLocation(){
-  const raw=String(globalThis.location?.hash||"").replace(/^#/,"");
-  try{return featureName(decodeURIComponent(raw));}catch{return featureName(raw);}
-}
-function featurePanel(name){const config=FEATURE_CONFIG[name];return config?el(config.panelId):null;}
-function featureHash(name){return `#${FEATURE_CONFIG[name].panelId}`;}
-function updateFeatureHistory(name,mode){
-  if(mode!=="push"&&mode!=="replace")return;
-  const hash=featureHash(name);
-  if(String(globalThis.location?.hash||"")===hash)return;
-  const method=mode==="push"?"pushState":"replaceState";
-  globalThis.history?.[method]?.({feature:name},"",hash);
-}
-function activateFeature(value,{focus=false,scroll=false,smooth=false,announce=false,historyMode="none"}={}){
-  const name=featureName(value)||FEATURE_DEFAULT,config=FEATURE_CONFIG[name],panel=featurePanel(name);
-  if(!panel)return false;
-  state.activeFeature=name;
-  for(const candidate of Object.keys(FEATURE_CONFIG)){
-    const candidatePanel=featurePanel(candidate);
-    if(candidatePanel)candidatePanel.hidden=candidate!==name;
+const toastController=NavigationCore.createToastController(el("toast"));
+function showToast(message){toastController.show(message);}
+function hideToast(){toastController.hide();}
+const featureNavigation=NavigationCore.createFeatureNavigation({
+  config:FEATURE_CONFIG,defaultFeature:FEATURE_DEFAULT,state,document,window,
+  onDestinationChange:hideToast,
+  onActivate:(name)=>{
+    if(state.user&&["recommendations","library","battle"].includes(name))void refreshCommunityRatings().catch(()=>{});
+    if(state.user&&name==="community"&&!state.communityLoaded&&!state.communityLoading)void loadCommunityPlans({reset:true});
   }
-  for(const link of document.querySelectorAll("[data-feature-target]")){
-    const active=featureName(link.dataset.featureTarget)===name;
-    link.classList.toggle("active",active);
-    link.setAttribute?.("aria-controls",FEATURE_CONFIG[featureName(link.dataset.featureTarget)]?.panelId||"");
-    link.setAttribute?.("aria-expanded",String(active));
-    if(link.classList.contains("feature-block")||link.classList.contains("destination-link")){
-      if(active)link.setAttribute?.("aria-current","location");
-      else link.removeAttribute?.("aria-current");
-    }
-  }
-  document.body.dataset.activeFeature=name;
-  updateFeatureHistory(name,historyMode);
-  if(announce&&el("featureStatus"))el("featureStatus").textContent=`${config.label} workspace opened.`;
-  if(state.user&&["recommendations","library","battle"].includes(name))void refreshCommunityRatings().catch(()=>{});
-  if(state.user&&name==="community"&&!state.communityLoaded&&!state.communityLoading)void loadCommunityPlans({reset:true});
-  if(scroll||focus){
-    const move=()=>{
-      const reduceMotion=window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-      if(scroll)panel.scrollIntoView?.({behavior:smooth&&!reduceMotion?"smooth":"instant",block:"start"});
-      if(focus)el(config.headingId)?.focus?.({preventScroll:true});
-    };
-    if(typeof globalThis.requestAnimationFrame==="function")globalThis.requestAnimationFrame(move);else setTimeout(move,0);
-  }
-  return true;
-}
-function initializeFeatureNavigation(){
-  const requested=featureFromLocation();
-  activateFeature(requested||FEATURE_DEFAULT,{scroll:Boolean(requested),historyMode:"none"});
-}
-let featureHistoryQueued=false;
-function restoreFeatureFromHistory(){
-  if(featureHistoryQueued)return;
-  featureHistoryQueued=true;
-  Promise.resolve().then(()=>{
-    featureHistoryQueued=false;
-    const rawHash=String(globalThis.location?.hash||"").replace(/^#/,"");
-    if(rawHash==="featureHub")return;
-    const requested=featureFromLocation();
-    if(rawHash&&!requested)return;
-    activateFeature(requested||FEATURE_DEFAULT,{scroll:Boolean(requested)});
-  });
-}
-window.addEventListener?.("popstate",restoreFeatureFromHistory);
-window.addEventListener?.("hashchange",restoreFeatureFromHistory);
+});
+function featureName(value){return featureNavigation.featureName(value);}
+function activateFeature(value,options={}){return featureNavigation.activate(value,options);}
+function initializeFeatureNavigation(){return featureNavigation.initialize();}
 const round=Core.round;
 function aggregateFor(id){return state.aggregate.get(id)||null;}
-function communitySummary(id){
-  const item=aggregateFor(id),count=Math.max(0,Number.parseInt(item?.rating_count,10)||0),overall=Number(item?.overall);
-  if(!count||!Number.isFinite(overall))return {count:0,hasRatings:false,score:"",label:"Not rated yet",attribution:"No Strata+ ratings yet"};
-  const score=(Math.min(5,Math.max(1,overall))*2).toFixed(1);
-  return {count,hasRatings:true,score,label:`${score}/10 · ${count} rating${count===1?"":"s"}`,attribution:`Rated by ${count} Strata+ user${count===1?"":"s"}`};
-}
-function communityLabel(id){return communitySummary(id).label;}
-function ratingAverage(value){const number=Number(value);return Number.isFinite(number)?number.toFixed(1):"—";}
 const setupLabel=Core.setupLabel;
 const resistanceProfile=Core.resistanceProfile;
 const practicality=Core.practicality;
@@ -171,247 +76,20 @@ function scoreAdjustment(exercise){return Core.scoreAdjustment(exercise,state.me
 function personalResult(exercise){return Core.personalResult(exercise,state.preferences);}
 function alternativesFor(exercise){return Core.alternativesFor(exercise,state.exercises,state.preferences,4);}
 
-function profileReason(result){return result.reasons.length?result.reasons.join(", "):"strong all-around fit";}
-function buildRecommendations(){state.recommendations=state.exercises.map((exercise)=>({exercise,result:personalResult(exercise)})).filter((item)=>item.result.eligible).sort((a,b)=>b.result.match-a.result.match||b.exercise.score-a.exercise.score).slice(0,8);}
-function personalLabel(result,{long=false}={}){return result.eligible?`${result.match}% personal match`:long?`Profile mismatch — ${profileReason(result)}`:"Profile mismatch";}
+const catalog=CatalogCore.createCatalog({
+  state,core:Core,labels:GROUP_LABELS,preferenceOptions:PREFERENCE_OPTIONS,limitationOptions:LIMITATION_OPTIONS,movementBoardLimit:MOVEMENT_BOARD_LIMIT,
+  desktopPageSize:EXPLORER_DESKTOP_PAGE_SIZE,mobilePageSize:EXPLORER_MOBILE_PAGE_SIZE,ratingsRefreshInterval:RATINGS_REFRESH_MIN_INTERVAL_MS,
+  document,window,element:el,escapeHtml,exerciseById,titleCase,personalResult,aggregateFor,api,getGeneration:()=>workspaceGeneration,saveMovementBoard,showToast,
+  openDetail:(...args)=>openDetail(...args),openComparison:(...args)=>openComparison(...args)
+});
+const {communityLabel,communitySummary,explorerPageSize,movementBoardButton,personalLabel,profileReason,populateFilters,ratingAverage,readBattleBuilder,refreshCommunityRatings,renderCommunityViews,renderCompareTray,renderExplorer,renderMovementBoard,renderProfile,renderRecommendations,resetExplorerWindow,toggleCompare,toggleMovementBoard}=catalog;
 
-function choiceMarkup(name,value,label,checked){return `<label class="choice-pill"><input type="checkbox" name="${name}" value="${escapeHtml(value)}" ${checked?"checked":""}/><span>${escapeHtml(label)}</span></label>`;}
-function renderProfile(){
-  el("goalSelect").value=state.preferences.goal;el("levelSelect").value=state.preferences.level;el("daysInput").value=state.preferences.days;
-  const equipment=[...new Set(state.exercises.map((exercise)=>exercise.equipment))];
-  el("equipmentChoices").innerHTML=equipment.map((value)=>choiceMarkup("equipment",value,value,state.preferences.equipment.includes(value))).join("");
-  el("preferenceChoices").innerHTML=Object.entries(PREFERENCE_OPTIONS).map(([value,label])=>choiceMarkup("preferences",value,label,state.preferences.preferences.includes(value))).join("");
-  el("limitationChoices").innerHTML=Object.entries(LIMITATION_OPTIONS).map(([value,label])=>choiceMarkup("limitations",value,label,state.preferences.limitations.includes(value))).join("");
-  el("profileStatus").textContent="Saved";
-  renderRankingLens();
-}
-
-function scoreButton(exercise){return `<button class="score-button" data-open-detail="${exercise.id}" type="button" aria-label="Open transparent FitScore for ${escapeHtml(exercise.name)}"><strong>${exercise.score}</strong><span>FitScore</span></button>`;}
-function compareButton(exercise){const active=state.compare.includes(exercise.id);return `<button class="${active?"active":""}" data-toggle-compare="${exercise.id}" type="button" aria-pressed="${active}" aria-label="${active?"Remove":"Add"} ${escapeHtml(exercise.name)} ${active?"from":"to"} comparison">${active?"Selected ✓":"Compare +"}</button>`;}
-function movementBoardButton(exercise,{compact=false}={}){
-  const active=state.shortlist.includes(exercise.id),label=active?"Saved":"Save";
-  return `<button class="movement-save${active?" is-saved":""}${compact?" is-compact":""}" data-toggle-shortlist="${exercise.id}" type="button" aria-pressed="${active}" aria-label="${active?"Remove":"Save"} ${escapeHtml(exercise.name)} ${active?"from":"to"} your decision board"><span aria-hidden="true">${active?"✓":"+"}</span><b>${label}</b></button>`;
-}
-
-function renderRankingLens(){
-  if(!state.preferences||!el("rankingLensItems"))return;
-  const goal={hypertrophy:"Hypertrophy",strength:"Strength",balanced:"Balanced","time-efficient":"Time-efficient"}[state.preferences.goal]||titleCase(state.preferences.goal);
-  const constraints=state.preferences.limitations?.length?`${state.preferences.limitations.length} constraint${state.preferences.limitations.length===1?"":"s"}`:"No exclusions";
-  const items=[goal,state.preferences.level,`${state.preferences.days} days`,`${state.preferences.equipment.length} equipment types`,constraints];
-  el("rankingLensItems").innerHTML=items.map((item)=>`<li>${escapeHtml(item)}</li>`).join("");
-}
-
-function renderMovementBoard({message=""}={}){
-  if(!el("movementBoardList"))return;
-  state.shortlist=Core.normalizeShortlist(state.shortlist,state.exercises,MOVEMENT_BOARD_LIMIT);
-  const exercises=state.shortlist.map(exerciseById).filter(Boolean),count=exercises.length;
-  el("movementBoardCapacity").textContent=`${count} / ${MOVEMENT_BOARD_LIMIT} saved`;
-  el("savedCollectionLabel").textContent=`Saved · ${count}`;
-  el("clearMovementBoard").hidden=!count;
-  el("compareMovementBoard").disabled=count<2;
-  const filled=exercises.map((exercise,index)=>{
-    const personal=personalResult(exercise),group=GROUP_LABELS[exercise.group]||titleCase(exercise.group),fit=personal.eligible?`${personal.match}% match`:"Excluded";
-    return `<article class="movement-board-item"><button class="movement-board-open" data-open-detail="${exercise.id}" type="button" aria-label="Inspect ${escapeHtml(exercise.name)}, ${escapeHtml(group)}, ${escapeHtml(exercise.equipment)}, ${escapeHtml(fit)}"><span>${String(index+1).padStart(2,"0")}</span><span><strong>${escapeHtml(exercise.name)}</strong><small>${escapeHtml(group)} · ${escapeHtml(exercise.equipment)}</small></span><b class="${personal.eligible?"":"is-excluded"}">${escapeHtml(fit)}</b></button><button class="movement-board-remove" data-toggle-shortlist="${exercise.id}" type="button" aria-label="Remove ${escapeHtml(exercise.name)} from your decision board">×</button></article>`;
-  }).join("");
-  const openSlots=Array.from({length:MOVEMENT_BOARD_LIMIT-count},(_,index)=>`<div class="movement-board-slot" aria-hidden="true"><span>${String(count+index+1).padStart(2,"0")}</span><small>Open slot</small></div>`).join("");
-  el("movementBoardList").innerHTML=count?filled+openSlots:'<p class="movement-board-empty">Save an exercise from a recommendation, the library, or its detail view.</p>';
-  const status=message||(count===0?"Nothing saved yet.":count===1?"One movement saved. Add another to compare.":`${count} movements saved. Ready to compare.`);
-  el("movementBoardStatus").textContent=status;
-}
-
-function toggleMovementBoard(id){
-  const exercise=exerciseById(id);if(!exercise)return false;
-  const index=state.shortlist.indexOf(id),removing=index>=0;
-  if(removing)state.shortlist.splice(index,1);
-  else if(state.shortlist.length>=MOVEMENT_BOARD_LIMIT){showToast(`Your decision board holds ${MOVEMENT_BOARD_LIMIT} movements. Remove one before saving another.`);return false;}
-  else state.shortlist.push(id);
-  const persisted=saveMovementBoard(),message=removing?`${exercise.name} removed from your decision board.`:`${exercise.name} saved${persisted?" on this device":" for this visit"}.`;
-  renderMovementBoard({message});renderRecommendations();renderExplorer();
-  if(state.activeExercise===id&&el("detailDialog")?.open)openDetail(id);
-  showToast(message);return true;
-}
-
-function renderRecommendations(){
-  buildRecommendations();
-  const goal={hypertrophy:"Hypertrophy selection",strength:"Strength skill",balanced:"Balanced","time-efficient":"Time-efficient setup"}[state.preferences.goal]||titleCase(state.preferences.goal);
-  el("recommendationSummary").textContent=`Rules-based ${goal.toLowerCase()} ranking · ${state.preferences.equipment.length} equipment types · ${state.preferences.days} days`;
-  el("recommendationGrid").innerHTML=state.recommendations.length?state.recommendations.map(({exercise,result},index)=>`<article class="recommend-card" data-rank="${String(index+1).padStart(2,"0")}"><div class="card-topline"><span class="match-pill">${result.match}% personal match</span><div class="card-tools">${movementBoardButton(exercise,{compact:true})}${scoreButton(exercise)}</div></div><h3>${escapeHtml(exercise.name)}</h3><span class="target">${escapeHtml(GROUP_LABELS[exercise.group])} / ${escapeHtml(exercise.sub)}</span><p>${escapeHtml(profileReason(result))}. ${escapeHtml(exercise.why)}</p><div class="mini-meta"><span>${escapeHtml(exercise.equipment)}</span><span>${escapeHtml(exercise.level)}</span></div><div class="community-line"><span>Community rating</span><strong>${escapeHtml(communityLabel(exercise.id))}</strong></div><div class="mini-actions"><button data-open-detail="${exercise.id}" type="button" aria-label="Why ${escapeHtml(exercise.name)} ranks here">Why it ranks</button>${compareButton(exercise)}<a href="/planner.html?add=${encodeURIComponent(exercise.id)}" aria-label="Add ${escapeHtml(exercise.name)} to weekly plan">Add to plan</a></div></article>`).join(""):`<div class="loading-card recommendation-empty"><p>No exercise matches all saved equipment and constraints.</p><a class="small-button" href="#profile" data-feature-target="profile">Tune my ranking →</a></div>`;
-}
-
-function populateFilters(){
-  const groups=[...new Set(state.exercises.map((exercise)=>exercise.group))];
-  const equipment=[...new Set(state.exercises.map((exercise)=>exercise.equipment))];
-  const patterns=[...new Set(state.exercises.map((exercise)=>exercise.pattern))];
-  el("groupFilter").innerHTML=`<option value="all">All muscles</option>${groups.map((value)=>`<option value="${value}">${escapeHtml(GROUP_LABELS[value]||titleCase(value))}</option>`).join("")}`;
-  el("equipmentFilter").innerHTML=`<option value="all">All equipment</option>${equipment.map((value)=>`<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join("")}`;
-  el("patternFilter").innerHTML=`<option value="all">All patterns</option>${patterns.map((value)=>`<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join("")}`;
-}
-
-function discoveryResults(){
-  return Core.filterExercises(state.exercises,{collection:state.collection,saved:state.shortlist,query:state.query,group:state.group,equipment:state.equipment,pattern:state.pattern,level:state.level,sort:state.sort},state.preferences,aggregateFor);
-}
-
-function explorerPageSize(){return window.matchMedia?.("(max-width: 680px)")?.matches?EXPLORER_MOBILE_PAGE_SIZE:EXPLORER_DESKTOP_PAGE_SIZE;}
-function resetExplorerWindow(){state.explorerLimit=explorerPageSize();}
-
-function renderExplorer(){
-  const items=discoveryResults(),visibleItems=items.slice(0,state.explorerLimit),remaining=Math.max(0,items.length-visibleItems.length),nextCount=Math.min(explorerPageSize(),remaining);
-  el("resultCount").textContent=items.length;el("resultNoun").textContent=items.length===1?"exercise":"exercises";el("exerciseGrid").hidden=!items.length;el("emptyState").hidden=Boolean(items.length);
-  const savedEmpty=!items.length&&state.collection==="saved"&&!state.shortlist.length;
-  el("emptyStateTitle").textContent=savedEmpty?"Your decision board is empty.":"No exercise matches every filter.";
-  el("emptyStateDetail").textContent=savedEmpty?"Save up to four movements from recommendations or the library, then return here to review them together.":"Try clearing the search or one of the exercise filters.";
-  el("exerciseGrid").innerHTML=visibleItems.map((exercise,index)=>{const personal=personalResult(exercise);return `<article class="exercise-card" data-result-index="${index}"><div class="card-topline"><span class="match-pill ${personal.eligible?"":"is-excluded"}">${escapeHtml(personalLabel(personal))}</span><div class="card-tools">${movementBoardButton(exercise,{compact:true})}${scoreButton(exercise)}</div></div><h3>${escapeHtml(exercise.name)}</h3><span class="target">${escapeHtml(GROUP_LABELS[exercise.group]||titleCase(exercise.group))} / ${escapeHtml(exercise.sub)}</span><p>${escapeHtml(exercise.why)}</p><div class="mini-meta"><span>${escapeHtml(exercise.equipment)}</span><span>${escapeHtml(exercise.pattern)}</span><span>${escapeHtml(exercise.level)}</span></div><div class="community-line"><span>Community rating</span><strong>${escapeHtml(communityLabel(exercise.id))}</strong></div><div class="mini-actions"><button data-open-detail="${exercise.id}" type="button" aria-label="Inspect ${escapeHtml(exercise.name)}">Inspect</button>${compareButton(exercise)}<a href="/planner.html?add=${encodeURIComponent(exercise.id)}" aria-label="Add ${escapeHtml(exercise.name)} to weekly plan">Add to plan</a></div></article>`;}).join("")+(!remaining?"":`<div class="explorer-load-more"><p>Showing ${visibleItems.length} of ${items.length} matching exercises</p><button data-load-more-exercises type="button" aria-controls="exerciseGrid">Load ${nextCount} more <span aria-hidden="true">↓</span></button></div>`);
-}
-
-function renderCommunityViews(){
-  if(!state.exercises.length||!state.preferences||state.ratingSaving.size)return;
-  renderRecommendations();renderExplorer();
-  if(state.activeExercise&&el("detailDialog")?.open)openDetail(state.activeExercise);
-  if(state.compare.length>=2&&!el("battleResults")?.hidden)openComparison();
-}
-
-async function refreshCommunityRatings({force=false}={}){
-  if(!state.user||!state.exercises.length)return false;
-  if(state.ratingsRefreshPromise)return state.ratingsRefreshPromise;
-  if(!force&&Date.now()-state.ratingsRefreshedAt<RATINGS_REFRESH_MIN_INTERVAL_MS)return false;
-  const generation=workspaceGeneration;
-  const refresh=api("/api/ratings/aggregates").then((data)=>{
-    if(generation!==workspaceGeneration)return false;
-    const aggregates=Array.isArray(data.aggregates)?data.aggregates:Array.isArray(data.ratings?.aggregates)?data.ratings.aggregates:[];
-    state.aggregate=new Map(aggregates.map((item)=>[item.exercise_id,item]));
-    state.ratingsRefreshedAt=Date.now();renderCommunityViews();return true;
-  });
-  state.ratingsRefreshPromise=refresh;
-  try{return await refresh;}finally{if(state.ratingsRefreshPromise===refresh)state.ratingsRefreshPromise=null;}
-}
-
-function renderCompareTray(){
-  const exercises=state.compare.map(exerciseById).filter(Boolean);
-  el("compareTray").hidden=!exercises.length;el("compareCount").textContent=`${exercises.length}/4`;el("openCompare").disabled=exercises.length<2;
-  el("compareNames").textContent=exercises.length?exercises.map((exercise)=>exercise.name).join(" vs. "):"Choose 2–4 exercises";
-  renderBattleBuilder();
-}
-
-function battleOptions(selected){
-  const groups=Object.keys(GROUP_LABELS);
-  return `<option value="">Choose an exercise…</option>${groups.map((group)=>`<optgroup label="${escapeHtml(GROUP_LABELS[group])}">${state.exercises.filter((exercise)=>exercise.group===group).sort((a,b)=>b.score-a.score).map((exercise)=>`<option value="${exercise.id}" ${exercise.id===selected?"selected":""}>${escapeHtml(exercise.name)} — ${exercise.score}</option>`).join("")}</optgroup>`).join("")}`;
-}
-
-function renderBattleBuilder(){
-  if(!state.exercises.length)return;
-  el("battleSelects").innerHTML=[0,1,2,3].map((index)=>`<label class="battle-slot">Exercise ${index+1}${index<2?" (required)":" (optional)"}<select data-battle-slot="${index}" ${index<2?"required":""}>${battleOptions(state.compare[index]||"")}</select></label>`).join("");
-  const count=state.compare.length;
-  el("battleStatus").textContent=count<2?`${count}/4 selected · choose at least two`:`${count}/4 selected · ready to compare`;
-}
-
-function readBattleBuilder(){
-  state.compare=[...new Set([...document.querySelectorAll("[data-battle-slot]")].map((select)=>select.value).filter((id)=>exerciseById(id)))].slice(0,4);
-  const count=state.compare.length;
-  el("battleStatus").textContent=count<2?`${count}/4 selected · choose at least two`:`${count}/4 selected · ready to compare`;
-  el("compareTray").hidden=!count;el("compareCount").textContent=`${count}/4`;el("openCompare").disabled=count<2;
-  el("compareNames").textContent=count?state.compare.map((id)=>exerciseById(id).name).join(" vs. "):"Choose 2–4 exercises";
-}
-
-function toggleCompare(id){
-  if(state.compare.includes(id))state.compare=state.compare.filter((item)=>item!==id);
-  else if(state.compare.length<4)state.compare.push(id);
-  else{showToast("Comparison is limited to four exercises.");return;}
-  el("battleResults").hidden=true;renderCompareTray();renderRecommendations();renderExplorer();
-}
-
-function sourceSelection(exercise){
-  const ids=["rom-2023","rom-meta-2021","prescription-2023","progression-acsm","machines-2022","execution-ace","anatomy-openstax"];
-  if(exercise.pattern.includes("Squat")||exercise.pattern.includes("Press"))ids.push("load-2021");
-  return [...new Set(ids)].map((id)=>state.sources.find((source)=>source.id===id)).filter(Boolean);
-}
-
-function metricMarkup(exercise){
-  const weights=factorWeights();
-  return state.methodology.factors.map((factor)=>`<div class="metric-row"><span>${escapeHtml(factor.label)}</span><div class="metric-bar"><i style="width:${exercise.metrics[factor.key]}%"></i></div><strong>${exercise.metrics[factor.key]}</strong><small>${round(exercise.metrics[factor.key]*weights[factor.key]/100,1)} pts</small></div>`).join("");
-}
-
-function ratingOptions(selected){return [1,2,3,4,5].map((value)=>`<option value="${value}" ${Number(selected)===value?"selected":""}>${value} — ${{1:"Low",2:"Below average",3:"Average",4:"Strong",5:"Excellent"}[value]}</option>`).join("");}
-function ratingFormMarkup(exercise,draft=null){
-  const current=draft||state.userRatings.get(exercise.id)||{comfort:3,pump:3,enjoyment:3,stability:3,setup:3,overall:3};
-  return `<form class="rating-form" data-rating-form="${exercise.id}"><div class="rating-grid">${[["comfort","Comfort"],["pump","Pump / target feel"],["enjoyment","Enjoyment"],["stability","Perceived stability"],["setup","Setup ease"],["overall","Overall"]].map(([key,label])=>`<label>${label}<select name="${key}">${ratingOptions(current[key])}</select></label>`).join("")}</div><button class="button button-dark" type="submit">${state.userRatings.has(exercise.id)?"Update my rating":"Save my rating"} <span>→</span></button><p class="rating-save-status" data-rating-status role="status" aria-live="polite" aria-atomic="true"></p></form>`;
-}
-
-function openRatingDraft(id){
-  if(state.activeExercise!==id||!el("detailDialog")?.open)return null;
-  const form=el("detailContent")?.querySelector?.("[data-rating-form]");
-  if(!form||form.dataset?.ratingForm!==id)return null;
-  const draft={};
-  for(const key of ["comfort","pump","enjoyment","stability","setup","overall"]){
-    const field=form.elements?.namedItem?.(key)||form.querySelector?.(`[name="${key}"]`),value=Number(field?.value);
-    if(!Number.isInteger(value)||value<1||value>5)return null;
-    draft[key]=value;
-  }
-  return draft;
-}
-
-function gainsAndLosses(reference,candidate){
-  const result=Core.gainsAndLosses(reference,candidate,state.methodology);
-  return `Gain: ${result.gain} · Trade-off: ${result.loss}`;
-}
-
-function openDetail(id){
-  if(state.ratingSaving.has(id)){showToast("Your rating is still saving. Please wait.");return;}
-  const exercise=exerciseById(id);if(!exercise)return;const ratingDraft=openRatingDraft(id);state.activeExercise=id;
-  const dialog=el("detailDialog");
-  const baseline=weightedBaseline(exercise),adjustment=scoreAdjustment(exercise),personal=personalResult(exercise),aggregate=aggregateFor(id),sources=sourceSelection(exercise),alternatives=alternativesFor(exercise),confidence=state.limited.has(id)?"Limited":"Moderate";
-  const community=communitySummary(id),ownRating=state.userRatings.get(id)||null;
-  const profileHeading=personal.eligible?"Why it fits you":"Why it does not match your profile";
-  const profileSummary=personal.eligible?`<strong>${personal.match}% rules-based match.</strong> ${escapeHtml(profileReason(personal))}.`:`<strong>Excluded by your saved rules.</strong> ${escapeHtml(profileReason(personal))}.`;
-  el("detailContent").innerHTML=`
-    <div class="detail-hero"><div class="dialog-head" style="position:static;padding:0 0 24px;background:transparent;border-color:rgba(255,255,255,.18)"><p class="kicker">Exercise intelligence / ${escapeHtml(GROUP_LABELS[exercise.group]||titleCase(exercise.group))}</p><button class="icon-button" data-close-dialog="detailDialog" type="button" aria-label="Close exercise details">×</button></div><div class="detail-hero-grid"><div><h2 class="detail-title" id="detailTitle">${escapeHtml(exercise.name)}</h2><p>${escapeHtml(exercise.why)}</p><span class="match-pill ${personal.eligible?"":"is-excluded"}">${escapeHtml(personalLabel(personal))}</span></div><div class="detail-score"><strong>${exercise.score}</strong><span>Official FitScore</span></div></div><div class="detail-quick-actions">${movementBoardButton(exercise)}<button data-toggle-compare="${exercise.id}" type="button" aria-pressed="${state.compare.includes(id)}">${state.compare.includes(id)?"Remove from battle":"Add to battle"}</button><button data-scroll-alternatives type="button" aria-controls="alternativeSection">Find alternative ↓</button><a href="/planner.html?add=${encodeURIComponent(id)}">Add to plan <span aria-hidden="true">→</span></a><a href="${exercise.youtube}" target="_blank" rel="noreferrer">YouTube search ↗</a><button data-share-exercise="${exercise.id}" type="button">Share card ↗</button></div></div>
-    <div class="detail-body"><div class="detail-grid"><div>
-      <section class="detail-section"><h3>${profileHeading}</h3><p>${profileSummary} This selection is an editorial rules engine, not an AI prediction or medical recommendation.</p><p><strong>Target:</strong> ${escapeHtml(exercise.sub)} · <strong>Pattern:</strong> ${escapeHtml(exercise.pattern)} · <strong>Equipment:</strong> ${escapeHtml(exercise.equipment)} · <strong>Level:</strong> ${escapeHtml(exercise.level)}</p></section>
-      <section class="detail-section"><h3>FitScore audit</h3><div class="metric-list">${metricMarkup(exercise)}</div><div class="adjustment-row"><strong>Weighted baseline: ${round(baseline,1)}</strong> · Published score: ${exercise.score} · Editorial adjustment: ${adjustment>0?"+":""}${adjustment}.<br/>${escapeHtml(state.methodology.adjustment)}</div><p>${escapeHtml(state.methodology.evidenceNote)}</p></section>
-      <section class="detail-section"><h3>Evidence and boundaries</h3><span class="confidence">${confidence} exercise-specific confidence</span><p><strong>Evidence:</strong> the links below support broad training principles. <strong>STRATA interpretation:</strong> applying those principles to this exact exercise and score is editorial judgment.</p>${sources.map((source)=>`<article class="source-card"><a href="${source.url}" target="_blank" rel="noreferrer">${escapeHtml(source.title)} ↗</a><span>${escapeHtml(source.type)} · ${escapeHtml(source.publisher)} · ${source.year}</span><p><strong>Supports:</strong> ${escapeHtml(source.supports)}</p><p class="source-boundary"><strong>Does not support:</strong> ${escapeHtml(source.doesNotSupport)}</p></article>`).join("")}</section>
-    </div><aside>
-      <section class="detail-section"><h3>Practical decision</h3><p><strong>Stability:</strong> ${exercise.metrics.stability}/100 · <strong>Effective range:</strong> ${exercise.metrics.range}/100</p><p><strong>Resistance profile:</strong> ${escapeHtml(resistanceProfile(exercise))}</p><p><strong>Progression:</strong> ${exercise.metrics.progression}/100 · <strong>Setup:</strong> ${escapeHtml(setupLabel(exercise))}</p><p><strong>Editorial practicality:</strong> ${practicality(exercise)}/100</p><h4>Programming starting point</h4><p>${escapeHtml(exercise.sets)} sets · ${escapeHtml(exercise.reps)} reps · ${escapeHtml(exercise.rest)} rest</p><h4>Technique cues</h4><ul>${exercise.cues.map((cue)=>`<li>${escapeHtml(cue)}</li>`).join("")}</ul><h4>Consideration</h4><p>${escapeHtml(exercise.caution)}</p></section>
-      <section class="detail-section" id="alternativeSection"><h3 id="alternativeTitle" tabindex="-1">Find an alternative</h3><div class="alternative-list">${alternatives.length?alternatives.map(({exercise:candidate,match})=>`<div class="alternative-item"><div><strong>${escapeHtml(candidate.name)}</strong><small>${escapeHtml(gainsAndLosses(exercise,candidate))}</small></div><span>${match}%</span><div class="alternative-actions"><button data-open-detail="${candidate.id}" type="button" aria-label="Open ${escapeHtml(candidate.name)} details">Open</button><a href="/planner.html?add=${encodeURIComponent(candidate.id)}" aria-label="Add ${escapeHtml(candidate.name)} to weekly plan">Add to plan</a></div></div>`).join(""):"<p>No eligible same-target alternative under your saved profile.</p>"}</div><p>Match percentages are transparent editorial similarity scores based on target, pattern, resistance profile, equipment, skill, and factor profile.</p></section>
-      <section class="detail-section"><h3>Community score</h3><div class="rating-summary"><strong>${escapeHtml(community.hasRatings?`${community.score}/10`:community.label)}</strong><span>${escapeHtml(community.attribution)}</span></div>${community.hasRatings?`<div class="community-breakdown">${[["comfort","Comfort"],["pump","Pump"],["enjoyment","Enjoyment"],["stability","Stability"],["setup","Setup"],["overall","Overall"]].map(([key,label])=>`<span>${label}<b>${ratingAverage(aggregate[key])}/5</b></span>`).join("")}</div>`:""}${ownRating?`<p><strong>Your rating:</strong> ${Number(ownRating.overall)}/5 overall</p>`:"<p>Be the first Strata+ user to rate this exercise.</p>"}<p>Your rating is tied to your account and replaces your prior rating. It never changes the official FitScore.</p>${ratingFormMarkup(exercise,ratingDraft)}</section>
-    </aside></div></div>`;
-  openDialog(dialog,dialog.querySelector?.('[data-close-dialog="detailDialog"]'));
-}
-
-function comparisonWinner(exercises){
-  const result=Core.comparisonRecommendation(exercises,state.preferences);
-  return {winner:result.winner,text:result.reason||result.error};
-}
-
-function bestIds(exercises,value){
-  const scores=exercises.map((exercise)=>({id:exercise.id,value:Number.parseFloat(value(exercise))})).filter((item)=>Number.isFinite(item.value));
-  if(!scores.length)return new Set();
-  const top=Math.max(...scores.map((item)=>item.value));return new Set(scores.filter((item)=>item.value===top).map((item)=>item.id));
-}
-function tableRow(label,exercises,value,{winner=false}={}){const leaders=winner?bestIds(exercises,value):new Set();return `<tr><th scope="row">${escapeHtml(label)}</th>${exercises.map((exercise)=>{const leads=leaders.has(exercise.id);return `<td class="${leads?"winner":""}">${leads?'<span class="sr-only">Best in this comparison. </span>':""}${value(exercise)}</td>`;}).join("")}</tr>`;}
-function openComparison(){
-  const exercises=state.compare.map(exerciseById).filter(Boolean);
-  if(exercises.length<2){el("battleStatus").textContent="Choose at least two different exercises first.";el("battleResults").hidden=true;showToast("Choose at least two exercises.");return;}
-  const verdict=comparisonWinner(exercises);
-  const rows=[
-    tableRow("Official FitScore",exercises,(exercise)=>`${exercise.score}/100`,{winner:true}),
-    tableRow("Personal match",exercises,(exercise)=>personalResult(exercise).eligible?`${personalResult(exercise).match}%`:"Excluded by profile",{winner:true}),
-    tableRow("Community rating",exercises,(exercise)=>escapeHtml(communityLabel(exercise.id))),
-    tableRow("Primary target",exercises,(exercise)=>escapeHtml(exercise.sub)),
-    tableRow("Stability",exercises,(exercise)=>`${exercise.metrics.stability}/100`,{winner:true}),
-    tableRow("Effective range",exercises,(exercise)=>`${exercise.metrics.range}/100`,{winner:true}),
-    tableRow("Target stimulus",exercises,(exercise)=>`${exercise.metrics.stimulus}/100`,{winner:true}),
-    tableRow("Progression",exercises,(exercise)=>`${exercise.metrics.progression}/100`,{winner:true}),
-    tableRow("Resistance profile",exercises,(exercise)=>escapeHtml(resistanceProfile(exercise))),
-    tableRow("Setup",exercises,(exercise)=>escapeHtml(setupLabel(exercise))),
-    tableRow("Equipment",exercises,(exercise)=>escapeHtml(exercise.equipment)),
-    tableRow("Practicality",exercises,(exercise)=>`${practicality(exercise)}/100`,{winner:true}),
-    tableRow("Starting point",exercises,(exercise)=>`${escapeHtml(exercise.sets)} × ${escapeHtml(exercise.reps)}<br>${escapeHtml(exercise.rest)} rest`),
-    tableRow("STRATA interpretation",exercises,(exercise)=>escapeHtml(exercise.why)),
-    tableRow("Add to plan",exercises,(exercise)=>`<a class="small-button" href="/planner.html?add=${encodeURIComponent(exercise.id)}">Add to plan</a>`)
-  ];
-  const columnHeaders=exercises.map((exercise)=>`<th scope="col"><strong>${escapeHtml(exercise.name)}</strong><span>${escapeHtml(exercise.sub)}</span></th>`).join("");
-  el("battleResults").innerHTML=`<div class="battle-results-head"><h3>Side-by-side result</h3><div class="battle-results-actions"><button class="small-button" data-share-battle type="button">Share card ↗</button><a class="small-button" href="/planner.html">Open planner ↗</a></div></div><div class="battle-verdict"><strong>${verdict.winner?`${escapeHtml(verdict.winner.name)} leads`:"No universal winner"}</strong><p>${escapeHtml(verdict.text)}</p></div><div class="comparison-scroll" role="region" aria-label="Exercise comparison table. Scroll horizontally to see every exercise." tabindex="0"><table class="comparison-table"><caption class="sr-only">Exercise comparison across FitScore, targets, mechanics, progression, setup, equipment, and practicality</caption><thead><tr><th scope="col">Measure</th>${columnHeaders}</tr></thead><tbody>${rows.join("")}</tbody></table></div><p class="field-note">Highlighted cells lead this selected set on that factor. Rankings are editorial and do not predict individual results.</p>`;
-  el("battleResults").hidden=false;el("battleStatus").textContent=`Compared ${exercises.length} exercises.`;
-}
+const detail=DetailCore.createDetail({
+  state,core:Core,labels:GROUP_LABELS,element:el,escapeHtml,exerciseById,titleCase,round,factorWeights,weightedBaseline,scoreAdjustment,personalResult,alternativesFor,
+  profileReason,personalLabel,movementBoardButton,aggregateFor,communitySummary,communityLabel,ratingAverage,setupLabel,resistanceProfile,practicality,
+  openDialog:(...args)=>openDialog(...args),showToast
+});
+const {comparisonWinner,openComparison,openDetail}=detail;
 
 const dialogReturnFocus=new WeakMap();
 function syncDialogState(){document.body.classList.toggle("dialog-open",[...document.querySelectorAll("dialog")].some((dialog)=>dialog.open));}
@@ -430,109 +108,12 @@ function openDialog(dialog,initialFocus){
   syncDialogState();queueDialogFocus(initialFocus||dialog.querySelector?.("[data-close-dialog],button,[href],input,select,textarea"));
 }
 function closeDialog(id){const dialog=el(id);if(dialog?.open)dialog.close();syncDialogState();restoreDialogFocus(dialog);}
-let toastTimer;function showToast(message){const toast=el("toast");toast.textContent=message;toast.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove("show"),2200);}
 
-function normalizeCommunityPlan(record){
-  if(!record||typeof record!=="object")return null;
-  const id=String(record.id||"").trim();if(!id)return null;
-  try{
-    return{id,title:String(record.title||"Community week").trim().slice(0,80)||"Community week",description:String(record.description||"").trim().slice(0,240),authorName:String(record.authorName||"STRATA member").trim().slice(0,80)||"STRATA member",createdAt:record.createdAt,updatedAt:record.updatedAt,plan:Monthly.normalizeWeeklyPlan(record.plan,state.exercises)};
-  }catch{return null;}
-}
-function communityPlanStats(record){
-  const days=Monthly.DAYS.map((day)=>record.plan.days[day]||[]),exercises=days.reduce((total,items)=>total+items.length,0),trainingDays=days.filter((items)=>items.length).length;
-  return{exercises,trainingDays};
-}
-function communityExerciseName(item){return exerciseById(item.exerciseId)?.name||titleCase(item.exerciseId);}
-function communityPlanSearchText(record){
-  const names=Monthly.DAYS.flatMap((day)=>record.plan.days[day]||[]).map(communityExerciseName);
-  return[record.title,record.description,record.authorName,...names].join(" ").toLocaleLowerCase();
-}
-function communityDateLabel(value){
-  if(value===null||value===undefined||value==="")return "Shared plan";
-  const numeric=Number(value),date=new Date(Number.isFinite(numeric)&&numeric>0?numeric:value);
-  return Number.isNaN(date.getTime())?"Shared plan":`Shared ${new Intl.DateTimeFormat(undefined,{month:"short",year:"numeric"}).format(date)}`;
-}
-function sharedPlanDayMarkup(day,plan){
-  const items=plan.days[day]||[],isRest=(plan.restDays||[plan.restDay]).includes(day);
-  const list=items.map((item)=>`<li><strong>${escapeHtml(communityExerciseName(item))}</strong><small>${Number(item.sets)} sets × ${escapeHtml(item.reps)}</small></li>`).join("");
-  return `<section class="shared-plan-day ${isRest?"is-rest":""}" aria-label="${escapeHtml(day)}: ${isRest?"recovery day":`${items.length} exercise${items.length===1?"":"s"}`}"><h4>${escapeHtml(day.slice(0,3))}<span>${isRest?"Recovery":`${items.length} exercise${items.length===1?"":"s"}`}</span></h4>${isRest?"<p>REST / RECOVERY</p>":items.length?`<ul>${list}</ul>`:"<p>Open training day</p>"}</section>`;
-}
-function communityPlanCard(record,index){
-  const stats=communityPlanStats(record),applied=state.communityAppliedId===record.id&&state.communityAppliedUpdatedAt===Number(record.updatedAt);
-  return `<article class="community-plan-card" data-community-plan="${escapeHtml(record.id)}"><div class="community-plan-card-head"><span class="community-plan-index">${String(index+1).padStart(2,"0")}</span><span class="community-plan-author">By ${escapeHtml(record.authorName)}</span></div><h3>${escapeHtml(record.title)}</h3><p class="community-plan-description">${escapeHtml(record.description||"A complete seven-day workout plan shared with the STRATA community.")}</p><div class="community-plan-meta"><span>${stats.trainingDays} training day${stats.trainingDays===1?"":"s"}</span><span>${stats.exercises} exercise${stats.exercises===1?"":"s"}</span><span>${escapeHtml(communityDateLabel(record.updatedAt||record.createdAt))}</span></div><details class="shared-plan-preview"><summary aria-label="Preview all 7 days of ${escapeHtml(record.title)} by ${escapeHtml(record.authorName)}">Preview all 7 days</summary><div class="shared-plan-week">${Monthly.DAYS.map((day)=>sharedPlanDayMarkup(day,record.plan)).join("")}</div></details><div class="community-plan-card-actions"><button class="button button-dark" data-apply-community="${escapeHtml(record.id)}" data-applied="${applied}" type="button" aria-label="${applied?"This exact version is already your weekly plan":`Use ${escapeHtml(record.title)} by ${escapeHtml(record.authorName)} as my weekly plan`}" ${applied?"disabled":""}>${applied?"Already using this plan":"Use this week"} <span aria-hidden="true">${applied?"✓":"→"}</span></button><a class="small-button" href="/planner.html">Open my plan <span aria-hidden="true">→</span></a></div></article>`;
-}
-function renderCommunityPlans(){
-  const grid=el("communityPlanGrid"),status=el("communityPlanStatus"),query=state.communityQuery.trim().toLocaleLowerCase();
-  grid.setAttribute?.("aria-busy",String(state.communityLoading));
-  if(state.communityLoading&&!state.communityPlans.length){grid.innerHTML='<div class="community-plan-state"><span class="community-state-mark" aria-hidden="true">↻</span><strong>Loading shared plans</strong><p>Getting the latest plans from the community.</p></div>';status.textContent="Loading shared plans…";el("communityLoadMore").hidden=true;return;}
-  const plans=query?state.communityPlans.filter((record)=>communityPlanSearchText(record).includes(query)):state.communityPlans;
-  if(!plans.length){
-    const failed=Boolean(state.communityError),filtered=Boolean(query&&state.communityPlans.length);
-    grid.innerHTML=`<div class="community-plan-state"><span class="community-state-mark" aria-hidden="true">${failed?"!":filtered?"⌕":"+"}</span><strong>${failed?"Plans could not load":filtered?"No matching plans":"No plans shared yet"}</strong><p>${failed?escapeHtml(state.communityError):filtered?"Try another plan name, creator, or exercise.":"When a member shares a week from their planner, it will appear here."}</p>${failed?'<button class="small-button" data-community-retry type="button">Try again</button>':""}</div>`;
-    status.textContent=failed?"Shared plans are temporarily unavailable.":filtered?"No loaded plans match your search.":"No community plans have been published yet.";
-  }else{
-    grid.innerHTML=plans.map((record,index)=>communityPlanCard(record,index)).join("");
-    status.textContent=state.communityError?`${plans.length} loaded plan${plans.length===1?"":"s"} shown · more plans could not load.`:`${plans.length} plan${plans.length===1?"":"s"} shown${query?` from ${state.communityPlans.length} loaded`:""}.`;
-  }
-  el("communityLoadMore").hidden=state.communityLoading||state.communityNextOffset===null;
-}
-function communityViewState(){
-  const cards=[...el("communityPlanGrid").querySelectorAll("[data-community-plan]")];
-  return{openIds:new Set(cards.filter((card)=>card.querySelector("details")?.open).map((card)=>card.dataset.communityPlan)),focusLoadMore:document.activeElement===el("communityLoadMore")};
-}
-function restoreCommunityView(view){
-  for(const card of el("communityPlanGrid").querySelectorAll("[data-community-plan]"))if(view.openIds.has(card.dataset.communityPlan)){const details=card.querySelector("details");if(details)details.open=true;}
-  if(view.focusLoadMore&&!el("communityLoadMore").hidden)el("communityLoadMore").focus?.();
-}
-async function loadCommunityPlans({reset=false}={}){
-  if(state.communityLoading)return;
-  const generation=workspaceGeneration;
-  const view=communityViewState();
-  if(reset){state.communityPlans=[];state.communityNextOffset=0;state.communityError="";state.communityLoaded=false;}
-  if(state.communityNextOffset===null&&!reset)return;
-  const offset=reset?0:state.communityNextOffset;
-  state.communityLoading=true;
-  if(!state.communityPlans.length)renderCommunityPlans();
-  else{el("communityPlanGrid").setAttribute?.("aria-busy","true");el("communityLoadMore").disabled=true;el("communityPlanStatus").textContent="Loading more shared plans…";}
-  try{
-    const data=await api(`/api/community-plans?limit=${COMMUNITY_PAGE_SIZE}&offset=${offset}`),incoming=(Array.isArray(data.plans)?data.plans:[]).map(normalizeCommunityPlan).filter(Boolean),plansById=new Map(state.communityPlans.map((plan)=>[plan.id,plan]));
-    if(generation!==workspaceGeneration)return;
-    incoming.forEach((plan)=>plansById.set(plan.id,plan));state.communityPlans=[...plansById.values()];
-    const rawNext=Number(data.pagination?.nextOffset);state.communityNextOffset=Number.isSafeInteger(rawNext)&&rawNext>offset?rawNext:null;state.communityError="";
-  }catch(error){if(generation===workspaceGeneration)state.communityError=error.message||"Please check your connection and try again.";}
-  finally{if(generation===workspaceGeneration){state.communityLoading=false;state.communityLoaded=true;el("communityLoadMore").disabled=false;renderCommunityPlans();restoreCommunityView(view);}}
-}
-function openCommunityApplyDialog(id){
-  const record=state.communityPlans.find((plan)=>plan.id===String(id));if(!record)return;
-  const dialog=el("communityApplyDialog"),incoming=communityPlanStats(record),currentCount=weeklyPlanCount(state.weeklyPlan);
-  state.communityPendingId=record.id;el("communityApplyError").hidden=true;el("communityApplyError").textContent="";
-  el("communityApplyDescription").textContent=`Replace your current weekly plan with “${record.title}” by ${record.authorName}?`;
-  el("communityApplySummary").innerHTML=`<div><span>New week</span><strong>${escapeHtml(record.title)}</strong></div><div><span>Creator</span><strong>${escapeHtml(record.authorName)}</strong></div><div><span>New exercises</span><strong>${incoming.exercises}</strong></div><div><span>Your current week</span><strong>${currentCount} exercise${currentCount===1?"":"s"}</strong></div>`;
-  openDialog(dialog,el("communityApplyCancel"));
-}
-async function applyCommunityPlan(){
-  const record=state.communityPlans.find((plan)=>plan.id===state.communityPendingId);if(!record)return;
-  const dialog=el("communityApplyDialog"),confirm=el("communityApplyConfirm"),controls=[...dialog.querySelectorAll("button")];
-  dialog.dataset.busy="true";dialog.setAttribute?.("aria-busy","true");controls.forEach((control)=>{control.disabled=true;});confirm.textContent="Saving…";el("communityApplyError").hidden=true;el("communityPlanStatus").textContent="Saving…";
-  const controller=typeof globalThis.AbortController==="function"?new AbortController():null;
-  const timeout=controller?setTimeout(()=>controller.abort(),15_000):null;
-  try{
-    const result=await api(`/api/community-plans/${encodeURIComponent(record.id)}/apply`,{method:"POST",body:JSON.stringify({sourceUpdatedAt:Number(record.updatedAt),targetUpdatedAt:state.weeklyPlanUpdatedAt}),...(controller?{signal:controller.signal}:{})});
-    state.weeklyPlan=Monthly.normalizeWeeklyPlan(result.plan,state.exercises);state.weeklyPlanUpdatedAt=Number(result.planUpdatedAt)||state.weeklyPlanUpdatedAt;state.communityAppliedId=record.id;state.communityAppliedUpdatedAt=Number(record.updatedAt);syncSessionPlanViews({invalidateSession:true});closeDialog("communityApplyDialog");state.communityPendingId=null;renderCommunityPlans();
-    const planLink=el("communityOpenPlan");planLink.hidden=false;el("communityPlanStatus").textContent=`Saved. “${record.title}” is now your weekly plan.`;planLink.focus?.();showToast("Saved. Weekly plan replaced with the community week.");
-  }catch(error){
-    if(error.code==="COMMUNITY_PLAN_CHANGED"){
-      const refreshed=await Promise.allSettled([api("/api/plan"),loadCommunityPlans({reset:true})]);
-      if(refreshed[0].status==="fulfilled"){
-        state.weeklyPlan=Monthly.normalizeWeeklyPlan(refreshed[0].value.plan,state.exercises);state.weeklyPlanUpdatedAt=Number(refreshed[0].value.planUpdatedAt)||0;
-        syncSessionPlanViews({invalidateSession:true});
-      }
-      closeDialog("communityApplyDialog");state.communityPendingId=null;el("communityPlanStatus").textContent="Couldn't save — Retry. A shared plan or your current week changed; the latest versions are loaded for review.";showToast("Couldn't save — Retry. Review the latest plans first.");
-    }else{const message=saveRetryMessage(error),node=el("communityApplyError");node.textContent=message;node.hidden=false;el("communityPlanStatus").textContent=message;}
-  }
-  finally{if(timeout!==null)clearTimeout(timeout);dialog.dataset.busy="false";dialog.setAttribute?.("aria-busy","false");controls.forEach((control)=>{control.disabled=false;});confirm.innerHTML='Replace with this plan <span aria-hidden="true">→</span>';}
-}
+const community=CommunityCore.createCommunity({
+  state,monthly:Monthly,element:el,document,escapeHtml,exerciseById,titleCase,api,getGeneration:()=>workspaceGeneration,pageSize:COMMUNITY_PAGE_SIZE,
+  weeklyPlanCount,openDialog,closeDialog,syncSessionPlanViews:(...args)=>syncSessionPlanViews(...args),saveRetryMessage,showToast
+});
+const {applyCommunityPlan,loadCommunityPlans,openCommunityApplyDialog,renderCommunityPlans}=community;
 
 function blankMonthlySchedule(){
   const training={Monday:["chest","triceps"],Wednesday:["back","biceps"],Friday:["legs","glutes"],Saturday:["shoulders","core"]};
@@ -546,10 +127,10 @@ function weekContext(now=new Date()){
   const today=localNoon(now),todayIndex=(today.getDay()+6)%7,monday=localNoon(today,-todayIndex),dates=Monthly.DAYS.map((day,index)=>({day,date:localNoon(monday,index)}));
   return{today,todayIndex,monday,dates,dateKeys:new Set(dates.map(({date})=>localDateKey(date)))};
 }
-function safeWorkoutList(value){return Array.isArray(value)?value.filter((workout)=>workout&&typeof workout==="object"&&typeof workout.id==="string"&&["active","completed"].includes(workout.status)&&Array.isArray(workout.exerciseSummaries)):[];}
-function completedWorkouts(){return state.workouts.filter((workout)=>workout.status==="completed").sort((a,b)=>Number(b.startedAt||0)-Number(a.startedAt||0));}
+function safeWorkoutList(value){return ProgressCore.safeWorkoutList(value);}
+function completedWorkouts(){return ProgressCore.completedWorkouts(state.workouts);}
 function completedThisWeek(week=weekContext()){return completedWorkouts().filter((workout)=>week.dateKeys.has(String(workout.date||"")));}
-function scheduledDays(){return Monthly.DAYS.filter((day)=>Array.isArray(state.weeklyPlan?.days?.[day])&&state.weeklyPlan.days[day].length);}
+function scheduledDays(){return ProgressCore.scheduledDays(state.weeklyPlan,Monthly.DAYS);}
 function nextPlannedDay(week=weekContext()){
   const completeDays=new Set(completedThisWeek(week).map((workout)=>String(workout.planDay||"")));
   for(let offset=0;offset<14;offset+=1){
@@ -558,25 +139,8 @@ function nextPlannedDay(week=weekContext()){
   }
   return null;
 }
-function formatDuration(seconds){
-  const safe=Math.max(0,Math.round(Number(seconds)||0));
-  if(safe<60)return `${safe} sec`;
-  const minutes=Math.floor(safe/60),remainder=safe%60;
-  return remainder?`${minutes}m ${remainder}s`:`${minutes} min`;
-}
-function compactNumber(value){
-  const number=Math.round((Number(value)||0)*10)/10;
-  return new Intl.NumberFormat(undefined,{maximumFractionDigits:1,notation:Math.abs(number)>=10_000?"compact":"standard"}).format(number);
-}
-function summaryMetric(summary){
-  if(!summary||Number(summary.completedSets)<=0)return null;
-  if(summary.measurement==="timed"&&Number(summary.maxSeconds)>0)return{key:"time",value:Number(summary.maxSeconds),label:"Longest set",formatted:formatDuration(summary.maxSeconds),higher:true};
-  if(summary.loadType==="external"&&Number(summary.maxWeight)>0){const unit=summary.unit==="lb"?"lb":"kg";return{key:`load:${unit}`,value:Number(summary.maxWeight),label:"Top load",formatted:`${compactNumber(summary.maxWeight)} ${unit}`,higher:true};}
-  if(summary.loadType==="assisted"&&summary.minAssistance!=null&&Number(summary.maxReps)>0){const unit=summary.unit==="lb"?"lb":"kg";return{key:`assistance:${unit}`,value:Number(summary.minAssistance),label:"Assistance",formatted:`${compactNumber(summary.minAssistance)} ${unit} assistance`,higher:false};}
-  if(Number(summary.maxReps)>0)return{key:"reps",value:Number(summary.maxReps),label:"Most reps",formatted:`${compactNumber(summary.maxReps)} reps`,higher:true};
-  return null;
-}
-function summaryKey(summary,metric){return `${String(summary.exerciseId||"")}:${String(summary.measurement||"")}:${String(summary.loadType||"")}:${String(summary.unit||"")}:${metric.key}`;}
+function formatDuration(seconds){return ProgressCore.formatDuration(seconds);}
+function summaryMetric(summary){return ProgressCore.summaryMetric(summary);}
 function exerciseName(id){return exerciseById(id)?.name||titleCase(String(id||"movement").replace(/_/g,"-"));}
 function readableDate(value){
   if(typeof value!=="string"||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value))return "saved session";
@@ -634,51 +198,8 @@ function renderWeeklyPulse(){
   }
   el("weeklyPulseAction").href="#planWorkspace";el("weeklyPulseAction").innerHTML='Review plan <span aria-hidden="true">→</span>';
 }
-function progressRecords(){
-  const chronological=completedWorkouts().slice().reverse(),previous=new Map(),improvements=[],bests=new Map();
-  for(const workout of chronological)for(const summary of workout.exerciseSummaries){
-    const metric=summaryMetric(summary);if(!metric)continue;
-    const key=summaryKey(summary,metric),earlier=previous.get(key),better=earlier!==undefined&&(metric.higher?metric.value>earlier.value:metric.value<earlier.value);
-    if(better)improvements.push({key,exerciseId:summary.exerciseId,metric,previous:earlier.metric,workout});
-    if(earlier===undefined||(metric.higher?metric.value>earlier.value:metric.value<earlier.value))previous.set(key,{value:metric.value,metric});
-    const best=bests.get(key);if(!best||(metric.higher?metric.value>best.metric.value:metric.value<best.metric.value))bests.set(key,{key,exerciseId:summary.exerciseId,metric,workout});
-  }
-  const latestImprovements=new Map();for(const item of improvements.slice().reverse())if(!latestImprovements.has(item.key))latestImprovements.set(item.key,item);
-  return{improvements:[...latestImprovements.values()].slice(0,4),bests:[...bests.values()].sort((a,b)=>Number(b.workout.startedAt||0)-Number(a.workout.startedAt||0)).slice(0,4)};
-}
-function renderProgressList(target,items,kind){
-  const node=el(target);if(!node)return;
-  if(!items.length){const partial=state.workoutHistoryHasMore;node.innerHTML=`<p class="progress-empty">${kind==="improvement"?(partial?"No like-for-like improvement appears in the 100 most recent sessions. Older sessions are not included here.":"Repeat an exercise in two completed sessions to see a like-for-like improvement."):(partial?"No comparable performance high appears in the 100 most recent sessions. Open full history for older records.":"Complete a workout to establish your first logged personal best.")}</p>`;return;}
-  node.innerHTML=items.map((item)=>{
-    const detail=kind==="improvement"?`${item.previous.formatted} → ${item.metric.formatted}`:`${item.metric.label} · ${item.metric.formatted}`;
-    return `<article class="progress-record"><span aria-hidden="true">${kind==="improvement"?"↑":"◆"}</span><div><strong>${escapeHtml(exerciseName(item.exerciseId))}</strong><p>${escapeHtml(detail)}</p><small>${escapeHtml(readableDate(item.workout.date))} · same format and unit</small></div></article>`;
-  }).join("");
-}
-function fourWeekConsistency(workouts,now=new Date()){
-  const currentMonday=weekContext(now).monday.getTime(),weekMilliseconds=7*24*60*60*1000,weeks=new Set();
-  for(const workout of workouts){
-    const date=typeof workout.date==="string"&&/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(workout.date)?new Date(`${workout.date}T12:00:00`):new Date(Number(workout.completedAt||workout.startedAt||0));
-    if(Number.isNaN(date.getTime()))continue;
-    const index=Math.floor((currentMonday-weekContext(date).monday.getTime())/weekMilliseconds);if(index>=0&&index<4)weeks.add(index);
-  }
-  return weeks.size;
-}
-function renderProgress(){
-  if(!el("progressAdherence"))return;
-  const partial=state.workoutHistoryHasMore;el("repeatImprovementScope").textContent=partial?"Within the 100 most recent sessions":"Comparable sessions";el("repeatImprovementTitle").textContent=partial?"RECENT REPEAT IMPROVEMENTS":"REPEAT IMPROVEMENTS";el("personalBestScope").textContent=partial?"Within the 100 most recent sessions":"From your recorded history";el("personalBestTitle").textContent=partial?"RECENT PERFORMANCE HIGHS":"LOGGED PERSONAL BESTS";
-  if(!state.workoutHistoryAvailable){
-    for(const id of ["progressAdherence","progressVolume","progressConsistency","progressSessions"])el(id).textContent="—";
-    el("progressAdherenceDetail").textContent="Workout history is temporarily unavailable. Your plan was not changed.";el("progressVolumeDetail").textContent="Reconnect to calculate recorded load volume.";el("progressConsistencyDetail").textContent="Reconnect to compare the last four calendar weeks.";el("progressSessionsDetail").textContent="No history totals are shown without a verified response.";renderProgressList("repeatImprovementList",[],"improvement");renderProgressList("personalBestList",[],"best");return;
-  }
-  const completed=completedWorkouts(),week=weekContext(),weekSessions=completedThisWeek(week),planned=scheduledDays(),completedDays=new Set(weekSessions.map((workout)=>String(workout.planDay||"")).filter((day)=>planned.includes(day))),volumes=new Map();
-  for(const workout of weekSessions)for(const summary of workout.exerciseSummaries){if(summary.loadType!=="external"||!(Number(summary.volume)>0))continue;const unit=summary.unit==="lb"?"lb":"kg";volumes.set(unit,(volumes.get(unit)||0)+Number(summary.volume));}
-  const volumeLabel=[...volumes].map(([unit,value])=>`${compactNumber(value)} ${unit}·reps`).join(" + ")||"No load logged";
-  el("progressAdherence").textContent=planned.length?`${completedDays.size} / ${planned.length}`:`${weekSessions.length}`;el("progressAdherenceDetail").textContent=planned.length?`${completedDays.size} planned ${completedDays.size===1?"day":"days"} completed out of ${planned.length} this calendar week.`:`${weekSessions.length} completed ${weekSessions.length===1?"session":"sessions"} this week; no weekly plan is set.`;
-  el("progressVolume").textContent=volumeLabel;el("progressVolumeDetail").textContent=volumes.size?"External load × repetitions from completed sets this calendar week.":"Only completed sets with an external load contribute to this measure.";
-  const consistency=fourWeekConsistency(completed);el("progressConsistency").textContent=`${consistency} / 4 weeks`;el("progressConsistencyDetail").textContent="Calendar weeks with at least one completed, saved session.";
-  el("progressSessions").textContent=`${completed.length}${state.workoutHistoryHasMore?"+":""}`;el("progressSessionsDetail").textContent=state.workoutHistoryHasMore?`${completed.length} completed in the 100 most recent sessions. Older history is available in the workout log.`:`${weekSessions.length} completed this week · in-progress sessions are excluded.`;
-  const records=progressRecords();renderProgressList("repeatImprovementList",records.improvements,"improvement");renderProgressList("personalBestList",records.bests,"best");
-}
+const progressRenderer=RenderCore.createProgressRenderer({element:el,escapeHtml,exerciseName,readableDate,days:Monthly.DAYS});
+function renderProgress(){return progressRenderer.render({workouts:state.workouts,weeklyPlan:state.weeklyPlan,historyAvailable:state.workoutHistoryAvailable,hasMore:state.workoutHistoryHasMore});}
 function normalizeTrainingBlock(data){
   const raw=data?.trainingBlock||data?.block||null;if(!raw||typeof raw!=="object")return null;
   const weeks=Math.round(Number(raw.weeks??raw.durationWeeks));if(weeks<4||weeks>8)return null;
@@ -886,110 +407,11 @@ async function dismissProgression(){
   try{const result=await api(`/api/training/adaptations/${encodeURIComponent(suggestion.id)}`,{method:"POST",body:JSON.stringify({decision:"dismiss"})});resolvedAdaptation(result,suggestion,"dismissed");await confirmDashboardIdentity(expectedUserId,expectedCsrf);state.progressionSuggestion=null;renderProgression();el("featureStatus").textContent="Suggestion dismissed. No training change was applied.";showToast("Suggestion dismissed. Your plan is unchanged.");}
   catch(error){if(redirectedOrChangedAccount(error))return;if(await reconcileAdaptationError(error))return;button.disabled=false;el("progressionAccept").disabled=false;button.textContent="Dismiss";el("progressionStatus").textContent=saveRetryMessage(error);}
 }
-function sessionBuilderAvailable(){return Boolean(el("sessionBuilder")&&el("sessionGroup")&&el("sessionLength")&&el("sessionDay")&&el("sessionGenerate")&&el("sessionResults")&&el("sessionStatus")&&el("sessionAddAll"));}
-function preferredSessionDay(current=""){
-  const available=Core.WEEKDAYS.filter((day)=>!(state.weeklyPlan?.restDays||[state.weeklyPlan?.restDay]).includes(day));
-  if(available.includes(current))return current;
-  const today=Core.WEEKDAYS[(new Date().getDay()+6)%7];
-  if(available.includes(today))return today;
-  const pulse=Core.weeklyPulse(state.weeklyPlan,{today,profileDays:state.preferences?.days});
-  return available.includes(pulse.day)?pulse.day:available[0]||"";
-}
-function populateSessionDay(){
-  if(!sessionBuilderAvailable())return;
-  const select=el("sessionDay"),selected=preferredSessionDay(state.sessionDayInitialized?select.value:"");
-  select.innerHTML=Core.WEEKDAYS.filter((day)=>!(state.weeklyPlan?.restDays||[state.weeklyPlan?.restDay]).includes(day)).map((day)=>{
-    const count=Array.isArray(state.weeklyPlan?.days?.[day])?state.weeklyPlan.days[day].length:0;
-    return `<option value="${day}" ${day===selected?"selected":""}>${day}${count?` · ${count} scheduled`:""}</option>`;
-  }).join("");
-  select.value=selected;state.sessionDayInitialized=true;
-}
-function populateSessionBrief(){
-  if(!sessionBuilderAvailable())return;
-  const focus=Object.hasOwn(Core.SESSION_FOCUSES,el("sessionGroup").value)?el("sessionGroup").value:"full",minutes=Object.hasOwn(Core.SESSION_LENGTHS,el("sessionLength").value)?Number(el("sessionLength").value):35;
-  el("sessionGroup").innerHTML=Object.entries(Core.SESSION_FOCUSES).map(([value,config])=>`<option value="${value}" ${value===focus?"selected":""}>${escapeHtml(config.label)}</option>`).join("");
-  el("sessionLength").innerHTML=Object.values(Core.SESSION_LENGTHS).map((config)=>`<option value="${config.minutes}" ${config.minutes===minutes?"selected":""}>${escapeHtml(config.label)} · ${config.minutes} min</option>`).join("");
-  el("sessionGroup").value=focus;el("sessionLength").value=String(minutes);populateSessionDay();
-}
-function sessionCardMarkup(item,index){
-  const exercise=item.exercise,name=escapeHtml(exercise.name),reason=item.reasons.map(escapeHtml).join(" · ");
-  return `<li class="session-result-card"><span class="session-result-index" aria-hidden="true">${String(index+1).padStart(2,"0")}</span><div class="session-result-copy"><p>${escapeHtml(item.roleLabel)}</p><h4>${name}</h4><span>${escapeHtml(GROUP_LABELS[exercise.group]||titleCase(exercise.group))} / ${escapeHtml(exercise.sub)} · ${escapeHtml(exercise.equipment)}</span><p class="session-result-reason">${reason}.</p></div><div class="session-result-prescription"><strong>${item.sets} sets × ${escapeHtml(item.reps)}</strong><span>${escapeHtml(item.rest)} rest</span><span class="session-match">${item.match}% personal match</span><button class="small-button" data-open-detail="${escapeHtml(exercise.id)}" type="button" aria-label="Inspect why ${name} fits this session">Why this move</button></div></li>`;
-}
-function sessionMergePreview(){
-  if(!state.session)return null;
-  return Core.mergeSessionIntoPlan(state.weeklyPlan,el("sessionDay").value,state.session);
-}
-function updateSessionAddButton(){
-  if(!sessionBuilderAvailable())return null;
-  const button=el("sessionAddAll"),day=el("sessionDay").value,dayLabel=day||"the selected day";button.hidden=!state.session;
-  if(!state.session){button.disabled=true;button.title="";return null;}
-  try{
-    const preview=sessionMergePreview();button.disabled=state.sessionSaving||!preview.changed;button.title=preview.changed?`Add ${preview.added} new movement${preview.added===1?"":"s"}${preview.skipped?` and skip ${preview.skipped} already on this day`:""}`:"Every movement in this session is already on the selected day.";button.innerHTML=preview.changed?`Add ${preview.added} movement${preview.added===1?"":"s"} to ${escapeHtml(dayLabel)} <span aria-hidden="true">→</span>`:`Already in ${escapeHtml(dayLabel)} <span aria-hidden="true">✓</span>`;return null;
-  }catch(error){button.disabled=true;button.title=error.message;button.textContent=`Can't add to ${dayLabel}`;return error;}
-}
-function renderSession(session,{announce=false}={}){
-  if(!sessionBuilderAvailable())return;
-  state.session=session;el("sessionResults").innerHTML=`<div class="session-result-summary"><div><p>${escapeHtml(session.timeLabel)} session</p><h3 id="sessionResultsTitle">${escapeHtml(session.focusLabel.toUpperCase())} · ${session.minutes} MIN</h3></div><strong>${escapeHtml(session.summary)}</strong></div><ol class="session-result-list">${session.items.map(sessionCardMarkup).join("")}</ol><p class="session-time-note">Time is an estimate; actual duration changes with setup, rest, and training pace.</p>`;
-  el("sessionStatus").textContent=`${session.focusLabel} session ready · ${session.summary}. Review every movement before adding it.`;
-  el("sessionOpenPlan")&&(el("sessionOpenPlan").hidden=true);const previewError=updateSessionAddButton();
-  if(previewError)el("sessionStatus").textContent=`This session does not fit the selected day: ${previewError.message}`;
-  if(announce&&state.activeFeature==="session"){
-    const reduceMotion=window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-    el("sessionResults").scrollIntoView?.({behavior:reduceMotion?"auto":"smooth",block:"start"});
-  }
-}
-function showSessionBuildError(error){
-  if(!sessionBuilderAvailable())return;
-  state.session=null;el("sessionResults").innerHTML=`<div class="session-empty-state"><div><h3 id="sessionResultsTitle">SESSION NEEDS AN ADJUSTMENT.</h3><p>${escapeHtml(error.message)}</p></div></div>`;el("sessionStatus").textContent=error.message;el("sessionAddAll").hidden=true;el("sessionAddAll").disabled=true;el("sessionOpenPlan").hidden=true;
-}
-function generateSession({announce=false}={}){
-  if(!sessionBuilderAvailable()||!state.exercises.length||!state.preferences)return;
-  el("sessionResults").setAttribute("aria-busy","true");
-  try{renderSession(Core.buildSession({exercises:state.exercises,preferences:state.preferences,focus:el("sessionGroup").value,minutes:Number(el("sessionLength").value),weeklyPlan:state.weeklyPlan}),{announce});}
-  catch(error){showSessionBuildError(error);if(announce)showToast(error.message);}
-  finally{el("sessionResults").setAttribute("aria-busy","false");}
-}
-function setSessionBusy(busy){
-  state.sessionSaving=busy;el("sessionResults")?.setAttribute("aria-busy",String(busy));
-  for(const id of ["sessionGroup","sessionLength","sessionDay","sessionGenerate"])if(el(id))el(id).disabled=busy;
-  if(el("sessionAddAll")){el("sessionAddAll").disabled=busy;if(busy)el("sessionAddAll").innerHTML='Saving… <span aria-hidden="true">→</span>';}
-  if(!busy)updateSessionAddButton();
-}
-function resetSessionPreview(message="Choose your brief, then build a session."){
-  if(!sessionBuilderAvailable())return;
-  state.session=null;el("sessionResults").setAttribute("aria-busy","false");el("sessionResults").innerHTML='<div class="session-empty-state"><div><h3 id="sessionResultsTitle">YOUR SESSION WILL APPEAR HERE.</h3><p>Strata+ will prioritize personal fit, useful exercise order, and a practical amount of work for the time selected.</p></div></div>';el("sessionStatus").textContent=message;el("sessionAddAll").hidden=true;el("sessionAddAll").disabled=true;el("sessionOpenPlan").hidden=true;
-}
-function syncSessionPlanViews({invalidateSession=false}={}){renderWeeklyPulse();renderTrainingBlockReview();populateSessionDay();updateMonthlySourceButtons();if(invalidateSession)resetSessionPreview("Your weekly plan changed. Build the session again to refresh its exercise picks.");else updateSessionAddButton();}
-async function refreshSessionConflict(error){
-  const latest=error?.payload?.plan?error.payload:await api("/api/plan");
-  state.weeklyPlan=Monthly.normalizeWeeklyPlan(latest.plan,state.exercises);state.weeklyPlanUpdatedAt=Number(latest.planUpdatedAt)||0;syncSessionPlanViews();
-}
-async function addSessionToWeek(){
-  if(!sessionBuilderAvailable()||state.sessionSaving||!state.session)return;
-  const day=el("sessionDay").value;let merged;
-  try{merged=Core.mergeSessionIntoPlan(state.weeklyPlan,day,state.session);}
-  catch(error){const message=saveRetryMessage(error);el("sessionStatus").textContent=message;showToast(message);updateSessionAddButton();return;}
-  if(!merged.changed){el("sessionStatus").textContent=`Every generated movement is already scheduled on ${day}.`;updateSessionAddButton();return;}
-  setSessionBusy(true);el("sessionStatus").textContent="Saving…";
-  try{
-    const result=await api("/api/plan",{method:"PUT",body:JSON.stringify({plan:merged.plan,expectedPlanUpdatedAt:state.weeklyPlanUpdatedAt})});
-    state.weeklyPlan=Monthly.normalizeWeeklyPlan(result.plan,state.exercises);state.weeklyPlanUpdatedAt=Number(result.planUpdatedAt)||state.weeklyPlanUpdatedAt;syncSessionPlanViews();
-    const skipped=merged.skipped?` ${merged.skipped} already scheduled movement${merged.skipped===1?" was":"s were"} not duplicated.`:"";
-    el("sessionStatus").textContent=`Saved. Session added to ${day}: ${merged.added} new movement${merged.added===1?"":"s"}.${skipped}`;
-    if(el("sessionOpenPlan"))el("sessionOpenPlan").hidden=false;showToast(`Saved. Session added to ${day}.`);
-  }catch(error){
-    if(error.status===409||error.code==="PLAN_CHANGED"){
-      try{await refreshSessionConflict(error);el("sessionStatus").textContent="Couldn't save — Retry. Your week changed in another tab or device. The latest plan is loaded; review the selected day, then add the session again.";showToast("Couldn't save — Retry. Weekly plan changed; latest copy loaded.");}
-      catch{el("sessionStatus").textContent="Couldn't save — Retry. Your week changed elsewhere, and the latest copy could not be loaded. Refresh before adding this session.";}
-    }else{
-      const message=saveRetryMessage(error);el("sessionStatus").textContent=message;showToast(message);
-    }
-  }finally{setSessionBusy(false);}
-}
-function initializeSessionBuilder(){
-  if(!sessionBuilderAvailable())return;
-  populateSessionBrief();resetSessionPreview();renderWeeklyPulse();
-}
+const session=SessionCore.createSession({
+  state,core:Core,monthly:Monthly,labels:GROUP_LABELS,element:el,window,escapeHtml,titleCase,api,saveRetryMessage,showToast,
+  renderWeeklyPulse,renderTrainingBlockReview,updateMonthlySourceButtons
+});
+const {addToWeek:addSessionToWeek,generate:generateSession,initialize:initializeSessionBuilder,resetPreview:resetSessionPreview,syncPlanViews:syncSessionPlanViews,updateAddButton:updateSessionAddButton}=session;
 function localIsoDate(){const date=new Date(),part=(value)=>String(value).padStart(2,"0");return `${date.getFullYear()}-${part(date.getMonth()+1)}-${part(date.getDate())}`;}
 function friendlyMonthlyDate(value){
   if(!/^\d{4}-\d{2}-\d{2}$/.test(String(value||"")))return "";
@@ -1095,43 +517,13 @@ function printMonthlyPlan(){
   window.addEventListener?.("afterprint",finish,{once:true});window.print?.();setTimeout(finish,750);
 }
 
-function cardLines(kind,id){
-  if(kind==="exercise"){
-    const exercise=exerciseById(id),personal=personalResult(exercise);return {eyebrow:`${GROUP_LABELS[exercise.group]||titleCase(exercise.group)} / ${exercise.sub}`,title:exercise.name,score:`${exercise.score}`,scoreLabel:"OFFICIAL FITSCORE",lines:[personalLabel(personal,{long:true}),`${exercise.equipment} · ${exercise.pattern}`,exercise.why],footer:"Evidence-aware Strata+ comparison"};
-  }
-  if(kind==="comparison"){
-    const exercises=state.compare.map(exerciseById).filter(Boolean),verdict=comparisonWinner(exercises);return {eyebrow:"EXERCISE BATTLE",title:exercises.map((exercise)=>exercise.name).join(" vs. "),score:verdict.winner?String(verdict.winner.score):"—",scoreLabel:verdict.winner?"LEADING FITSCORE":"NO UNIVERSAL WINNER",lines:exercises.map((exercise)=>`${exercise.score} FitScore · ${personalLabel(personalResult(exercise))} — ${exercise.name}`),footer:"Compare the trade-offs, not just the score"};
-  }
-  const top=state.recommendations.slice(0,5);return {eyebrow:"PERSONALIZED SHORTLIST",title:`${titleCase(state.preferences.goal)} selection`,score:String(top[0]?.result.match||"—"),scoreLabel:"TOP PERSONAL MATCH",lines:top.map(({exercise,result},index)=>`${index+1}. ${exercise.name} — ${result.match}% match`),footer:`${state.preferences.days} days · ${state.preferences.level} · community ratings separate`};
-}
-
-function wrapCanvasText(ctx,text,x,y,maxWidth,lineHeight,maxLines=3){const words=String(text).split(/\s+/);let line="",lines=0;for(const word of words){const test=`${line}${line?" ":""}${word}`;if(ctx.measureText(test).width>maxWidth&&line){ctx.fillText(line,x,y);line=word;y+=lineHeight;lines+=1;if(lines>=maxLines-1)break;}else line=test;}if(line&&lines<maxLines){let final=line;if(ctx.measureText(final).width>maxWidth){while(final.length&&ctx.measureText(`${final}…`).width>maxWidth)final=final.slice(0,-1);final+="…";}ctx.fillText(final,x,y);}return y+lineHeight;}
-
-function drawCanvasBrand(ctx){
-  ctx.save();ctx.translate(70,60);ctx.transform(1,0,-.2,1,0,0);ctx.fillStyle="#d4f578";ctx.fillRect(0,14,10,24);ctx.fillRect(15,7,10,31);ctx.fillRect(30,0,10,38);ctx.restore();
-  ctx.fillStyle="#faf9f5";ctx.font="700 42px Manrope, sans-serif";ctx.fillText("STRATA",126,95);
-}
-
-async function shareCard(kind,id=null){
-  try{
-    const data=cardLines(kind,id),canvas=document.createElement("canvas");canvas.width=1080;canvas.height=1350;const ctx=canvas.getContext("2d");
-    if(!ctx)throw new Error("Canvas is unavailable.");
-    ctx.fillStyle="#10110f";ctx.fillRect(0,0,1080,1350);ctx.strokeStyle="rgba(212,245,120,.18)";ctx.lineWidth=2;ctx.beginPath();ctx.arc(960,110,360,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.arc(960,110,470,0,Math.PI*2);ctx.stroke();
-    drawCanvasBrand(ctx);ctx.fillStyle="#d4f578";ctx.font="500 20px 'DM Mono', monospace";ctx.fillText(data.eyebrow.toUpperCase(),70,180);
-    ctx.fillStyle="#faf9f5";ctx.font="700 78px Manrope, sans-serif";let y=wrapCanvasText(ctx,data.title.toUpperCase(),70,285,900,86,3);
-    y=Math.max(y+35,515);ctx.fillStyle="#d4f578";ctx.font="700 190px Manrope, sans-serif";ctx.fillText(data.score,70,y+150);ctx.fillStyle="#faf9f5";ctx.font="500 21px 'DM Mono', monospace";ctx.fillText(data.scoreLabel,310,y+130);
-    let lineY=y+245;ctx.strokeStyle="rgba(255,255,255,.22)";for(const line of data.lines.slice(0,5)){ctx.beginPath();ctx.moveTo(70,lineY-34);ctx.lineTo(1010,lineY-34);ctx.stroke();ctx.fillStyle="#faf9f5";ctx.font="500 30px Manrope, sans-serif";lineY=wrapCanvasText(ctx,line,70,lineY,920,40,2)+25;}
-    ctx.strokeStyle="rgba(255,255,255,.22)";ctx.beginPath();ctx.moveTo(70,1240);ctx.lineTo(1010,1240);ctx.stroke();ctx.fillStyle="rgba(255,255,255,.55)";ctx.font="500 18px 'DM Mono', monospace";ctx.fillText(data.footer.toUpperCase(),70,1290);ctx.fillStyle="#d4f578";ctx.textAlign="right";ctx.fillText("STRATAFITNESS.ONLINE",1010,1290);ctx.textAlign="left";
-    const blob=await new Promise((resolve)=>canvas.toBlob(resolve,"image/png"));if(!blob)throw new Error("Image export is unavailable.");
-    const filename=`strata-${kind}-${Date.now()}.png`;
-    if(typeof File==="function"&&navigator.share){const file=new File([blob],filename,{type:"image/png"});if(navigator.canShare?.({files:[file]})){try{await navigator.share({files:[file],title:`STRATA ${kind} card`,text:"Exercise intelligence from STRATA"});return;}catch(error){if(error.name==="AbortError")return;}}}
-    const url=URL.createObjectURL(blob),link=document.createElement("a");link.href=url;link.download=filename;link.hidden=true;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);showToast("Share card downloaded.");
-  }catch(error){showToast(`Share failed: ${error.message}`);}
-}
+const sharing=SharingCore.createSharing({
+  state,document,navigator,urlApi:URL,fileCtor:globalThis.File,labels:GROUP_LABELS,exerciseById,titleCase,personalResult,personalLabel,comparisonWinner,showToast
+});
+const {shareCard}=sharing;
 
 function setCollectionState(value){document.querySelectorAll("[data-collection]").forEach((button)=>{const active=button.dataset.collection===value;button.classList.toggle("active",active);button.setAttribute("aria-pressed",String(active));});}
-let explorerSearchTimer=null;
-function resetFilters(){clearTimeout(explorerSearchTimer);state.collection="all";state.query="";state.group="all";state.equipment="all";state.pattern="all";state.level="all";state.sort="personal";el("searchInput").value="";el("groupFilter").value="all";el("equipmentFilter").value="all";el("patternFilter").value="all";el("levelFilter").value="all";el("sortSelect").value="personal";setCollectionState("all");resetExplorerWindow();renderExplorer();}
+function resetFilters(){clearTimeout(state.explorerSearchTimer);state.explorerSearchTimer=null;state.collection="all";state.query="";state.group="all";state.equipment="all";state.pattern="all";state.level="all";state.sort="personal";el("searchInput").value="";el("groupFilter").value="all";el("equipmentFilter").value="all";el("patternFilter").value="all";el("levelFilter").value="all";el("sortSelect").value="personal";setCollectionState("all");resetExplorerWindow();renderExplorer();}
 
 const profileForm=el("profileForm");
 function markProfileDirty(){if(profileForm.dataset.saving!=="true")el("profileStatus").textContent="Unsaved changes";}
@@ -1252,73 +644,12 @@ document.addEventListener("submit",async(event)=>{
   }
 });
 
-document.addEventListener("click",(event)=>{
-  const feature=event.target.closest("[data-feature-target]"),shortlist=event.target.closest("[data-toggle-shortlist]"),detail=event.target.closest("[data-open-detail]"),compare=event.target.closest("[data-toggle-compare]"),scrollAlternatives=event.target.closest("[data-scroll-alternatives]"),close=event.target.closest("[data-close-dialog]"),collection=event.target.closest("[data-collection]"),reset=event.target.closest("[data-reset-filters]"),loadMore=event.target.closest("[data-load-more-exercises]"),share=event.target.closest("[data-share-exercise]"),shareBattle=event.target.closest("[data-share-battle]");
-  if(feature&&featureName(feature.dataset.featureTarget)){event.preventDefault();activateFeature(feature.dataset.featureTarget,{focus:true,scroll:true,smooth:true,announce:true,historyMode:"push"});}
-  else if(shortlist){
-    const id=shortlist.dataset.toggleShortlist,containerId=shortlist.closest("#recommendationGrid,#exerciseGrid,#detailContent,#movementBoardList")?.id;
-    if(toggleMovementBoard(id)&&containerId)requestAnimationFrame(()=>{
-      const same=[...el(containerId).querySelectorAll("[data-toggle-shortlist]")].find((button)=>button.dataset.toggleShortlist===id);
-      const fallback=containerId==="movementBoardList"?el("movementBoardList").querySelector("[data-toggle-shortlist],[data-open-detail]"):state.collection==="saved"?document.querySelector('[data-collection="saved"]'):null;
-      (same||fallback||el("movementBoardTitle"))?.focus?.({preventScroll:true});
-    });
-  }
-  else if(detail)openDetail(detail.dataset.openDetail);
-  else if(compare){
-    const id=compare.dataset.toggleCompare,containerId=compare.closest("#recommendationGrid,#exerciseGrid,#detailContent")?.id;
-    toggleCompare(id);if(el("detailDialog").open)openDetail(id);
-    if(containerId)requestAnimationFrame(()=>[...el(containerId).querySelectorAll("[data-toggle-compare]")].find((button)=>button.dataset.toggleCompare===id)?.focus({preventScroll:true}));
-  }
-  else if(scrollAlternatives){const section=el("alternativeSection"),heading=el("alternativeTitle"),reduceMotion=window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;section?.scrollIntoView?.({behavior:reduceMotion?"auto":"smooth",block:"start"});heading?.focus?.({preventScroll:true});}
-  else if(close)closeDialog(close.dataset.closeDialog);
-  else if(collection){state.collection=collection.dataset.collection;if(state.collection==="community"){state.sort="community";el("sortSelect").value="community";}setCollectionState(state.collection);resetExplorerWindow();renderExplorer();}
-  else if(reset)resetFilters();
-  else if(loadMore){const firstNewIndex=state.explorerLimit;state.explorerLimit+=explorerPageSize();renderExplorer();requestAnimationFrame(()=>el("exerciseGrid").querySelector(`[data-result-index="${firstNewIndex}"] [data-open-detail]`)?.focus());}
-  else if(share)void shareCard("exercise",share.dataset.shareExercise);
-  else if(shareBattle)void shareCard("comparison");
-});
-
-document.querySelectorAll("dialog").forEach((dialog)=>{
-  dialog.addEventListener("click",(event)=>{if(event.target===dialog&&dialog.dataset.busy!=="true")closeDialog(dialog.id);});
-  dialog.addEventListener("cancel",(event)=>{event.preventDefault();if(dialog.dataset.busy!=="true")closeDialog(dialog.id);});
-  dialog.addEventListener("close",()=>{syncDialogState();restoreDialogFocus(dialog);});
-});
 async function revalidateMemberWorkspaceWhenVisible(){
   if(document.visibilityState&&document.visibilityState!=="visible"||!workspaceReady||workspaceRevalidating||discoveryLoading)return;
   workspaceRevalidating=true;clearPrivateWorkspace();
   try{await init();}
   finally{workspaceRevalidating=false;}
 }
-window.addEventListener?.("focus",()=>{void revalidateMemberWorkspaceWhenVisible();});
-document.addEventListener("visibilitychange",()=>{void revalidateMemberWorkspaceWhenVisible();});
-el("searchInput").addEventListener("input",(event)=>{const query=event.target.value;clearTimeout(explorerSearchTimer);explorerSearchTimer=setTimeout(()=>{state.query=query;resetExplorerWindow();renderExplorer();},SEARCH_DEBOUNCE_MS);});
-el("groupFilter").addEventListener("change",(event)=>{state.group=event.target.value;resetExplorerWindow();renderExplorer();});
-el("equipmentFilter").addEventListener("change",(event)=>{state.equipment=event.target.value;resetExplorerWindow();renderExplorer();});
-el("patternFilter").addEventListener("change",(event)=>{state.pattern=event.target.value;resetExplorerWindow();renderExplorer();});
-el("levelFilter").addEventListener("change",(event)=>{state.level=event.target.value;resetExplorerWindow();renderExplorer();});
-el("sortSelect").addEventListener("change",(event)=>{state.sort=event.target.value;resetExplorerWindow();renderExplorer();});
-el("clearFilters").addEventListener("click",resetFilters);
-el("clearCompare").addEventListener("click",()=>{state.compare=[];el("battleResults").hidden=true;renderCompareTray();renderRecommendations();renderExplorer();});
-el("openCompare").addEventListener("click",()=>{activateFeature("battle",{focus:true,scroll:true,smooth:true,announce:true,historyMode:"push"});openComparison();});
-el("battleSelects").addEventListener("change",()=>{readBattleBuilder();el("battleResults").hidden=true;renderRecommendations();renderExplorer();});
-el("battleForm").addEventListener("submit",(event)=>{event.preventDefault();readBattleBuilder();renderCompareTray();renderRecommendations();renderExplorer();openComparison();});
-el("battleReset").addEventListener("click",()=>{state.compare=[];el("battleResults").hidden=true;renderCompareTray();renderRecommendations();renderExplorer();});
-el("shareRanking").addEventListener("click",()=>void shareCard("ranking"));
-el("compareMovementBoard").addEventListener("click",()=>{
-  state.compare=Core.normalizeShortlist(state.shortlist,state.exercises,MOVEMENT_BOARD_LIMIT);renderCompareTray();renderRecommendations();renderExplorer();activateFeature("battle",{focus:true,scroll:true,smooth:true,announce:true,historyMode:"push"});openComparison();
-});
-el("clearMovementBoard").addEventListener("click",()=>{
-  state.shortlist=[];saveMovementBoard();renderMovementBoard({message:"Decision board cleared."});renderRecommendations();renderExplorer();el("movementBoardTitle").focus?.({preventScroll:true});showToast("Decision board cleared.");
-});
-el("logoutButton").addEventListener("click",async(event)=>{
-  const button=event.currentTarget;if(button.disabled)return;button.disabled=true;
-  try{await api("/api/logout",{method:"POST"});window.location.replace("/");}
-  catch(error){
-    if(error.status===401){window.location.replace("/");return;}
-    button.disabled=false;showToast("Could not sign out. Check your connection and try again.");
-  }
-});
-el("discoveryRetry").addEventListener("click",()=>{void init();});
 
 let discoveryLoading=false;
 function initialLoadMessage(error){
@@ -1360,5 +691,9 @@ async function init(){
   finally{discoveryLoading=false;el("discoveryRetry").disabled=false;}
 }
 
+EventsCore.bind({
+  document,window,el,state,core:Core,movementBoardLimit:MOVEMENT_BOARD_LIMIT,searchDebounceMs:SEARCH_DEBOUNCE_MS,featureNavigation,
+  actions:{api,activateFeature,closeDialog,explorerPageSize,featureName,hideToast,init,openComparison,openDetail,readBattleBuilder,renderCompareTray,renderExplorer,renderMovementBoard,renderRecommendations,resetExplorerWindow,resetFilters,restoreDialogFocus,revalidateMemberWorkspaceWhenVisible,saveMovementBoard,setCollectionState,shareCard,showToast,syncDialogState,toggleCompare,toggleMovementBoard}
+});
 initializeFeatureNavigation();
 init();

@@ -18,6 +18,8 @@ npm run check
 
 The E2E command uses isolated local applications and provider fakes. Most risk-focused journeys run in Chromium. Linux CI runs the focused compatibility matrix in Chromium, Firefox, and WebKit for axe serious/critical checks, keyboard navigation, copy-day behavior, and 200% text reflow. Local Darwin runs default to Chromium and WebKit because Playwright Firefox cannot use its headless framebuffer in the Codex app sandbox; use `STRATA_E2E_ENGINE=firefox npm run test:e2e` to request that diagnostic explicitly. No path contacts production Paddle, Resend, or Turso services.
 
+`npm run test:visual` runs the deterministic responsive geometry contracts directly. They measure containment, sibling collisions, touch targets, sticky-navigation separation, collapsed secondary content, and horizontal overflow from 320 through 1,440 px. These invariant checks avoid fragile pixel hashes while still failing CI on the overlap, clipping, unreadably narrow text, and mobile-action regressions that have affected STRATA before. They are also included in the complete E2E gate.
+
 To run the coverage-gated Node suite by itself:
 
 ```bash
