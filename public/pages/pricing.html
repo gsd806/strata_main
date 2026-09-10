@@ -3,35 +3,36 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="description" content="Your next workout, ready. Your last workout, remembered. Start my free 7-day trial, then choose $0.99 USD per month. No card for the trial." />
+    <meta name="description" content="Strata+ access includes workout logging, history, progression suggestions, and advanced planning. Try 7 days free, then choose $0.99 USD per month. No card for the trial." />
     <meta name="theme-color" content="#10110f" />
     <meta name="application-name" content="STRATA" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="STRATA" />
-    <title>Strata+ Pricing — STRATA</title>
+    <title>Strata+ access — STRATA</title>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icons/strata-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="/fonts.css?v=7.8.2" />
-    <link rel="stylesheet" href="/site-info.css?v=7.8.2" />
-    <link rel="stylesheet" href="/product-signals.css?v=7.8.2" />
-    <link rel="stylesheet" href="/experience.css?v=7.8.2" />
-    <script src="/motion.js?v=7.8.2"></script>
+    <link rel="stylesheet" href="/fonts.css?v=7.8.3" />
+    <link rel="stylesheet" href="/site-info.css?v=7.8.3" />
+    <link rel="stylesheet" href="/product-signals.css?v=7.8.3" />
+    <link rel="stylesheet" href="/experience.css?v=7.8.3" />
+    <script src="/motion.js?v=7.8.3"></script>
+    <link rel="stylesheet" href="/product-nav.css?v=7.8.3" />
   </head>
   <body class="pricing-page">
     <a class="skip-link" href="#main">Skip to pricing</a>
     <header class="info-header">
       <a class="brand" href="/" aria-label="STRATA home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>STRATA</span></a>
-      <nav class="info-nav" aria-label="Primary navigation"><a href="/">Rankings</a><a href="/discover.html">Strata+</a><a href="/planner.html">Plan</a><a href="/workout.html">Train</a></nav>
+      <nav class="info-nav" aria-label="Primary navigation"><a href="/" data-product-owner="exercises">Exercises</a><a href="/planner.html" data-product-owner="plan">Plan</a><a href="/workout.html" data-product-owner="train">Train</a><a href="/discover.html#progressWorkspace" data-product-owner="progress">Progress</a><a href="/account.html" data-product-owner="account">Account</a></nav>
     </header>
 
     <main id="main">
       <section class="info-hero" aria-labelledby="pageTitle">
         <div class="info-container info-hero-grid">
-          <div><p class="eyebrow">Strata+ · Monthly subscription</p><h1 id="pageTitle">MAKE NEXT<br />TIME <em>EASIER.</em></h1></div>
+          <div><p class="eyebrow">Strata+ · Monthly subscription</p><h1 id="pageTitle">Strata+ access</h1></div>
           <div>
-            <p class="info-lede">Your next workout is ready. Your last workout is remembered. Strata+ puts your plan, previous sets, and workout log in one place—so each session starts with less guessing. Try a full week free, with no card. Keep it for $0.99 USD per month only if it helps.</p>
+            <p class="info-lede">Add workout logging, saved history, progression suggestions, and advanced planning to STRATA. Try a full week free, with no card. Keep access for $0.99 USD per month only if it helps.</p>
             <div class="hero-facts" aria-label="Strata+ subscription facts"><span><strong>7 days</strong>Free, no-card trial</span><span><strong>$0.99 USD</strong>Per month</span><span><strong>Cancel</strong>Through Paddle</span></div>
             <div class="purchase-panel hero-purchase-panel" id="purchasePanel" aria-busy="false">
               <div class="button-row purchase-actions">
@@ -39,7 +40,7 @@
                 <a class="button button-light" id="purchaseLogin" href="/account.html?mode=login&amp;next=pricing">Already have an account? Sign in</a>
                 <button class="button button-dark" id="trialDiscovery" type="button" aria-describedby="purchaseStatus" hidden disabled>Try 7 days free · no card <span aria-hidden="true">→</span></button>
                 <button class="button button-dark" id="buyDiscovery" type="button" aria-describedby="purchaseStatus" hidden disabled>Subscribe · $0.99 USD / month <span aria-hidden="true">→</span></button>
-                <a class="button button-dark" id="openDiscovery" href="/discover.html" hidden>Open Strata+ <span aria-hidden="true">→</span></a>
+                <a class="button button-dark" id="openDiscovery" href="/planner.html" hidden>Open Plan <span aria-hidden="true">→</span></a>
                 <a class="button button-light" id="manageSubscription" href="/account.html#accountBilling" hidden>Manage subscription <span aria-hidden="true">→</span></a>
                 <button class="button button-light" id="checkAccess" type="button" aria-describedby="purchaseStatus" hidden>Check access <span aria-hidden="true">↻</span></button>
               </div>
@@ -62,37 +63,37 @@
               <li><span>03</span><div><strong>Subscribe only if it helps</strong><small>Choose checkout explicitly, then pay $0.99 USD each month until you cancel.</small></div></li>
             </ol></details>
             <ul class="feature-list plus-benefits">
-              <li><span><strong>Know what’s next.</strong> Today opens your next planned session or resumes an unfinished workout.</span></li>
-              <li><span><strong>Remember last time.</strong> Training Memory shows previous sets, reps, and loads for the same movement and format. Reuse values, then log what you actually do.</span></li>
-              <li><span><strong>See your work add up.</strong> Private workout history and progress views keep completed sessions together.</span></li>
-              <li><span><strong>Adjust with confidence.</strong> Review suggested plan changes before saving. You stay in control.</span></li>
+              <li><span><strong>Start or resume a workout.</strong> Train opens your next planned workout or resumes an unfinished workout.</span></li>
+              <li><span><strong>Previous workout values.</strong> See previous sets, reps, and loads for the same exercise and format. Reuse values, then log what you actually do.</span></li>
+              <li><span><strong>Workout history.</strong> Progress keeps completed workouts together.</span></li>
+              <li><span><strong>Suggested plan adjustments.</strong> Review suggested plan changes before saving. You stay in control.</span></li>
             </ul>
-            <details class="plus-extras"><summary>Also included with Strata+</summary><p>Personalized exercise rankings, comparisons, session building, optional workout check-ins, community week previews, and a saved 31-day planner with print, download, and sharing tools.</p></details>
+            <details class="plus-extras"><summary>Also included with Strata+</summary><p>Personalized exercise rankings, comparisons, workout building, optional workout check-ins, shared week previews, and a saved monthly schedule (31 days) with print, download, and sharing tools.</p></details>
             <noscript><p class="purchase-status purchase-status-warn">JavaScript is required to open secure Paddle checkout. You can still create an account, then return to this page.</p></noscript>
             <p class="checkout-note"><strong>Secure subscription:</strong> Paddle is the merchant of record and handles payment details, applicable tax, recurring charges, receipts, cancellation, and refunds. STRATA does not receive or store your full card number. Strata+ unlocks after STRATA securely confirms the subscription. Manage or cancel it from Account; cancellation stops future renewals as shown by Paddle. See the <a href="/refunds">14-day refund policy</a>.</p>
           </article>
 
           <article class="free-card" aria-labelledby="freeTitle">
             <section class="memory-preview" aria-labelledby="memoryPreviewTitle">
-              <p class="card-kicker">A look at Training Memory</p>
-              <h2 id="memoryPreviewTitle">PICK UP WHERE<br />YOU LEFT OFF.</h2>
+              <p class="card-kicker">Previous workout values</p>
+              <h2 id="memoryPreviewTitle">Review previous sets</h2>
               <p class="memory-example-label">Illustrative example · not your workout data</p>
               <div class="memory-sample">
-                <div class="memory-sample-heading"><strong>Dumbbell press</strong><span>Last completed session</span></div>
-                <table><caption class="sr-only">Example previous sets shown in Training Memory</caption><thead><tr><th scope="col">Set</th><th scope="col">Reps</th><th scope="col">Load</th></tr></thead><tbody><tr><th scope="row">1</th><td>10</td><td>12 kg</td></tr><tr><th scope="row">2</th><td>10</td><td>12 kg</td></tr><tr><th scope="row">3</th><td>8</td><td>12 kg</td></tr></tbody></table>
+                <div class="memory-sample-heading"><strong>Dumbbell press</strong><span>Last completed workout</span></div>
+                <table><caption class="sr-only">Example previous workout sets</caption><thead><tr><th scope="col">Set</th><th scope="col">Reps</th><th scope="col">Load</th></tr></thead><tbody><tr><th scope="row">1</th><td>10</td><td>12 kg</td></tr><tr><th scope="row">2</th><td>10</td><td>12 kg</td></tr><tr><th scope="row">3</th><td>8</td><td>12 kg</td></tr></tbody></table>
                 <p><strong>Next workout:</strong> see these sets beside your log. Choose “Use last values” or enter today’s values yourself.</p>
               </div>
               <p class="memory-example-note">Values are an example, not a prescribed target. Reusing values never marks a set complete.</p>
             </section>
             <p class="card-kicker">STRATA core · Free</p>
-            <h2 id="freeTitle">CORE STAYS FREE.</h2>
-            <p>STRATA should be useful before you pay. Build a weekly Plan without an account; it stays in that browser. A signed-in account gets its own synced Plan. Rankings, exercise setup and technique guides, equipment swaps, and installation also remain free.</p>
+            <h2 id="freeTitle">Free features</h2>
+            <p>STRATA should be useful before you pay. Build a weekly Plan without an account; it stays in that browser. A signed-in account gets its own synced Plan. Exercise rankings, exercise setup and technique guides, equipment swaps, and installation also remain free.</p>
             <ul class="feature-list">
               <li><span>200 ranked exercises across 8 muscle groups, with transparent rationale and guidance</span></li>
               <li><span>Login-free manual weekly planner with optional account sync</span></li>
               <li><span>Install STRATA on supported phones and computers</span></li>
             </ul>
-            <p class="tier-boundary"><strong>What Strata+ adds:</strong> personalization, guided training and logging, private history, progression suggestions, community discovery, and the 31-day view. Your manual Plan is not taken away when access ends.</p>
+            <p class="tier-boundary"><strong>What Strata+ adds:</strong> personalization, guided training and logging, private history, progression suggestions, shared plans, and the monthly schedule. Your manual Plan is not taken away when access ends.</p>
             <a class="button button-light" href="/planner.html">Open free planner <span aria-hidden="true">→</span></a>
             <p class="plain-note">Questions before subscribing? <a class="contact-email" href="/contact">Contact STRATA</a> or review the <a class="contact-email" href="/terms">Terms of Service</a>.</p>
           </article>
@@ -100,13 +101,13 @@
 
         <details class="info-container plan-comparison pricing-disclosure">
           <summary><span id="planComparisonTitle">Compare Free and Strata+</span><small>Your weekly Plan stays free.</small></summary>
-          <h2>A useful free plan. A reason to keep Plus.</h2>
+          <h2>Features by access level</h2>
           <table><caption>Choose what you need</caption><thead><tr><th scope="col">Your training</th><th scope="col">Free</th><th scope="col">Strata+</th></tr></thead><tbody>
             <tr><th scope="row">Exercise rankings and technique guides</th><td>Included</td><td>Included</td></tr>
             <tr><th scope="row">Manual weekly plan and optional account sync</th><td>Included</td><td>Included</td></tr>
             <tr><th scope="row">Guided workouts, set logging, and rest timers</th><td>—</td><td>Included</td></tr>
-            <tr><th scope="row">Training Memory and private progress history</th><td>—</td><td>Included</td></tr>
-            <tr><th scope="row">Personalized recommendations and 31-day planning</th><td>—</td><td>Included</td></tr>
+            <tr><th scope="row">Previous workout values and private progress history</th><td>—</td><td>Included</td></tr>
+            <tr><th scope="row">Personalized recommendations and monthly schedules</th><td>—</td><td>Included</td></tr>
           </tbody></table>
           <p>Your manual weekly plan stays available when a trial or subscription ends. New trials last 7 consecutive days from the moment you start them; existing trials keep their original expiry. Trials never charge you automatically. A subscription renews monthly until canceled; applicable tax is shown at checkout.</p>
         </details>
@@ -121,19 +122,19 @@
 
     <footer class="info-footer">
       <div class="info-container info-footer-grid">
-        <div><a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>STRATA</span></a><p class="footer-tagline">Make every working set intentional.</p></div>
-        <nav class="footer-nav" aria-label="Footer navigation"><a href="/">Rankings</a><a href="/discover.html">Strata+</a><a href="/pricing">Pricing</a><a href="/contact">Contact</a><a href="/policies">Policies</a><a href="/install">Install</a></nav>
-        <p class="footer-meta">© 2026 Strata Index<br />Build 7.8.2</p>
+        <div><a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>STRATA</span></a><p class="footer-tagline">Exercise guides, planning, and workout tracking.</p></div>
+        <nav class="footer-nav" aria-label="Footer navigation"><a href="/">Exercises</a><a href="/planner.html">Plan</a><a href="/pricing">Pricing</a><a href="/contact">Contact</a><a href="/policies">Policies</a><a href="/install">Install</a></nav>
+        <p class="footer-meta">© 2026 Strata Index<br />Build 7.8.3</p>
       </div>
     </footer>
     <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
-    <script src="/pwa.js?v=7.8.2"></script>
-    <script src="/product-signals.js?v=7.8.2"></script>
-    <script src="/pricing-logic.js?v=7.8.2"></script>
-    <script src="/pricing-state.js?v=7.8.2"></script>
-    <script src="/pricing-api.js?v=7.8.2"></script>
-    <script src="/pricing-render.js?v=7.8.2"></script>
-    <script src="/pricing-events.js?v=7.8.2"></script>
-    <script src="/pricing.js?v=7.8.2"></script>
+    <script src="/pwa.js?v=7.8.3"></script>
+    <script src="/product-signals.js?v=7.8.3"></script>
+    <script src="/pricing-logic.js?v=7.8.3"></script>
+    <script src="/pricing-state.js?v=7.8.3"></script>
+    <script src="/pricing-api.js?v=7.8.3"></script>
+    <script src="/pricing-render.js?v=7.8.3"></script>
+    <script src="/pricing-events.js?v=7.8.3"></script>
+    <script src="/pricing.js?v=7.8.3"></script>
   </body>
 </html>

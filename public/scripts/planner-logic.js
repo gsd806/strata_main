@@ -62,7 +62,7 @@
     if(error?.code==="NETWORK_ERROR")return "STRATA is offline. Your changes are still unsaved; check your connection and retry.";
     if(error?.status===401)return "Your session ended before the plan was saved. Sign in again, then retry.";
     if(error?.status===403)return "The secure save token expired. Refresh this page, review your plan, and retry.";
-    if(error?.status===413)return "This plan is too large to save. Remove a few movements, then retry.";
+    if(error?.status===413)return "This plan is too large to save. Remove a few exercises, then retry.";
     if([400,422].includes(error?.status)&&error?.message&&error.message!=="Request failed.")return error.message;
     if(Number(error?.status)>=500)return "STRATA could not save right now. Your changes are still here; retry in a moment.";
     return error?.message&&error.message!=="Request failed."?error.message:"Your plan was not saved. Review your changes and retry.";

@@ -24,7 +24,7 @@ test("account and setup navigation fit narrow screens with touch-sized targets",
   try{
     const fixtures=[
       {name:"account",header:headerFrom("public/pages/account.html"),css:`${read("public/styles/account.css")}\n${sharedCss}`,current:"Account"},
-      {name:"setup",header:headerFrom("public/pages/onboarding.html"),css:`${read("public/styles/onboarding.css")}\n${sharedCss}`,current:null}
+      {name:"setup",header:headerFrom("public/pages/onboarding.html"),css:`${read("public/styles/onboarding.css")}\n${sharedCss}`,current:"Plan"}
     ];
     for(const width of [320,390])for(const fixture of fixtures){
       const page=await browser.newPage({viewport:{width,height:700}});
@@ -35,7 +35,7 @@ test("account and setup navigation fit narrow screens with touch-sized targets",
         current:document.querySelector('.product-nav [aria-current="page"]')?.textContent.trim()||null
       }));
       assert.ok(result.overflow<=1,`${fixture.name} navigation overflows ${width}px by ${result.overflow}px`);
-      assert.deepEqual(result.links.map(link=>link.text),["Rankings","Strata+","Plan","Train","Account"]);
+      assert.deepEqual(result.links.map(link=>link.text),["Exercises","Plan","Train","Progress","Account"]);
       assert.ok(result.links.every(link=>link.width>=44&&link.height>=44),`${fixture.name} navigation must keep 44×44px targets at ${width}px`);
       assert.ok(result.links.every(link=>link.fontSize>=11),`${fixture.name} navigation text must remain readable at ${width}px`);
       assert.equal(result.current,fixture.current);
@@ -51,26 +51,26 @@ test("responsive product headers follow their visual keyboard order",{timeout:30
   try{
     const fixtures=[
       {
-        name:"Strata+",header:headerFrom("public/pages/discover.html"),css:read("public/styles/discover.css"),bodyClass:"plus-studio",
-        desktop:["STRATA home","Rankings","Strata+","Plan","Train","Account","Sign out"],
-        mobile:["STRATA home","Account","Sign out","Rankings","Strata+","Plan","Train"]
+        name:"Exercises",header:headerFrom("public/pages/discover.html"),css:`${read("public/styles/discover.css")}\n${sharedCss}`,bodyClass:"plus-studio",
+        desktop:["STRATA home","Exercises","Plan","Train","Progress","Account","Sign out"],
+        mobile:["STRATA home","Sign out","Exercises","Plan","Train","Progress","Account"]
       },
       {
-        name:"Plan",header:headerFrom("public/pages/planner.html"),css:read("public/styles/planner.css"),signedIn:true,
-        desktop:["STRATA rankings","Rankings","Strata+","Plan","Train","Account","Sign out"],
-        mobile:["STRATA rankings","Account","Sign out","Rankings","Strata+","Plan","Train"]
+        name:"Plan",header:headerFrom("public/pages/planner.html"),css:`${read("public/styles/planner.css")}\n${sharedCss}`,signedIn:true,
+        desktop:["STRATA home","Exercises","Plan","Train","Progress","Account","Sign out"],
+        mobile:["STRATA home","Sign out","Exercises","Plan","Train","Progress","Account"]
       },
       {
-        name:"Train",header:headerFrom("public/pages/workout.html"),css:read("public/styles/workout.css"),
-        desktop:["STRATA rankings","Rankings","Strata+","Plan","Train","Account"],
-        mobile:["STRATA rankings","Account","Rankings","Strata+","Plan","Train"]
+        name:"Train",header:headerFrom("public/pages/workout.html"),css:`${read("public/styles/workout.css")}\n${sharedCss}`,
+        desktop:["STRATA home","Exercises","Plan","Train","Progress","Account"],
+        mobile:["STRATA home","Exercises","Plan","Train","Progress","Account"]
       }
     ];
     for(const fixture of fixtures)for(const [width,expected] of [[1200,fixture.desktop],[390,fixture.mobile],[320,fixture.mobile]]){
       const page=await browser.newPage({viewport:{width,height:800}});
       await page.setContent(`<style>${fixture.css}</style>${fixture.header}`);
       if(fixture.bodyClass)await page.evaluate((bodyClass)=>{document.body.className=bodyClass;},fixture.bodyClass);
-      if(fixture.signedIn)await page.evaluate(()=>{document.getElementById("userName").hidden=false;document.getElementById("logoutButton").hidden=false;});
+      if(fixture.signedIn)await page.evaluate(()=>{document.getElementById("userName").hidden=false;document.getElementById("userName").textContent="A very long member name that must fit";document.getElementById("logoutButton").hidden=false;});
       const result=await page.evaluate(()=>{
         const controls=[...document.querySelectorAll("header a,header button")].filter((control)=>{
           const style=getComputedStyle(control),rect=control.getBoundingClientRect();
@@ -80,6 +80,8 @@ test("responsive product headers follow their visual keyboard order",{timeout:30
         document.body.tabIndex=-1;document.body.focus();
         return {
           labels:controls.map((control)=>(control.getAttribute("aria-label")||control.textContent||"").replace(/\s+/g," ").trim()),
+          clippedNavigation:[...document.querySelectorAll('header nav[aria-label="Primary navigation"] a')].filter(link=>{const box=link.getBoundingClientRect();if(!box.width)return false;const range=document.createRange();range.selectNodeContents(link);const text=range.getBoundingClientRect();return text.left<box.left||text.right>box.right;}).map(link=>link.textContent.trim()),
+          navigationRows:[...document.querySelectorAll('header nav[aria-label="Primary navigation"]')].filter(nav=>nav.getBoundingClientRect().height>0).map(nav=>[...new Set([...nav.querySelectorAll("a")].map(link=>Math.round(link.getBoundingClientRect().top)))]),
           targets:controls.map((control)=>{const rect=control.getBoundingClientRect();return{width:rect.width,height:rect.height};}),
           overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth
         };
@@ -89,6 +91,8 @@ test("responsive product headers follow their visual keyboard order",{timeout:30
         await page.keyboard.press("Tab");
         keyboard.push(await page.evaluate(()=>Number(document.activeElement?.dataset.focusOrder)));
       }
+      assert.deepEqual(result.clippedNavigation,[],`${fixture.name} primary labels must fit each target at ${width}px`);
+      assert.ok(result.navigationRows.every(rows=>rows.length===1),`${fixture.name} primary links must share one row at ${width}px`);
       assert.deepEqual(result.labels,expected,`${fixture.name} visible controls must follow visual order at ${width}px`);
       assert.deepEqual(keyboard,expected.map((_,index)=>index),`${fixture.name} Tab order must follow its visible controls at ${width}px`);
       assert.ok(result.targets.every(({width:targetWidth,height})=>targetWidth>=44&&height>=44),`${fixture.name} header targets must remain at least 44×44px at ${width}px`);
@@ -179,5 +183,23 @@ test("planner cards contain long text and usable controls at every responsive bo
       assert.equal(result.inside,true,`Planner save failure leaves the header at ${width}px`);
     }
     await page.close();
+  }finally{await browser.close();}
+});
+
+
+test("Exercises primary navigation has five unclipped targets in one row",{timeout:30_000},async()=>{
+  const options={headless:true};if(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH)options.executablePath=resolve(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH);
+  const browser=await chromium.launch(options);
+  try{
+    const header=headerFrom("public/pages/index.html"),mobile=read("public/pages/index.html").match(/<nav class="mobile-public-nav"[\s\S]*?<\/nav>/)?.[0];assert.ok(mobile);
+    const page=await browser.newPage({viewport:{width:1200,height:800}});
+    for(const width of [1200,801,800,700,390,320]){
+      await page.setViewportSize({width,height:800});await page.setContent(`<style>${read("public/styles/styles.css")}\n${read("public/styles/experience.css")}\n${sharedCss}</style><body class="home-page">${header}${mobile}</body>`);
+      const result=await page.evaluate(()=>{
+        const links=[...document.querySelectorAll('nav[aria-label="Primary navigation"] a')].filter(link=>link.getBoundingClientRect().width>0);
+        return{labels:links.map(link=>link.textContent.trim()),rows:[...new Set(links.map(link=>Math.round(link.getBoundingClientRect().top)))],small:links.filter(link=>{const box=link.getBoundingClientRect();return box.width<44||box.height<44;}).length,clipped:links.filter(link=>{const box=link.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(link);const text=range.getBoundingClientRect();return text.left<box.left||text.right>box.right;}).map(link=>link.textContent.trim()),overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth};
+      });
+      assert.deepEqual(result.labels,["Exercises","Plan","Train","Progress","Account"]);assert.equal(result.rows.length,1,`Exercises primary navigation wraps at ${width}px`);assert.equal(result.small,0);assert.deepEqual(result.clipped,[],`Exercises primary labels clip at ${width}px`);assert.ok(result.overflow<=1,`Exercises header overflows at ${width}px`);
+    }
   }finally{await browser.close();}
 });

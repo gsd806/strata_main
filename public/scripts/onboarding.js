@@ -60,7 +60,7 @@
   function allowEditing(preferences){
     profileKey=`strata_setup_v1:user:${user.id}`;const saved=renderSavedProfile(preferences,original);if(!activationIntent)restoreSessionLength();ready=true;$("setupFields").disabled=false;
     const replacing=hasItems(original);
-    $("setupKicker").textContent=replacing?"01 / REBUILD YOUR WEEK":"01 / YOUR STARTING POINT";
+    $("setupKicker").textContent=replacing?"Plan / Rebuild week":"Plan / Weekly setup";
     $("generateWeekLabel").textContent=replacing?"Preview a replacement week":"Preview my first week";
     $("accountMode").textContent=(replacing
       ?`Strata+ · ${user.name||"Your account"}. You already have a saved week. Previewing is safe; saving a new week replaces it only after you confirm.`
@@ -91,7 +91,7 @@
     ready=false;$("setupFields").disabled=true;$("retrySetup").hidden=true;$("previewSummary").hidden=true;status("Loading your starting point…");
     try{
       if(!exercises.length){
-        const response=await fetch("/exercises.json?v=7.8.2");if(!response.ok)throw new Error("The exercise library is unavailable. Reconnect and retry.");exercises=await response.json();
+        const response=await fetch("/exercises.json?v=7.8.3");if(!response.ok)throw new Error("The exercise library is unavailable. Reconnect and retry.");exercises=await response.json();
       }
       const account=await request("/api/setup",{cache:"no-store"});requirePlus(account);
       if(!account.csrfToken)throw new Error("Your account could not be verified. Retry before editing.");
@@ -99,12 +99,12 @@
     }catch(error){status(error.message,{tone:"error",focus:true});$("accountMode").textContent="Setup is unavailable right now. Your existing plan has not changed.";$("retrySetup").hidden=false;}
   }
   function renderPreview(){
-    $("previewTitle").textContent="Review your week.";
+    $("previewTitle").textContent="Review your week";
     const snapshot=core.trainingSnapshot(profile(),preview);
-    $("previewSummary").innerHTML=`<div><strong>${snapshot.trainingDays}</strong><span>training day${snapshot.trainingDays===1?"":"s"}</span></div><div><strong>${snapshot.movementCount}</strong><span>movements</span></div><div><strong>${snapshot.workingSets}</strong><span>working sets</span></div>`;
+    $("previewSummary").innerHTML=`<div><strong>${snapshot.trainingDays}</strong><span>training day${snapshot.trainingDays===1?"":"s"}</span></div><div><strong>${snapshot.movementCount}</strong><span>exercises</span></div><div><strong>${snapshot.workingSets}</strong><span>working sets</span></div>`;
     $("previewSummary").hidden=false;
-    $("weekPreview").innerHTML=core.DAYS.map(day=>{const session=preview.sessions.find(item=>item.day===day);return `<section class="preview-day"><h3>${day} ${session?`<small> / ${escape(session.focusLabel)}</small>`:""}</h3>${session?`<small>${escape(session.summary)}</small><details><summary>Review ${session.items.length} movements</summary><ul>${session.items.map(item=>`<li>${escape(item.exercise.name)} · ${item.sets} × ${escape(item.reps)}<br /><small>${escape(item.roleLabel)} · ${escape(item.exercise.equipment)}</small></li>`).join("")}</ul></details>`:"<small>Recovery / no planned session</small>"}</section>`;}).join("");
-    $("replaceNotice").textContent=hasItems(original)?"You already have a saved week. Saving this preview replaces it; download a copy of your current week first.":"Your first week is ready. Save it, then adjust any movement, sets, or reps in the planner.";
+    $("weekPreview").innerHTML=core.DAYS.map(day=>{const session=preview.sessions.find(item=>item.day===day);return `<section class="preview-day"><h3>${day} ${session?`<small> / ${escape(session.focusLabel)}</small>`:""}</h3>${session?`<small>${escape(session.summary)}</small><details><summary>Review ${session.items.length} exercises</summary><ul>${session.items.map(item=>`<li>${escape(item.exercise.name)} · ${item.sets} × ${escape(item.reps)}<br /><small>${escape(item.roleLabel)} · ${escape(item.exercise.equipment)}</small></li>`).join("")}</ul></details>`:"<small>No planned workout</small>"}</section>`;}).join("");
+    $("replaceNotice").textContent=hasItems(original)?"You already have a saved week. Saving this preview replaces it; download a copy of your current week first.":"Your first week is ready. Save it, then adjust exercises, sets, or reps in Plan.";
     const oldLink=document.getElementById("previousWeek");if(oldLink)oldLink.remove();
     if(hasItems(original)){
       if(previousDownload)URL.revokeObjectURL(previousDownload);

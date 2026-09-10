@@ -254,7 +254,7 @@ test("homepage creates a real no-account shortlist with reasons and trade-offs",
   assert.equal((elements.get("quickPreviewResults").innerHTML.match(/class="preview-result"/g)||[]).length,3);
   assert.match(elements.get("quickPreviewResults").innerHTML,/Why this moved up/);
   assert.match(elements.get("quickPreviewResults").innerHTML,/Trade-off:/);
-  assert.match(elements.get("quickPreviewResults").innerHTML,/Personal match/);
+  assert.match(elements.get("quickPreviewResults").innerHTML,/Match for you/);
   assert.match(elements.get("quickPreviewResults").innerHTML,/FitScore/);
   assert.equal(elements.get("quickPreviewActions").hidden,false);
   assert.match(elements.get("quickPreviewStatus").textContent,/Shortlist ready/);

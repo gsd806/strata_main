@@ -48,7 +48,7 @@
       el("localPlanSummary").innerHTML=planConflictSummary(local);
       el("reviewLocalPlan").hidden=state.conflictReview;
       el("draftRecoveryLabel").hidden=state.recoveredDrafts.length<2||state.conflictReview;
-      el("draftRecoverySelect").innerHTML=state.recoveredDrafts.map((entry,index)=>`<option value="${escapeHtml(entry.key)}">Draft ${index+1} · ${escapeHtml(new Date(entry.data.updatedAt).toLocaleString())} · ${planMovementCount(entry.data.plan)} movements</option>`).join("");
+      el("draftRecoverySelect").innerHTML=state.recoveredDrafts.map((entry,index)=>`<option value="${escapeHtml(entry.key)}">Draft ${index+1} · ${escapeHtml(new Date(entry.data.updatedAt).toLocaleString())} · ${planMovementCount(entry.data.plan)} exercises</option>`).join("");
       el("draftRecoverySelect").value=state.recoverySource?.key||"";
       panel.hidden=false;
     }

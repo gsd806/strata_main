@@ -9,19 +9,18 @@
   const GROUP_LABELS=Object.freeze({chest:"Chest",back:"Back",shoulders:"Shoulders",arms:"Arms",legs:"Legs",glutes:"Glutes",calves:"Calves",core:"Core"});
   const PREFERENCE_OPTIONS=Object.freeze({stable:"Stable setup","long-range":"Long-range friendly","simple-setup":"Simple setup",compound:"Compound lifts",isolation:"Isolation work"});
   const LIMITATION_OPTIONS=Object.freeze({"no-overhead":"Avoid overhead positions","no-deep-knee":"Avoid deep knee flexion","no-unsupported-hinge":"Avoid unsupported hinges","no-floor":"Avoid floor exercises","no-unilateral":"Avoid unilateral work"});
-  const FEATURE_DEFAULT="today";
+  const FEATURE_DEFAULT="recommendations";
   const FEATURE_CONFIG=Object.freeze({
-    today:Object.freeze({panelId:"todayWorkspace",headingId:"todayTitle",label:"Today"}),
-    plan:Object.freeze({panelId:"planWorkspace",headingId:"planWorkspaceTitle",label:"Plan"}),
     progress:Object.freeze({panelId:"progressWorkspace",headingId:"progressWorkspaceTitle",label:"Progress"}),
-    explore:Object.freeze({panelId:"exploreWorkspace",headingId:"exploreWorkspaceTitle",label:"Explore"}),
-    recommendations:Object.freeze({panelId:"recommendations",headingId:"recommendationTitle",label:"Best exercises for you"}),
-    library:Object.freeze({panelId:"exerciseExplorer",headingId:"explorerTitle",label:"Exercise library"}),
+    recommendations:Object.freeze({panelId:"recommendations",headingId:"recommendationTitle",label:"Recommended exercises"}),
+    library:Object.freeze({panelId:"exerciseExplorer",headingId:"explorerTitle",label:"Browse exercises"}),
     battle:Object.freeze({panelId:"battle",headingId:"battleTitle",label:"Compare exercises"}),
-    profile:Object.freeze({panelId:"profile",headingId:"profileTitle",label:"Personalize recommendations"}),
-    community:Object.freeze({panelId:"communityPlans",headingId:"communityPlansTitle",label:"Browse community plans"}),
-    monthly:Object.freeze({panelId:"monthlyPlan",headingId:"monthlyPlanTitle",label:"Build a 31-day plan"}),
-    session:Object.freeze({panelId:"sessionBuilder",headingId:"sessionBuilderTitle",label:"Build a session"})
+    profile:Object.freeze({panelId:"profile",headingId:"profileTitle",label:"Recommendation preferences"}),
+    community:Object.freeze({panelId:"communityPlans",headingId:"communityPlansTitle",label:"Shared plans"}),
+    monthly:Object.freeze({panelId:"monthlyPlan",headingId:"monthlyPlanTitle",label:"Monthly schedule"}),
+    session:Object.freeze({panelId:"sessionBuilder",headingId:"sessionBuilderTitle",label:"Workout builder"}),
+    block:Object.freeze({panelId:"trainingBlockWorkspace",headingId:"trainingBlockTitle",label:"Training block"}),
+    saved:Object.freeze({panelId:"savedExercises",headingId:"savedExercisesTitle",label:"Saved exercises"})
   });
   const LIMITS=Object.freeze({
     explorerDesktopPageSize:24,

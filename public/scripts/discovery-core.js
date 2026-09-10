@@ -115,7 +115,7 @@
     if(Number(preferences.days)<=3&&practicality(exercise)>=86){raw+=2;reasons.push("efficient for a shorter week");}
     const available=(preferences.equipment||[]).includes(exercise.equipment),constrained=excludedByLimitations(exercise,preferences.limitations||[]);
     if(!available)reasons.unshift(`${exercise.equipment.toLowerCase()} unavailable`);
-    if(constrained)reasons.unshift("excluded by a saved movement constraint");
+    if(constrained)reasons.unshift("excluded by a saved exercise constraint");
     return {match:round(clamp(raw,40,99)),eligible:available&&!constrained,reasons:[...new Set(reasons)].slice(0,3)};
   }
 
@@ -154,7 +154,7 @@
     return {
       setup:`Use ${String(exercise.equipment||"the listed equipment").toLowerCase()}. ${cues[0]||"Set up in a stable position before the first working set."}`,
       cues:cues.slice(1),
-      mistake:String(exercise.caution||"Keep the movement controlled and stop if the setup no longer feels comfortable."),
+      mistake:String(exercise.caution||"Keep the exercise controlled and stop if the setup no longer feels comfortable."),
       prescription:`${String(exercise.sets||"Review your plan")} sets · ${String(exercise.reps||"use your planned range")} · ${String(exercise.rest||"rest as needed")}`,
       purpose:`${String(exercise.sub||exercise.group||"Training target")} · ${String(exercise.pattern||"movement")}. ${String(exercise.why||"")}`.trim(),
       alternatives
@@ -204,9 +204,9 @@
 
   function comparisonRecommendation(exercises,preferences){
     if(!Array.isArray(exercises)||exercises.length<2||exercises.length>4)return {winner:null,error:"Choose between two and four exercises."};
-    if(!exercises.every((exercise)=>targetsCompatible(exercise,exercises[0])))return {winner:null,reason:"These movements target different muscles or training roles, so there is no honest universal winner. Compare how each one fits into the week instead."};
+    if(!exercises.every((exercise)=>targetsCompatible(exercise,exercises[0])))return {winner:null,reason:"These exercises target different muscles or training roles, so there is no honest universal winner. Compare how each one fits into the week instead."};
     const eligible=exercises.filter((exercise)=>personalResult(exercise,preferences).eligible);
-    if(!eligible.length)return {winner:null,reason:"None of these movements matches your saved equipment and movement constraints. Update the selection or your profile before choosing a winner."};
+    if(!eligible.length)return {winner:null,reason:"None of these exercises matches your saved equipment and exercise constraints. Update the selection or your profile before choosing a winner."};
     const ranked=eligible.map((exercise)=>({exercise,value:personalResult(exercise,preferences).match*.55+exercise.score*.45})).sort((a,b)=>b.value-a.value);
     const goal={hypertrophy:"hypertrophy selection",strength:"strength skill",balanced:"balanced selection","time-efficient":"time-efficient selection"}[preferences.goal]||"saved selection";
     const winner=ranked[0].exercise,match=personalResult(winner,preferences).match;
@@ -267,30 +267,30 @@
   }
   function buildLegacySession({exercises,preferences,focus="full",minutes=35,weeklyPlan=null}={}){
     const focusConfig=SESSION_FOCUSES[focus],lengthConfig=SESSION_LENGTHS[Number(minutes)];
-    if(!focusConfig)throw sessionError("Choose a valid session focus.","INVALID_SESSION_FOCUS");
+    if(!focusConfig)throw sessionError("Choose a valid workout focus.","INVALID_SESSION_FOCUS");
     if(!lengthConfig)throw sessionError("Choose 20, 35, or 50 minutes.","INVALID_SESSION_LENGTH");
     if(!preferences||typeof preferences!=="object")throw sessionError("Your saved training profile is unavailable.","INVALID_SESSION_PROFILE");
     const candidates=(Array.isArray(exercises)?exercises:[]).filter((exercise)=>sessionFocusMatches(exercise,focus)).map((exercise)=>({exercise,personal:personalResult(exercise,preferences)})).filter(({personal})=>personal.eligible);
-    if(candidates.length<lengthConfig.count)throw sessionError(`Only ${candidates.length} eligible ${focusConfig.label.toLowerCase()} exercise${candidates.length===1?" matches":"s match"} your equipment and movement constraints. Choose a shorter session or update your profile.`,"SESSION_POOL_TOO_SMALL");
+    if(candidates.length<lengthConfig.count)throw sessionError(`Only ${candidates.length} eligible ${focusConfig.label.toLowerCase()} exercise${candidates.length===1?" matches":"s match"} your equipment and exercise constraints. Choose a shorter workout or update your profile.`,"SESSION_POOL_TOO_SMALL");
     const requiredRoles=focusConfig.slots.slice(0,lengthConfig.count),missingRole=requiredRoles.find((role)=>!candidates.some(({exercise})=>sessionRoleMatches(exercise,role)));
-    if(missingRole)throw sessionError(`Your saved equipment and movement constraints do not provide an eligible ${missingRole.label.toLowerCase()} movement for this ${focusConfig.label.toLowerCase()} session. Choose a different focus or update your profile.`,"SESSION_ROLE_UNAVAILABLE");
-    if(!sessionRolesAreFeasible(candidates,requiredRoles))throw sessionError(`Your saved equipment and movement constraints do not provide enough distinct movements to cover every role in this ${focusConfig.label.toLowerCase()} session. Choose a shorter session, a different focus, or update your profile.`,"SESSION_ROLE_UNAVAILABLE");
+    if(missingRole)throw sessionError(`Your saved equipment and exercise constraints do not provide an eligible ${missingRole.label.toLowerCase()} exercise for this ${focusConfig.label.toLowerCase()} workout. Choose a different focus or update your profile.`,"SESSION_ROLE_UNAVAILABLE");
+    if(!sessionRolesAreFeasible(candidates,requiredRoles))throw sessionError(`Your saved equipment and exercise constraints do not provide enough distinct exercises to cover every role in this ${focusConfig.label.toLowerCase()} workout. Choose a shorter workout, a different focus, or update your profile.`,"SESSION_ROLE_UNAVAILABLE");
     const weekIds=scheduledExerciseIds(weeklyPlan),usedIds=new Set(),usedGroups=new Map(),usedSubs=new Map(),items=[];
     for(let index=0;index<lengthConfig.count;index++){
       const role=requiredRoles[index],roleMatches=candidates.filter(({exercise})=>!usedIds.has(exercise.id)&&sessionRoleMatches(exercise,role));
       const ranked=roleMatches.map((candidate)=>({...candidate,selectionScore:sessionCandidateScore(candidate,{role,usedGroups,usedSubs,weekIds})})).sort((a,b)=>b.selectionScore-a.selectionScore||b.personal.match-a.personal.match||Number(b.exercise.score)-Number(a.exercise.score)||String(a.exercise.id).localeCompare(String(b.exercise.id)));
       const remainingRoles=requiredRoles.slice(index+1),selected=ranked.find(({exercise})=>sessionRolesAreFeasible(candidates,remainingRoles,new Set([...usedIds,exercise.id])));
-      if(!selected)throw sessionError(`STRATA could not cover every programmed role in this ${focusConfig.label.toLowerCase()} session with distinct eligible movements. Choose a shorter session, a different focus, or update your profile.`,"SESSION_ROLE_UNAVAILABLE");
+      if(!selected)throw sessionError(`STRATA could not cover every programmed role in this ${focusConfig.label.toLowerCase()} workout with distinct eligible exercises. Choose a shorter workout, a different focus, or update your profile.`,"SESSION_ROLE_UNAVAILABLE");
       const {exercise,personal}=selected,roleLabel=role.label,sets=sessionSetCount(exercise,lengthConfig.minutes,index);
       const reasons=[roleLabel];
       if(personal.reasons?.length)reasons.push(personal.reasons[0]);
       else reasons.push(`${exercise.score} official FitScore`);
-      if(weekIds.size)reasons.push(weekIds.has(exercise.id)?"was already in your saved week but remained the strongest fit":"was not yet in your saved week when this session was generated");
+      if(weekIds.size)reasons.push(weekIds.has(exercise.id)?"was already in your saved week but remained the strongest fit":"was not yet in your saved week when this workout was generated");
       items.push({exercise,exerciseId:exercise.id,role:role.key,roleLabel,sets,reps:String(exercise.reps||"8–12"),rest:String(exercise.rest||"60–90 s"),match:personal.match,reasons});
       usedIds.add(exercise.id);usedGroups.set(exercise.group,(usedGroups.get(exercise.group)||0)+1);usedSubs.set(exercise.sub,(usedSubs.get(exercise.sub)||0)+1);
     }
     const workingSets=items.reduce((sum,item)=>sum+item.sets,0);
-    return {focus,focusLabel:focusConfig.label,minutes:lengthConfig.minutes,timeLabel:lengthConfig.label,estimatedMinutes:lengthConfig.minutes,workingSets,items,summary:`${items.length} movements · ${workingSets} working sets · about ${lengthConfig.minutes} minutes`};
+    return {focus,focusLabel:focusConfig.label,minutes:lengthConfig.minutes,timeLabel:lengthConfig.label,estimatedMinutes:lengthConfig.minutes,workingSets,items,summary:`${items.length} exercises · ${workingSets} working sets · about ${lengthConfig.minutes} minutes`};
   }
 
   function repeatSessionAnchors(session,anchors,limit=2){
@@ -316,7 +316,7 @@
       if(repeated.length>=requested)break;
     }
     const workingSets=items.reduce((sum,item)=>sum+clamp(Math.round(Number(item?.sets)||0),0,10),0);
-    return{...session,workingSets,items,anchorExerciseIds:repeated,summary:`${items.length} movements · ${workingSets} working sets · about ${session.minutes} minutes`};
+    return{...session,workingSets,items,anchorExerciseIds:repeated,summary:`${items.length} exercises · ${workingSets} working sets · about ${session.minutes} minutes`};
   }
 
   function planItemCount(plan){return WEEKDAYS.reduce((sum,day)=>sum+(Array.isArray(plan?.days?.[day])?plan.days[day].length:0),0);}
@@ -333,7 +333,7 @@
     if(!WEEKDAYS.includes(day))throw sessionPlanError("Choose a valid planner day.","INVALID_SESSION_DAY");
     if((plan.restDays||[plan.restDay]).includes(day))throw sessionPlanError(`${day} is your recovery day. Choose another day or change it in My Plan first.`,"SESSION_REST_DAY");
     const sourceItems=Array.isArray(session?.items)?session.items:[];
-    if(!sourceItems.length)throw sessionPlanError("Build a session before adding it to your week.","EMPTY_SESSION");
+    if(!sourceItems.length)throw sessionPlanError("Build a workout before adding it to your week.","EMPTY_SESSION");
     const output={...plan,days:Object.fromEntries(WEEKDAYS.map((name)=>[name,plan.days[name].map((item)=>({...item}))]))},existingIds=new Set(output.days[day].map((item)=>String(item.exerciseId))),pending=[],seen=new Set();
     for(const item of sourceItems){
       const exerciseId=String(item?.exerciseId||item?.exercise?.id||"");
@@ -343,8 +343,8 @@
       pending.push({exerciseId,sets:clamp(Math.round(Number(item.sets)||3),1,10),reps:String(item.reps||item.exercise?.reps||"8–12").trim().slice(0,20)||"8–12"});
     }
     const skipped=sourceItems.length-pending.length;
-    if(output.days[day].length+pending.length>maxDayItems)throw sessionPlanError(`${day} does not have room for the complete session. Remove exercises in My Plan or choose another day.`,"SESSION_DAY_CAPACITY");
-    if(planItemCount(output)+pending.length>maxPlanItems)throw sessionPlanError("Your weekly plan does not have room for the complete session. Remove exercises in My Plan, then try again.","SESSION_PLAN_CAPACITY");
+    if(output.days[day].length+pending.length>maxDayItems)throw sessionPlanError(`${day} does not have room for the complete workout. Remove exercises in My Plan or choose another day.`,"SESSION_DAY_CAPACITY");
+    if(planItemCount(output)+pending.length>maxPlanItems)throw sessionPlanError("Your weekly plan does not have room for the complete workout. Remove exercises in My Plan, then try again.","SESSION_PLAN_CAPACITY");
     const usedInstances=new Set(WEEKDAYS.flatMap((name)=>output.days[name].map((item)=>String(item.instanceId||""))).filter(Boolean));
     pending.forEach((item,index)=>output.days[day].push({...item,instanceId:sessionInstanceId(day,item.exerciseId,index,usedInstances,makeInstanceId)}));
     return {plan:output,added:pending.length,skipped,changed:pending.length>0};
@@ -353,14 +353,14 @@
   function weeklyPulse(plan,{today=new Date(),profileDays=0}={}){
     const fallbackDate=today instanceof Date&&!Number.isNaN(today.getTime())?today:new Date(),fallbackDay=WEEKDAYS[(fallbackDate.getDay()+6)%7],rawDay=typeof today==="string"&&WEEKDAYS.includes(today)?today:fallbackDay,todayIndex=WEEKDAYS.indexOf(rawDay);
     const scheduled=WEEKDAYS.map((day)=>({day,items:Array.isArray(plan?.days?.[day])?plan.days[day]:[]})).filter(({items})=>items.length),scheduledDays=scheduled.length,targetDays=clamp(Math.round(Number(profileDays)||1),1,7),progressPercent=round(clamp(scheduledDays/targetDays*100,0,100));
-    if(!scheduledDays)return {day:null,isToday:false,offset:null,movements:0,workingSets:0,scheduledDays,targetDays,progressPercent:0,eyebrow:"Saved week",title:"NO SESSIONS SCHEDULED.",detail:`0 scheduled training days · ${targetDays}-day profile target.`,actionLabel:"Build my week"};
+    if(!scheduledDays)return {day:null,isToday:false,offset:null,movements:0,workingSets:0,scheduledDays,targetDays,progressPercent:0,eyebrow:"Saved week",title:"NO WORKOUTS SCHEDULED.",detail:`0 scheduled training days · ${targetDays}-day profile target.`,actionLabel:"Build my week"};
     let selected=null,offset=0;
     for(;offset<WEEKDAYS.length;offset++){
       const day=WEEKDAYS[(todayIndex+offset)%WEEKDAYS.length],items=Array.isArray(plan?.days?.[day])?plan.days[day]:[];
       if(items.length){selected={day,items};break;}
     }
     const movements=selected.items.length,workingSets=selected.items.reduce((sum,item)=>sum+clamp(Math.round(Number(item?.sets)||0),0,10),0),isToday=offset===0,when=isToday?"Today":offset===1?"Tomorrow":selected.day;
-    return {day:selected.day,isToday,offset,movements,workingSets,scheduledDays,targetDays,progressPercent,eyebrow:isToday?"Today in your week":"Next in your week",title:`${when.toUpperCase()} · ${movements} MOVEMENT${movements===1?"":"S"}.`,detail:`${selected.day} · ${workingSets} working sets · ${scheduledDays} scheduled training day${scheduledDays===1?"":"s"} vs ${targetDays}-day profile target.`,actionLabel:"Open weekly plan"};
+    return {day:selected.day,isToday,offset,movements,workingSets,scheduledDays,targetDays,progressPercent,eyebrow:isToday?"Today in your week":"Next in your week",title:`${when.toUpperCase()} · ${movements} EXERCISE${movements===1?"":"S"}.`,detail:`${selected.day} · ${workingSets} working sets · ${scheduledDays} scheduled training day${scheduledDays===1?"":"s"} vs ${targetDays}-day profile target.`,actionLabel:"Open weekly plan"};
   }
 
   return {FACTOR_KEYS,TRAIT_KEYS,ISOLATION,UNILATERAL,OVERHEAD,DEEP_KNEE,UNSUPPORTED_HINGE,FLOOR,WEEKDAYS,SESSION_LENGTHS,SESSION_FOCUSES,SESSION_SELECTION_MODES:SessionSelection?.SESSION_SELECTION_MODES,hasTrait,movementClass,round,clamp,levelNumber,averageMetric,setupScore,setupLabel,resistanceProfile,practicality,factorWeights,weightedBaseline,scoreAdjustment,excludedByLimitations,personalResult,similarity,targetsCompatible,alternativesFor,exerciseGuidance,gainsAndLosses,normalizeShortlist,filterExercises,comparisonRecommendation,sessionRoleMatches,sessionFocusMatches,sessionMuscleTargets,buildSession,repeatSessionAnchors,mergeSessionIntoPlan,weeklyPulse};

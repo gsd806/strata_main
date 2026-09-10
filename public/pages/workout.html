@@ -4,45 +4,48 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#10110f" />
-  <meta name="description" content="Train with your STRATA plan. Record actual sets, resume a session, and see your progress." />
+  <meta name="description" content="Train with your STRATA plan. Record actual sets, resume a workout, and see your progress." />
   <meta name="application-name" content="STRATA" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="STRATA" />
-  <title>Workout Room — STRATA</title>
+  <title>Train — STRATA</title>
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" href="/icons/strata-icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="/fonts.css?v=7.8.2" />
-  <link rel="stylesheet" href="/workout.css?v=7.8.2" />
-  <link rel="stylesheet" href="/product-signals.css?v=7.8.2" />
-  <script src="/motion.js?v=7.8.2"></script>
-</head>
+  <link rel="stylesheet" href="/fonts.css?v=7.8.3" />
+  <link rel="stylesheet" href="/workout.css?v=7.8.3" />
+  <link rel="stylesheet" href="/product-signals.css?v=7.8.3" />
+  <script src="/motion.js?v=7.8.3"></script>
+  <link rel="stylesheet" href="/product-nav.css?v=7.8.3" />
+  </head>
 <body class="workout-page">
   <a class="skip-link" href="#workoutTitle">Skip to workout</a>
   <header class="site-header">
-    <a class="brand" href="/" aria-label="STRATA rankings"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>STRATA</a>
-    <nav class="workout-nav workout-nav-desktop" aria-label="Primary navigation"><a href="/">Rankings</a><a href="/discover.html">Strata+</a><a href="/planner.html">Plan</a><a href="/workout.html" aria-current="page">Train</a></nav>
-    <a class="header-account" href="/account.html" id="accountLink">Account</a>
-    <nav class="workout-nav workout-nav-mobile" aria-label="Primary navigation"><a href="/">Rankings</a><a href="/discover.html">Strata+</a><a href="/planner.html">Plan</a><a href="/workout.html" aria-current="page">Train</a></nav>
+    <a class="brand" href="/" aria-label="STRATA home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>STRATA</a>
+    <nav class="workout-nav workout-nav-desktop" aria-label="Primary navigation"><a href="/" data-product-owner="exercises">Exercises</a><a href="/planner.html" data-product-owner="plan">Plan</a><a href="/workout.html" data-product-owner="train" aria-current="page">Train</a><a href="/discover.html#progressWorkspace" data-product-owner="progress">Progress</a><a href="/account.html" data-product-owner="account">Account</a></nav>
+
+    <nav class="workout-nav workout-nav-mobile" aria-label="Primary navigation"><a href="/" data-product-owner="exercises">Exercises</a><a href="/planner.html" data-product-owner="plan">Plan</a><a href="/workout.html" data-product-owner="train" aria-current="page">Train</a><a href="/discover.html#progressWorkspace" data-product-owner="progress">Progress</a><a href="/account.html" data-product-owner="account">Account</a></nav>
   </header>
   <main class="shell">
-    <div class="mode-notice" id="modeNotice" role="status">Checking your session…</div>
+    <div class="mode-notice" id="modeNotice" role="status">Checking your account…</div>
     <section class="hero" aria-labelledby="workoutTitle">
-      <div><p class="eyebrow"><span class="live-dot" aria-hidden="true"></span> The workout room</p><h1 id="workoutTitle" tabindex="-1">SHOW UP.<br /><em>BUILD ON IT.</em></h1><p class="hero-copy">Your plan becomes practice. Log the work you do, then see how far you’ve come.</p></div>
-      <div class="hero-visual" aria-hidden="true"><span class="orbital orbital-one"></span><span class="orbital orbital-two"></span><div class="visual-core"><span>ONE SET</span><strong>AT A<br />TIME.</strong><span class="visual-arrow">↗</span></div><span class="visual-label">CONSISTENCY COMPOUNDS</span></div>
+      <div><h1 id="workoutTitle" tabindex="-1">Train</h1><p class="hero-copy">Start or resume a workout from your weekly plan.</p></div>
     </section>
-    <section class="panel" id="accessPanel" hidden><p class="eyebrow">Strata+ access</p><h2>Your training, in one place.</h2><p>Guided workouts, set logging, and progress history are part of Strata+. Your free weekly Plan is unchanged and always available.</p><div class="actions"><a class="button primary" href="/pricing">Review Strata+ access</a><a class="button secondary" href="/planner.html">Return to free Plan</a></div></section>
-    <section class="panel error-panel" id="loadError" hidden role="alert"><h2>We couldn’t open your workout room.</h2><p id="loadErrorMessage"></p><button class="button primary" type="button" id="retryLoad">Try again</button></section>
-    <section class="panel recovery-panel" id="recoveryPanel" aria-labelledby="recoveryTitle" hidden><p class="eyebrow">Pick up where you left off</p><h2 id="recoveryTitle">Sessions saved on this device.</h2><p>Choose a session to review. Unsaved changes stay separate from the latest account version until you decide what to keep.</p><div id="recoveryList"></div></section>
-    <section class="panel conflict-panel" id="conflictPanel" aria-labelledby="conflictTitle" hidden><p class="eyebrow">A newer version exists</p><h2 id="conflictTitle" tabindex="-1">Your work is still here.</h2><p id="conflictMessage">This session changed in another tab or device. Choose the latest version, or explicitly save your changes as a separate session.</p><div id="conflictComparison" class="comparison"></div><div class="actions"><button class="button secondary" type="button" id="useLatest">Use latest saved version</button><button class="button primary" type="button" id="saveCopy">Save mine as a new session</button><button class="button quiet" type="button" id="exportConflict">Download my draft</button></div></section>
+    <section class="panel" id="accessPanel" hidden><p class="eyebrow">Strata+ access</p><h2>Train with Strata+</h2><p>Workout logging and saved history require Strata+. You can still build and edit your weekly plan.</p><div class="actions"><a class="button primary" href="/pricing">Review Strata+ access</a><a class="button secondary" href="/planner.html">Return to free Plan</a></div></section>
+    <section class="panel error-panel" id="loadError" hidden role="alert"><h2>Train could not load.</h2><p id="loadErrorMessage"></p><button class="button primary" type="button" id="retryLoad">Try again</button></section>
+    <section class="panel recovery-panel" id="recoveryPanel" aria-labelledby="recoveryTitle" hidden><p class="eyebrow">Device recovery</p><h2 id="recoveryTitle">Workouts saved on this device.</h2><p>Choose a workout to review. Unsaved changes stay separate from the latest account version until you decide what to keep.</p><div id="recoveryList"></div></section>
+    <section class="panel conflict-panel" id="conflictPanel" aria-labelledby="conflictTitle" hidden><p class="eyebrow">A newer version exists</p><h2 id="conflictTitle" tabindex="-1">Review conflicting workout versions</h2><p id="conflictMessage">This workout changed in another tab or device. Choose the latest version, or explicitly save your changes as a separate workout.</p><div id="conflictComparison" class="comparison"></div><div class="actions"><button class="button secondary" type="button" id="useLatest">Use latest saved version</button><button class="button primary" type="button" id="saveCopy">Save mine as a new workout</button><button class="button quiet" type="button" id="exportConflict">Download my draft</button></div></section>
     <div id="trainingRoom" hidden>
       <section class="panel start-panel" id="startPanel" aria-labelledby="startTitle">
-        <div class="section-heading"><div><p class="eyebrow" id="todayLabel">Your next session</p><h2 id="startTitle">Review your workout.</h2></div><a class="text-link" href="/planner.html">Edit plan ↗</a></div>
-        <label class="field day-field">Choose a plan day<select id="planDay"></select></label>
-        <div class="session-brief" id="planBrief" aria-label="Selected workout summary"></div>
-        <div class="start-bottom"><p id="startHint" class="muted"></p><div class="start-actions"><button class="button secondary" type="button" id="chooseScheduledDay" hidden>Choose a scheduled day <span aria-hidden="true">→</span></button><a class="button secondary" id="openPlannerFromEmpty" href="/planner.html" hidden>Add exercises to my week <span aria-hidden="true">↗</span></a><button class="button primary" type="button" id="startWorkout">Start working out <span aria-hidden="true">↗</span></button></div></div>
-        <details class="plan-preview-details"><summary>Preview exercises</summary><div class="plan-preview" id="planPreview"></div></details>
+        <div class="section-heading"><div><p class="eyebrow" id="todayLabel">Today</p><h2 id="startTitle">Today’s workout</h2></div><a class="text-link" id="editWorkoutWeek" href="/planner.html" hidden>Edit week ↗</a></div>
+        <p class="plan-status" id="planStatus" role="status"></p>
+        <label class="field day-field" id="planDayField" hidden>Choose a day<select id="planDay"></select></label>
+        <div class="session-brief" id="planBrief" aria-label="Selected workout summary" hidden></div>
+        <div class="train-history-notice" id="trainHistoryNotice" hidden><p id="trainHistoryMessage" role="status"></p><button class="button secondary" type="button" id="retryWorkoutHistory">Retry workout history</button></div>
+        <div class="start-bottom"><p id="startHint" class="muted"></p><div class="start-actions"><button class="button primary" type="button" id="resumeWorkout" hidden>Resume workout <span aria-hidden="true">→</span></button><button class="button primary" type="button" id="chooseScheduledDay" hidden>Choose a scheduled day <span aria-hidden="true">→</span></button><a class="button primary" id="openPlannerFromEmpty" href="/planner.html" hidden>Build your first week <span aria-hidden="true">↗</span></a><button class="button primary" type="button" id="startWorkout" hidden>Start workout <span aria-hidden="true">↗</span></button></div></div>
+        <p class="alternate-workout" id="differentWorkout" hidden><a class="text-link" href="/discover.html#sessionBuilder">Create a different workout ↗</a></p>
+        <details class="plan-preview-details" id="planPreviewDetails" hidden><summary>Preview exercises</summary><div class="plan-preview" id="planPreview"></div></details>
       </section>
       <section class="session" id="sessionPanel" aria-labelledby="sessionTitle" hidden>
         <div class="session-heading"><div><p class="eyebrow" id="sessionDate"></p><h2 id="sessionTitle" tabindex="-1"></h2><p class="muted">See the last comparable work, choose today’s target, then log what you actually do. Nothing changes your Plan without approval.</p></div><div class="session-clock"><span>Time since start</span><strong id="sessionElapsed">0:00</strong></div></div>
@@ -55,10 +58,10 @@
         <div id="sessionEntries" class="session-entries"></div>
         <div class="finish-bar"><p id="finishHint" class="muted"></p><button id="finishWorkout" type="button" class="button primary">Finish workout <span aria-hidden="true">✓</span></button></div>
       </section>
-      <section class="panel celebration" id="celebration" hidden aria-labelledby="celebrationTitle"><span class="completion-badge" aria-hidden="true">✓</span><p class="eyebrow">Session complete</p><h2 id="celebrationTitle">That’s work worth building on.</h2><p id="celebrationMessage"></p>
+      <section class="panel celebration" id="celebration" hidden aria-labelledby="celebrationTitle"><span class="completion-badge" aria-hidden="true">✓</span><p class="eyebrow">Workout complete</p><h2 id="celebrationTitle">Workout saved</h2><p id="celebrationMessage"></p>
         <section class="next-time" id="progressionPanel" aria-labelledby="progressionTitle" hidden><p class="eyebrow">Weight progression</p><h3 id="progressionTitle">Your next workout target.</h3><div id="progressionList" role="status" aria-live="polite"></div><p class="guidance-boundary">Targets use your completed sets and any optional effort or check-in feedback. Progress follows performance, not a weekly deadline. Review and apply a target when you next train the same exercise.</p></section>
         <form class="check-in" id="checkInForm" aria-labelledby="checkInTitle">
-          <div class="check-in-heading"><div><p class="eyebrow">Optional · about 15 seconds</p><h3 id="checkInTitle">How did this session feel?</h3></div><p>Your explicit answers can shape a small suggestion for next time. STRATA does not detect recovery, fatigue, pain, or injury.</p></div>
+          <div class="check-in-heading"><div><p class="eyebrow">Optional · about 15 seconds</p><h3 id="checkInTitle">How did this workout feel?</h3></div><p>Your explicit answers can shape a small suggestion for next time. STRATA does not detect recovery, fatigue, pain, or injury.</p></div>
           <div class="check-in-grid">
             <label>Difficulty<select id="checkInDifficulty" required><option value="">Choose</option><option value="1">1 · Very easy</option><option value="2">2 · Easier than planned</option><option value="3">3 · About right</option><option value="4">4 · Hard</option><option value="5">5 · Very hard</option></select></label>
             <label>Energy<select id="checkInEnergy" required><option value="">Choose</option><option value="1">1 · Very low</option><option value="2">2 · Low</option><option value="3">3 · Steady</option><option value="4">4 · Good</option><option value="5">5 · High</option></select></label>
@@ -68,37 +71,41 @@
           <div class="check-in-actions"><button class="button primary" id="saveCheckIn" type="submit">Save check-in</button><span id="checkInStatus" role="status" aria-live="polite" aria-atomic="true"></span></div>
         </form>
         <section class="adaptation-proposal" id="adaptationProposal" aria-labelledby="adaptationTitle" hidden><p class="eyebrow">Plan change available</p><h3 id="adaptationTitle"></h3><p id="adaptationExplanation"></p><p class="adaptation-change" id="adaptationChange"></p><p>No change happens unless you approve it.</p><div class="actions"><button class="button primary" id="acceptAdaptation" type="button">Approve this plan change</button><button class="button secondary" id="dismissAdaptation" type="button">Keep my current plan</button></div><p id="adaptationStatus" role="status" aria-live="polite" aria-atomic="true"></p></section>
-        <p class="completion-next-note">Your next session will show these targets beside your previous performance. Apply them when you are ready; your recorded results stay unchanged.</p>
+        <p class="completion-next-note">Your next workout will show these targets beside your previous performance. Apply them when you are ready; your recorded results stay unchanged.</p>
         <section class="calendar-next" id="calendarNext" hidden aria-labelledby="calendarNextTitle"><div><span>Optional reminder</span><strong id="calendarNextTitle">Put your next workout on your calendar.</strong><small id="calendarNextSummary"></small></div><a class="button secondary" id="calendarLink" href="#" download>Add to calendar <span aria-hidden="true">↓</span></a><p>The calendar file is created on this device. STRATA does not request notification access or send your plan to a calendar service.</p></section>
-        <a class="button" href="/discover.html#todayWorkspace">See my next session <span aria-hidden="true">→</span></a>
+        <a class="button" href="/discover.html#progressWorkspace">View progress <span aria-hidden="true">→</span></a>
         <button type="button" class="button secondary" id="anotherSession">Choose another workout</button>
       </section>
     </div>
     <section class="history-section" id="historySection" hidden aria-labelledby="historyTitle">
-      <div class="section-heading"><div><p class="eyebrow">Your training record</p><h2 id="historyTitle" tabindex="-1">The work adds up.</h2></div><button type="button" class="button secondary compact" id="refreshHistory">Refresh history</button></div>
+      <details class="workout-history" id="workoutHistory"><summary id="historyTitle"><span>Workout history</span><small id="historySummary">Completed workouts and recorded sets</small></summary>
+      <div class="history-toolbar"><button type="button" class="button secondary compact" id="refreshHistory">Refresh history</button><a class="text-link" href="/discover.html#progressWorkspace">View progress ↗</a></div>
       <div class="history-stats" id="historyStats"></div>
-      <div class="history-layout"><section class="panel history-log" aria-labelledby="historyLogTitle"><h3 id="historyLogTitle">Recent sessions</h3><div id="historyList"></div><p id="historyError" class="inline-error" role="alert" hidden></p><button type="button" class="button secondary full-width" id="loadMore" hidden>Load more sessions</button></section><section class="panel progress-panel" aria-labelledby="progressTitle"><p class="eyebrow">Progress, measured</p><h3 id="progressTitle">Build on your own best.</h3><p id="chartEmpty" class="muted">Complete a session to see your actual performance here.</p><div id="chartControls" hidden><label class="field">Exercise and logging format<select id="chartExercise"></select></label><label class="field">Measure<select id="chartMetric"></select></label></div><div id="performanceChart"></div><p class="scope-note" id="chartScope">Only completed sets in the loaded history are included. Reps and seconds are compared separately; bodyweight and assistance are never counted as external lifting volume.</p></section></div>
+      <div class="history-layout"><section class="panel history-log" aria-labelledby="historyLogTitle"><h3 id="historyLogTitle">Recent workouts</h3><div id="historyList"></div><p id="historyError" class="inline-error" role="alert" hidden></p><button type="button" class="button secondary full-width" id="loadMore" hidden>Load more workouts</button></section><section class="panel progress-panel" id="historyPerformance" aria-labelledby="progressTitle" hidden><h3 id="progressTitle">Exercise performance</h3><p id="chartEmpty" class="muted">Complete a workout to see your actual performance here.</p><div id="chartControls" hidden><label class="field">Exercise and logging format<select id="chartExercise"></select></label><label class="field">Measure<select id="chartMetric"></select></label></div><div id="performanceChart"></div><p class="scope-note" id="chartScope">Only completed sets in the loaded history are included. Reps and seconds are compared separately; bodyweight and assistance are never counted as external lifting volume.</p></section></div>
+      </details>
     </section>
     <div class="signal-consent-host" data-product-signals-consent-host></div>
-    <noscript><div class="panel">Enable JavaScript to log sessions and load workout history. Your week remains available in <a href="/planner.html">Plan</a>.</div></noscript>
+    <noscript><div class="panel">Enable JavaScript to log workouts and load workout history. Your week remains available in <a href="/planner.html">Plan</a>.</div></noscript>
   </main>
-  <footer>STRATA · Build 7.8.2 <span>Plan with purpose. Train with intent.</span><a href="/policies">Policies</a><a href="/install.html">Install app</a></footer>
-  <dialog id="finishDialog" aria-labelledby="finishDialogTitle"><form method="dialog"><p class="eyebrow">Close out your session</p><h2 id="finishDialogTitle">Finish this workout?</h2><p id="finishDialogMessage"></p><p>Only checked sets count toward your history and progress. Unfinished sets stay in the session for reference.</p><div class="actions"><button class="button secondary" value="cancel">Keep training</button><button class="button primary" value="finish">Finish and save</button></div></form></dialog>
-  <dialog id="detailDialog" aria-labelledby="detailTitle"><div class="section-heading"><h2 id="detailTitle"></h2><button class="button quiet compact" type="button" id="closeDetail" aria-label="Close session details">Close ×</button></div><div id="detailBody"></div></dialog>
-  <dialog id="swapDialog" aria-labelledby="swapTitle" aria-describedby="swapBoundary"><div class="section-heading"><div><p class="eyebrow">Exercise replacement</p><h2 id="swapTitle" tabindex="-1">Choose a comparable movement.</h2></div><button class="button quiet compact" type="button" id="closeSwap" aria-label="Close exercise replacement">Close ×</button></div><p id="swapBoundary">Choose a catalog-backed alternative and review the target, equipment, FitScore, and stability trade-off. No workout or Plan changes until you use one of the actions below.</p><label class="field">Alternative exercise<select id="swapExercise"></select></label><div class="swap-comparison" id="swapComparison" role="status" aria-live="polite"></div><p class="inline-error" id="swapError" role="alert" hidden></p><div class="swap-actions"><button class="button secondary" type="button" id="swapWorkoutOnly">Use for this workout only</button><button class="button primary" type="button" id="reviewPlanSwap">Review change to Plan</button></div><section class="plan-swap-review" id="planSwapReview" hidden aria-labelledby="planSwapTitle"><p class="eyebrow">Plan proposal · not applied</p><h3 id="planSwapTitle">Review the lasting change.</h3><p id="planSwapSummary"></p><p>This updates the matching exercise in your saved weekly Plan and this active workout. Sets and written rep targets stay the same.</p><div class="actions"><button class="button primary" type="button" id="approvePlanSwap">Approve Plan &amp; workout change</button><button class="button quiet" type="button" id="cancelPlanSwap">Keep Plan unchanged</button></div></section></dialog>
+  <footer>STRATA · Build 7.8.3 <span>Plan with purpose. Train with intent.</span><a href="/policies">Policies</a><a href="/install.html">Install app</a></footer>
+  <dialog id="finishDialog" aria-labelledby="finishDialogTitle"><form method="dialog"><p class="eyebrow">Close out your workout</p><h2 id="finishDialogTitle">Finish this workout?</h2><p id="finishDialogMessage"></p><p>Only checked sets count toward your history and progress. Unfinished sets stay in the workout for reference.</p><div class="actions"><button class="button secondary" value="cancel">Keep training</button><button class="button primary" value="finish">Finish and save</button></div></form></dialog>
+  <dialog id="detailDialog" aria-labelledby="detailTitle"><div class="section-heading"><h2 id="detailTitle"></h2><button class="button quiet compact" type="button" id="closeDetail" aria-label="Close workout details">Close ×</button></div><div id="detailBody"></div></dialog>
+  <dialog id="swapDialog" aria-labelledby="swapTitle" aria-describedby="swapBoundary"><div class="section-heading"><div><p class="eyebrow">Exercise replacement</p><h2 id="swapTitle" tabindex="-1">Choose a comparable exercise.</h2></div><button class="button quiet compact" type="button" id="closeSwap" aria-label="Close exercise replacement">Close ×</button></div><p id="swapBoundary">Compare the muscle target, equipment, FitScore, and stability. No workout or Plan changes until you use one of the actions below.</p><label class="field">Alternative exercise<select id="swapExercise"></select></label><div class="swap-comparison" id="swapComparison" role="status" aria-live="polite"></div><p class="inline-error" id="swapError" role="alert" hidden></p><div class="swap-actions"><button class="button secondary" type="button" id="swapWorkoutOnly">Use for this workout only</button><button class="button primary" type="button" id="reviewPlanSwap">Review change to Plan</button></div><section class="plan-swap-review" id="planSwapReview" hidden aria-labelledby="planSwapTitle"><p class="eyebrow">Plan proposal · not applied</p><h3 id="planSwapTitle">Review the lasting change.</h3><p id="planSwapSummary"></p><p>This updates the matching exercise in your saved weekly plan and this active workout. Sets and written rep targets stay the same.</p><div class="actions"><button class="button primary" type="button" id="approvePlanSwap">Approve Plan &amp; workout change</button><button class="button quiet" type="button" id="cancelPlanSwap">Keep Plan unchanged</button></div></section></dialog>
   <div class="toast" id="workoutToast" role="status" aria-live="polite"></div>
-  <script src="/workout-core.js?v=7.8.2"></script>
-  <script src="/discovery-core.js?v=7.8.2"></script>
-  <script src="/workout-state.js?v=7.8.2"></script>
-  <script src="/workout-api.js?v=7.8.2"></script>
-  <script src="/workout-calendar.js?v=7.8.2"></script>
-  <script src="/workout-progression.js?v=7.8.2"></script>
-  <script src="/workout-render.js?v=7.8.2"></script>
-  <script src="/workout-guidance.js?v=7.8.2"></script>
-  <script src="/workout-history.js?v=7.8.2"></script>
-  <script src="/workout-events.js?v=7.8.2"></script>
-  <script src="/product-signals.js?v=7.8.2" defer></script>
-  <script src="/workout.js?v=7.8.2" defer></script>
-  <script src="/pwa.js?v=7.8.2" defer></script>
+  <script src="/workout-core.js?v=7.8.3"></script>
+  <script src="/discovery-core.js?v=7.8.3"></script>
+  <script src="/workout-state.js?v=7.8.3"></script>
+  <script src="/workout-api.js?v=7.8.3"></script>
+  <script src="/workout-calendar.js?v=7.8.3"></script>
+  <script src="/workout-progression.js?v=7.8.3"></script>
+  <script src="/workout-render.js?v=7.8.3"></script>
+  <script src="/workout-guidance.js?v=7.8.3"></script>
+  <script src="/workout-history.js?v=7.8.3"></script>
+  <script src="/workout-events.js?v=7.8.3"></script>
+  <script src="/plan-insights-core.js?v=7.8.3"></script>
+  <script src="/workout-context.js?v=7.8.3"></script>
+  <script src="/product-signals.js?v=7.8.3" defer></script>
+  <script src="/workout.js?v=7.8.3" defer></script>
+  <script src="/pwa.js?v=7.8.3" defer></script>
 </body>
 </html>

@@ -1,9 +1,9 @@
-/* global module */
+/* global module, require */
 (function(root,factory){
-  const api=factory();
+  const api=factory(typeof module==="object"&&module.exports?require("./app-navigation"):root.StrataAppNavigation);
   if(typeof module==="object"&&module.exports)module.exports=api;
   root.StrataDiscoverApi=api;
-})(typeof globalThis!=="undefined"?globalThis:this,function(){
+})(typeof globalThis!=="undefined"?globalThis:this,function(appNavigation){
   "use strict";
 
   function saveErrorDetail(error){
@@ -19,7 +19,7 @@
 
   function saveRetryMessage(error){return `Couldn't save — Retry. ${saveErrorDetail(error)}`;}
 
-  function createClient({fetchImpl,getCsrfToken,getGeneration,redirect}){
+  function createClient({fetchImpl,getCsrfToken,getGeneration,redirect,onAccessDenied=null}){
     if(typeof fetchImpl!=="function")throw new TypeError("A fetch implementation is required.");
     return async function request(path,options={}){
       const requestGeneration=getGeneration(),method=String(options.method||"GET").toUpperCase(),changesState=method!=="GET"&&method!=="HEAD";
@@ -33,8 +33,8 @@
       if(requestGeneration!==getGeneration())throw Object.assign(new Error("This response belongs to an earlier account workspace."),{code:"STALE_WORKSPACE_RESPONSE",stale:true});
       if(!response.ok){
         const error=Object.assign(new Error(data.error||"Request failed."),{status:response.status,code:data.code||"REQUEST_FAILED",payload:data});
-        if(response.status===401){error.redirecting=true;redirect("/account.html?mode=login&next=discover");}
-        else if(response.status===402||data.code==="DISCOVERY_ACCESS_REQUIRED"){error.redirecting=true;redirect("/pricing?reason=access-revoked");}
+        if(response.status===401){error.redirecting=true;const next=appNavigation.discoverReturnPath();redirect(`/account.html?mode=login&next=${encodeURIComponent(next==="/discover.html"?"discover":next)}`);}
+        else if(response.status===402||data.code==="DISCOVERY_ACCESS_REQUIRED"){error.redirecting=true;if(typeof onAccessDenied==="function")onAccessDenied(error);else redirect("/pricing?reason=access-revoked");}
         throw error;
       }
       return data;

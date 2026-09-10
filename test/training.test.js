@@ -84,7 +84,7 @@ test("feedback creates an optional plan proposal without changing the supplied p
   const applied=planWithAdaptation(plan,proposal);assert.equal(applied.days.Monday[0].sets,2);assert.equal(plan.days.Monday[0].sets,3);
   assert.throws(()=>planWithAdaptation(plan,{...proposal,change:{...proposal.change,fromSets:4,toSets:3}}),/no longer matches/i);
   assert.throws(()=>planWithAdaptation(plan,{...proposal,change:{...proposal.change,toSets:1}}),/invalid/i);
-  assert.match(proposal.explanation,/optional/i);assert.match(proposal.explanation,/does not diagnose/i);
+  assert.match(proposal.explanation,/optional change removes one set of this exercise from your weekly plan/i);assert.match(proposal.explanation,/does not diagnose/i);
   assert.equal(adaptationForFeedback({workout,plan,planUpdatedAt:123,checkIn:{difficulty:3,energy:4,comfort:4,enjoyment:1}}),null);
 });
 

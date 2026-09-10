@@ -4,7 +4,7 @@
 const logic=StrataAccountLogic;
 const params=new URLSearchParams(location.search);
 const requestedMode=params.get("mode"),mode=requestedMode==="login"?"login":"signup";
-const next=logic.safeNext(params.get("next"),params.get("add"));
+const next=logic.safeNext(params.get("next"),params.get("add"),location.hash);
 const renderer=StrataAccountRender.createRenderer();
 const el=renderer.el;
 const state=StrataAccountState.createState({pendingQueryError:logic.safeQueryError(params.get("error"))});

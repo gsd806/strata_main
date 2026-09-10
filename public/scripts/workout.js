@@ -6,6 +6,7 @@
   const A=globalThis.StrataWorkoutApi;
   const R=globalThis.StrataWorkoutRender;
   const E=globalThis.StrataWorkoutEvents;
+  const T=globalThis.StrataWorkoutContext;
   const C=globalThis.StrataWorkoutCalendar;
   const H=globalThis.StrataWorkoutHistory;
   const Q=globalThis.StrataWorkoutGuidance,P=globalThis.StrataWorkoutProgression;
@@ -52,8 +53,8 @@
     clearOfflineContext();
     $("trainingRoom").hidden=true;$("historySection").hidden=true;$("recoveryPanel").hidden=true;$("conflictPanel").hidden=true;
     $("modeNotice").textContent="Your account session changed. Your draft belongs to the original account and has been kept on this device where storage is available.";
-    $("loadError").hidden=false;$("loadErrorMessage").textContent="Reload the workout room to use the current account. Sign in to the original account to recover its draft. Account sessions never switch into guest mode automatically.";
-    $("retryLoad").textContent="Reload workout room";
+    $("loadError").hidden=false;$("loadErrorMessage").textContent="Reload Train to use the current account. Sign in to the original account to recover its draft. Account sessions never switch into guest mode automatically.";
+    $("retryLoad").textContent="Reload Train";
     if($("detailDialog").open)$("detailDialog").close();
     if($("finishDialog").open)$("finishDialog").close();
     if($("swapDialog").open)$("swapDialog").close();
@@ -63,7 +64,7 @@
     document.body.classList.remove("has-workout-access");
     clearOfflineContext();
     $("trainingRoom").hidden=true;$("historySection").hidden=true;$("recoveryPanel").hidden=true;$("conflictPanel").hidden=true;$("accessPanel").hidden=false;
-    $("modeNotice").textContent="Strata+ access ended. Saved sessions and device drafts are kept; your free Plan is unchanged.";
+    $("modeNotice").textContent="Strata+ access ended. Saved workouts and device drafts are kept; your free Plan is unchanged.";
     if($("detailDialog").open)$("detailDialog").close();if($("finishDialog").open)$("finishDialog").close();if($("swapDialog").open)$("swapDialog").close();
   }
   const client=A.create({state,onSessionBlocked:blockSession,onAccessBlocked:blockAccess,onIdentity:(current)=>{authorizeOffline(current.user.discovery);writeOfflineContext();}});
@@ -94,7 +95,7 @@
         else if(record?.workout?.status==="completed")staleKeys.push(key);
       }
       staleKeys.forEach((key)=>localStorage.removeItem(key));
-    }catch{toast("Device draft recovery is unavailable in this browser. Keep this tab open until your session is saved.");}
+    }catch{toast("Device draft recovery is unavailable in this browser. Keep this tab open until your workout is saved.");}
     state.recoveries=items.sort((a,b)=>b.savedAt-a.savedAt);
     renderRecovery();renderPlan();historyView.render();
   }
@@ -102,7 +103,7 @@
     $("recoveryPanel").hidden=!state.recoveries.length||!!state.workout||state.blocked;
     $("recoveryList").innerHTML=state.recoveries.map((record,index)=>{
       const counts=W.progress(record.workout);
-      return `<div class="recovery-item"><div><strong>${esc(record.workout.title)}</strong><small>${esc(record.workout.date)} · ${counts.completed}/${counts.total} sets · ${record.dirty?"Unsaved device changes":"Previously saved session"}</small></div><div class="actions"><button class="button secondary compact" data-recover="${index}" type="button">Review &amp; recover</button><button class="button quiet compact" data-discard="${index}" type="button">Remove device draft</button></div></div>`;
+      return `<div class="recovery-item"><div><strong>${esc(record.workout.title)}</strong><small>${esc(record.workout.date)} · ${counts.completed}/${counts.total} sets · ${record.dirty?"Unsaved device changes":"Previously saved workout"}</small></div><div class="actions"><button class="button secondary compact" data-recover="${index}" type="button">Review &amp; recover</button><button class="button quiet compact" data-discard="${index}" type="button">Remove device draft</button></div></div>`;
     }).join("");
   }
   function selectWorkout(workout,{dirty=false,pausedSeconds=null}={}){
@@ -133,42 +134,14 @@
       }else{
         selectWorkout(record.workout,{dirty:!!record.dirty,pausedSeconds:record.pausedSeconds});
         if(latest&&latest.revision!==record.workout.revision)showConflict(latest);
-        else if(!latest&&record.workout.revision)showConflict(null,"This session was removed from saved history. Keep your draft by explicitly saving it as a new session.");
+        else if(!latest&&record.workout.revision)showConflict(null,"This workout was removed from saved history. Keep your draft by explicitly saving it as a new workout.");
         else if(latest&&W.matches(latest,record.workout)){state.workout.revision=latest.revision;state.dirty=false;status("Synced","saved");persistDraft();}
       }
       if(persistDraft()&&record.key!==state.draftKey)removeDraft(record.key);
     }catch(error){toast(saveError(error));}
     finally{buttons.forEach((button)=>button.disabled=false);}
   }
-  function renderPlan(){
-    $("planDay").innerHTML=W.DAYS.map((day)=>`<option value="${day}"${day===state.day?" selected":""}>${day}${day===W.today()?" · today":""}</option>`).join("");
-    const items=state.plan?.days?.[state.day]||[];
-    const currentIndex=Math.max(0,W.DAYS.indexOf(state.day));
-    const upcomingDays=[...W.DAYS.slice(currentIndex+1),...W.DAYS.slice(0,currentIndex)];
-    const scheduledDay=upcomingDays.find((day)=>(state.plan?.days?.[day]||[]).length);
-    const startButton=$("startWorkout"),chooseButton=$("chooseScheduledDay"),plannerLink=$("openPlannerFromEmpty"),brief=$("planBrief"),previewDetails=document.querySelector(".plan-preview-details"),summary=W.planDaySummary(state.plan,state.day);
-    const activeWorkout=state.workout?.status==="active"?state.workout:state.history.find((item)=>item.status==="active")||state.recoveries.find((record)=>record.workout.status==="active")?.workout;
-    const activeHint=activeWorkout?`${activeWorkout.title} is already in progress. Resume it from Training history below before starting another session.`:"";
-    $("todayLabel").textContent=`${W.localDate()} · ${state.day} plan`;
-    $("startTitle").textContent=`${state.day} is ready.`;
-    startButton.innerHTML=`Start ${esc(state.day)} workout <span aria-hidden="true">↗</span>`;
-    startButton.hidden=!items.length||!!activeWorkout;startButton.disabled=!state.plan||state.blocked;
-    chooseButton.hidden=!!activeWorkout||!!items.length||!scheduledDay;plannerLink.hidden=!!activeWorkout||!!items.length||!!scheduledDay;
-    if(!items.length){
-      previewDetails.hidden=true;previewDetails.open=false;
-      brief.hidden=true;brief.innerHTML="";
-      const recovery=(state.plan?.restDays||[state.plan?.restDay]).includes(state.day);
-      $("planPreview").innerHTML=`<div class="empty-state"><strong>${recovery?"Recovery is part of the plan.":"Nothing is scheduled for this day yet."}</strong>${scheduledDay?`${esc(scheduledDay)} has a workout ready. Choose it below, or edit your week in Plan.`:"Add exercises to your week in Plan, then return here to train."}</div>`;
-      if(scheduledDay){chooseButton.dataset.day=scheduledDay;chooseButton.innerHTML=`Choose ${esc(scheduledDay)} workout <span aria-hidden="true">→</span>`;}
-      else delete chooseButton.dataset.day;
-      $("startHint").textContent=activeHint||(scheduledDay?`Your next scheduled session is ${scheduledDay}.`:"Build a session in Plan, then return here to train.");return;
-    }
-    previewDetails.hidden=false;
-    brief.hidden=false;
-    brief.innerHTML=`<div><span>Movements</span><strong>${summary.movements}</strong></div><div><span>Working sets</span><strong>${summary.workingSets}</strong></div><div><span>Plan day</span><strong>${esc(summary.day)}</strong></div>`;
-    $("planPreview").innerHTML=view.planPreview(items);
-    $("startHint").textContent=activeHint||"Review the summary, then start when you are ready.";
-  }
+  function renderPlan(){contextView.render();}
   function memoryReadyFor(workout){return !workout||state.memoryExhausted||workout.entries.every((entry)=>memoryFor(entry));}
   function mergeMemory(items){state.memoryHistory=[...new Map([...state.memoryHistory,...items].map((item)=>[item.id,item])).values()].sort((a,b)=>b.startedAt-a.startedAt);}
   async function loadWorkoutMemory(workoutId){
@@ -178,7 +151,7 @@
     try{
       while(hasMore&&state.workout?.id===workoutId&&!memoryReadyFor(state.workout)){
         const result=await accountRead(`/api/workouts?limit=100&offset=${offset}&memory=1`);
-        if(!Array.isArray(result.workouts)||typeof result.hasMore!=="boolean"||!result.workouts.length&&result.hasMore)throw new Error("Workout Memory received an incomplete history page.");
+        if(!Array.isArray(result.workouts)||typeof result.hasMore!=="boolean"||!result.workouts.length&&result.hasMore)throw new Error("Workout history returned an incomplete history page.");
         mergeMemory(result.workouts);offset+=result.workouts.length;hasMore=result.hasMore;
         if(!hasMore)state.memoryExhausted=true;
       }
@@ -229,12 +202,12 @@
   function renderSwapComparison(){
     const entry=state.workout?.entries.find((item)=>item.id===state.swapEntryId),candidate=exercise(state.swapCandidateId);if(!entry||!candidate.id)return;
     const current=exercise(entry.exerciseId),comparison=W.swapComparison(current,candidate);
-    $("swapComparison").innerHTML=`<div><span>Current</span><strong>${esc(current.name)}</strong><small>${esc(current.sub||current.group)} · ${esc(current.equipment)} · FitScore ${Number(current.score)} · Stability ${Number(current.metrics?.stability||0)}</small></div><span class="swap-arrow" aria-hidden="true">→</span><div><span>Alternative</span><strong>${esc(candidate.name)}</strong><small>${esc(candidate.sub||candidate.group)} · ${esc(candidate.equipment)} · FitScore ${Number(candidate.score)} · Stability ${Number(candidate.metrics?.stability||0)}</small></div><p>${esc(comparison.explanation)}</p>`;
+    $("swapComparison").innerHTML=`<div><span>Current</span><strong>${esc(current.name)}</strong><small>${esc(current.sub||current.group)} · ${esc(current.equipment)} · FitScore ${Number(current.score)}/100 · Stability ${Number(current.metrics?.stability||0)}/100</small></div><span class="swap-arrow" aria-hidden="true">→</span><div><span>Alternative</span><strong>${esc(candidate.name)}</strong><small>${esc(candidate.sub||candidate.group)} · ${esc(candidate.equipment)} · FitScore ${Number(candidate.score)}/100 · Stability ${Number(candidate.metrics?.stability||0)}/100</small></div><p>${esc(comparison.explanation)}</p>`;
     $("planSwapReview").hidden=true;state.swapProposal=null;$("swapError").hidden=true;
   }
   function openSwap(button){
     const entry=entryFor(button);if(!entry||hasActuals(entry)||state.workout.status!=="active")return;
-    const choices=alternativesFor(entry);if(!choices.length){toast("No comparable catalog alternative is available for this movement.");return;}
+    const choices=alternativesFor(entry);if(!choices.length){toast("No comparable catalog alternative is available for this exercise.");return;}
     state.swapEntryId=entry.id;state.swapCandidateId=choices[0].id;state.swapProposal=null;state.swapTrigger=button;
     $("swapExercise").innerHTML=choices.map((candidate)=>`<option value="${esc(candidate.id)}">${esc(candidate.name)} · ${esc(candidate.equipment)} · FitScore ${Number(candidate.score)}</option>`).join("");
     $("swapExercise").value=state.swapCandidateId;$("swapTitle").textContent=`Replace ${exercise(entry.exerciseId).name}`;renderSwapComparison();$("swapDialog").showModal();$("swapTitle").focus();
@@ -279,7 +252,7 @@
     const index=state.workout.entries.indexOf(entry);if(index<0)return;
     if(entry.supersetGroup){const group=entry.supersetGroup;state.workout.entries.forEach((item)=>{if(item.supersetGroup===group)item.supersetGroup="";});}
     else{
-      const next=state.workout.entries[index+1];if(!next){toast("Choose an exercise above another movement to make a pair.");return;}
+      const next=state.workout.entries[index+1];if(!next){toast("Choose an exercise above another exercise to make a pair.");return;}
       if(next.supersetGroup){const old=next.supersetGroup;state.workout.entries.forEach((item)=>{if(item.supersetGroup===old)item.supersetGroup="";});}
       const group=`superset-${W.id().replace(/^workout-/,"").slice(0,80)}`;entry.supersetGroup=group;next.supersetGroup=group;
     }
@@ -298,9 +271,9 @@
     clearTimeout(state.saveTimer);state.conflict={latest};state.dirty=true;persistDraft();
     $("conflictPanel").hidden=false;
     if(message)$("conflictMessage").textContent=message;
-    else $("conflictMessage").textContent="This session changed in another tab or device. Choose the latest saved version, or explicitly save your changes as a separate session. Neither version has been overwritten.";
+    else $("conflictMessage").textContent="This workout changed in another tab or device. Choose the latest saved version, or explicitly save your changes as a separate workout. Neither version has been overwritten.";
     const mine=W.progress(state.workout),saved=latest?W.progress(latest):null;
-    $("conflictComparison").innerHTML=`<div><strong>Latest saved version</strong><span>${latest?`${esc(latest.title)} · ${saved.completed}/${saved.total} sets · revision ${Number(latest.revision)}`:"This session is no longer in saved history."}</span></div><div><strong>Your device draft</strong><span>${esc(state.workout.title)} · ${mine.completed}/${mine.total} sets · ${esc(state.workout.status)}</span></div>`;
+    $("conflictComparison").innerHTML=`<div><strong>Latest saved version</strong><span>${latest?`${esc(latest.title)} · ${saved.completed}/${saved.total} sets`:"This workout is no longer in saved history."}</span></div><div><strong>Your device draft</strong><span>${esc(state.workout.title)} · ${mine.completed}/${mine.total} sets · ${esc(state.workout.status)}</span></div>`;
     $("useLatest").disabled=!latest;status("Conflict — Review","error");updateSessionMeta();$("conflictTitle").focus();
   }
   async function flushSave(){
@@ -320,7 +293,7 @@
           await assertIdentity();
         }
         if(!saved||!Number.isInteger(saved.revision))throw new Error("The save response was incomplete. Your draft is still available; retry before leaving.");
-        if(!W.matches(saved,snapshot)){showConflict(saved,"The saved session differs from this request. Review the latest saved version before choosing what to keep.");return false;}
+        if(!W.matches(saved,snapshot)){showConflict(saved,"The saved workout differs from this request. Review the latest saved version before choosing what to keep.");return false;}
         state.workout.revision=saved.revision;state.workout.updatedAt=saved.updatedAt;
         state.dirty=state.sequence!==sequence;
         historyView.upsert(W.summary(saved));
@@ -336,7 +309,7 @@
         if(error.status===409&&(!error.code||error.code==="WORKOUT_CONFLICT")){
           const latest=error.data?.workout||null;showConflict(latest);return false;
         }
-        if(error.status===404&&snapshot.revision){showConflict(null,"This session was removed from saved history. Keep your draft by explicitly saving it as a new session.");return false;}
+        if(error.status===404&&snapshot.revision){showConflict(null,"This workout was removed from saved history. Keep your draft by explicitly saving it as a new workout.");return false;}
         if(error.status===401||error.code==="IDENTITY_CHANGED")blockSession();
         const detail=saveError(error);status("Couldn't save — Retry","error");errorMessage(detail);persistDraft();return false;
       }
@@ -354,7 +327,7 @@
   function showCompleted(workout){
     $("sessionPanel").hidden=true;$("celebration").hidden=false;$("conflictPanel").hidden=true;
     const counts=W.progress(workout);
-    $("celebrationMessage").textContent=`${counts.completed} completed set${counts.completed===1?"":"s"} · ${workout.entries.length} planned movements · ${W.duration(workout.elapsedSeconds)} since start. ${state.mode==="account"?"Saved to your account.":"Saved on this device only."}`;
+    $("celebrationMessage").textContent=`${counts.completed} completed set${counts.completed===1?"":"s"} · ${workout.entries.length} planned exercises · ${W.duration(workout.elapsedSeconds)} since start. ${state.mode==="account"?"Saved to your account.":"Saved on this device only."}`;
     guidance.reset();void guidance.load(workout.id);
     updateCalendarLink();
     toast("Workout complete. Your history is updated.");
@@ -365,11 +338,11 @@
     $("calendarNext").hidden=!event;
     if(!event)return;
     $("calendarNextTitle").textContent=`Schedule ${event.day}’s workout.`;
-    $("calendarNextSummary").textContent=`${event.date} · ${event.movements} movement${event.movements===1?"":"s"} · ${event.workingSets} working set${event.workingSets===1?"":"s"}`;
+    $("calendarNextSummary").textContent=`${event.date} · ${event.movements} exercise${event.movements===1?"":"s"} · ${event.workingSets} working set${event.workingSets===1?"":"s"}`;
     $("calendarLink").href=event.href;$("calendarLink").download=event.filename;
   }
   function returnToPlan(){
-    progression.reset();state.workout=null;state.draftKey="";state.pausedSeconds=null;guidance.reset();$("calendarNext").hidden=true;$("celebration").hidden=true;$("sessionPanel").hidden=true;$("startPanel").hidden=false;scanDrafts();($("startWorkout").hidden?$("planDay"):$("startWorkout")).focus();
+    progression.reset();state.workout=null;state.draftKey="";state.pausedSeconds=null;guidance.reset();$("calendarNext").hidden=true;$("celebration").hidden=true;$("sessionPanel").hidden=true;$("startPanel").hidden=false;scanDrafts();contextView.focusPrimary();
   }
   function exportDraft(){
     if(!state.workout)return;
@@ -391,14 +364,15 @@
   const progression=P.create({state,workout:W,memoryFor,accountRead,renderSession:()=>view.refreshTargets($("sessionEntries"))});
   const guidance=Q.create({$,state,accountRead,api,assertIdentity,saveError,exercise,esc,number,renderPlan});
   const historyView=H.create({$,state,workout:W,view,esc,number,exercise,formatLabel,accountRead,saveError,blockSession,renderPlan,mergeMemory,memoryReadyFor,renderSession,loadWorkoutMemory,fetchWorkout,selectWorkout,toast,recover,resetProgression:progression.reset,locationLike:location,historyLike:history});
+  const contextView=T.create({$,state,workout:W,insights:globalThis.StrataPlanInsights,view,esc,exercise,openDetail:id=>historyView.openDetail(id),recover});
   async function initialize(){
     if(state.loading)return;
     if(state.blocked){location.reload();return;}
     state.loading=true;$("loadError").hidden=true;$("accessPanel").hidden=true;restorePreferences();
     try{
       const identity=await api("/api/me");
-      if(!identity.user?.id)throw new Error("Sign in to Strata+ to open your workout room.");
-      if(identity.user.discovery?.active!==true){$("accessPanel").hidden=false;$("modeNotice").textContent="Guided workouts, set logging, and history are Strata+ features. Your free Plan is unchanged.";return;}
+      if(!identity.user?.id)throw new Error("Sign in to open Train.");
+      if(identity.user.discovery?.active!==true){$("accessPanel").hidden=false;$("modeNotice").textContent="Strata+ access is not active.";return;}
       state.mode="account";state.user=identity.user;state.csrfToken=String(identity.csrfToken||"");state.ownerId=owner();authorizeOffline(identity.user.discovery);
       const catalog=await fetch("/exercises.json",{credentials:"same-origin"});
       if(!catalog.ok)throw new Error("The exercise library could not be loaded.");
@@ -408,16 +382,16 @@
       state.plan=planResult.plan;state.planUpdatedAt=Number(planResult.planUpdatedAt)||0;
       if(!state.plan?.days)throw new Error("Your account plan could not be loaded. Retry to continue.");
       document.body.classList.add("has-workout-access");
-      $("modeNotice").innerHTML=`<strong>${esc(state.user.name||"Your account")} · Strata+ active.</strong> Workouts sync securely and can recover on this device. <a href='/account.html'>Account</a>`;
+      $("modeNotice").innerHTML=`<strong>${esc(state.user.name||"Your account")} · Strata+ active.</strong> <a href='/account.html'>Account</a>`;
       $("trainingRoom").hidden=false;$("historySection").hidden=false;scanDrafts();await historyView.load();
       const resumed=!state.blocked&&await historyView.openRequested();
-      if(!resumed&&location.hash==="#historySection"&&!state.blocked){$("historySection").scrollIntoView({block:"start"});$("historyTitle").focus();}
+      if(!resumed&&location.hash==="#historySection"&&!state.blocked)historyView.show();
     }catch(error){
       $("loadError").hidden=false;$("loadErrorMessage").textContent=saveError(error);
-      $("modeNotice").textContent="The workout room could not load. Your saved sessions and device drafts have been kept.";
+      $("modeNotice").textContent="Train could not load. Your saved workouts and device drafts have been kept.";
     }finally{state.loading=false;}
   }
-  E.bind({$,state,workout:W,number,signal,actions:{initialize,renderPlan,toast,selectWorkout,markDirty,errorMessage,entryFor,hasActuals,exercise,openSwap,toggleSuperset,applyRemembered,renderSession,startRest,tick,rememberPreferences,focusNextSet,flushSave,persistDraft,returnToPlan,exportDraft,resolveAdaptation:guidance.resolve,recover,removeDraft,scanDrafts,showCompleted,upsertHistory:historyView.upsert,openDetail:historyView.openDetail,loadHistory:historyView.load,renderMetricOptions:historyView.renderMetricOptions,renderChart:historyView.renderChart,closeSwap,renderSwapComparison,applyWorkoutSwap,reviewPlanSwap,approvePlanSwap,assertIdentity,status,saveError,saveCheckIn:guidance.save}});
+  E.bind({$,state,workout:W,number,signal,actions:{initialize,renderPlan,resumeWorkout:contextView.resume,toast,selectWorkout,markDirty,errorMessage,entryFor,hasActuals,exercise,openSwap,toggleSuperset,applyRemembered,renderSession,startRest,tick,rememberPreferences,focusNextSet,flushSave,persistDraft,returnToPlan,exportDraft,resolveAdaptation:guidance.resolve,recover,removeDraft,scanDrafts,showCompleted,upsertHistory:historyView.upsert,openDetail:historyView.openDetail,showHistory:historyView.show,loadHistory:historyView.load,renderMetricOptions:historyView.renderMetricOptions,renderChart:historyView.renderChart,closeSwap,renderSwapComparison,applyWorkoutSwap,reviewPlanSwap,approvePlanSwap,assertIdentity,status,saveError,saveCheckIn:guidance.save}});
   setInterval(tick,1000);
   void initialize();
 })();

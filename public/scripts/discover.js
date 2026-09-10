@@ -19,7 +19,7 @@ const EventsCore=globalThis.StrataDiscoverEvents;if(!EventsCore)throw new Error(
 const CatalogCore=globalThis.StrataDiscoverCatalog;if(!CatalogCore)throw new Error("The Strata+ catalog module did not load.");
 const DetailCore=globalThis.StrataDiscoverDetail;if(!DetailCore)throw new Error("The Strata+ detail module did not load.");
 const CommunityCore=globalThis.StrataDiscoverCommunity;if(!CommunityCore)throw new Error("The Strata+ community module did not load.");
-const SessionCore=globalThis.StrataDiscoverSession;if(!SessionCore)throw new Error("The Strata+ session module did not load.");
+const SessionCore=globalThis.StrataDiscoverSession;if(!SessionCore)throw new Error("The Strata+ workout module did not load.");
 const SharingCore=globalThis.StrataDiscoverSharing;if(!SharingCore)throw new Error("The Strata+ sharing module did not load.");
 const {FEATURE_CONFIG,FEATURE_DEFAULT,GROUP_LABELS,LIMITATION_OPTIONS,MOVEMENT_BOARD_STORAGE_PREFIX,PREFERENCE_OPTIONS}=StateCore;
 const EXPLORER_DESKTOP_PAGE_SIZE=StateCore.LIMITS.explorerDesktopPageSize;
@@ -31,7 +31,7 @@ const MOVEMENT_BOARD_LIMIT=StateCore.LIMITS.movementBoard;
 const state=StateCore.createState();
 let workspaceGeneration=0,workspaceReady=false,workspaceRevalidating=false;
 const el=(id)=>document.getElementById(id);
-const api=ApiCore.createClient({fetchImpl:fetch,getCsrfToken:()=>state.csrfToken,getGeneration:()=>workspaceGeneration,redirect:(path)=>window.location.replace(path)});
+const api=ApiCore.createClient({fetchImpl:fetch,getCsrfToken:()=>state.csrfToken,getGeneration:()=>workspaceGeneration,redirect:(path)=>window.location.replace(path),onAccessDenied:()=>showFeatureAccess()});
 const saveRetryMessage=ApiCore.saveRetryMessage;
 function redirectedOrChangedAccount(error){
   if(error?.redirecting)return true;
@@ -121,85 +121,15 @@ function blankMonthlySchedule(){
 }
 function copyMonthlyValue(value){return JSON.parse(JSON.stringify(value));}
 function weeklyPlanCount(plan){return Monthly.DAYS.reduce((total,day)=>total+(Array.isArray(plan?.days?.[day])?plan.days[day].length:0),0);}
-function localDateKey(date){return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;}
-function localNoon(date,offset=0){return new Date(date.getFullYear(),date.getMonth(),date.getDate()+offset,12);}
-function weekContext(now=new Date()){
-  const today=localNoon(now),todayIndex=(today.getDay()+6)%7,monday=localNoon(today,-todayIndex),dates=Monthly.DAYS.map((day,index)=>({day,date:localNoon(monday,index)}));
-  return{today,todayIndex,monday,dates,dateKeys:new Set(dates.map(({date})=>localDateKey(date)))};
-}
 function safeWorkoutList(value){return ProgressCore.safeWorkoutList(value);}
 function completedWorkouts(){return ProgressCore.completedWorkouts(state.workouts);}
-function completedThisWeek(week=weekContext()){return completedWorkouts().filter((workout)=>week.dateKeys.has(String(workout.date||"")));}
-function scheduledDays(){return ProgressCore.scheduledDays(state.weeklyPlan,Monthly.DAYS);}
-function nextPlannedDay(week=weekContext()){
-  const completeDays=new Set(completedThisWeek(week).map((workout)=>String(workout.planDay||"")));
-  for(let offset=0;offset<14;offset+=1){
-    const day=Monthly.DAYS[(week.todayIndex+offset)%7],items=Array.isArray(state.weeklyPlan?.days?.[day])?state.weeklyPlan.days[day]:[];
-    if(items.length&&(offset>=7||!completeDays.has(day)))return{day,items,offset,date:localNoon(week.today,offset)};
-  }
-  return null;
-}
-function formatDuration(seconds){return ProgressCore.formatDuration(seconds);}
-function summaryMetric(summary){return ProgressCore.summaryMetric(summary);}
 function exerciseName(id){return exerciseById(id)?.name||titleCase(String(id||"movement").replace(/_/g,"-"));}
 function readableDate(value){
-  if(typeof value!=="string"||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value))return "saved session";
-  const date=new Date(`${value}T12:00:00`);return Number.isNaN(date.getTime())?"saved session":new Intl.DateTimeFormat(undefined,{month:"short",day:"numeric"}).format(date);
-}
-function estimatedSessionMinutes(items){
-  const sets=items.reduce((total,item)=>total+Math.max(0,Math.min(10,Math.round(Number(item?.sets)||0))),0);
-  return Math.max(15,Math.min(90,Math.round((sets*2.5+items.length*2)/5)*5));
-}
-function equipmentSummary(values){const equipment=[...new Set(values.filter(Boolean))];return equipment.length>2?`${equipment.slice(0,2).join(" + ")} +${equipment.length-2} more`:equipment.join(" + ");}
-function previousComparable(items){
-  const ids=new Set(items.map((item)=>String(item?.exerciseId||"")));
-  for(const workout of completedWorkouts())for(const summary of workout.exerciseSummaries){
-    if(!ids.has(String(summary.exerciseId||"")))continue;
-    const metric=summaryMetric(summary);if(metric)return{workout,summary,metric};
-  }
-  return null;
-}
-function renderPreviousComparable(items){
-  const previous=previousComparable(items),partial=state.workoutHistoryHasMore;el("todayPreviousLabel").textContent=partial?"Previous comparable · 100 most recent":"Previous comparable performance";
-  if(previous){el("todayPreviousValue").textContent=`${exerciseName(previous.summary.exerciseId)} · ${previous.metric.formatted}`;el("todayPreviousDetail").textContent=`${previous.metric.label} in ${previous.workout.title||"a workout"} on ${readableDate(previous.workout.date)}. ${partial?"Found in the 100 most recent sessions; ":""}compare the same format and unit.`;return;}
-  el("todayPreviousValue").textContent=partial?"Nothing comparable in the 100 most recent sessions":"Nothing comparable logged yet";el("todayPreviousDetail").textContent=partial?"Older sessions are not included here. Complete one of these movements or open full history for more context.":"Complete one of these movements to establish a like-for-like baseline.";
-}
-function renderPlanOverview(pulse){
-  if(!el("planWorkspaceDays"))return;
-  el("planWorkspaceDays").textContent=String(pulse.scheduledDays);
-  el("planWorkspaceMovements").textContent=String(weeklyPlanCount(state.weeklyPlan));
-  el("planWorkspaceSets").textContent=String(Monthly.DAYS.flatMap((day)=>state.weeklyPlan?.days?.[day]||[]).reduce((total,item)=>total+Math.max(0,Number(item?.sets)||0),0));
-  el("planWorkspaceSummary").textContent=pulse.scheduledDays?`${pulse.scheduledDays} planned training day${pulse.scheduledDays===1?"":"s"}. Open the weekly plan to change exercises, sets, or recovery days.`:"No training days are scheduled. Build a repeatable week before starting a training block.";
-}
-function renderWeeklyPulse(){
-  const pulseNodes=["weeklyPulse","weeklyPulseEyebrow","weeklyPulseTitle","weeklyPulseDetail","weeklyPulseBar","weeklyPulseAction","weeklyPulseMovements","weeklyPulseDays","todayDurationLabel","todayDuration","todayEquipment","todayPreviousLabel","todayPreviousValue","todayPreviousDetail","todayIntro"].map(el),pulseRoot=pulseNodes[0];
-  if(pulseNodes.some((node)=>!node)||!state.preferences)return;
-  const pulse=Core.weeklyPulse(state.weeklyPlan,{profileDays:state.preferences.days});
-  const active=state.workoutHistoryAvailable?state.workouts.find((workout)=>workout.status==="active"):null,week=weekContext(),next=nextPlannedDay(week),items=next?.items||[],start=el("plusStartWorkout");
-  const planned=scheduledDays(),done=new Set(completedThisWeek(week).map(workout=>workout.planDay).filter(day=>planned.includes(day)));
-  const progress=state.workoutHistoryAvailable&&planned.length?Math.round(done.size/planned.length*100):0;
-  el("weeklyPulseBar").setAttribute("style",`width:${progress}%`);
-  el("weeklyPulseBar").parentElement.hidden=!state.workoutHistoryAvailable;
-  el("weeklyPulseDays").textContent=state.workoutHistoryAvailable?`${state.workoutHistoryHasMore?"At least ":""}${done.size} / ${planned.length}`:"History unavailable ·";renderPlanOverview(pulse);
-  if(active){
-    el("weeklyPulseEyebrow").textContent="Workout in progress";el("weeklyPulseTitle").textContent=String(active.title||"Open workout").toUpperCase();
-    el("weeklyPulseDetail").textContent=`${Math.max(0,Number(active.completedSets)||0)} of ${Math.max(0,Number(active.totalSets)||0)} sets completed. Continue where you left off.`;
-    el("weeklyPulseMovements").textContent=String(Math.max(0,Number(active.exerciseCount)||0));el("todayDurationLabel").textContent="Elapsed";el("todayDuration").textContent=formatDuration(active.elapsedSeconds);
-    el("todayEquipment").textContent=equipmentSummary(active.exerciseSummaries.map((item)=>exerciseById(item.exerciseId)?.equipment))||"See workout";renderPreviousComparable(active.exerciseSummaries);
-    start.href=`/workout.html#resume=${encodeURIComponent(active.id)}`;start.innerHTML='Resume workout <span aria-hidden="true">↗</span>';el("todayIntro").textContent="Your open workout is the only action that matters right now.";pulseRoot.dataset.sessionDay=active.planDay||"active";
-  }else if(next){
-    const when=next.offset===0?"Today":next.offset===1?"Tomorrow":next.offset>=7?`Next ${next.day}`:next.day,equipment=[...new Set(items.map((item)=>exerciseById(item.exerciseId)?.equipment).filter(Boolean))];
-    el("weeklyPulseEyebrow").textContent=`${when} in your week`;el("weeklyPulseTitle").textContent=`${next.day.toUpperCase()} WORKOUT`;
-    el("weeklyPulseDetail").textContent=`${items.length} planned movement${items.length===1?"":"s"}. Review the session, then record only what you complete.`;
-    el("weeklyPulseMovements").textContent=String(items.length);el("todayDurationLabel").textContent="Estimated time";el("todayDuration").textContent=`~${estimatedSessionMinutes(items)} min`;el("todayEquipment").textContent=equipmentSummary(equipment)||(items.length?"No equipment":"—");renderPreviousComparable(items);
-    start.href=`/workout.html?day=${encodeURIComponent(next.day)}`;start.innerHTML='Start working out <span aria-hidden="true">↗</span>';el("todayIntro").textContent=`Your next planned action is ${next.day}'s workout. The time is an estimate based on movements and working sets.`;pulseRoot.dataset.sessionDay=next.day;
-  }else{
-    el("weeklyPulseEyebrow").textContent="Start with your week";el("weeklyPulseTitle").textContent="NO WORKOUT PLANNED";el("weeklyPulseDetail").textContent="Choose your training days and movements before tracking progress.";el("weeklyPulseMovements").textContent="0";el("todayDurationLabel").textContent="Estimated time";el("todayDuration").textContent="—";el("todayEquipment").textContent="—";el("todayPreviousLabel").textContent="Previous comparable performance";el("todayPreviousValue").textContent="No baseline yet";el("todayPreviousDetail").textContent="A completed workout will create your first comparison.";start.href="/onboarding.html";start.innerHTML='Build my first week <span aria-hidden="true">→</span>';el("todayIntro").textContent="A simple, repeatable weekly plan comes before progression.";pulseRoot.dataset.sessionDay="empty";
-  }
-  el("weeklyPulseAction").href="#planWorkspace";el("weeklyPulseAction").innerHTML='Review plan <span aria-hidden="true">→</span>';
+  if(typeof value!=="string"||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value))return "saved workout";
+  const date=new Date(`${value}T12:00:00`);return Number.isNaN(date.getTime())?"saved workout":new Intl.DateTimeFormat(undefined,{month:"short",day:"numeric"}).format(date);
 }
 const progressRenderer=RenderCore.createProgressRenderer({element:el,escapeHtml,exerciseName,readableDate,days:Monthly.DAYS});
-function renderProgress(){return progressRenderer.render({workouts:state.workouts,weeklyPlan:state.weeklyPlan,historyAvailable:state.workoutHistoryAvailable,hasMore:state.workoutHistoryHasMore});}
+function renderProgress(){return progressRenderer.render({workouts:state.workouts,weeklyPlan:state.weeklyPlan,historyAvailable:state.workoutHistoryAvailable,historyLoading:state.workoutHistoryLoading,hasMore:state.workoutHistoryHasMore});}
 function normalizeTrainingBlock(data){
   const raw=data?.trainingBlock||data?.block||null;if(!raw||typeof raw!=="object")return null;
   const weeks=Math.round(Number(raw.weeks??raw.durationWeeks));if(weeks<4||weeks>8)return null;
@@ -227,7 +157,7 @@ function renderTrainingBlockReview(){
   root.hidden=!block;if(!block)return;
   const review=BlockCore.weekReview({block,weeklyPlan:state.weeklyPlan,workouts:state.workouts,exercises:state.exercises}),timeline=review.timeline,historyReady=state.workoutHistoryAvailable;
   el("trainingBlockReviewRange").textContent=timeline.valid?`${BlockCore.formatDate(timeline.weekStart)}–${BlockCore.formatDate(timeline.weekEnd)} · calendar-derived`:"Check the saved start date";
-  el("trainingBlockReviewTitle").textContent=`WEEK ${timeline.week} REVIEW`;el("trainingBlockReviewPhase").textContent=trainingBlockPhase(block,timeline);
+  el("trainingBlockReviewTitle").textContent=`Week ${timeline.week} review`;el("trainingBlockReviewPhase").textContent=trainingBlockPhase(block,timeline);
   el("trainingBlockWorkoutCount").textContent=historyReady?`${review.completedWorkouts} / ${review.plannedWorkouts}`:`— / ${review.plannedWorkouts}`;
   el("trainingBlockSetCount").textContent=historyReady?`${review.completedSets} / ${review.plannedSets}`:`— / ${review.plannedSets}`;el("trainingBlockWeekCount").textContent=`${timeline.week} / ${timeline.weeks}`;
   el("trainingBlockMuscles").innerHTML=review.muscles.length?review.muscles.map((muscle)=>`<div class="training-block-muscle"><strong>${escapeHtml(muscle.label)}</strong><span>${muscle.planned}<small>planned</small></span><span>${historyReady?muscle.completed:"—"}<small>logged</small></span></div>`).join(""):'<p class="training-block-empty">No working sets are in the saved weekly Plan yet.</p>';
@@ -235,13 +165,13 @@ function renderTrainingBlockReview(){
   el("trainingBlockNextDecision").textContent=historyReady?review.nextDecision:"Reconnect before deciding from this week’s workout history.";
   el("trainingBlockCarry").disabled=!review.actions.carry||!historyReady;el("trainingBlockLighter").disabled=!review.actions.lighter;el("trainingBlockFinish").disabled=!review.actions.finish;
   if(block.status==="completed")el("trainingBlockReviewStatus").textContent="Saved. This block is complete; the weekly Plan and workout history are unchanged.";
-  else if(state.workoutHistoryHasMore)el("trainingBlockReviewStatus").textContent="Reviewing the 100 most recent sessions. Nothing changes until you confirm an action.";
+  else if(state.workoutHistoryHasMore)el("trainingBlockReviewStatus").textContent="Reviewing the 100 most recent workouts. Nothing changes until you confirm an action.";
   else el("trainingBlockReviewStatus").textContent="Nothing changes until you review and confirm an action.";
 }
 function renderTrainingBlock(){
   const block=state.trainingBlock,status=el("trainingBlockStatus");if(!status)return;
-  el("trainingBlockCurrentWeek").disabled=true;el("trainingBlockState").disabled=true;
-  if(!block){el("trainingBlockWeeks").value="6";el("trainingBlockStartDate").value=localIsoDate();el("trainingBlockState").value="active";renderTrainingBlockWeekOptions(1,"");status.textContent="Review the suggested start date. Nothing changes until you save.";renderTrainingBlockReview();return;}
+  el("trainingBlockCurrentWeek").disabled=true;el("trainingBlockState").disabled=true;el("trainingBlockStateField").hidden=!block;el("trainingBlockWeekField").hidden=!block;el("trainingBlockSave").textContent=block?"Save block settings":"Start training block";
+  if(!block){el("trainingBlockWeeks").value="6";el("trainingBlockStartDate").value=localIsoDate();el("trainingBlockState").value="active";renderTrainingBlockWeekOptions(1,"");status.textContent="No training block is active. Choose a start date and length when you want this optional structure.";renderTrainingBlockReview();return;}
   const timeline=BlockCore.deriveWeek(block);el("trainingBlockWeeks").value=String(block.weeks);el("trainingBlockStartDate").value=block.startDate;el("trainingBlockState").value=block.status;renderTrainingBlockWeekOptions(timeline.week,block.lightWeek);
   status.textContent=block.status==="completed"?`Saved. Completed · ${block.weeks}-week block${block.lightWeek?` · week ${block.lightWeek} marked lighter`:""}.`:`Saved. Active · date-derived week ${timeline.week} of ${block.weeks}${block.lightWeek?` · week ${block.lightWeek} marked lighter`:" · no lighter week selected"}.`;
   renderTrainingBlockReview();
@@ -257,7 +187,7 @@ function renderTrainingBlockWeekOptions(selected=1,selectedLight=el("trainingBlo
 function adaptationChangeLabel(change){
   if(typeof change==="string"&&change.trim())return change.trim();
   if(!change||typeof change!=="object")return "Review the proposed plan change.";
-  const from=Math.max(0,Math.round(Number(change.fromSets)||0)),to=Math.max(0,Math.round(Number(change.toSets)||0)),day=Monthly.DAYS.includes(change.day)?change.day:"Next session",name=exerciseName(change.exerciseId);
+  const from=Math.max(0,Math.round(Number(change.fromSets)||0)),to=Math.max(0,Math.round(Number(change.toSets)||0)),day=Monthly.DAYS.includes(change.day)?change.day:"Next workout",name=exerciseName(change.exerciseId);
   return from&&to?`${day} · ${name} · ${from} → ${to} sets`:`${day} · ${name}`;
 }
 function adaptationPersistenceCopy(change){
@@ -272,32 +202,35 @@ function normalizeProgression(data,workoutId=""){
   const id=String(raw.id||raw.adaptationId||"");if(!id||raw.requiresApproval===false)return null;
   const progressionItems=Array.isArray(data?.progression?.suggestions)?data.progression.suggestions:[],evidence=progressionItems[0]?.explanation;
   const reduceSets=raw.kind==="reduce_sets";
-  return{id,workoutId:String(raw.sourceWorkoutId||workoutId),title:String(raw.title||"Review a saved-Plan adjustment"),explanation:String(raw.explanation||"This suggestion uses comparable work you chose to log."),change:adaptationChangeLabel(raw.change),tradeoff:reduceSets?adaptationPersistenceCopy(raw.change):"Accepting edits your saved weekly Plan, and that edit remains until you change Plan again. Keeping the current Plan is always an option.",evidence:String(evidence||"Based only on comparable saved workout entries and optional check-ins."),expectedPlanUpdatedAt:Number(raw.expectedPlanUpdatedAt)||0,applied:false};
+  return{id,workoutId:String(raw.sourceWorkoutId||workoutId),title:String(raw.title||"Review a plan adjustment"),explanation:String(raw.explanation||"This suggestion uses comparable work you chose to log."),change:adaptationChangeLabel(raw.change),tradeoff:reduceSets?adaptationPersistenceCopy(raw.change):"Accepting edits your saved weekly Plan, and that edit remains until you change Plan again. Keeping the current Plan is always an option.",evidence:String(evidence||"Based only on comparable saved workout entries and optional check-ins."),expectedPlanUpdatedAt:Number(raw.expectedPlanUpdatedAt)||0,applied:false};
 }
 function renderProgression(){
   const card=el("progressionCard"),suggestion=state.progressionSuggestion;if(!card)return;
   card.hidden=!suggestion;if(!suggestion)return;
-  el("progressionTitle").textContent=suggestion.title.toUpperCase();el("progressionExplanation").textContent=suggestion.explanation;el("progressionChange").textContent=suggestion.change;el("progressionTradeoff").textContent=suggestion.tradeoff;el("progressionEvidence").textContent=suggestion.evidence;
+  el("progressionTitle").textContent=suggestion.title;el("progressionExplanation").textContent=suggestion.explanation;el("progressionChange").textContent=suggestion.change;el("progressionTradeoff").textContent=suggestion.tradeoff;el("progressionEvidence").textContent=suggestion.evidence;
   el("progressionAccept").disabled=suggestion.applied;el("progressionAccept").textContent=suggestion.applied?"Change accepted":"Accept change";el("progressionDismiss").hidden=suggestion.applied;el("progressionStatus").textContent=suggestion.applied?"Saved. Your weekly Plan was updated; this edit remains until you change Plan again.":"Nothing changes unless you accept.";
 }
 function clearPrivateWorkspace(){
   workspaceGeneration+=1;workspaceReady=false;
   state.exercises=[];state.methodology=null;state.sources=[];state.limited=new Set();state.preferences=null;state.user=null;state.csrfToken="";state.aggregate=new Map();state.userRatings=new Map();state.ratingsRefreshedAt=0;state.ratingsRefreshPromise=null;state.ratingSaving=new Set();state.compare=[];state.shortlist=[];state.collection="all";state.query="";state.group="all";state.equipment="all";state.pattern="all";state.level="all";state.sort="personal";state.recommendations=[];state.activeExercise=null;state.explorerLimit=EXPLORER_DESKTOP_PAGE_SIZE;
-  state.weeklyPlan=null;state.weeklyPlanUpdatedAt=0;state.workouts=[];state.workoutHistoryAvailable=false;state.workoutHistoryHasMore=false;state.trainingBlock=null;state.trainingBlockRevision=0;state.trainingBlockAction=null;state.progressionSuggestion=null;state.session=null;state.sessionSaving=false;state.sessionDayInitialized=false;state.monthlyPlan=null;state.monthlyPlanUpdatedAt=0;state.monthlySchedule=null;state.monthlySource="muscle-schedule";state.communityPlans=[];state.communityLoaded=false;state.communityLoading=false;state.communityError="";state.communityNextOffset=0;state.communityQuery="";state.communityPendingId=null;state.communityAppliedId=null;state.communityAppliedUpdatedAt=0;
+  state.weeklyPlan=null;state.weeklyPlanUpdatedAt=0;state.workouts=[];state.workoutHistoryAvailable=false;state.workoutHistoryLoading=true;state.workoutHistoryHasMore=false;state.trainingBlock=null;state.trainingBlockRevision=0;state.trainingBlockAction=null;state.progressionSuggestion=null;state.session=null;state.sessionSaving=false;state.sessionDayInitialized=false;state.monthlyPlan=null;state.monthlyPlanUpdatedAt=0;state.monthlySchedule=null;state.monthlySource="muscle-schedule";state.communityPlans=[];state.communityLoaded=false;state.communityLoading=false;state.communityError="";state.communityNextOffset=0;state.communityQuery="";state.communityPendingId=null;state.communityAppliedId=null;state.communityAppliedUpdatedAt=0;
   const main=document.querySelector("main");if(main){main.hidden=true;main.inert=true;main.setAttribute("aria-busy","true");}
   el("userName").textContent="Checking account…";el("compareTray").hidden=true;el("compareNames").textContent="Choose 2–4 exercises";el("toast").textContent="";el("featureStatus").textContent="";
   el("progressionCard").hidden=true;el("trainingBlockReview").hidden=true;el("battleResults").hidden=true;el("battleResults").innerHTML="";el("communityPlanGrid").innerHTML="";el("sessionResults").innerHTML="";
+  for(const id of ["recommendationGrid","exerciseGrid","movementBoardList","rankingLensItems","equipmentChoices","preferenceChoices","limitationChoices","monthlyDays","repeatImprovementList","personalBestList"])if(el(id))el(id).innerHTML="";
   if(el("detailContent"))el("detailContent").innerHTML="";if(el("communityApplySummary"))el("communityApplySummary").innerHTML="";
   document.querySelectorAll("dialog").forEach((dialog)=>{if(dialog.open)dialog.close();});document.body.classList.remove("dialog-open");
 }
+function showFeatureAccess(){clearPrivateWorkspace();el("featureAccess").hidden=false;el("discoveryLoadError").hidden=true;el("userName").textContent="Access required";el("logoutButton").hidden=true;el("featureAccessTitle").focus?.();}
 function revealPrivateWorkspace(){
+  el("featureAccess").hidden=true;el("logoutButton").hidden=false;
   const main=document.querySelector("main");if(main){main.hidden=false;main.inert=false;main.setAttribute("aria-busy","false");}
   workspaceReady=true;
 }
-function dashboardUnavailable(message="Workout history could not be loaded. Your plan is still ready."){
-  state.workouts=[];state.workoutHistoryAvailable=false;state.workoutHistoryHasMore=false;renderWeeklyPulse();renderProgress();renderTrainingBlockReview();
-  if(el("todayPreviousValue"))el("todayPreviousValue").textContent="History unavailable";
-  if(el("todayPreviousDetail"))el("todayPreviousDetail").textContent=message;
+function dashboardUnavailable(message="Workout history could not be loaded. Try again to review your logs."){
+  state.workouts=[];state.workoutHistoryAvailable=false;state.workoutHistoryLoading=false;state.workoutHistoryHasMore=false;renderProgress();renderTrainingBlockReview();
+
+  if(el("progressLoadMessage"))el("progressLoadMessage").textContent=message;
 }
 function dashboardAccountChanged(){
   clearPrivateWorkspace();
@@ -306,6 +239,7 @@ function dashboardAccountChanged(){
 async function confirmDashboardIdentity(expectedUserId,expectedCsrf){
   const identity=await api("/api/me"),sameUser=String(identity.user?.id||"")===String(expectedUserId||""),sameCsrf=Boolean(identity.csrfToken)&&String(identity.csrfToken)===String(expectedCsrf||"");
   if(!sameUser||!sameCsrf)throw Object.assign(new Error("The signed-in account changed."),{code:"ACCOUNT_CHANGED"});
+  if(identity.user?.discovery?.active!==true){showFeatureAccess();throw Object.assign(new Error("Strata+ access ended."),{redirecting:true,status:402});}
   return identity;
 }
 function resolvedAdaptation(result,suggestion,status,{requirePlan=false}={}){
@@ -334,19 +268,21 @@ async function reconcileAdaptationError(error,{accepting=false}={}){
   return true;
 }
 async function loadMemberDashboard(generation=workspaceGeneration){
+  state.workoutHistoryLoading=true;renderProgress();
   const [historyResult,trainingResult]=await Promise.allSettled([api("/api/workouts?limit=100&offset=0"),api("/api/training")]);
   if(generation!==workspaceGeneration)return;
   let identity;
   try{identity=await api("/api/me");}
-  catch(error){if(!error?.redirecting)dashboardUnavailable();return;}
+  catch(error){if(generation!==workspaceGeneration||error?.stale)return;if(!error?.redirecting)dashboardUnavailable();return;}
   if(generation!==workspaceGeneration)return;
   const sameUser=String(identity.user?.id||"")===String(state.user?.id||""),identityCsrf=String(identity.csrfToken||"");
   const history=historyResult.status==="fulfilled"?historyResult.value:null,historyCsrf=String(history?.csrfToken||"");
   const training=trainingResult.status==="fulfilled"?trainingResult.value:null,trainingCsrf=String(training?.csrfToken||"");
   if(!sameUser||(history&&(!historyCsrf||historyCsrf!==identityCsrf))||(training&&(!trainingCsrf||trainingCsrf!==identityCsrf))){dashboardAccountChanged();return;}
+  if(identity.user?.discovery?.active!==true){showFeatureAccess();return;}
   state.csrfToken=identityCsrf||state.csrfToken;
   if(history&&Array.isArray(history.workouts)&&typeof history.hasMore==="boolean"){
-    state.workouts=safeWorkoutList(history.workouts);state.workoutHistoryAvailable=true;state.workoutHistoryHasMore=history.hasMore===true;renderWeeklyPulse();renderProgress();renderTrainingBlockReview();
+    state.workouts=safeWorkoutList(history.workouts);state.workoutHistoryLoading=false;state.workoutHistoryAvailable=true;state.workoutHistoryHasMore=history.hasMore===true;renderProgress();renderTrainingBlockReview();
   }else dashboardUnavailable();
   state.progressionSuggestion=normalizeProgression(training,completedWorkouts()[0]?.id||"");renderProgression();
   if(training){
@@ -396,7 +332,7 @@ async function acceptProgression(){
   button.disabled=true;el("progressionDismiss").disabled=true;button.textContent="Saving…";el("progressionStatus").textContent="Saving…";
   try{
     const result=await api(`/api/training/adaptations/${encodeURIComponent(suggestion.id)}`,{method:"POST",body:JSON.stringify({decision:"accept",expectedPlanUpdatedAt:suggestion.expectedPlanUpdatedAt})});resolvedAdaptation(result,suggestion,"accepted",{requirePlan:true});const nextPlan=Monthly.normalizeWeeklyPlan(result.plan,state.exercises);await confirmDashboardIdentity(expectedUserId,expectedCsrf);
-    state.weeklyPlan=nextPlan;state.weeklyPlanUpdatedAt=Number(result.planUpdatedAt);renderWeeklyPulse();renderTrainingBlockReview();
+    state.weeklyPlan=nextPlan;state.weeklyPlanUpdatedAt=Number(result.planUpdatedAt);renderProgress();renderTrainingBlockReview();
     state.progressionSuggestion={...suggestion,applied:true};renderProgression();showToast("Saved. Your weekly Plan was updated.");
   }catch(error){if(redirectedOrChangedAccount(error))return;if(await reconcileAdaptationError(error,{accepting:true}))return;button.disabled=false;el("progressionDismiss").disabled=false;button.textContent="Accept change";el("progressionStatus").textContent=saveRetryMessage(error);}
 }
@@ -409,7 +345,7 @@ async function dismissProgression(){
 }
 const session=SessionCore.createSession({
   state,core:Core,monthly:Monthly,labels:GROUP_LABELS,element:el,window,escapeHtml,titleCase,api,saveRetryMessage,showToast,
-  renderWeeklyPulse,renderTrainingBlockReview,updateMonthlySourceButtons
+  renderWeeklyPulse:renderProgress,renderTrainingBlockReview,updateMonthlySourceButtons
 });
 const {addToWeek:addSessionToWeek,generate:generateSession,initialize:initializeSessionBuilder,resetPreview:resetSessionPreview,syncPlanViews:syncSessionPlanViews,updateAddButton:updateSessionAddButton}=session;
 function localIsoDate(){const date=new Date(),part=(value)=>String(value).padStart(2,"0");return `${date.getFullYear()}-${part(date.getMonth()+1)}-${part(date.getDate())}`;}
@@ -481,9 +417,9 @@ function renderMonthlyPlan(plan,{announce=false}={}){
   const workoutDays=plan.days.filter((day)=>!day.rest).length,restDays=plan.days.length-workoutDays,totalExercises=plan.days.reduce((sum,day)=>sum+day.exercises.length,0);
   el("monthlyResultsTitle").textContent=plan.title;
   el("monthlySummary").innerHTML=`<div><span>Plan</span><strong>31 days</strong></div><div><span>Training</span><strong>${workoutDays}</strong></div><div><span>Rest</span><strong>${restDays}</strong></div><div><span>Exercises</span><strong>${totalExercises}</strong></div>`;
-  el("monthlyDays").innerHTML=plan.days.map((day)=>`<article class="monthly-day-card ${day.rest?"is-rest":""}" data-rest="${day.rest}"><header class="monthly-day-head"><span class="monthly-day-number">Day ${String(day.dayNumber).padStart(2,"0")}</span><time datetime="${escapeHtml(day.date)}">${escapeHtml(friendlyMonthlyDate(day.date))}</time></header><h4>${escapeHtml(day.weekday)}</h4>${day.rest?'<p class="monthly-rest-copy"><strong>REST / RECOVERY</strong><br />Keep the day clear or use gentle movement.</p>':`<p class="monthly-day-targets">${day.targets.map((target)=>escapeHtml(Monthly.TARGET_LABELS[target]||titleCase(target))).join(" + ")}</p><ol class="monthly-exercise-list">${day.exercises.map(monthlyExerciseMarkup).join("")}</ol>`}</article>`).join("");
+  el("monthlyDays").innerHTML=plan.days.map((day)=>`<article class="monthly-day-card ${day.rest?"is-rest":""}" data-rest="${day.rest}"><header class="monthly-day-head"><span class="monthly-day-number">Day ${String(day.dayNumber).padStart(2,"0")}</span><time datetime="${escapeHtml(day.date)}">${escapeHtml(friendlyMonthlyDate(day.date))}</time></header><h4>${escapeHtml(day.weekday)}</h4>${day.rest?"<p class=\"monthly-rest-copy\"><strong>Rest day</strong><br />Keep the day clear or use gentle exercise.</p>":`<p class="monthly-day-targets">${day.targets.map((target)=>escapeHtml(Monthly.TARGET_LABELS[target]||titleCase(target))).join(" + ")}</p><ol class="monthly-exercise-list">${day.exercises.map(monthlyExerciseMarkup).join("")}</ol>`}</article>`).join("");
   el("monthlyResults").hidden=false;
-  if(announce){el("monthlyPlanStatus").textContent=`Saved. 31-day plan ready with ${workoutDays} training days and ${restDays} rest days.`;el("monthlyResults").scrollIntoView?.({behavior:window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches?"auto":"smooth",block:"start"});}
+  if(announce){el("monthlyPlanStatus").textContent=`Saved. monthly schedule ready with ${workoutDays} training days and ${restDays} rest days.`;el("monthlyResults").scrollIntoView?.({behavior:window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches?"auto":"smooth",block:"start"});}
 }
 function populateMonthlyBuilder(plan=null){
   el("monthlyTitle").value=plan?.title||"My 31-day Strata plan";
@@ -491,7 +427,7 @@ function populateMonthlyBuilder(plan=null){
   el("monthlyExercisesPerTarget").value=String(plan?.exercisesPerTarget||2);
   state.monthlySource=plan?.source||"muscle-schedule";
   renderMonthlySchedule(plan?.schedule||blankMonthlySchedule());updateMonthlyDateRange();updateMonthlySourceButtons();renderMonthlyPlan(plan);
-  el("monthlyPlanStatus").textContent=plan?"Saved. Your 31-day plan is ready on this account.":"Choose your split, start date, and rest days.";
+  el("monthlyPlanStatus").textContent=plan?"Saved. Your monthly schedule is ready on this account.":"Choose your split, start date, and rest days.";
 }
 function downloadTextFile(text,filename,type="text/plain"){
   const blob=new Blob([text],{type}),url=URL.createObjectURL(blob),link=document.createElement("a");
@@ -499,7 +435,7 @@ function downloadTextFile(text,filename,type="text/plain"){
 }
 async function shareMonthlyPlan(){
   if(!state.monthlyPlan)return;
-  const text=Monthly.shareText(state.monthlyPlan,state.exercises),title=state.monthlyPlan.title||"My STRATA 31-day plan";
+  const text=Monthly.shareText(state.monthlyPlan,state.exercises),title=state.monthlyPlan.title||"My STRATA monthly schedule";
   try{
     if(typeof File==="function"&&navigator.share){
       const file=new File([text],"strata-31-day-plan.txt",{type:"text/plain"});
@@ -534,7 +470,7 @@ profileForm.addEventListener("submit",async(event)=>{
   const formElement=event.currentTarget,form=new FormData(formElement),preferences={goal:form.get("goal"),level:form.get("level"),days:Number(form.get("days")),equipment:form.getAll("equipment"),preferences:form.getAll("preferences"),limitations:form.getAll("limitations")};
   const controls=[...formElement.elements];profileForm.dataset.saving="true";controls.forEach((control)=>{control.disabled=true;});
   el("profileStatus").textContent="Saving…";
-  try{const result=await api("/api/preferences",{method:"PUT",body:JSON.stringify({preferences})});state.preferences=result.preferences;renderProfile();renderMovementBoard();renderRecommendations();resetExplorerWindow();renderExplorer();renderWeeklyPulse();resetSessionPreview("Preferences saved. Build a new session when you're ready.");showToast("Saved. Your recommendations are updated.");}
+  try{const result=await api("/api/preferences",{method:"PUT",body:JSON.stringify({preferences})});state.preferences=result.preferences;renderProfile();renderMovementBoard();renderRecommendations();resetExplorerWindow();renderExplorer();renderProgress();resetSessionPreview("Preferences saved. Create a new workout when you're ready.");showToast("Saved. Your recommendations are updated.");}
   catch(error){const message=saveRetryMessage(error);el("profileStatus").textContent=message;showToast(message);}
   finally{profileForm.dataset.saving="false";controls.forEach((control)=>{control.disabled=false;});}
 });
@@ -563,8 +499,8 @@ el("progressionAccept")?.addEventListener("click",()=>{void acceptProgression();
 el("progressionDismiss")?.addEventListener("click",()=>{void dismissProgression();});
 el("sessionBuilderForm")?.addEventListener("submit",(event)=>{event.preventDefault();if(!state.sessionSaving)generateSession({announce:true});});
 session.bindSelectionControls();
-el("sessionLength")?.addEventListener("change",()=>{if(!state.sessionSaving)resetSessionPreview("Time changed. Build the session to see your updated picks.");});
-el("sessionDay")?.addEventListener("change",()=>{if(!state.sessionSaving){const error=updateSessionAddButton();el("sessionStatus").textContent=error?`This session does not fit the selected day: ${error.message}`:state.session?`Session ready to add to ${el("sessionDay").value}.`:"Build a session first.";}});
+el("sessionLength")?.addEventListener("change",()=>{if(!state.sessionSaving)resetSessionPreview("Time changed. Build the workout to see your updated picks.");});
+el("sessionDay")?.addEventListener("change",()=>{if(!state.sessionSaving){const error=updateSessionAddButton();el("sessionStatus").textContent=error?`This workout does not fit the selected day: ${error.message}`:state.session?`Workout ready to add to ${el("sessionDay").value}.`:"Create workout first.";}});
 el("sessionAddAll")?.addEventListener("click",()=>{void addSessionToWeek();});
 monthlyPlanForm.addEventListener("submit",async(event)=>{
   event.preventDefault();if(monthlyPlanForm.dataset.saving==="true")return;
@@ -573,9 +509,9 @@ monthlyPlanForm.addEventListener("submit",async(event)=>{
     const schedule=readMonthlySchedule(),generated={...Monthly.generateMonthPlan({title:el("monthlyTitle").value,startDate:el("monthlyStartDate").value,exercisesPerTarget:Number(el("monthlyExercisesPerTarget").value),schedule,exercises:state.exercises,preferences:state.preferences}),source:state.monthlySource};
     monthlyPlanForm.dataset.saving="true";monthlyPlanForm.setAttribute("aria-busy","true");unlockControls=lockFormControls(monthlyPlanForm);el("monthlyPlanStatus").textContent="Saving…";
     const result=await api("/api/monthly-plan",{method:"PUT",body:JSON.stringify({monthlyPlan:generated,expectedUpdatedAt:state.monthlyPlanUpdatedAt})});
-    state.monthlySchedule=copyMonthlyValue(result.monthlyPlan.schedule);renderMonthlyPlan(result.monthlyPlan,{announce:true});showToast("Saved. Your 31-day plan is ready.");
+    state.monthlySchedule=copyMonthlyValue(result.monthlyPlan.schedule);renderMonthlyPlan(result.monthlyPlan,{announce:true});showToast("Saved. Your monthly schedule is ready.");
   }catch(error){
-    const message=error.status===409?"A newer monthly plan was saved on another tab. Your setup is unchanged. Reload to review the saved plan before generating again.":saveRetryMessage(error);
+    const message=error.status===409?"A newer monthly schedule was saved on another tab. Your setup is unchanged. Reload to review the saved plan before generating again.":saveRetryMessage(error);
     setMonthlyValidation(message);el("monthlyPlanStatus").textContent=message;showToast(message);
   }
   finally{monthlyPlanForm.dataset.saving="false";monthlyPlanForm.setAttribute("aria-busy","false");unlockControls();}
@@ -658,30 +594,31 @@ function initialLoadMessage(error){
   return "Strata+ could not load. Please try again.";
 }
 function showInitialLoadProgress(){
+  const main=document.querySelector("main");if(main){main.inert=true;main.setAttribute("aria-busy","true");}
   el("discoveryLoadError").hidden=true;el("discoveryRetry").disabled=true;
   el("profileStatus").textContent="Loading profile…";el("battleStatus").textContent="Loading exercises…";el("monthlyPlanStatus").textContent="Loading planner…";el("communityPlanStatus").textContent="Loading shared plans…";if(el("sessionStatus"))el("sessionStatus").textContent="Loading your profile and weekly plan…";
   el("recommendationGrid").innerHTML='<div class="loading-card">Building your ranking…</div>';
   if(el("rankingLensItems"))el("rankingLensItems").innerHTML="<li>Loading preferences…</li>";
-  if(el("movementBoardStatus"))el("movementBoardStatus").textContent="Loading your decision board…";
+  if(el("movementBoardStatus"))el("movementBoardStatus").textContent="Loading your saved exercises…";
   if(el("trainingBlockStatus"))el("trainingBlockStatus").textContent="Loading your optional training block…";
   if(el("progressAdherenceDetail"))el("progressAdherenceDetail").textContent="Loading planned and completed days…";
-  el("exerciseGrid").hidden=false;el("exerciseGrid").innerHTML='<div class="loading-card">Loading exercise intelligence…</div>';el("emptyState").hidden=true;
+  el("exerciseGrid").hidden=false;el("exerciseGrid").innerHTML="<div class=\"loading-card\">Loading exercise details…</div>";el("emptyState").hidden=true;
 }
 function showInitialLoadError(error){
   const message=initialLoadMessage(error);
   el("profileStatus").textContent="Unable to load";el("battleStatus").textContent=message;el("monthlyPlanStatus").textContent=message;el("communityPlanStatus").textContent=message;if(el("sessionStatus"))el("sessionStatus").textContent=message;
   el("recommendationGrid").innerHTML=`<div class="loading-card load-error-card">${escapeHtml(message)}</div>`;el("exerciseGrid").innerHTML=`<div class="loading-card load-error-card">${escapeHtml(message)}</div>`;
-  if(el("movementBoardStatus"))el("movementBoardStatus").textContent="Decision board unavailable until Strata+ reconnects.";
+  if(el("movementBoardStatus"))el("movementBoardStatus").textContent="Saved exercises unavailable until Strata+ reconnects.";
   el("discoveryLoadErrorMessage").textContent=message;el("discoveryLoadError").hidden=false;showToast(message);
 }
 async function init(){
   if(discoveryLoading)return;
-  const generation=workspaceGeneration;discoveryLoading=true;showInitialLoadProgress();
+  const generation=workspaceGeneration;discoveryLoading=true;state.workoutHistoryLoading=true;showInitialLoadProgress();
   try{
     const data=await api("/api/discovery"),identity=await api("/api/me");
     if(generation!==workspaceGeneration)return;
     if(String(data.user?.id||"")!==String(identity.user?.id||"")||!data.csrfToken||String(data.csrfToken)!==String(identity.csrfToken||"")){dashboardAccountChanged();return;}
-    if(identity.user?.discovery?.active!==true){const error=Object.assign(new Error("Strata+ access changed while this page was open."),{redirecting:true});window.location.replace("/pricing?reason=access-revoked");throw error;}
+    if(identity.user?.discovery?.active!==true){const error=Object.assign(new Error("Strata+ access changed while this page was open."),{redirecting:true});showFeatureAccess();throw error;}
     state.exercises=data.exercises;state.methodology=data.methodology;state.sources=data.sources;state.limited=new Set(data.limitedConfidenceExercises);state.preferences=data.preferences;state.user=data.user;state.weeklyPlan=data.weeklyPlan||null;state.weeklyPlanUpdatedAt=Number(data.weeklyPlanUpdatedAt)||0;state.monthlyPlanUpdatedAt=Number(data.monthlyPlanUpdatedAt)||0;state.monthlyPlan=data.monthlyPlan||null;loadMovementBoard();
     state.csrfToken=String(data.csrfToken||"");state.aggregate=new Map((data.ratings.aggregates||[]).map((item)=>[item.exercise_id,item]));state.userRatings=new Map((data.ratings.user||[]).map((item)=>[item.exercise_id,item]));state.ratingsRefreshedAt=Date.now();
     el("userName").textContent=data.user.name;el("catalogTotal").textContent=state.exercises.length;
@@ -695,5 +632,6 @@ EventsCore.bind({
   document,window,el,state,core:Core,movementBoardLimit:MOVEMENT_BOARD_LIMIT,searchDebounceMs:SEARCH_DEBOUNCE_MS,featureNavigation,
   actions:{api,activateFeature,closeDialog,explorerPageSize,featureName,hideToast,init,openComparison,openDetail,readBattleBuilder,renderCompareTray,renderExplorer,renderMovementBoard,renderRecommendations,resetExplorerWindow,resetFilters,restoreDialogFocus,revalidateMemberWorkspaceWhenVisible,saveMovementBoard,setCollectionState,shareCard,showToast,syncDialogState,toggleCompare,toggleMovementBoard}
 });
+el("progressRetry").addEventListener("click",()=>void loadMemberDashboard(workspaceGeneration));
 initializeFeatureNavigation();
 init();

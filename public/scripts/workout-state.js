@@ -24,7 +24,7 @@
       mode:"",user:null,ownerId:"",contextId:workout.id(),csrfToken:"",catalog:[],plan:null,planUpdatedAt:0,
       day:deepLinkedDay(locationLike,workout),workout:null,dirty:false,sequence:0,saving:null,saveTimer:null,
       blocked:false,conflict:null,pausedSeconds:null,timerAnnounced:false,draftKey:"",recoveries:[],history:[],
-      offset:0,hasMore:false,historyBusy:false,memoryHistory:[],memoryExhausted:false,memoryBusy:false,
+      offset:0,hasMore:false,historyBusy:false,historyLoaded:false,historyLoadError:"",memoryHistory:[],memoryExhausted:false,memoryBusy:false,
       memoryReady:false,memoryError:"",detailBusy:false,loading:false,toastTimer:null,checkInBusy:false,
       adaptation:null,swapEntryId:"",swapCandidateId:"",swapProposal:null,swapBusy:false,swapTrigger:null,
       offlineAccessUntil:0
@@ -50,7 +50,7 @@
     if(error.status===401||error.code==="IDENTITY_CHANGED")return "Your account session changed. Your device draft has been kept. Reload and sign in to the original account to recover it.";
     if(error.status===403)return "Your secure session could not authorize the save. Reload, then review your recovered draft before saving again.";
     if(error.code==="NETWORK_ERROR")return "Not saved to your account. Check your connection, then choose Save now. Your device draft is kept where storage is available.";
-    return error.message||"This session could not be saved. Your changes are still here.";
+    return error.message||"This workout could not be saved. Your changes are still here.";
   }
 
   return{PREFERENCE_KEY,OFFLINE_CONTEXT_KEY,REST_DURATIONS,deepLinkedDay,create,readPreferences,writePreferences,saveError};

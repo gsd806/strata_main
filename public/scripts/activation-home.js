@@ -14,12 +14,12 @@
     const byId=new Map(exercises.map(exercise=>[exercise.id,exercise]));
     return DAYS.map(day=>{
       const items=Array.isArray(plan?.days?.[day])?plan.days[day]:[];
-      return `<article class="quick-week-day ${items.length?"":"is-recovery"}"><div><span>${day.slice(0,3)}</span><strong>${items.length?`${items.length} movement${items.length===1?"":"s"}`:"Recovery"}</strong></div>${items.length?`<ol>${items.map(item=>`<li><b>${escape(byId.get(item.exerciseId)?.name||"Movement unavailable")}</b><small>${escape(item.sets)} × ${escape(item.reps)}</small></li>`).join("")}</ol>`:"<p>No scheduled session.</p>"}</article>`;
+      return `<article class="quick-week-day ${items.length?"":"is-recovery"}"><div><span>${day.slice(0,3)}</span><strong>${items.length?`${items.length} exercise${items.length===1?"":"s"}`:"Recovery"}</strong></div>${items.length?`<ol>${items.map(item=>`<li><b>${escape(byId.get(item.exerciseId)?.name||"Exercise unavailable")}</b><small>${escape(item.sets)} × ${escape(item.reps)}</small></li>`).join("")}</ol>`:"<p>No scheduled workout.</p>"}</article>`;
     }).join("");
   }
   function renderWeek(plan,profile,exercises,{restored=false}={}){
     const movementCount=DAYS.reduce((total,day)=>total+(Array.isArray(plan?.days?.[day])?plan.days[day].length:0),0),trainingDays=DAYS.filter(day=>plan?.days?.[day]?.length).length;
-    $("quickWeekGrid").innerHTML=weekMarkup(plan,exercises);$("quickWeekMeta").textContent=`${trainingDays} training days · ${movementCount} movements · ${profile.minutes} minutes per session`;
+    $("quickWeekGrid").innerHTML=weekMarkup(plan,exercises);$("quickWeekMeta").textContent=`${trainingDays} training days · ${movementCount} exercises · ${profile.minutes} minutes per workout`;
     $("quickWeekBoundary").textContent=restored?"Your preview is back. Sign in to choose which week to keep. Your account plan stays unchanged until you save.":"Like this week? Save it with a free account. Guided workouts and Training Memory are included in the optional 7-day Strata+ trial; no card required.";$("quickWeekPreview").hidden=false;
   }
   function render({exercises,sample,profile,plan,previewResultMarkup,restored=false}){

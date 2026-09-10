@@ -211,7 +211,7 @@
       const result=Discovery.personalResult(exercise,preferences);
       if(typeof result?.eligible!=="boolean"||!Number.isFinite(result.match))throw new Error("Invalid eligibility result.");
       return result;
-    }catch{fail(`Could not verify the saved equipment and movement constraints for ${exercise.name||exercise.id}. Review your profile and try again.`);}
+    }catch{fail(`Could not verify the saved equipment and exercise constraints for ${exercise.name||exercise.id}. Review your profile and try again.`);}
   }
 
   function candidatePool(exercises,target,preferences){
@@ -222,7 +222,7 @@
   }
 
   function generateMonthPlan(input){
-    if(!isRecord(input))fail("Monthly plan settings are missing.");
+    if(!isRecord(input))fail("Monthly schedule settings are missing.");
     const exercises=Array.isArray(input.exercises)?input.exercises:[];
     if(!exercises.length)fail("The exercise library is unavailable.");
     const knownExercises=exerciseIndex(exercises);
@@ -243,7 +243,7 @@
         if(selected.length>=MAX_EXERCISES_PER_DAY)break;
         const exercise=knownExercises.get(item.exerciseId),target=inferTarget(exercise);
         if(!exercise||!target||!entry.targets.includes(target)||used.has(item.exerciseId))continue;
-        if(!checkedPersonalResult(exercise,input.preferences).eligible)fail(`${weekday}'s imported ${exercise.name||exercise.id} does not match your saved equipment or movement constraints. Edit the imported day or update your profile before generating the month.`);
+        if(!checkedPersonalResult(exercise,input.preferences).eligible)fail(`${weekday}'s imported ${exercise.name||exercise.id} does not match your saved equipment or exercise constraints. Edit the imported day or update your profile before generating the month.`);
         used.add(item.exerciseId);
         selected.push({exerciseId:item.exerciseId,sets:item.sets,reps:item.reps});
       }
@@ -258,7 +258,7 @@
           selected.push({exerciseId:String(exercise.id),sets:defaultSets(exercise),reps:cleanText(exercise.reps,20)||"8–12"});
           added++;
         }
-        if(already+added<exercisesPerTarget)fail(`No eligible ${TARGET_LABELS[target].toLowerCase()} exercises match the saved equipment and movement constraints.`);
+        if(already+added<exercisesPerTarget)fail(`No eligible ${TARGET_LABELS[target].toLowerCase()} exercises match the saved equipment and exercise constraints.`);
         occurrences[target]++;
       }
       return{dayNumber:index+1,date,weekday,rest:false,targets:[...entry.targets],exercises:selected};
@@ -275,7 +275,7 @@
   }
 
   function shareText(plan,exercises=[]){
-    if(!isRecord(plan)||!Array.isArray(plan.days)||plan.days.length!==MONTH_LENGTH)fail("Generate a complete 31-day plan before sharing it.");
+    if(!isRecord(plan)||!Array.isArray(plan.days)||plan.days.length!==MONTH_LENGTH)fail("Generate a complete monthly schedule before sharing it.");
     const knownExercises=exerciseIndex(exercises),title=cleanText(plan.title,80)||"My 31-Day Plan";
     const finalDate=plan.days[MONTH_LENGTH-1]?.date;
     const lines=[title,`${displayDate(plan.startDate)} – ${displayDate(finalDate)}`,""];

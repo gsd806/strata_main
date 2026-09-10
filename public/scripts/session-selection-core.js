@@ -7,9 +7,9 @@
   "use strict";
 
   const SESSION_SELECTION_MODES=Object.freeze({
-    random:Object.freeze({label:"Random",description:"Shuffle eligible exercises while keeping your session focus and movement constraints."}),
+    random:Object.freeze({label:"Random",description:"Shuffle eligible exercises while keeping your workout focus and exercise constraints."}),
     "not-in-week":Object.freeze({label:"Not in my week",description:"Choose only exercises that are absent from every day in your saved weekly plan."}),
-    "needs-focus":Object.freeze({label:"Needs focus",description:"Prioritize muscle targets with fewer completed sets in your last 28 days of saved workouts."}),
+    "needs-focus":Object.freeze({label:"Less-trained muscle targets",description:"Prioritize muscle targets with fewer completed sets in your last 28 days of saved workouts."}),
     preferences:Object.freeze({label:"My preferences",description:"Use your shortlist, your own ratings, and the muscle targets you repeatedly train."})
   });
   const DAY_MS=86_400_000;
@@ -74,44 +74,44 @@
     };
     const reason=(exercise)=>{
       const rating=ratings.get(exercise.id),times=history.exerciseSessions.get(exercise.id)||0,target=targetKey(exercise);
-      if(rating!==undefined&&rating<3)return[`your own average overall / enjoyment rating is ${Math.round(rating*10)/10}/5`,saved.has(exercise.id)?"saved to your shortlist":"",times>=2?`completed in ${times} of your saved sessions`:""].filter(Boolean).join("; ");
+      if(rating!==undefined&&rating<3)return[`your own average overall / enjoyment rating is ${Math.round(rating*10)/10}/5`,saved.has(exercise.id)?"saved to your shortlist":"",times>=2?`completed in ${times} of your saved workouts`:""].filter(Boolean).join("; ");
       if(saved.has(exercise.id))return"saved to your shortlist";
       if(rating!==undefined&&rating>3)return`your own average overall / enjoyment rating is ${Math.round(rating*10)/10}/5`;
-      if(times>=2)return`completed in ${times} of your saved sessions`;
+      if(times>=2)return`completed in ${times} of your saved workouts`;
       if((targetAffinity.get(target)||0)>0)return`matches ${exercise.sub.toLowerCase()} targets you save or rate highly`;
       if((history.targetSessions.get(target)||0)>=2)return`matches ${exercise.sub.toLowerCase()} targets you repeatedly train`;
       if((groupAffinity.get(exercise.group)||0)>0)return`matches ${exercise.group} exercises you save or rate highly`;
       if((history.groupSessions.get(exercise.group)||0)>=2)return`matches the ${exercise.group} group you repeatedly train`;
-      return"fits your saved training profile; no stronger personal signal for this session role";
+      return"fits your saved training profile; no stronger personal signal for this workout role";
     };
     const hasSignal=(candidates)=>candidates.some((exercise)=>saved.has(exercise.id)||ratings.has(exercise.id)||targetAffinity.get(targetKey(exercise))||groupAffinity.get(exercise.group)||history.exerciseSessions.get(exercise.id)>=2||history.targetSessions.get(targetKey(exercise))>=2||history.groupSessions.get(exercise.group)>=2);
     return{score,reason,hasSignal};
   }
   function selectionNote(mode,{weekIds,historyAvailable,hasMore,hasRecent,hasPreferences}){
-    if(mode==="random")return"Random choices within your selected focus, equipment, and movement constraints. Build again for another shuffle.";
+    if(mode==="random")return"Random choices within your selected focus, equipment, and exercise constraints. Build again for another shuffle.";
     if(mode==="not-in-week")return weekIds.size?"Every exercise is absent from all seven days of your saved weekly plan.":"Your saved weekly plan is empty, so all eligible exercises can be included.";
-    const partial=hasMore?" Uses only the loaded workout history; older sessions may be missing.":"";
+    const partial=hasMore?" Uses only the loaded workout history; older workouts may be missing.":"";
     if(mode==="needs-focus"){
       if(!historyAvailable)return"Workout history is unavailable. Using your saved training profile until completed workout data is available.";
       if(!hasRecent)return`No completed sets were found for this focus in the last 28 days. Using your saved training profile until there is enough history.${partial}`;
-      return`Prioritizes muscle targets with fewer completed sets in the last 28 calendar days, within each session role. Counts describe logged training, not recovery.${partial}`;
+      return`Prioritizes muscle targets with fewer completed sets in the last 28 calendar days, within each workout role. Counts describe logged training, not recovery.${partial}`;
     }
     if(!hasPreferences)return`No shortlist, own ratings, or repeated completed choices match this focus yet. Using your saved training profile.${historyAvailable?partial:" Workout history is unavailable."}`;
     return`Uses your shortlist, your own ratings, and repeated completed choices where available.${historyAvailable?partial:" Workout history is unavailable; using your saved choices and ratings."}`;
   }
   function filteredRoles(candidates,count,muscleGroup,muscleTarget){
     const groups=[...new Set(candidates.map(({exercise})=>exercise.group))],label=muscleTarget!=="all"?muscleTarget:muscleGroup;
-    return Array.from({length:count},(_,index)=>({key:`muscle-${index+1}`,label:`${label.charAt(0).toUpperCase()+label.slice(1)} movement ${index+1}`,groups,...(muscleTarget!=="all"?{include:[muscleTarget.toLowerCase()]}:{})}));
+    return Array.from({length:count},(_,index)=>({key:`muscle-${index+1}`,label:`${label.charAt(0).toUpperCase()+label.slice(1)} exercise ${index+1}`,groups,...(muscleTarget!=="all"?{include:[muscleTarget.toLowerCase()]}:{})}));
   }
   function buildSession({exercises,preferences,focus="full",minutes=35,selectionMode,muscleGroup="all",muscleTarget="all",weeklyPlan=null,workouts=[],workoutHistoryAvailable=false,workoutHistoryHasMore=false,userRatings=new Map(),shortlist=[],now=new Date(),random=Math.random}={},core){
     const focusConfig=Object.hasOwn(core.SESSION_FOCUSES,focus)?core.SESSION_FOCUSES[focus]:null,lengthConfig=core.SESSION_LENGTHS[Number(minutes)],modeConfig=Object.hasOwn(SESSION_SELECTION_MODES,selectionMode)?SESSION_SELECTION_MODES[selectionMode]:null;
-    if(!focusConfig)throw core.sessionError("Choose a valid session focus.","INVALID_SESSION_FOCUS");
+    if(!focusConfig)throw core.sessionError("Choose a valid workout focus.","INVALID_SESSION_FOCUS");
     if(!lengthConfig)throw core.sessionError("Choose 20, 35, or 50 minutes.","INVALID_SESSION_LENGTH");
-    if(!modeConfig)throw core.sessionError("Choose Random, Not in my week, Needs focus, or My preferences.","INVALID_SESSION_SELECTION_MODE");
+    if(!modeConfig)throw core.sessionError("Choose Random, Not in my week, Less-trained muscle targets, or My preferences.","INVALID_SESSION_SELECTION_MODE");
     if(!preferences||typeof preferences!=="object")throw core.sessionError("Your saved training profile is unavailable.","INVALID_SESSION_PROFILE");
     const catalog=[...new Map(list(exercises).filter((exercise)=>exercise?.id).map((exercise)=>[exercise.id,exercise])).values()];
     const focusPool=catalog.filter((exercise)=>core.sessionFocusMatches(exercise,focus));
-    if(muscleGroup!=="all"&&!focusPool.some((exercise)=>exercise.group===muscleGroup))throw core.sessionError("Choose a muscle group within your session focus.","INVALID_SESSION_MUSCLE_GROUP");
+    if(muscleGroup!=="all"&&!focusPool.some((exercise)=>exercise.group===muscleGroup))throw core.sessionError("Choose a muscle group within your workout focus.","INVALID_SESSION_MUSCLE_GROUP");
     if(muscleTarget!=="all"&&!sessionMuscleTargets(catalog,focus,muscleGroup,core.sessionFocusMatches).includes(muscleTarget))throw core.sessionError("Choose a muscle target within your selected focus and group.","INVALID_SESSION_MUSCLE_TARGET");
     const weekIds=core.scheduledExerciseIds(weeklyPlan),strict=selectionMode==="not-in-week",filtered=muscleGroup!=="all"||muscleTarget!=="all";
     if(strict&&!core.WEEKDAYS.every((day)=>Array.isArray(weeklyPlan?.days?.[day])))throw core.sessionError("Your weekly plan is unavailable. Reload it before choosing Not in my week.","SESSION_WEEK_UNAVAILABLE");
@@ -119,10 +119,10 @@
     const candidates=focusPool.filter(matchesMuscle).map((exercise)=>({exercise,personal:core.personalResult(exercise,preferences)})).filter(({exercise,personal})=>personal.eligible&&(!strict||!weekIds.has(exercise.id)));
     const focusLabel=muscleTarget!=="all"?muscleTarget:muscleGroup!=="all"?muscleGroup.charAt(0).toUpperCase()+muscleGroup.slice(1):focusConfig.label;
     const shortage=strict?" Exercises already planned this week are excluded; no repeats were added.":"";
-    if(candidates.length<lengthConfig.count)throw core.sessionError(`Only ${candidates.length} eligible ${focusLabel.toLowerCase()} exercise${candidates.length===1?" matches":"s match"} your selection.${shortage} Choose a shorter session, a broader muscle target, or update your profile.`,"SESSION_POOL_TOO_SMALL");
+    if(candidates.length<lengthConfig.count)throw core.sessionError(`Only ${candidates.length} eligible ${focusLabel.toLowerCase()} exercise${candidates.length===1?" matches":"s match"} your selection.${shortage} Choose a shorter workout, a broader muscle target, or update your profile.`,"SESSION_POOL_TOO_SMALL");
     const roles=filtered?filteredRoles(candidates,lengthConfig.count,muscleGroup,muscleTarget):focusConfig.slots.slice(0,lengthConfig.count);
     const missingRole=roles.find((role)=>!candidates.some(({exercise})=>core.sessionRoleMatches(exercise,role)));
-    if(missingRole||!core.sessionRolesAreFeasible(candidates,roles))throw core.sessionError(`Your selection cannot provide ${missingRole?`an eligible ${missingRole.label.toLowerCase()} movement`:"enough distinct movements for every session role"}.${shortage} Choose a shorter session, a different focus, or update your profile.`,"SESSION_ROLE_UNAVAILABLE");
+    if(missingRole||!core.sessionRolesAreFeasible(candidates,roles))throw core.sessionError(`Your selection cannot provide ${missingRole?`an eligible ${missingRole.label.toLowerCase()} exercise`:"enough distinct exercises for every workout role"}.${shortage} Choose a shorter workout, a different focus, or update your profile.`,"SESSION_ROLE_UNAVAILABLE");
     const history=historyEvidence(catalog,workouts,workoutHistoryAvailable,now),personal=personalEvidence(catalog,userRatings,shortlist,history);
     const hasRecent=candidates.some(({exercise})=>(history.recentSets.get(targetKey(exercise))||0)>0),hasPreferences=personal.hasSignal(candidates.map(({exercise})=>exercise));
     const usedIds=new Set(),usedGroups=new Map(),usedSubs=new Map(),items=[];
@@ -140,9 +140,9 @@
         return base(b)-base(a)||a.exercise.id.localeCompare(b.exercise.id);
       });
       const selected=roleCandidates.find(({exercise})=>core.sessionRolesAreFeasible(candidates,roles.slice(index+1),new Set([...usedIds,exercise.id])));
-      if(!selected)throw core.sessionError(`The session cannot cover every role with distinct eligible exercises.${shortage}`,"SESSION_ROLE_UNAVAILABLE");
+      if(!selected)throw core.sessionError(`The workout cannot cover every role with distinct eligible exercises.${shortage}`,"SESSION_ROLE_UNAVAILABLE");
       const {exercise}=selected,sets=core.sessionSetCount(exercise,lengthConfig.minutes,index),reasons=[role.label];
-      if(selectionMode==="random")reasons.push("randomly selected from eligible movements for this role");
+      if(selectionMode==="random")reasons.push("randomly selected from eligible exercises for this role");
       else if(strict)reasons.push("absent from every day in your saved weekly plan");
       else if(selectionMode==="needs-focus"&&hasRecent){const count=history.recentSets.get(targetKey(exercise))||0;reasons.push(`${count} completed set${count===1?"":"s"} logged for ${exercise.sub.toLowerCase()} in the last 28 days${workoutHistoryHasMore?" of available history":""}`);}
       else if(selectionMode==="preferences")reasons.push(personal.reason(exercise));
@@ -151,7 +151,7 @@
       usedIds.add(exercise.id);add(usedGroups,exercise.group);add(usedSubs,exercise.sub);
     }
     const workingSets=items.reduce((sum,item)=>sum+item.sets,0);
-    return{focus,focusLabel,muscleGroup,muscleTarget,selectionMode,selectionLabel:modeConfig.label,selectionNote:selectionNote(selectionMode,{weekIds,historyAvailable:workoutHistoryAvailable,hasMore:workoutHistoryHasMore,hasRecent,hasPreferences}),minutes:lengthConfig.minutes,timeLabel:lengthConfig.label,estimatedMinutes:lengthConfig.minutes,workingSets,items,summary:`${items.length} movements · ${workingSets} working sets · about ${lengthConfig.minutes} minutes`};
+    return{focus,focusLabel,muscleGroup,muscleTarget,selectionMode,selectionLabel:modeConfig.label,selectionNote:selectionNote(selectionMode,{weekIds,historyAvailable:workoutHistoryAvailable,hasMore:workoutHistoryHasMore,hasRecent,hasPreferences}),minutes:lengthConfig.minutes,timeLabel:lengthConfig.label,estimatedMinutes:lengthConfig.minutes,workingSets,items,summary:`${items.length} exercises · ${workingSets} working sets · about ${lengthConfig.minutes} minutes`};
   }
 
   return{SESSION_SELECTION_MODES,sessionMuscleTargets,buildSession};

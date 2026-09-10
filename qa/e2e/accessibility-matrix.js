@@ -58,12 +58,13 @@ test(`${Object.keys(ENGINES).join(", ")} pass focused accessibility, keyboard, a
         await page.keyboard.press(engineName==="webkit"?"Alt+Tab":"Tab");
         assert.equal(await page.locator(".skip-link").evaluate((node)=>node===globalThis.document.activeElement),true,`${engineName} homepage starts with its skip link`);
         await page.keyboard.press("Enter");
-        assert.equal(await page.locator("#preview").evaluate((node)=>node===globalThis.document.activeElement||node.contains(globalThis.document.activeElement)),true,`${engineName} skip link reaches its named content`);
+        assert.equal(await page.locator("#rankings").evaluate((node)=>node===globalThis.document.activeElement||node.contains(globalThis.document.activeElement)),true,`${engineName} skip link reaches its named content`);
 
         debug(`${engineName}: copy-day`);await page.goto(`${server.baseUrl}/planner.html`,{waitUntil:"domcontentloaded"});
         await page.locator("[data-quick-add]").first().waitFor({state:"visible"});
         await page.locator("[data-quick-add]").first().click();
         await page.waitForFunction(()=>globalThis.document.querySelector("#saveStatus")?.textContent==="Saved");
+        await page.locator("#planningTools > summary").click();
         await page.locator("#copySourceDay").selectOption("Monday");
         await page.locator("#copyTargetDay").selectOption("Tuesday");
         await page.locator("#previewCopyDay").click();

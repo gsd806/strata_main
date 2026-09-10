@@ -37,7 +37,7 @@
     if(!availability.length)message="Choose at least one training day.";
     else if(availability.length>6)message="Keep at least one day open for recovery.";
     else if(!equipment.length)message="Choose the equipment you can reliably access.";
-    else if(!minutes)message="Choose a session length.";
+    else if(!minutes)message="Choose a workout length.";
     else message=`${availability.length} training day${availability.length===1?"":"s"}, ${DAYS.length-availability.length} recovery day${DAYS.length-availability.length===1?"":"s"}, and ${availability.length*minutes} planned minutes each week.`;
     return{
       trainingDays:availability.length,recoveryDays:Math.max(0,DAYS.length-availability.length),minutes,
@@ -58,7 +58,7 @@
     if(!equipment.length)throw new Error("Choose the equipment you can actually use.");
     if(!["hypertrophy","strength","balanced","time-efficient"].includes(profile.goal)||!["Beginner","Intermediate","Advanced"].includes(profile.level))throw new Error("Choose a goal and experience level.");
     const minutes=Number(profile.minutes);
-    if(![20,35,50].includes(minutes))throw new Error("Choose 20, 35, or 50 minutes per session.");
+    if(![20,35,50].includes(minutes))throw new Error("Choose 20, 35, or 50 minutes per workout.");
     const preferences={
       version:1,goal:profile.goal,level:profile.level,days:days.length,equipment,
       preferences:uniqueAllowed(profile.preferences,PREFERENCE_OPTIONS),

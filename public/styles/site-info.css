@@ -399,3 +399,6 @@ a { color:inherit; }
 @media (max-width:800px) {
   .info-header { background:var(--ink); }
 }
+
+/* Strata+ is an access level within STRATA. */
+.pricing-page h1,.pricing-page h2,.pricing-page h3 { text-transform:none; }

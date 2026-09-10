@@ -7,7 +7,7 @@ const {join}=require("node:path");
 
 const ROOT=join(__dirname,"..");
 const read=(...parts)=>fs.readFileSync(join(ROOT,"public",...parts),"utf8");
-const html=read("pages","workout.html"),sources=["workout-state.js","workout-api.js","workout-calendar.js","workout-progression.js","workout-render.js","workout-guidance.js","workout-history.js","workout-events.js","workout.js"].map((name)=>[name,read("scripts",name)]),catalog=JSON.parse(read("data","exercises.json"));
+const html=read("pages","workout.html"),sources=["workout-state.js","workout-api.js","workout-calendar.js","workout-progression.js","workout-render.js","workout-guidance.js","workout-history.js","workout-events.js","plan-insights-core.js","workout-context.js","workout.js"].map((name)=>[name,read("scripts",name)]),catalog=JSON.parse(read("data","exercises.json"));
 const Workout=require(join(ROOT,"public/scripts/workout-core")),Discovery=require(join(ROOT,"public/scripts/discovery-core"));
 const {progressionForWorkout}=require(join(ROOT,"src/progression"));
 const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map((match)=>match[1]);
@@ -75,7 +75,7 @@ vm.createContext(context);for(const [name,source] of sources)vm.runInContext(sou
   assert.deepEqual(progressionRequests,["/api/workouts/runtime-history/progression"]);assert.match(markup,/Repeat this target/);assert.match(markup,/42\.5 kg/);assert.doesNotMatch(markup,/Checking the next target/);
   assert.match(markup,/data-add-set/);assert.match(markup,/data-duplicate-set/);assert.match(markup,/data-remove-set/);
   assert.match(markup,/data-entry-note/);assert.match(markup,/Effort \(optional\)/);
-  assert.match(markup,/More options/);assert.match(markup,/Warm-ups &amp; plate calculator/);assert.match(markup,/data-calc-warmup/);assert.match(markup,/data-calc-plates/);
+  assert.match(markup,/Exercise tools/);assert.match(markup,/Warm-ups &amp; plate calculator/);assert.match(markup,/data-calc-warmup/);assert.match(markup,/data-calc-plates/);
   assert.match(markup,/Complete set/);
   assert.match(markup,/data-toggle-superset/);assert.match(markup,/data-open-swap/);
   assert.match(html,/No workout or Plan changes until/);assert.match(html,/Approve Plan &amp; workout change/);
