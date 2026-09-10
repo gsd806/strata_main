@@ -154,7 +154,7 @@
       "maxLines": 450,
       "allowedDependencies": [
         "src/plans.js",
-        "src/workouts.js"
+        "src/progression.js"
       ]
     },
     "src/email.js": {
@@ -281,6 +281,13 @@
       "allowedDependencies": [
         "src/legacy-checkout.js",
         "src/payments.js",
+        "src/plans.js"
+      ]
+    },
+    "src/progression.js": {
+      "role": "Pure per-set performance progression and comparison rules",
+      "maxLines": 300,
+      "allowedDependencies": [
         "src/plans.js"
       ]
     }

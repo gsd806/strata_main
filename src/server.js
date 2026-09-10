@@ -76,6 +76,7 @@ const STATIC_FILES = new Map([
   ["workout-state.js","scripts/workout-state.js"],
   ["workout-api.js","scripts/workout-api.js"],
   ["workout-calendar.js","scripts/workout-calendar.js"],
+  ["workout-progression.js","scripts/workout-progression.js"],
   ["workout-render.js","scripts/workout-render.js"],
   ["workout-guidance.js","scripts/workout-guidance.js"],
   ["workout-history.js","scripts/workout-history.js"],

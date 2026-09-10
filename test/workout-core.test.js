@@ -235,3 +235,13 @@ test("exercise swap explains trade-offs and Plan proposals remain immutable unti
   const workout=makeWorkout(),plan={version:1,days:{Monday:[{instanceId:"plan-press",exerciseId:"press",sets:2,reps:"8–12"}]}};workout.entries[0].planInstanceId="plan-press";
   const proposal=W.planSwapProposal(plan,"Monday",workout.entries[0],"machine");assert.equal(plan.days.Monday[0].exerciseId,"press");assert.equal(proposal.plan.days.Monday[0].exerciseId,"machine");assert.equal(proposal.before,"press");
 });
+
+
+test("memory uses the latest earlier exposure even when it has no completed sets",()=>{
+  const current=makeWorkout(),entry=current.entries[0],format={exerciseId:entry.exerciseId,measurement:entry.measurement,loadType:entry.loadType,unit:entry.unit};
+  const row=(id,startedAt,setValues)=>({id,startedAt,date:"2026-09-05",status:"completed",exerciseSummaries:[{...format,setValues}]});
+  const good=row("old",1000,[{reps:12,weight:40,seconds:null}]),unfinished=row("latest",2000,[]),future=row("future",4000,[{reps:12,weight:80,seconds:null}]);
+  const latest=W.previousComparable([good,future,unfinished],entry,current.id,3000);
+  assert.equal(latest.workoutId,"latest");assert.deepEqual(latest.sets,[]);
+  assert.equal(W.previousComparable([future],entry,current.id,3000),null);
+});

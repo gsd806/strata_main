@@ -30,7 +30,7 @@ async function account(suffix,{plus=true}={}) {
   return member;
 }
 function completed(id,startedAt,reps=10) {
-  const workout=workoutFixture(id);workout.startedAt=startedAt;workout.status="completed";workout.completedAt=startedAt+60000;workout.entries[0].sets[0]={reps,weight:20,seconds:null,completed:true};return workout;
+  const workout=workoutFixture(id);workout.startedAt=startedAt;workout.date=new Date(startedAt).toISOString().slice(0,10);workout.status="completed";workout.completedAt=startedAt+60000;workout.entries[0].sets=Array.from({length:3},()=>({reps,weight:40,seconds:null,completed:true}));return workout;
 }
 async function savePressPlan(member) {
   const current=await request("/api/plan",member),plan=structuredClone(current.data.plan);
@@ -61,16 +61,16 @@ test("training APIs require Strata+, preserve owner isolation, CSRF, JSON, compl
 
 test("comparable performance, explicit check-in, and user-approved adaptation form a deterministic loop",async()=>{
   const member=await account("progression");const planState=await savePressPlan(member);
-  const prior=completed("prior-comparable",1767600000000,9),current=completed("current-comparable",1767600001000,10);
+  const prior=completed("prior-comparable",1767600000000,9),current=completed("current-comparable",1768204800000,10);
   assert.equal((await request("/api/workouts",member,"POST",{workout:prior})).status,201);
   assert.equal((await request("/api/workouts",member,"POST",{workout:current})).status,201);
   const beforeCheckIn=await request(`/api/workouts/${current.id}/progression`,member);
-  assert.equal(beforeCheckIn.data.progression.suggestions[0].action,"repeat");assert.equal(beforeCheckIn.data.progression.suggestions[0].basis,"check-in-needed");
+  assert.equal(beforeCheckIn.data.progression.suggestions[0].action,"increase_reps");assert.equal(beforeCheckIn.data.progression.suggestions[0].target.reps,11);
   const progressed=await request(`/api/workouts/${current.id}/check-in`,member,"POST",{checkIn:{difficulty:3,energy:4,comfort:4,enjoyment:4}});
   assert.equal(progressed.status,200);assert.equal(progressed.data.adaptation,null);
   assert.equal(progressed.data.progression.suggestions[0].action,"increase_reps");assert.equal(progressed.data.progression.suggestions[0].target.reps,11);
 
-  const difficult=completed("difficult-session",1767600002000,10);assert.equal((await request("/api/workouts",member,"POST",{workout:difficult})).status,201);
+  const difficult=completed("difficult-session",1768809600000,10);assert.equal((await request("/api/workouts",member,"POST",{workout:difficult})).status,201);
   const checked=await request(`/api/workouts/${difficult.id}/check-in`,member,"POST",{checkIn:{difficulty:5,energy:3,comfort:4,enjoyment:3}});
   assert.equal(checked.status,200);assert.equal(checked.data.progression.suggestions[0].action,"repeat");
   const proposal=checked.data.adaptation;assert.equal(proposal.kind,"reduce_sets");assert.equal(proposal.requiresApproval,true);assert.equal(proposal.change.fromSets,3);assert.equal(proposal.change.toSets,2);
@@ -99,7 +99,7 @@ test("training blocks expose 4–8 week metadata and exact revision conflicts",a
 
 test("only an active block governs progression and its selected lighter week suppresses increases",async()=>{
   const member=await account("block-progression");
-  const prior=completed("block-prior",1767600000000,12),current=completed("block-current",1767600001000,12);
+  const prior=completed("block-prior",1767600000000,12),current=completed("block-current",1768204800000,12);
   assert.equal((await request("/api/workouts",member,"POST",{workout:prior})).status,201);
   assert.equal((await request("/api/workouts",member,"POST",{workout:current})).status,201);
   const block={title:"Six-week cycle",goal:"strength",weeks:6,currentWeek:2,lightWeek:2,startDate:"2026-09-07",status:"active",progressionRule:"reps-only",milestones:[{week:1,label:"Baseline"},{week:2,label:"Lighter week"},{week:6,label:"Review"}]};

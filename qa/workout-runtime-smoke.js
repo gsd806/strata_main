@@ -7,8 +7,9 @@ const {join}=require("node:path");
 
 const ROOT=join(__dirname,"..");
 const read=(...parts)=>fs.readFileSync(join(ROOT,"public",...parts),"utf8");
-const html=read("pages","workout.html"),sources=["workout-state.js","workout-api.js","workout-calendar.js","workout-render.js","workout-guidance.js","workout-history.js","workout-events.js","workout.js"].map((name)=>[name,read("scripts",name)]),catalog=JSON.parse(read("data","exercises.json"));
+const html=read("pages","workout.html"),sources=["workout-state.js","workout-api.js","workout-calendar.js","workout-progression.js","workout-render.js","workout-guidance.js","workout-history.js","workout-events.js","workout.js"].map((name)=>[name,read("scripts",name)]),catalog=JSON.parse(read("data","exercises.json"));
 const Workout=require(join(ROOT,"public/scripts/workout-core")),Discovery=require(join(ROOT,"public/scripts/discovery-core"));
+const {progressionForWorkout}=require(join(ROOT,"src/progression"));
 const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map((match)=>match[1]);
 
 class Element{
@@ -17,7 +18,13 @@ class Element{
   setAttribute(name,value){this.attributes[name]=String(value);}
   removeAttribute(name){delete this.attributes[name];}
   querySelector(){return null;}
-  querySelectorAll(){return[];}
+  querySelectorAll(selector){
+    if(this.id!=="sessionEntries"||selector!=="[data-entry]")return[];
+    return [...this.innerHTML.matchAll(/<article[^>]+data-entry="([^"]+)"/g)].map((match)=>({dataset:{entry:match[1]},querySelector:(child)=>{
+      if(child!==".memory-target")return null;
+      const container=this,entryId=match[1];return{set outerHTML(value){const card=container.innerHTML.indexOf(`data-entry="${entryId}"`),start=container.innerHTML.indexOf('<section class="memory-target"',card),end=container.innerHTML.indexOf("</section>",start)+10;assert.ok(card>=0&&start>=0&&end>start,"Async target hydration must address a rendered card");container.innerHTML=container.innerHTML.slice(0,start)+value+container.innerHTML.slice(end);}};
+    }}));
+  }
   focus(){}
   scrollIntoView(){}
   showModal(){this.open=true;}
@@ -29,8 +36,9 @@ elements.get("restDuration").value="90";
 const first=catalog.find((item)=>item.equipment==="Barbell / Smith"&&!/seconds|sec|min/i.test(item.reps));
 const second=catalog.find((item)=>item.id!==first.id&&item.equipment!=="Bodyweight"&&!/seconds|sec|min/i.test(item.reps));
 const plan={version:1,restDay:"Sunday",restDays:["Sunday"],days:Object.fromEntries(Workout.DAYS.map((day)=>[day,day==="Monday"?[{instanceId:"runtime-first",exerciseId:first.id,sets:2,reps:"8–12"},{instanceId:"runtime-second",exerciseId:second.id,sets:1,reps:"8–12"}]:[]]))};
-const past=Workout.createWorkout(plan,"Monday",catalog,1_700_000_000_000);past.id="runtime-history";past.date="2026-08-31";past.status="completed";past.completedAt=past.startedAt+1000;past.elapsedSeconds=1;past.entries[0].sets[0]={reps:10,weight:42.5,seconds:null,completed:true,effort:null};
+const past=Workout.createWorkout(plan,"Monday",catalog,Date.now()-604800000);past.id="runtime-history";past.status="completed";past.completedAt=past.startedAt+1000;past.elapsedSeconds=1;past.entries[0].sets=[10,9].map(reps=>({reps,weight:42.5,seconds:null,completed:true,effort:null}));
 const history=[Workout.summary(past)];
+const progressionRequests=[];
 const storage=new Map();
 const previewDetails=new Element("planPreviewDetails"),document={visibilityState:"visible",body:new Element("body"),getElementById:(id)=>elements.get(id)||null,querySelector:(selector)=>selector===".plan-preview-details"?previewDetails:null,addEventListener(){}};
 const location={search:"?day=Monday",hash:"",href:"http://strata.test/workout.html?day=Monday",reload(){}};
@@ -44,6 +52,7 @@ const context={
     if(path==="/exercises.json")return{ok:true,status:200,json:async()=>catalog};
     if(path==="/api/plan")return{ok:true,status:200,json:async()=>({plan,planUpdatedAt:100,user:{id:"runtime-user"},csrfToken:"runtime-csrf"})};
     if(String(path).startsWith("/api/workouts?"))return{ok:true,status:200,json:async()=>({workouts:history,hasMore:false,csrfToken:"runtime-csrf"})};
+    if(path==="/api/workouts/runtime-history/progression"){progressionRequests.push(path);return{ok:true,status:200,json:async()=>({progression:progressionForWorkout(past,[],null),csrfToken:"runtime-csrf"})};}
     throw new Error(`Unexpected runtime request: ${path}`);
   },
   window:{addEventListener(){},matchMedia:()=>({matches:true})},
@@ -58,9 +67,12 @@ vm.createContext(context);for(const [name,source] of sources)vm.runInContext(sou
   assert.match(elements.get("planPreview").innerHTML,/runtime-first|Setup, cues/);
   const startHandlers=elements.get("startWorkout").listeners.click||[];assert.equal(startHandlers.length,1);
   startHandlers[0]();
+  assert.match(elements.get("sessionEntries").innerHTML,/Checking the next target/);
+  for(let index=0;index<8&&elements.get("sessionEntries").innerHTML.includes("Checking the next target");index++)await new Promise(setImmediate);
   const markup=elements.get("sessionEntries").innerHTML;
   assert.match(markup,/Previous performance/);
   assert.match(markup,/data-use-last/);assert.match(markup,/data-apply-target/);
+  assert.deepEqual(progressionRequests,["/api/workouts/runtime-history/progression"]);assert.match(markup,/Repeat this target/);assert.match(markup,/42\.5 kg/);assert.doesNotMatch(markup,/Checking the next target/);
   assert.match(markup,/data-add-set/);assert.match(markup,/data-duplicate-set/);assert.match(markup,/data-remove-set/);
   assert.match(markup,/data-entry-note/);assert.match(markup,/Effort \(optional\)/);
   assert.match(markup,/More options/);assert.match(markup,/Warm-ups &amp; plate calculator/);assert.match(markup,/data-calc-warmup/);assert.match(markup,/data-calc-plates/);

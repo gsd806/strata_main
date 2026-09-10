@@ -20,8 +20,9 @@
   }
 
   function create({$,state,accountRead,api,assertIdentity,saveError,exercise,esc,number,renderPlan}){
+    let loadGeneration=0;
     function reset(){
-      state.adaptation=null;state.checkInBusy=false;
+      loadGeneration++;state.adaptation=null;state.checkInBusy=false;
       for(const id of ["checkInDifficulty","checkInEnergy","checkInComfort","checkInEnjoyment"])$(id).value="";
       $("saveCheckIn").disabled=false;$("anotherSession").disabled=false;$("saveCheckIn").textContent="Save check-in";$("checkInStatus").textContent="";$("checkInStatus").dataset.state="";
       $("progressionPanel").hidden=true;$("progressionList").innerHTML="";$("adaptationProposal").hidden=true;$("adaptationStatus").textContent="";
@@ -39,26 +40,27 @@
     }
 
     function render(result,{saved=false}={}){
-      const checkIn=result?.checkIn;
+      if(saved)loadGeneration++;const checkIn=result?.checkIn;
       if(checkIn){
         $("checkInDifficulty").value=String(checkIn.difficulty);$("checkInEnergy").value=String(checkIn.energy);$("checkInComfort").value=String(checkIn.comfort);$("checkInEnjoyment").value=String(checkIn.enjoyment);
         $("saveCheckIn").textContent="Update check-in";
         if(saved){$("checkInStatus").textContent="Saved";$("checkInStatus").dataset.state="saved";}
       }
       const suggestions=Array.isArray(result?.progression?.suggestions)?result.progression.suggestions:[];
-      $("progressionPanel").hidden=!checkIn;
-      $("progressionList").innerHTML=suggestions.length?suggestions.map((suggestion)=>`<article class="progression-suggestion"><div><span>${esc(actionLabel(suggestion.action))}</span><h4>${esc(exercise(suggestion.exerciseId).name)}</h4></div><strong>${esc(suggestionTarget(suggestion,number))}</strong><p>${esc(suggestion.explanation||"Review this target against your next planned session.")}</p><small>${suggestion.requiresApproval===true?"Suggestion only · no workout or plan changed":"Review before changing your Plan"}</small></article>`).join(""):"<p class='muted'>No progression change is suggested from this session. Keep the current targets and continue logging comparable sets.</p>";
+      $("progressionPanel").hidden=false;
+      $("progressionList").innerHTML=suggestions.length?suggestions.map((suggestion)=>`<article class="progression-suggestion"><div><span>${esc(actionLabel(suggestion.action))}</span><h4>${esc(exercise(suggestion.exerciseId).name)}</h4></div><div class="progression-target"><strong>${esc(suggestionTarget(suggestion,number))}</strong>${Array.isArray(suggestion.targetSets)?`<ol class="progression-sets">${suggestion.targetSets.map((target,index)=>`<li>Set ${index+1} · ${esc(suggestionTarget({...suggestion,target},number))}</li>`).join("")}</ol>`:""}</div><p>${esc(suggestion.explanation||"Review this target against your next planned session.")}</p><small>${esc(suggestion.timing||"Next time you train this exercise")} · review before applying</small></article>`).join(""):"<p class='muted'>No progression change is suggested from this session. Keep the current targets and continue logging comparable sets.</p>";
       renderAdaptation(result?.adaptation||null);
     }
 
     async function load(workoutId){
+      const generation=++loadGeneration;$("progressionPanel").hidden=false;$("progressionList").innerHTML="<p class='muted'>Checking completed sets for your next workout target…</p>";
       try{
         const result=await accountRead(`/api/workouts/${encodeURIComponent(workoutId)}/check-in`);
-        if(state.workout?.id!==workoutId||state.workout?.status!=="completed")return;
+        if(generation!==loadGeneration||state.blocked||state.workout?.id!==workoutId||state.workout?.status!=="completed")return;
         if(result.csrfToken)state.csrfToken=String(result.csrfToken);render(result);
-      }catch(error){
-        if(error.status===404)return;
-        if(state.workout?.id===workoutId){$("checkInStatus").textContent="Couldn’t load an earlier check-in — you can still save these answers.";$("checkInStatus").dataset.state="error";}
+      }catch{
+        if(generation!==loadGeneration||state.blocked)return;
+        if(state.workout?.id===workoutId){$("progressionList").innerHTML="<p class='muted'>Next-weight guidance could not be loaded. Your completed workout is saved; reload to try again.</p>";$("checkInStatus").textContent="Couldn’t load an earlier check-in — you can still save these answers.";$("checkInStatus").dataset.state="error";}
       }
     }
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## 7.8.2 — Weight progression in Train
+
+- Show specific per-set next targets after completion, with optional effort and check-in feedback.
+- Use two complete, comparable sessions at the top of the prescribed range for a small load increase; build reps first or hold when evidence is insufficient.
+- Bring the target into the next matching exercise with an explicit Apply action that preserves completed records and saves through existing workout revision checks.
+- Handle long history, changed prescriptions, unfinished sets, long breaks, assisted exercises, lighter weeks, and history/account refresh safely.
+- Advance managed build references and the service-worker cache to 7.8.2; no schema or provider changes.
+
+Validation is recorded in the [7.8.2 release guide](docs/release-7.8.2.md).
+
 ## 7.8.1 — Session selection choices
 
 - Add Random, Not in my week, Needs focus, and My preferences modes to Build a session, with optional muscle-group and specific-muscle focus.

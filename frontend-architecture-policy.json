@@ -63,6 +63,7 @@
         {"file":"public/scripts/workout-state.js","role":"state","global":"StrataWorkoutState","maxLines":80},
         {"file":"public/scripts/workout-api.js","role":"api","global":"StrataWorkoutApi","maxLines":80},
         {"file":"public/scripts/workout-calendar.js","role":"logic","global":"StrataWorkoutCalendar","maxLines":50},
+        {"file":"public/scripts/workout-progression.js","role":"logic","global":"StrataWorkoutProgression","maxLines":130},
         {"file":"public/scripts/workout-render.js","role":"render","global":"StrataWorkoutRender","maxLines":90},
         {"file":"public/scripts/workout-guidance.js","role":"render","global":"StrataWorkoutGuidance","maxLines":130},
         {"file":"public/scripts/workout-history.js","role":"render","global":"StrataWorkoutHistory","maxLines":130},

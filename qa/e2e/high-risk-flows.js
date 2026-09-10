@@ -415,6 +415,7 @@ test("security-sensitive browser journeys",{timeout:120_000},async(t)=>{
 
     await goto(primary.page,accountActionUrl(resetMessage,"reset-password"));
     await primary.page.locator("#resetPasswordForm").waitFor({state:"visible"});
+    await primary.page.waitForFunction(()=>globalThis.document.activeElement===globalThis.document.querySelector("#newPassword"));
     await primary.page.fill("#newPassword",NEW_PASSWORD);
     await primary.page.fill("#confirmPassword",NEW_PASSWORD);
     const resetComplete=primary.page.waitForResponse((response)=>new URL(response.url()).pathname==="/api/password-reset/complete");
