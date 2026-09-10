@@ -72,6 +72,7 @@ const context={console,document,window:{location:{replace(path){navigations.push
 },setTimeout,clearTimeout,URL,File:globalThis.File,FormData:class{},Intl,globalThis:null};
 context.globalThis=context;
 vm.createContext(context);
+vm.runInContext(readPublic("scripts","session-selection-core.js"),context,{filename:"session-selection-core.js"});
 vm.runInContext(readPublic("scripts","discovery-core.js"),context,{filename:"discovery-core.js"});
 vm.runInContext(readPublic("scripts","monthly-plan-core.js"),context,{filename:"monthly-plan-core.js"});
 vm.runInContext(readPublic("scripts","training-block-core.js"),context,{filename:"training-block-core.js"});

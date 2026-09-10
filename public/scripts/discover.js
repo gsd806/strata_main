@@ -562,7 +562,7 @@ el("trainingBlockActionDialog")?.addEventListener("close",()=>{if(el("trainingBl
 el("progressionAccept")?.addEventListener("click",()=>{void acceptProgression();});
 el("progressionDismiss")?.addEventListener("click",()=>{void dismissProgression();});
 el("sessionBuilderForm")?.addEventListener("submit",(event)=>{event.preventDefault();if(!state.sessionSaving)generateSession({announce:true});});
-el("sessionGroup")?.addEventListener("change",()=>{if(!state.sessionSaving)resetSessionPreview("Focus changed. Build the session to see your updated picks.");});
+session.bindSelectionControls();
 el("sessionLength")?.addEventListener("change",()=>{if(!state.sessionSaving)resetSessionPreview("Time changed. Build the session to see your updated picks.");});
 el("sessionDay")?.addEventListener("change",()=>{if(!state.sessionSaving){const error=updateSessionAddButton();el("sessionStatus").textContent=error?`This session does not fit the selected day: ${error.message}`:state.session?`Session ready to add to ${el("sessionDay").value}.`:"Build a session first.";}});
 el("sessionAddAll")?.addEventListener("click",()=>{void addSessionToWeek();});
