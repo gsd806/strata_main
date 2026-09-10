@@ -23,7 +23,7 @@ test("two complete top-of-range sessions recommend an exact modest next-exposure
   assert.deepEqual(result.targetSets,Array.from({length:3},()=>({reps:8,weight:42.5,seconds:null,effort:null})));
   assert.equal(result.entryId,"current-entry");assert.equal(result.sourceDate,current.date);assert.equal(result.sourceStartedAt,current.startedAt);
   assert.equal(result.setCount,3);assert.equal(result.prescribedReps,"8–12");assert.equal(result.timing,"Next time you train this exercise");
-  assert.match(result.explanation,/two comparable workouts/);assert.match(result.explanation,/If reps felt controlled/);
+  assert.match(result.explanation,/two comparable sessions/);assert.match(result.explanation,/If reps felt controlled/);
   assert.equal(JSON.stringify([current,prior]),before);
   const pound=suggestion(session("pound",undefined,undefined,80,{unit:"lb"}),session("pound-prior","2026-09-01",undefined,80,{unit:"lb"}));
   assert.equal(pound.target.weight,85);
@@ -36,7 +36,7 @@ test("baseline works without a check-in and does not increase from a best set",(
   assert.equal(next.action,"increase_reps");assert.deepEqual(next.targetSets.map((set)=>set.reps),[12,10,10]);
   assert.equal(next.target.weight,40);assert.equal(next.target.reps,10);
   const firstTop=suggestion(session("top"),session("prior","2026-09-01",[11,11,11]));
-  assert.equal(firstTop.action,"repeat");assert.match(firstTop.explanation,/two comparable workouts/);
+  assert.equal(firstTop.action,"repeat");assert.match(firstTop.explanation,/two comparable sessions/);
 });
 
 test("holds preserve individual values for incomplete, mixed-load, regressing, and adverse sessions",()=>{

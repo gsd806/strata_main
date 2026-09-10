@@ -63,10 +63,10 @@
     return{
       completed,weekSessions,planned,records:progressRecords(completed),
       adherence:planned.length?`${completedDays.size} / ${planned.length}`:`${weekSessions.length}`,
-      adherenceDetail:planned.length?`${completedDays.size} of ${planned.length} currently planned days have a completed workout this calendar week. Some sets may be unfinished.`:`${weekSessions.length} completed ${weekSessions.length===1?"workout":"workouts"} this week; no weekly plan is set.`,
+      adherenceDetail:planned.length?`${completedDays.size} planned ${completedDays.size===1?"day":"days"} completed out of ${planned.length} this calendar week.`:`${weekSessions.length} completed ${weekSessions.length===1?"session":"sessions"} this week; no weekly plan is set.`,
       volume:volumeLabel,volumeDetail:volumes.size?"External load × repetitions from completed sets this calendar week.":"Only completed sets with an external load contribute to this measure.",
-      consistency:`${fourWeekConsistency(completed,days,now)} / 4 weeks`,consistencyDetail:"Calendar weeks with at least one completed workout in the last four calendar weeks.",
-      sessions:`${completed.length}${hasMore?"+":""}`,sessionsDetail:hasMore?`${completed.length} completed in the 100 most recent workouts. Older history is available in the workout log.`:`${weekSessions.length} completed this week · in-progress workouts are excluded.`
+      consistency:`${fourWeekConsistency(completed,days,now)} / 4 weeks`,consistencyDetail:"Calendar weeks with at least one completed, saved session.",
+      sessions:`${completed.length}${hasMore?"+":""}`,sessionsDetail:hasMore?`${completed.length} completed in the 100 most recent sessions. Older history is available in the workout log.`:`${weekSessions.length} completed this week · in-progress sessions are excluded.`
     };
   }
 

@@ -18,8 +18,7 @@
   };
   const GROUP_ORDER=Object.keys(GROUPS);
   const METRIC_WEIGHTS={stimulus:.3,stability:.2,progression:.2,range:.2,fatigue:.1};
-  const METRIC_LABELS={stimulus:"Stimulus",stability:"Stability",progression:"Progression",range:"Useful range",fatigue:"Fatigue efficiency"};
-  const METRIC_DESCRIPTIONS={stimulus:"How directly the exercise loads the target muscle.",stability:"How readily effort reaches the target before balance limits it.",range:"How well it challenges the target through a useful range of motion.",progression:"How easily load, reps, range, or technique can be measured and progressed.",fatigue:"Expected target stimulus relative to non-target fatigue, setup burden, and recovery cost."};
+  const METRIC_LABELS={stimulus:"Stimulus",stability:"Stability",progression:"Progression",range:"Useful range",fatigue:"Low fatigue"};
   const PLAN_DAYS=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
   const GUEST_PLAN_KEY="strata_guest_plan_v1";
   const PREVIEW_STARTERS={
@@ -105,7 +104,7 @@
   }
 
   return{
-    GROUPS,GROUP_ORDER,METRIC_WEIGHTS,METRIC_LABELS,METRIC_DESCRIPTIONS,PLAN_DAYS,GUEST_PLAN_KEY,PREVIEW_STARTERS,
+    GROUPS,GROUP_ORDER,METRIC_WEIGHTS,METRIC_LABELS,PLAN_DAYS,GUEST_PLAN_KEY,PREVIEW_STARTERS,
     adjustmentLabel,equipmentOptions,escapeHtml,filterExercises,guestPlanCount,nextGroupForKey,normalizeCatalog,normalizeExercise,plannerUrl,previewProfile,previewStarter,toggleComparison,validPreviewGroup
   };
 });

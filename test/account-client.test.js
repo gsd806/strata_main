@@ -180,7 +180,7 @@ test("ordinary Account foreground restores purge first and reopen only the same 
     pending.resolve(jsonResponse(200,{csrfToken:"foreground-two",user:scenario.next}));await foreground;await settle();
     assert.equal(page.elements.get("signedInCard").hidden,!scenario.reopens,scenario.name);
     if(scenario.reopens)assert.match(page.elements.get("signedInIdentity").textContent,/FOREGROUND PRIVATE SENTINEL/,scenario.name);
-    else{assert.equal(page.elements.get("accountLoadingTitle").textContent,"Account access changed",scenario.name);assert.doesNotMatch([...page.elements.values()].map((node)=>`${node.textContent} ${node.innerHTML}`).join(" "),/REPLACEMENT PRIVATE SENTINEL/,scenario.name);}
+    else{assert.equal(page.elements.get("accountLoadingTitle").textContent,"ACCOUNT ACCESS CHANGED.",scenario.name);assert.doesNotMatch([...page.elements.values()].map((node)=>`${node.textContent} ${node.innerHTML}`).join(" "),/REPLACEMENT PRIVATE SENTINEL/,scenario.name);}
   }
 });
 
@@ -222,7 +222,7 @@ test("exports and Paddle portal links require the original account identity imme
     }});
     await settle();const button=page.elements.get(scenario.button);await button.emit("click",{currentTarget:button});await settle();
     assert.equal(identityReads,2,scenario.name);assert.deepEqual(page.downloads,[],scenario.name);assert.deepEqual(page.navigations,[],scenario.name);assert.equal(page.objectUrls.length,0,scenario.name);
-    assert.equal(page.elements.get("signedInCard").hidden,true,scenario.name);assert.equal(page.elements.get("accountLoadingTitle").textContent,"Account access changed",scenario.name);
+    assert.equal(page.elements.get("signedInCard").hidden,true,scenario.name);assert.equal(page.elements.get("accountLoadingTitle").textContent,"ACCOUNT ACCESS CHANGED.",scenario.name);
   }
 });
 
@@ -358,72 +358,72 @@ test("signed-in dashboard distinguishes access and plan states with a useful nex
     {
       name:"active monthly account with a populated week",planCount:6,workoutDays:3,
       discovery:{active:true,accessType:"subscription",pendingPurchaseCount:0,subscription:subscription("active")},
-      access:"Active",detail:/\$0\.99\/month · renews/i,primary:"Open next workout",href:/^\/workout\.html\?day=/,discoveryAction:"View Strata+ access →",billing:/next renewal/i,badge:"Active",cancel:true
+      access:"Active",detail:/\$0\.99\/month · renews/i,primary:"Open next workout",href:/^\/workout\.html\?day=/,discoveryAction:"Open Strata+ studio →",billing:/next renewal/i,badge:"Active",cancel:true
     },
     {
       name:"active monthly account with a complimentary grant",planCount:0,workoutDays:0,
       discovery:{active:true,accessType:"paid",pendingPurchaseCount:0,adminGrant:{active:true,startedAt:Date.now(),expiresAt:cancelAt,revokedAt:null},subscription:subscription("active")},
-      access:"Complimentary",detail:/Until /i,grantMessage:/monthly subscription remains separate/i,primary:"Build your first week",href:/^\/planner\.html$/,discoveryAction:"View Strata+ access →",billing:/next renewal/i,badge:"Active",cancel:true
+      access:"Complimentary",detail:/Until /i,grantMessage:/monthly subscription remains separate/i,primary:"Build your week",href:/^\/onboarding\.html$/,discoveryAction:"Open Strata+ studio →",billing:/next renewal/i,badge:"Active",cancel:true
     },
     {
       name:"complimentary grant without paid billing",planCount:0,workoutDays:0,
       discovery:{active:true,accessType:"grant",pendingPurchaseCount:0,adminGrant:{active:true,startedAt:Date.now(),expiresAt:null,revokedAt:null},subscription:null},
-      access:"Complimentary",detail:/Until revoked/i,grantMessage:/did not create a paid subscription/i,grantMessageNot:/manage it below/i,primary:"Build your first week",href:/^\/planner\.html$/,discoveryAction:"View Strata+ access →",billing:null
+      access:"Complimentary",detail:/Until revoked/i,grantMessage:/did not create a paid subscription/i,grantMessageNot:/manage it below/i,primary:"Build your week",href:/^\/onboarding\.html$/,discoveryAction:"Open Strata+ studio →",billing:null
     },
     {
       name:"grandfathered lifetime account with a complimentary grant",planCount:0,workoutDays:0,
       discovery:{active:true,accessType:"paid",pendingPurchaseCount:0,adminGrant:{active:true,startedAt:Date.now(),expiresAt:cancelAt,revokedAt:null},subscription:null},
-      access:"Complimentary",detail:/Until /i,grantMessage:/grandfathered lifetime access remains separate/i,primary:"Build your first week",href:/^\/planner\.html$/,discoveryAction:"View Strata+ access →",billing:/prior lifetime purchase remains active/i,badge:"Grandfathered",manage:false
+      access:"Complimentary",detail:/Until /i,grantMessage:/grandfathered lifetime access remains separate/i,primary:"Build your week",href:/^\/onboarding\.html$/,discoveryAction:"Open Strata+ studio →",billing:/prior lifetime purchase remains active/i,badge:"Grandfathered",manage:false
     },
     {
       name:"grandfathered lifetime account",planCount:0,workoutDays:0,
       discovery:{active:true,accessType:"lifetime",pendingPurchaseCount:0,subscription:null},
-      access:"Lifetime",detail:/grandfathered · no renewal/i,primary:"Build your first week",href:/^\/planner\.html$/,discoveryAction:"View Strata+ access →",billing:/prior lifetime purchase remains active/i,badge:"Grandfathered",manage:false
+      access:"Lifetime",detail:/grandfathered · no renewal/i,primary:"Build your week",href:/^\/onboarding\.html$/,discoveryAction:"Open Strata+ studio →",billing:/prior lifetime purchase remains active/i,badge:"Grandfathered",manage:false
     },
     {
       name:"trial account without a week",planCount:0,workoutDays:0,
       discovery:{active:true,accessType:"trial",pendingPurchaseCount:0,trial:{expiresAt:Date.now()+25*60000}},
-      access:"Trial",detail:/25 min remaining/i,primary:"Build your first week",href:/^\/planner\.html$/,discoveryAction:"View Strata+ access →",billing:null
+      access:"Trial",detail:/25 min remaining/i,primary:"Build your week",href:/^\/onboarding\.html$/,discoveryAction:"Open Strata+ studio →",billing:null
     },
     {
       name:"scheduled cancellation",planCount:0,workoutDays:0,
       discovery:{active:true,accessType:"subscription",pendingPurchaseCount:0,subscription:subscription("active",{scheduledChange:{action:"cancel",effectiveAt:cancelAt}})},
-      access:"Canceling",detail:/Access through/i,primary:"Build your first week",href:/^\/planner\.html$/,discoveryAction:"View Strata+ access →",billing:/Cancellation takes effect/i,badge:"Canceling",cancel:false
+      access:"Canceling",detail:/Access through/i,primary:"Build your week",href:/^\/onboarding\.html$/,discoveryAction:"Open Strata+ studio →",billing:/Cancellation takes effect/i,badge:"Canceling",cancel:false
     },
     {
       name:"scheduled pause",planCount:0,workoutDays:0,
       discovery:{active:true,accessType:"subscription",pendingPurchaseCount:0,subscription:subscription("active",{scheduledChange:{action:"pause",effectiveAt:cancelAt}})},
-      access:"Pausing",detail:/Access through/i,primary:"Build your first week",href:/^\/planner\.html$/,discoveryAction:"View Strata+ access →",billing:/subscription pauses/i,badge:"Pausing",cancel:true
+      access:"Pausing",detail:/Access through/i,primary:"Build your week",href:/^\/onboarding\.html$/,discoveryAction:"Open Strata+ studio →",billing:/subscription pauses/i,badge:"Pausing",cancel:true
     },
     {
       name:"past-due subscription",planCount:0,workoutDays:0,
       discovery:{active:true,accessType:"subscription",pendingPurchaseCount:0,subscription:subscription("past_due")},
-      access:"Past due",detail:/Update payment method/i,primary:"Build your first week",href:/^\/planner\.html$/,discoveryAction:"View Strata+ access →",billing:/could not collect/i,badge:"Past due",update:true,cancel:true
+      access:"Past due",detail:/Update payment method/i,primary:"Build your week",href:/^\/onboarding\.html$/,discoveryAction:"Open Strata+ studio →",billing:/could not collect/i,badge:"Past due",update:true,cancel:true
     },
     {
       name:"expired cached subscription",planCount:0,workoutDays:0,
       discovery:{active:false,accessType:null,pendingPurchaseCount:0,subscription:subscription("active",{active:false,currentPeriodEndsAt:Date.now()-1})},
-      access:"Inactive",detail:/Paid access inactive/i,primary:"Build your first week",href:/^\/planner\.html$/,discoveryAction:"Manage Strata+ billing →",billing:/last verified billing period/i,badge:"Inactive",cancel:true
+      access:"Inactive",detail:/Paid access inactive/i,primary:"Build your week",href:/^\/planner\.html$/,discoveryAction:"Manage Strata+ billing →",billing:/last verified billing period/i,badge:"Inactive",cancel:true
     },
     {
       name:"paused subscription",planCount:0,workoutDays:0,
       discovery:{active:false,accessType:null,pendingPurchaseCount:0,subscription:subscription("paused")},
-      access:"Paused",detail:/Paid access inactive/i,primary:"Build your first week",href:/^\/planner\.html$/,discoveryAction:"Manage Strata+ billing →",billing:/subscription is paused/i,badge:"Paused",cancel:true
+      access:"Paused",detail:/Paid access inactive/i,primary:"Build your week",href:/^\/planner\.html$/,discoveryAction:"Manage Strata+ billing →",billing:/subscription is paused/i,badge:"Paused",cancel:true
     },
     {
       name:"canceled subscription",planCount:0,workoutDays:0,
       discovery:{active:false,accessType:null,pendingPurchaseCount:0,subscription:subscription("canceled")},
-      access:"Canceled",detail:/No future renewals/i,primary:"Build your first week",href:/^\/planner\.html$/,discoveryAction:"Restart Strata+ →",billing:/no future renewals/i,badge:"Canceled",cancel:false
+      access:"Canceled",detail:/No future renewals/i,primary:"Build your week",href:/^\/planner\.html$/,discoveryAction:"Restart Strata+ →",billing:/no future renewals/i,badge:"Canceled",cancel:false
     },
     {
       name:"pending purchase without a week",planCount:0,workoutDays:0,
       discovery:{active:false,accessType:null,pendingPurchaseCount:1},
-      access:"Pending",detail:/checkout needs attention/i,primary:"Build your first week",href:/^\/planner\.html$/,discoveryAction:"Check Strata+ subscription →",billing:null
+      access:"Pending",detail:/checkout needs attention/i,primary:"Build your week",href:/^\/planner\.html$/,discoveryAction:"Check Strata+ subscription →",billing:null
     },
     {
       name:"free account with a populated week",planCount:2,workoutDays:2,
       discovery:{active:false,accessType:null,pendingPurchaseCount:0},
-      access:"Free",detail:/rankings and plan included/i,primary:"Edit week",href:/^\/planner\.html$/,discoveryAction:"View Strata+ options →",billing:null
+      access:"Free",detail:/rankings and plan included/i,primary:"Open your week",href:/^\/planner\.html$/,discoveryAction:"Unlock Strata+ →",billing:null
     }
   ];
   for(const [index,fixture] of cases.entries()){
@@ -453,7 +453,6 @@ test("signed-in dashboard distinguishes access and plan states with a useful nex
     assert.equal(page.elements.get("accountPrimaryLabel").textContent,fixture.primary,fixture.name);
     assert.match(page.elements.get("accountPrimaryAction").href,fixture.href,fixture.name);
     assert.equal(page.elements.get("accountDiscoveryAction").textContent,fixture.discoveryAction,fixture.name);
-    if(fixture.discovery.active)assert.equal(page.elements.get("accountDiscoveryAction").href,"#accountStrataAccess",fixture.name);
     assert.equal(page.elements.get("accountBilling").hidden,fixture.billing===null,fixture.name);
     if(fixture.billing){
       assert.match(page.elements.get("accountBillingDetail").textContent,fixture.billing,fixture.name);
@@ -492,7 +491,7 @@ test("subscription controls use the CSRF-protected Paddle portal and clear priva
   assert.match(page.elements.get("accountBillingStatus").textContent,/invalid subscription-management link/i);
   assert.equal(page.elements.get("accountBillingStatus").classList.contains("bad"),true);
   sessionExpired=true;await page.elements.get("accountManageSubscription").emit("click",{currentTarget:page.elements.get("accountManageSubscription")});await settle();
-  assert.equal(page.elements.get("signedInCard").hidden,true);assert.equal(page.elements.get("accountLoadingTitle").textContent,"Account access changed");assert.equal(page.elements.get("signedInIdentity").textContent,"");assert.equal(page.elements.get("accountBillingDetail").textContent,"");
+  assert.equal(page.elements.get("signedInCard").hidden,true);assert.equal(page.elements.get("accountLoadingTitle").textContent,"ACCOUNT ACCESS CHANGED.");assert.equal(page.elements.get("signedInIdentity").textContent,"");assert.equal(page.elements.get("accountBillingDetail").textContent,"");
 });
 
 test("returning dashboard prioritizes an in-progress workout as the single next action",async()=>{
@@ -509,9 +508,9 @@ test("returning dashboard prioritizes an in-progress workout as the single next 
   assert.equal(page.elements.get("accountPrimaryLabel").textContent,"Continue workout");
   assert.equal(page.elements.get("accountPrimaryAction").href,"/workout.html#resume=workout-1");
   assert.equal(page.elements.get("accountNextEyebrow").textContent,"Workout in progress");
-  assert.equal(page.elements.get("accountNextTitle").textContent,"Monday upper");
+  assert.equal(page.elements.get("accountNextTitle").textContent,"MONDAY UPPER");
   assert.match(page.elements.get("accountNextDetail").textContent,/1 of 5 sets completed/i);
-  assert.equal(page.elements.get("accountAdaptationTitle").textContent,"Workout in progress");
+  assert.equal(page.elements.get("accountAdaptationTitle").textContent,"FINISH THE OPEN SESSION.");
 });
 
 test("weekly progress and recent bests use only comparable saved workout summaries",async()=>{
@@ -534,14 +533,14 @@ test("weekly progress and recent bests use only comparable saved workout summari
   assert.equal(page.elements.get("accountWeekProgress").value,1);
   assert.equal(page.elements.get("accountWeekProgress").max,2);
   assert.equal(page.elements.get("accountWeekScore").textContent,"1/2");
-  assert.match(page.elements.get("accountWeekDetail").textContent,/2 saved workouts and 7 completed sets/i);
+  assert.match(page.elements.get("accountWeekDetail").textContent,/2 saved sessions and 7 completed sets/i);
   assert.match(page.elements.get("accountWeekDays").innerHTML,/class="complete today"/);
-  assert.equal(page.elements.get("accountNextTitle").textContent,`${next} workout`);
-  assert.match(page.elements.get("accountWinsList").innerHTML,/Workout complete/);
+  assert.equal(page.elements.get("accountNextTitle").textContent,`${next} WORKOUT`);
+  assert.match(page.elements.get("accountWinsList").innerHTML,/Session complete/);
   assert.match(page.elements.get("accountWinsList").innerHTML,/Flat Dumbbell Press/);
   assert.match(page.elements.get("accountWinsList").innerHTML,/Saved-history best · Top load 30 kg/);
   assert.doesNotMatch(page.elements.get("accountWinsList").innerHTML,/Assisted Pull Up/);
-  assert.equal(page.elements.get("accountAdaptationTitle").textContent,"New recorded results");
+  assert.equal(page.elements.get("accountAdaptationTitle").textContent,"PROGRESS IS MOVING.");
 });
 
 test("partial history labels comparisons as recent rather than all-time records",async()=>{
@@ -576,8 +575,8 @@ test("free and temporarily unavailable dashboards never invent completion progre
   assert.equal(free.requests.some(({path})=>path.startsWith("/api/workouts")),false);
   assert.equal(free.elements.get("accountWeekProgress").hidden,true);
   assert.equal(free.elements.get("accountWeekScore").textContent,"2 days");
-  assert.match(free.elements.get("accountWeekDetail").textContent,/saved week is shown/i);
-  assert.match(free.elements.get("accountAdaptationDetail").textContent,/comparisons will appear when saved history is available/i);
+  assert.match(free.elements.get("accountWeekDetail").textContent,/weekly structure is ready/i);
+  assert.match(free.elements.get("accountAdaptationDetail").textContent,/No training adaptation is claimed/i);
 
   const paidUser=memberFixture({planCount:2,workoutDays:2});
   const historyUnavailable=createPage({route:async(path)=>{
@@ -608,7 +607,7 @@ test("dashboard refuses to combine plan or workout data across account changes",
   assert.equal(page.requests.some(({path})=>path.startsWith("/api/workouts")),false);
   assert.equal(page.elements.get("signedInCard").hidden,true);
   assert.equal(page.elements.get("accountLoading").hidden,false);
-  assert.equal(page.elements.get("accountLoadingTitle").textContent,"Account access changed");
+  assert.equal(page.elements.get("accountLoadingTitle").textContent,"ACCOUNT ACCESS CHANGED.");
   assert.equal(page.elements.get("accountReload").hidden,false);
   assert.equal(page.elements.get("signedInIdentity").textContent,"");assert.equal(page.elements.get("accountGreeting").textContent,"");assert.equal(page.elements.get("accountPlanCount").textContent,"");
   await page.elements.get("accountReload").emit("click");
@@ -628,7 +627,7 @@ test("dashboard rechecks identity after workout history before combining private
   await settle();
   assert.equal(identityReads,2);
   assert.equal(page.elements.get("signedInCard").hidden,true);
-  assert.equal(page.elements.get("accountLoadingTitle").textContent,"Account access changed");
+  assert.equal(page.elements.get("accountLoadingTitle").textContent,"ACCOUNT ACCESS CHANGED.");
   assert.doesNotMatch(page.elements.get("accountWinsList").innerHTML,/CHANGED ACCOUNT PRIVATE TITLE/);
 });
 

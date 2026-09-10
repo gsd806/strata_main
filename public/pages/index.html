@@ -12,26 +12,30 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="STRATA" />
-    <title>Exercises — STRATA</title>
+    <title>STRATA — Your Next Workout, Ready</title>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icons/strata-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="/fonts.css?v=7.8.3" />
-    <link rel="stylesheet" href="styles.css?v=7.8.3" />
-    <link rel="stylesheet" href="/product-signals.css?v=7.8.3" />
-    <link rel="stylesheet" href="/experience.css?v=7.8.3" />
-    <script src="/motion.js?v=7.8.3"></script>
-    <link rel="stylesheet" href="/product-nav.css?v=7.8.3" />
+    <link rel="stylesheet" href="/fonts.css?v=7.8.2" />
+    <link rel="stylesheet" href="styles.css?v=7.8.2" />
+    <link rel="stylesheet" href="/product-signals.css?v=7.8.2" />
+    <link rel="stylesheet" href="/experience.css?v=7.8.2" />
+    <script src="/motion.js?v=7.8.2"></script>
   </head>
   <body class="home-page">
-    <a class="skip-link" href="#rankings">Skip to exercises</a>
+    <a class="skip-link" href="#preview">Skip to training preview</a>
 
     <header class="site-header" id="top">
       <a class="brand" href="#top" aria-label="Strata home">
         <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
         <span>STRATA</span>
       </a>
-      <nav class="desktop-nav" aria-label="Primary navigation"><a href="/" data-product-owner="exercises" aria-current="page">Exercises</a><a href="/planner.html" data-product-owner="plan">Plan</a><a href="/workout.html" data-product-owner="train">Train</a><a href="/discover.html#progressWorkspace" data-product-owner="progress">Progress</a><a href="/account.html" data-product-owner="account">Account</a></nav>
+      <nav class="desktop-nav" aria-label="Primary navigation">
+        <a href="#rankings">Rankings</a>
+        <a href="/discover.html">Strata+</a>
+        <a href="/planner.html">Plan</a>
+        <a href="/workout.html">Train</a>
+      </nav>
       <div class="header-actions">
         <!-- ACCOUNT_ACTIONS_START -->
         <a class="account-button discover-button" id="discoverButton" href="/discover.html" hidden>Strata+</a>
@@ -43,23 +47,111 @@
         <!-- ACCOUNT_ACTIONS_END -->
       </div>
     </header>
-    <nav class="mobile-public-nav" aria-label="Primary navigation"><a href="/" data-product-owner="exercises" aria-current="page">Exercises</a><a href="/planner.html" data-product-owner="plan">Plan</a><a href="/workout.html" data-product-owner="train">Train</a><a href="/discover.html#progressWorkspace" data-product-owner="progress">Progress</a><a href="/account.html" data-product-owner="account">Account</a></nav>
+    <nav class="mobile-public-nav" aria-label="Primary navigation">
+      <a href="#rankings" aria-current="page">Rankings</a><a href="/discover.html">Strata+</a><a href="/planner.html">Plan</a><a href="/workout.html">Train</a>
+    </nav>
 
     <main>
-      <section class="exercise-home-heading container" aria-labelledby="hero-title">
-        <p class="kicker">Exercise library · <span id="catalogTotal">200</span> exercises</p>
-        <h1 id="hero-title">Choose your exercises</h1>
-        <p>Search by muscle, equipment, or experience, then add exercises to your weekly plan.</p>
-        <nav class="exercise-tool-navigation" aria-label="Exercise tools"><a href="#rankings" aria-current="location">Rankings</a><a href="/discover.html#recommendations">Recommended</a><a href="/discover.html#exerciseExplorer">Library</a><a href="/discover.html#battle">Compare</a><a href="/discover.html#profile">Preferences</a><a href="/discover.html#savedExercises">Saved exercises</a></nav>
-        <details class="score-guide"><summary>What do these scores mean?</summary><dl><div><dt>FitScore</dt><dd>STRATA’s fixed exercise score. It does not change based on your profile.</dd></div><div><dt>Match for you</dt><dd>How well the exercise fits your goals, equipment, experience, and saved limitations.</dd></div><div><dt>Community rating</dt><dd>The average overall rating submitted by STRATA members, on a five-point scale.</dd></div></dl><p>FitScore is an editorial rating out of 100. Equipment and limitations determine eligibility; Match for you ranks eligible exercises using your saved preferences.</p></details>
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-media" role="img" aria-label="Athlete performing a pull-up in a gym"></div>
+        <div class="hero-overlay"></div>
+        <div class="hero-grid container">
+          <div class="hero-copy">
+            <p class="eyebrow"><span></span> Less guessing. More training.</p>
+            <h1 id="hero-title">YOUR NEXT<br />WORKOUT.<br /><em>READY.</em></h1>
+            <p class="hero-intro">
+              Build a week around your equipment and your time. With Strata+, log your sets and see exactly what you did last time—right when you need it.
+            </p>
+            <div class="hero-actions">
+              <a class="button button-accent" href="#preview">Build my free week <span aria-hidden="true">↘</span></a>
+              <a class="text-link" href="/pricing">Meet Strata+ · $0.99 / month <span aria-hidden="true">→</span></a>
+            </div>
+            <p class="hero-trial-note">No account to preview. Try Strata+ for 7 days, no card required.</p>
+          </div>
+          <div class="hero-data" aria-label="Database statistics">
+            <div><strong id="catalogTotal">200</strong><span>Ranked<br />movements</span></div>
+            <div><strong>26</strong><span>Muscle<br />targets</span></div>
+            <div><strong>8</strong><span>Major<br />groups</span></div>
+          </div>
+        </div>
+        <div class="hero-credit">
+          Photo: <a href="https://unsplash.com/photos/a-man-doing-a-pull-up-on-a-bar-in-a-gym-ThLzcgVeU5I" target="_blank" rel="noreferrer">Corey Young / Unsplash</a>
+        </div>
+      </section>
+
+      <section class="ticker" aria-label="Ranking principles">
+        <div class="ticker-track">
+          <span>RANK</span><b aria-hidden="true">→</b><span>PLAN</span><b aria-hidden="true">→</b><span>TRAIN</span><b aria-hidden="true">→</b><span>REVIEW</span><b aria-hidden="true">→</b>
+        </div>
+      </section>
+
+      <section class="proof-section" id="preview" aria-labelledby="preview-title" tabindex="-1">
+        <div class="container">
+          <div class="section-heading proof-heading">
+            <div>
+              <p class="kicker kicker-light">01 / Start with your week</p>
+              <h2 id="preview-title">A PLAN THAT<br /><em>FITS YOUR LIFE.</em></h2>
+            </div>
+            <p>Pick a starting point or choose your own settings. See every workout and recovery day before creating an account.</p>
+          </div>
+
+          <div class="proof-workspace" data-reveal>
+            <form class="preview-form" id="quickPreviewForm" aria-describedby="quickPreviewPrivacy quickPreviewStatus">
+              <div class="preview-form-heading">
+                <span>YOUR INPUT</span>
+                <strong>Start here. Make it yours.</strong>
+              </div>
+              <div class="preview-starters" role="group" aria-label="Build a starter week">
+                <button type="button" data-preview-starter="dumbbells" disabled><strong>I have dumbbells</strong><span>3 days · 35 min · balanced</span></button>
+                <button type="button" data-preview-starter="bodyweight" disabled><strong>No weights today</strong><span>3 days · 20 min · balanced</span></button>
+                <button type="button" data-preview-starter="barbell" disabled><strong>Barbell / Smith setup</strong><span>3 days · 50 min · strength</span></button>
+              </div>
+              <p class="preview-custom-label">Or adjust the details</p><p class="preview-setup-note">Review each movement’s setup before training. Bodyweight movements may use a bar or bench; the Barbell / Smith option includes both types.</p>
+              <div class="preview-fields">
+                <label><span>Training goal</span><select id="quickPreviewGoal" name="goal"><option value="balanced">Balanced training</option><option value="hypertrophy">Build muscle</option><option value="strength">Build strength</option><option value="time-efficient">Make the most of my time</option></select></label>
+                <label><span>Muscle group</span><select id="quickPreviewGroup" name="group"><option value="chest">Chest</option><option value="back">Back</option><option value="shoulders">Shoulders</option><option value="arms">Arms</option><option value="legs">Legs</option><option value="glutes">Glutes</option><option value="calves">Lower leg</option><option value="core">Core</option></select></label>
+                <label><span>Equipment</span><select id="quickPreviewEquipment" name="equipment" disabled><option>Loading equipment…</option></select></label>
+                <label><span>Experience</span><select id="quickPreviewLevel" name="level"><option>Beginner</option><option selected>Intermediate</option><option>Advanced</option></select></label>
+                <label><span>Training days</span><select id="quickPreviewDays" name="days"><option value="2">2 days / week</option><option value="3" selected>3 days / week</option><option value="4">4 days / week</option><option value="5">5 days / week</option></select></label>
+                <label><span>Session length</span><select id="quickPreviewMinutes" name="minutes"><option value="20">20 minutes</option><option value="35" selected>35 minutes</option><option value="50">50 minutes</option></select></label>
+              </div>
+              <button class="button button-accent" id="quickPreviewSubmit" type="submit" disabled>Build my complete week <span aria-hidden="true">→</span></button>
+              <p class="preview-privacy" id="quickPreviewPrivacy"><span aria-hidden="true">●</span> Your generated preview is kept privately on this device so it survives signup. It is not saved to an account until you explicitly choose to claim it.</p>
+              <p class="preview-status" id="quickPreviewStatus" role="status" aria-live="polite" aria-atomic="true">Loading the exercise library…</p>
+            </form>
+
+            <div class="preview-output" id="quickPreviewOutput" aria-busy="true">
+              <div class="preview-output-head">
+                <div><span>RULES-BASED RESULT</span><strong id="quickPreviewSummary" tabindex="-1">Waiting for your choices</strong></div>
+                <p><b>Personal match</b> responds to these choices. <b>FitScore</b> stays editorial and does not change.</p>
+              </div>
+              <ol class="preview-results" id="quickPreviewResults">
+                <li class="preview-placeholder"><span>01</span><div><strong>Recommendation</strong><p>Its strongest reason and clearest trade-off will appear here.</p></div></li>
+                <li class="preview-placeholder"><span>02</span><div><strong>Recommendation</strong><p>The result will explain itself instead of asking for blind trust.</p></div></li>
+                <li class="preview-placeholder"><span>03</span><div><strong>Recommendation</strong><p>You can continue into the complete rankings without signing up.</p></div></li>
+              </ol>
+              <section class="quick-week-preview" id="quickWeekPreview" aria-labelledby="quickWeekTitle" hidden>
+                <div class="quick-week-heading"><div><span>COMPLETE WEEK</span><h3 id="quickWeekTitle">YOUR SEVEN-DAY PREVIEW.</h3></div><p id="quickWeekMeta"></p></div>
+                <div class="quick-week-grid" id="quickWeekGrid"></div>
+                <p class="quick-week-boundary" id="quickWeekBoundary">Preview only. Create or sign in to claim this exact week. Training is not enabled here and still requires active Strata+ access.</p>
+              </section>
+              <div class="preview-actions" id="quickPreviewActions" hidden>
+                <button class="button button-dark" id="quickPreviewRankings" type="button">Explore this muscle <span aria-hidden="true">↓</span></button>
+                <a class="preview-free-link" id="quickPreviewLogin" href="/account.html?mode=login&amp;next=planner"><strong>Have an account?</strong><span>Sign in and compare weeks →</span></a>
+                <a class="preview-plus-link" id="quickPreviewContinue" href="/account.html?mode=signup&amp;next=planner"><strong>Keep this exact week</strong><span>Create an account, then choose what to save →</span></a>
+              </div>
+            </div>
+          </div>
+          <div class="signal-consent-host" data-product-signals-consent-host></div>
+        </div>
       </section>
 
       <section class="rankings-section" id="rankings" aria-labelledby="rankings-title" tabindex="-1">
         <div class="container">
           <div class="section-heading rankings-heading">
             <div>
-              <p class="kicker">Exercise rankings</p>
-              <h2 id="rankings-title">Browse exercises</h2>
+              <p class="kicker">02 / The index</p>
+              <h2 id="rankings-title">TRAIN THE <em>RIGHT LAYER.</em></h2>
             </div>
             <p>Choose a region, narrow the target, and sort the list around your equipment and experience.</p>
           </div>
@@ -76,7 +168,7 @@
                   <span class="sr-only">Search exercises</span>
                   <span class="field-label" aria-hidden="true">Search</span>
                   <span class="search-icon" aria-hidden="true">⌕</span>
-                  <input id="searchInput" type="search" placeholder="Search exercise or target" autocomplete="off" maxlength="80" />
+                  <input id="searchInput" type="search" placeholder="Search movement or target" autocomplete="off" maxlength="80" />
                 </label>
                 <label class="select-wrap">
                   <span class="field-label">Equipment</span>
@@ -106,17 +198,17 @@
                       <option value="stability">Stability</option>
                       <option value="range">Useful range</option>
                       <option value="progression">Progression</option>
-                      <option value="fatigue">Fatigue efficiency</option>
+                      <option value="fatigue">Low fatigue</option>
                     </select>
                   </label>
                 </div>
               </div>
 
-              <div class="exercise-list-head" aria-hidden="true"><span>Rank</span><span>Exercise</span><span>Target</span><span>Equipment</span><span>FitScore</span><span>Actions</span></div>
+              <div class="exercise-list-head" aria-hidden="true"><span>Rank</span><span>Movement</span><span>Target</span><span>Equipment</span><span>FitScore</span><span>Actions</span></div>
               <div class="exercise-list" id="exerciseList" role="list" aria-describedby="resultsStatus"></div>
               <div class="empty-state" id="emptyState" hidden>
                 <span>Ø</span>
-                <h3>No exercise found.</h3>
+                <h3>No movement found.</h3>
                 <p>Clear a filter or search another exercise.</p>
                 <button class="button button-dark" id="clearFilters" type="button">Reset filters</button>
               </div>
@@ -125,82 +217,21 @@
         </div>
       </section>
 
-      <details class="proof-section optional-week-preview" id="preview"><summary class="container">Build a starter week <span>Choose equipment and time, then review a complete week.</span></summary>
-        <div class="container">
-          <div class="section-heading proof-heading">
-            <div>
-              <p class="kicker kicker-light">01 / Start with your week</p>
-              <h2 id="preview-title">Build a starter week</h2>
-            </div>
-            <p>Pick a starting point or choose your own settings. See every workout and recovery day before creating an account.</p>
-          </div>
-
-          <div class="proof-workspace" data-reveal>
-            <form class="preview-form" id="quickPreviewForm" aria-describedby="quickPreviewPrivacy quickPreviewStatus">
-              <div class="preview-form-heading">
-                <span>YOUR INPUT</span>
-                <strong>Choose your settings</strong>
-              </div>
-              <div class="preview-starters" role="group" aria-label="Build a starter week">
-                <button type="button" data-preview-starter="dumbbells" disabled><strong>I have dumbbells</strong><span>3 days · 35 min · balanced</span></button>
-                <button type="button" data-preview-starter="bodyweight" disabled><strong>No weights today</strong><span>3 days · 20 min · balanced</span></button>
-                <button type="button" data-preview-starter="barbell" disabled><strong>Barbell / Smith setup</strong><span>3 days · 50 min · strength</span></button>
-              </div>
-              <p class="preview-custom-label">Or adjust the details</p><p class="preview-setup-note">Review each exercise’s setup before training. Bodyweight exercises may use a bar or bench; the Barbell / Smith option includes both types.</p>
-              <div class="preview-fields">
-                <label><span>Training goal</span><select id="quickPreviewGoal" name="goal"><option value="balanced">Balanced training</option><option value="hypertrophy">Build muscle</option><option value="strength">Build strength</option><option value="time-efficient">Make the most of my time</option></select></label>
-                <label><span>Muscle group</span><select id="quickPreviewGroup" name="group"><option value="chest">Chest</option><option value="back">Back</option><option value="shoulders">Shoulders</option><option value="arms">Arms</option><option value="legs">Legs</option><option value="glutes">Glutes</option><option value="calves">Lower leg</option><option value="core">Core</option></select></label>
-                <label><span>Equipment</span><select id="quickPreviewEquipment" name="equipment" disabled><option>Loading equipment…</option></select></label>
-                <label><span>Experience</span><select id="quickPreviewLevel" name="level"><option>Beginner</option><option selected>Intermediate</option><option>Advanced</option></select></label>
-                <label><span>Training days</span><select id="quickPreviewDays" name="days"><option value="2">2 days / week</option><option value="3" selected>3 days / week</option><option value="4">4 days / week</option><option value="5">5 days / week</option></select></label>
-                <label><span>Workout length</span><select id="quickPreviewMinutes" name="minutes"><option value="20">20 minutes</option><option value="35" selected>35 minutes</option><option value="50">50 minutes</option></select></label>
-              </div>
-              <button class="button button-accent" id="quickPreviewSubmit" type="submit" disabled>Build my complete week <span aria-hidden="true">→</span></button>
-              <p class="preview-privacy" id="quickPreviewPrivacy"><span aria-hidden="true">●</span> This preview stays on this device until you choose to save it to an account.</p>
-              <p class="preview-status" id="quickPreviewStatus" role="status" aria-live="polite" aria-atomic="true">Loading the exercise library…</p>
-            </form>
-
-            <div class="preview-output" id="quickPreviewOutput" aria-busy="true">
-              <div class="preview-output-head">
-                <div><span>RULES-BASED RESULT</span><strong id="quickPreviewSummary" tabindex="-1">Waiting for your choices</strong></div>
-                <p><b>Match for you</b> responds to these choices. <b>FitScore</b> stays editorial and does not change.</p>
-              </div>
-              <ol class="preview-results" id="quickPreviewResults">
-                <li class="preview-placeholder"><span>01</span><div><strong>Recommendation</strong><p>Choose your settings to see recommended exercises.</p></div></li>
-                <li class="preview-placeholder"><span>02</span><div><strong>Recommendation</strong><p>Each recommendation includes its selection reasons.</p></div></li>
-                <li class="preview-placeholder"><span>03</span><div><strong>Recommendation</strong><p>You can continue into the complete rankings without signing up.</p></div></li>
-              </ol>
-              <section class="quick-week-preview" id="quickWeekPreview" aria-labelledby="quickWeekTitle" hidden>
-                <div class="quick-week-heading"><div><span>COMPLETE WEEK</span><h3 id="quickWeekTitle">Your weekly plan preview</h3></div><p id="quickWeekMeta"></p></div>
-                <div class="quick-week-grid" id="quickWeekGrid"></div>
-                <p class="quick-week-boundary" id="quickWeekBoundary">Preview only. Create or sign in to claim this exact week. Training is not enabled here and still requires active Strata+ access.</p>
-              </section>
-              <div class="preview-actions" id="quickPreviewActions" hidden>
-                <button class="button button-dark" id="quickPreviewRankings" type="button">Browse this muscle <span aria-hidden="true">↓</span></button>
-                <a class="preview-free-link" id="quickPreviewLogin" href="/account.html?mode=login&amp;next=planner"><strong>Have an account?</strong><span>Sign in and compare weeks →</span></a>
-                <a class="preview-plus-link" id="quickPreviewContinue" href="/account.html?mode=signup&amp;next=planner"><strong>Keep this exact week</strong><span>Create an account, then choose what to save →</span></a>
-              </div>
-            </div>
-          </div>
-          <div class="signal-consent-host" data-product-signals-consent-host></div>
-        </div>
-      </details>
-
       <section class="system-section" id="system" aria-labelledby="system-title">
         <div class="container">
           <div class="section-heading system-heading">
             <div>
               <p class="kicker">03 / One training system</p>
-              <h2 id="system-title">How STRATA works</h2>
+              <h2 id="system-title">FROM QUESTION TO <em>WORKING SET.</em></h2>
             </div>
-            <p>STRATA keeps the useful parts of training connected, so an exercise you discover can become a plan you follow and a workout you can review.</p>
+            <p>STRATA keeps the useful parts of training connected, so a movement you discover can become a plan you follow and a session you can review.</p>
           </div>
 
           <div class="system-grid" data-reveal>
             <ol class="system-steps" aria-label="STRATA training workflow">
               <li>
                 <span>01</span>
-                <div><strong>Rank</strong><p>Filter 200 exercises by muscle, equipment, experience, and the trade-off that matters to you.</p></div>
+                <div><strong>Rank</strong><p>Filter 200 movements by muscle, equipment, experience, and the trade-off that matters to you.</p></div>
                 <a href="#rankings" aria-label="Explore exercise rankings">Explore <span aria-hidden="true">↗</span></a>
               </li>
               <li>
@@ -210,13 +241,13 @@
               </li>
               <li>
                 <span>03</span>
-                <div><strong>Train</strong><p>Follow scheduled work with set logging, timers, workout recovery, and private history.</p></div>
+                <div><strong>Train</strong><p>Follow scheduled work with set logging, timers, session recovery, and private history.</p></div>
                 <a href="/workout.html" aria-label="Open workout training">Train <span aria-hidden="true">↗</span></a>
               </li>
               <li>
                 <span>04</span>
-                <div><strong>Progress</strong><p>Review completed workouts, logged sets, and recorded performance.</p></div>
-                <a href="/discover.html#progressWorkspace" aria-label="View training progress">View progress <span aria-hidden="true">↗</span></a>
+                <div><strong>Refine</strong><p>Use Strata+ personalization, comparisons, progress views, and 31-day planning to keep improving the system.</p></div>
+                <a href="/discover.html" aria-label="Explore Strata+">Strata+ <span aria-hidden="true">↗</span></a>
               </li>
             </ol>
 
@@ -224,11 +255,11 @@
               <figure class="system-art">
                 <img src="/images/strata-layers.jpg" alt="Layered dark terrain connected by a luminous path, representing a clear route through training decisions" width="1672" height="941" loading="lazy" decoding="async" />
               </figure>
-              <div class="system-console" aria-label="Example workout">
-                <div class="console-topline"><span>STRATA / EXAMPLE WORKOUT</span><span class="console-status"><i aria-hidden="true"></i> Example</span></div>
+              <div class="system-console" aria-label="Example STRATA training workspace">
+                <div class="console-topline"><span>STRATA / TRAINING SYSTEM</span><span class="console-status"><i aria-hidden="true"></i> Ready</span></div>
                 <div class="console-session">
                   <div><p>Today’s focus</p><h3>Upper body</h3></div>
-                  <span>3 exercises</span>
+                  <span>3 movements</span>
                 </div>
                 <div class="console-exercises">
                   <div><span>01</span><strong>Incline dumbbell press</strong><small>3 × 8–12</small><i style="--progress:82%" aria-hidden="true"></i></div>
@@ -238,7 +269,7 @@
                 <div class="console-week" aria-label="Example training week">
                   <span><b>M</b><i></i><small>Train</small></span><span><b>T</b><i></i><small>Train</small></span><span class="rest"><b>W</b><i></i><small>Rest</small></span><span><b>T</b><i></i><small>Train</small></span><span><b>F</b><i></i><small>Train</small></span><span class="rest"><b>S</b><i></i><small>Rest</small></span><span class="rest"><b>S</b><i></i><small>Rest</small></span>
                 </div>
-                <p class="console-note">Example only. Your workout appears in Train after you build a weekly plan.</p>
+                <p class="console-note">An illustrative workspace using features available across STRATA and Strata+.</p>
               </div>
             </div>
           </div>
@@ -249,12 +280,12 @@
         <div class="container method-grid">
           <div class="method-intro">
             <p class="kicker kicker-light">04 / Scoring protocol</p>
-            <h2 id="method-title">How FitScore works</h2>
+            <h2 id="method-title">A SCORE YOU CAN<br /><em>INTERROGATE.</em></h2>
             <p>
               FitScore is an editorial tool for hypertrophy-oriented exercise selection—not a scientific measurement or a substitute for coaching. Each score starts with the rounded weighted baseline shown here, then may receive an exercise-specific editorial adjustment of up to four points when the five factors miss a meaningful trade-off.
             </p>
             <p class="method-adjustment"><strong>Score build:</strong> Rounded 30/20/20/20/10 weighted baseline + editorial adjustment (±4 maximum). Every exercise detail shows both numbers.</p>
-            <a class="button button-outline" href="#sources">View sources <span aria-hidden="true">↘</span></a>
+            <a class="button button-outline" href="#sources">Audit the sources <span aria-hidden="true">↘</span></a>
           </div>
 
           <div class="score-model">
@@ -262,11 +293,11 @@
               <span>FIT<br />SCORE</span><strong>100</strong>
             </div>
             <ol class="weight-list">
-              <li><span>01</span><div><strong>Target stimulus</strong><small>Does the exercise load the intended tissue directly?</small></div><b>30%</b></li>
+              <li><span>01</span><div><strong>Target stimulus</strong><small>Does the movement load the intended tissue directly?</small></div><b>30%</b></li>
               <li><span>02</span><div><strong>Useful range</strong><small>Can it challenge the muscle through a productive ROM?</small></div><b>20%</b></li>
               <li><span>03</span><div><strong>Stability</strong><small>Can effort reach the target before balance is limiting?</small></div><b>20%</b></li>
               <li><span>04</span><div><strong>Progression</strong><small>Is load or repetition progress easy to measure?</small></div><b>20%</b></li>
-              <li><span>05</span><div><strong>Fatigue efficiency</strong><small>How much non-target fatigue comes with the stimulus?</small></div><b>10%</b></li>
+              <li><span>05</span><div><strong>Fatigue cost</strong><small>How much non-target fatigue comes with the stimulus?</small></div><b>10%</b></li>
             </ol>
           </div>
         </div>
@@ -284,12 +315,12 @@
           </div>
           <article>
             <p class="kicker">05 / Use the list well</p>
-            <h2>Use the rankings in your training</h2>
+            <h2>CONSISTENCY OUTLIVES <em>NOVELTY.</em></h2>
             <p>
-              Rankings help you shortlist. Your logbook decides. Keep an exercise if it feels stable, reaches the target, tolerates progressive loading, and does not create unwanted joint pain.
+              Rankings help you shortlist. Your logbook decides. Keep a movement if it feels stable, reaches the target, tolerates progressive loading, and does not create unwanted joint pain.
             </p>
             <div class="editorial-notes">
-              <div><span>01</span><p><strong>Start repeatable.</strong> Pick 1–2 exercises per target that you can execute consistently.</p></div>
+              <div><span>01</span><p><strong>Start repeatable.</strong> Pick 1–2 movements per target that you can execute consistently.</p></div>
               <div><span>02</span><p><strong>Train with intent.</strong> Most working sets should finish with roughly 1–3 good reps left.</p></div>
               <div><span>03</span><p><strong>Progress one variable.</strong> Add a rep, small load, or cleaner range before adding novelty.</p></div>
             </div>
@@ -302,7 +333,7 @@
           <div class="section-heading sources-heading">
             <div>
               <p class="kicker">06 / Research ledger</p>
-              <h2 id="sources-title">Research and sources</h2>
+              <h2 id="sources-title">THE RECEIPTS.<br /><em>NOT THE HYPE.</em></h2>
             </div>
             <p>Primary research, professional exercise libraries, anatomy texts, and licensed imagery used to shape this guide.</p>
           </div>
@@ -310,7 +341,7 @@
             <a href="https://pubmed.ncbi.nlm.nih.gov/36662126/" target="_blank" rel="noreferrer"><span>01 · SYSTEMATIC REVIEW</span><strong>Range of motion and muscle hypertrophy</strong><small>Journal of Strength & Conditioning Research · PubMed</small><b aria-hidden="true">↗</b></a>
             <a href="https://pubmed.ncbi.nlm.nih.gov/38970765/" target="_blank" rel="noreferrer"><span>02 · META-REGRESSION</span><strong>Proximity to failure, strength & hypertrophy</strong><small>Sports Medicine · PubMed</small><b aria-hidden="true">↗</b></a>
             <a href="https://www.acsm.org/wp-content/uploads/2025/01/Progression-Models-in-Resistance-Training-for-Healthy-Adults-Simplified.pdf" target="_blank" rel="noreferrer"><span>03 · POSITION STAND</span><strong>Progression models in resistance training</strong><small>American College of Sports Medicine</small><b aria-hidden="true">↗</b></a>
-            <a href="https://www.acefitness.org/resources/everyone/exercise-library/" target="_blank" rel="noreferrer"><span>04 · EXERCISE LIBRARY</span><strong>Exercise setup, targets, and exercise cues</strong><small>American Council on Exercise</small><b aria-hidden="true">↗</b></a>
+            <a href="https://www.acefitness.org/resources/everyone/exercise-library/" target="_blank" rel="noreferrer"><span>04 · EXERCISE LIBRARY</span><strong>Exercise setup, targets, and movement cues</strong><small>American Council on Exercise</small><b aria-hidden="true">↗</b></a>
             <a href="https://openstax.org/books/anatomy-and-physiology-2e/pages/11-introduction" target="_blank" rel="noreferrer"><span>05 · ANATOMY TEXT</span><strong>Axial and appendicular muscle anatomy</strong><small>OpenStax Anatomy & Physiology 2e</small><b aria-hidden="true">↗</b></a>
             <a href="https://www.nsca.com/contentassets/d27e2ba7e56949229d3eb1aaef7ddcfa/trainertips_hypertrophy_201601.pdf" target="_blank" rel="noreferrer"><span>06 · PRACTITIONER GUIDE</span><strong>Hypertrophy programming variables</strong><small>National Strength & Conditioning Association</small><b aria-hidden="true">↗</b></a>
           </div>
@@ -325,8 +356,8 @@
         <div class="container offer-grid">
           <div>
             <p class="kicker">07 / Strata+ access</p>
-            <h2 id="discoveryOfferTitle">Strata+ access</h2>
-            <p>Train for 7 days with a free, no-card Strata+ trial. It never auto-converts. Review your previous sets while training. Continue only if you explicitly subscribe for $0.99 USD per month; the subscription renews monthly until canceled. Strata+ adds workout logging, private history, weight progression suggestions, recommendations based on your preferences, shared plans, and a monthly schedule. Rankings, exercise guidance, and the manual weekly Plan remain free.</p>
+            <h2 id="discoveryOfferTitle">TRY THE FULL SYSTEM.<br /><em>THEN $0.99 USD / MONTH.</em></h2>
+            <p>Train for 7 days with a free, no-card Strata+ trial. It never auto-converts. Come back to your previous sets with Training Memory. Continue only if you explicitly subscribe for $0.99 USD per month; the subscription renews monthly until canceled. Strata+ adds a focused Today path, guided workout logging, private history, optional post-session check-ins, review-first progression suggestions, personalized sessions, community discovery, and a saved 31-day view. Rankings, exercise guidance, and the manual weekly Plan remain free.</p>
           </div>
           <div class="offer-actions">
             <a class="button button-dark" href="/pricing">Start the 7-day trial <span aria-hidden="true">→</span></a>
@@ -349,7 +380,7 @@
         <div class="footer-meta">
           <p>© 2026 Strata Index</p>
           <p>Built for education, not diagnosis.</p>
-          <p class="build-number">Build 7.8.3</p>
+          <p class="build-number">Build 7.8.2</p>
         </div>
       </div>
     </footer>
@@ -371,25 +402,25 @@
 
     <dialog class="compare-dialog" id="compareDialog" aria-labelledby="compareDialogTitle">
       <div class="dialog-header">
-        <div><p class="kicker">Head to head</p><h2 id="compareDialogTitle">Compare exercises</h2></div>
+        <div><p class="kicker">Head to head</p><h2 id="compareDialogTitle">COMPARE MOVES</h2></div>
         <button class="icon-button" data-close-dialog="compareDialog" type="button" aria-label="Close comparison">×</button>
       </div>
       <div id="compareContent"></div>
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=7.8.3"></script>
-    <script src="/product-signals.js?v=7.8.3"></script>
-    <script src="/discovery-core.js?v=7.8.3"></script>
-    <script src="/preview-core.js?v=7.8.3"></script>
-    <script src="/onboarding-core.js?v=7.8.3"></script>
-    <script src="/activation-core.js?v=7.8.3"></script>
-    <script src="/activation-home.js?v=7.8.3"></script>
-    <script src="/home-logic.js?v=7.8.3"></script>
-    <script src="/home-state.js?v=7.8.3"></script>
-    <script src="/home-api.js?v=7.8.3"></script>
-    <script src="/home-render.js?v=7.8.3"></script>
-    <script src="/home-events.js?v=7.8.3"></script>
-    <script src="app.js?v=7.8.3"></script>
+    <script src="/pwa.js?v=7.8.2"></script>
+    <script src="/product-signals.js?v=7.8.2"></script>
+    <script src="/discovery-core.js?v=7.8.2"></script>
+    <script src="/preview-core.js?v=7.8.2"></script>
+    <script src="/onboarding-core.js?v=7.8.2"></script>
+    <script src="/activation-core.js?v=7.8.2"></script>
+    <script src="/activation-home.js?v=7.8.2"></script>
+    <script src="/home-logic.js?v=7.8.2"></script>
+    <script src="/home-state.js?v=7.8.2"></script>
+    <script src="/home-api.js?v=7.8.2"></script>
+    <script src="/home-render.js?v=7.8.2"></script>
+    <script src="/home-events.js?v=7.8.2"></script>
+    <script src="app.js?v=7.8.2"></script>
   </body>
 </html>

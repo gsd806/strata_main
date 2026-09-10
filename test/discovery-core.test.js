@@ -146,7 +146,7 @@ test("session builder rotates strong choices around exercises already in the sav
   days.Monday=baseline.items.map((item,index)=>({instanceId:`weekly-${index}-${item.exerciseId}`,exerciseId:item.exerciseId,sets:item.sets,reps:item.reps}));
   const rotated=Core.buildSession({exercises,preferences:allEquipment,focus:"upper",minutes:35,weeklyPlan:{version:1,restDay:"Sunday",days}});
   assert.notDeepEqual(rotated.items.map((item)=>item.exerciseId),baseline.items.map((item)=>item.exerciseId));
-  assert.ok(rotated.items.some((item)=>item.reasons.includes("was not yet in your saved week when this workout was generated")));
+  assert.ok(rotated.items.some((item)=>item.reasons.includes("was not yet in your saved week when this session was generated")));
 });
 
 test("session anchors repeat only compatible roles without creating duplicate movements",()=>{

@@ -49,13 +49,13 @@
     }
     const trainingDays=daySummaries.filter(({movements})=>movements>0).length,estimatedMinutes=daySummaries.reduce((sum,day)=>sum+day.estimatedMinutes,0),alerts=[];
     const denseDays=daySummaries.filter((day)=>day.movements>=10||day.workingSets>=30||day.estimatedMinutes>=90);
-    if(denseDays.length)alerts.push({id:"dense-days",tone:"attention",title:"Review dense training days",detail:`${denseDays.map(({day})=>day).join(", ")} ${denseDays.length===1?"has":"have"} at least 10 exercises, 30 working sets, or a 90-minute planning estimate.`,action:"Spread or trim the day"});
+    if(denseDays.length)alerts.push({id:"dense-days",tone:"attention",title:"Review dense training days",detail:`${denseDays.map(({day})=>day).join(", ")} ${denseDays.length===1?"has":"have"} at least 10 movements, 30 working sets, or a 90-minute planning estimate.`,action:"Spread or trim the day"});
     const duplicates=[...occurrences.values()].filter(({days})=>days.length>1).map((entry)=>({...entry,uniqueDays:[...new Set(entry.days)]})).sort((left,right)=>right.days.length-left.days.length||right.sets-left.sets||left.name.localeCompare(right.name));
     const repeatedSameDay=duplicates.filter((entry)=>entry.uniqueDays.length<entry.days.length);
     if(repeatedSameDay.length)alerts.push({id:"same-day-duplicates",tone:"attention",title:"Check duplicate entries",detail:`${repeatedSameDay.slice(0,3).map(({name})=>name).join(", ")} ${repeatedSameDay.length===1?"appears":"appear"} more than once on the same day.`,action:"Keep both or remove a duplicate"});
     const repeatedAcrossWeek=duplicates.filter((entry)=>entry.uniqueDays.length>=3);
-    if(repeatedAcrossWeek.length)alerts.push({id:"high-frequency-repeats",tone:"review",title:"Confirm high-frequency repeats",detail:`${repeatedAcrossWeek.slice(0,3).map(({name,uniqueDays})=>`${name} (${uniqueDays.length} days)`).join(", ")}. Repeating can be intentional; confirm it matches your plan.`,action:"Review repeated exercises"});
-    if(!trainingDays)alerts.push({id:"empty-week",tone:"start",title:"Your week is empty",detail:"Add one repeatable training day before tuning distribution.",action:"Add the first exercise"});
+    if(repeatedAcrossWeek.length)alerts.push({id:"high-frequency-repeats",tone:"review",title:"Confirm high-frequency repeats",detail:`${repeatedAcrossWeek.slice(0,3).map(({name,uniqueDays})=>`${name} (${uniqueDays.length} days)`).join(", ")}. Repeating can be intentional; confirm it matches your plan.`,action:"Review repeated movements"});
+    if(!trainingDays)alerts.push({id:"empty-week",tone:"start",title:"Your week is empty",detail:"Add one repeatable training day before tuning distribution.",action:"Add the first movement"});
     if(trainingDays&&!restDays(plan).length)alerts.push({id:"no-rest-day",tone:"review",title:"No recovery day is marked",detail:"Every day is currently available for training. Mark a rest day if that is not intentional.",action:"Review recovery days"});
     const muscleDistribution=[...muscles.values()].map((entry)=>({...entry,days:[...entry.days]})).sort((left,right)=>right.sets-left.sets||left.label.localeCompare(right.label));
     const patternDistribution=[...patterns.values()].sort((left,right)=>right.sets-left.sets||left.label.localeCompare(right.label));
@@ -75,9 +75,9 @@
     const existingExercises=new Set(mode==="merge"?before.map((item)=>String(item.exerciseId)):[]),skipped=[];
     const copied=[];source.forEach((item,index)=>{if(existingExercises.has(String(item.exerciseId))){skipped.push(String(item.exerciseId));return;}copied.push({...item,instanceId:uniqueInstanceId(existingIds,item.instanceId,targetDay,index)});existingExercises.add(String(item.exerciseId));});
     const result=mode==="replace"?copied:[...before,copied].flat();
-    if(result.length>MAX_DAY_ITEMS)throw new Error(`${targetDay} would exceed ${MAX_DAY_ITEMS} exercises.`);
+    if(result.length>MAX_DAY_ITEMS)throw new Error(`${targetDay} would exceed ${MAX_DAY_ITEMS} movements.`);
     const currentTotal=DAYS.reduce((sum,day)=>sum+next.days[day].length,0),nextTotal=currentTotal-before.length+result.length;
-    if(nextTotal>MAX_WEEK_ITEMS)throw new Error(`The copied week would exceed ${MAX_WEEK_ITEMS} exercises.`);
+    if(nextTotal>MAX_WEEK_ITEMS)throw new Error(`The copied week would exceed ${MAX_WEEK_ITEMS} movements.`);
     next.days[targetDay]=result;
     const rests=restDays(next).filter((day)=>day!==targetDay);next.restDays=rests;next.restDay=rests[0]??null;
     return {plan:next,sourceDay,targetDay,mode,added:copied.length,replaced:mode==="replace"?before.length:0,skipped,changed:JSON.stringify(before)!==JSON.stringify(result)||restDays(plan).includes(targetDay)};

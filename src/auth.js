@@ -515,9 +515,6 @@ function createAuthService({
     if(next==="admin"||next==="/admin"||next==="/admin.html")return "/admin";
     if(next==="pricing"||next==="/pricing"||next==="/pricing.html")return "/pricing";
     if(next==="discover"||next==="/discover.html")return "/discover.html";
-    if(next.startsWith("/discover.html#")){
-      try{const hash=decodeURIComponent(next.slice(15));if(/^(today|todayWorkspace|plan|planWorkspace|explore|exploreWorkspace|progress|progressWorkspace|recommendations|library|exerciseExplorer|battle|profile|community|communityPlans|monthly|monthlyPlan|session|sessionBuilder|block|trainingBlockWorkspace|saved|savedExercises)$/.test(hash)&&!/[\r\n]/.test(hash))return `/discover.html#${hash}`;}catch{}
-    }
     if(/^\/workout\.html\?day=(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)$/.test(next))return next;
     if(next==="workout"||next==="/workout.html")return "/workout.html";
     if(next==="onboarding"||next==="/onboarding.html")return "/onboarding.html";
@@ -528,7 +525,7 @@ function createAuthService({
     const params=new URLSearchParams({mode,error:message}),next=safeAccountNext(requestedNext);
     if(next.startsWith("/planner.html")){params.set("next","planner");const add=new URL(next,"http://strata.local").searchParams.get("add");if(add)params.set("add",add);}
     else if(next==="/pricing")params.set("next","pricing");
-    else if(next.startsWith("/discover.html"))params.set("next",next==="/discover.html"?"discover":next);
+    else if(next==="/discover.html")params.set("next","discover");
     else if(next==="/admin")params.set("next","admin");
     else if(next.startsWith("/workout.html"))params.set("next",next==="/workout.html"?"workout":next);
     else if(next==="/onboarding.html")params.set("next","onboarding");
@@ -538,7 +535,7 @@ function createAuthService({
     const params=new URLSearchParams(),next=safeAccountNext(requestedNext);
     if(next.startsWith("/planner.html")){params.set("next","planner");const add=new URL(next,"http://strata.local").searchParams.get("add");if(add)params.set("add",add);}
     else if(next==="/pricing")params.set("next","pricing");
-    else if(next.startsWith("/discover.html"))params.set("next",next==="/discover.html"?"discover":next);
+    else if(next==="/discover.html")params.set("next","discover");
     else if(next==="/admin")params.set("next","admin");
     else if(next.startsWith("/workout.html"))params.set("next",next==="/workout.html"?"workout":next);
     else if(next==="/onboarding.html")params.set("next","onboarding");

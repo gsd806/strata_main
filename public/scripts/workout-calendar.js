@@ -22,7 +22,7 @@
   function event(session){
     if(!session)return null;
     const start=new Date(`${session.date}T12:00:00`),end=new Date(start.getTime()+DAY_MS),title=`STRATA · ${session.day} workout`;
-    const lines=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//STRATA//Training Plan//EN","CALSCALE:GREGORIAN","BEGIN:VEVENT",`DTSTART;VALUE=DATE:${dateStamp(start)}`,`DTEND;VALUE=DATE:${dateStamp(end)}`,`SUMMARY:${escapeIcs(title)}`,`DESCRIPTION:${escapeIcs(`${session.movements} planned exercise${session.movements===1?"":"s"} · ${session.workingSets} working set${session.workingSets===1?"":"s"}. Open STRATA when you are ready to train.`)}`,"END:VEVENT","END:VCALENDAR",""];
+    const lines=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//STRATA//Training Plan//EN","CALSCALE:GREGORIAN","BEGIN:VEVENT",`DTSTART;VALUE=DATE:${dateStamp(start)}`,`DTEND;VALUE=DATE:${dateStamp(end)}`,`SUMMARY:${escapeIcs(title)}`,`DESCRIPTION:${escapeIcs(`${session.movements} planned movement${session.movements===1?"":"s"} · ${session.workingSets} working set${session.workingSets===1?"":"s"}. Open STRATA when you are ready to train.`)}`,"END:VEVENT","END:VCALENDAR",""];
     return{...session,title,filename:`strata-${session.date}-${session.day.toLowerCase()}.ics`,href:`data:text/calendar;charset=utf-8,${encodeURIComponent(lines.join("\r\n"))}`};
   }
   return{nextPlannedSession,event};

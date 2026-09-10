@@ -51,7 +51,7 @@
     el("battleReset").addEventListener("click",()=>{state.compare=[];el("battleResults").hidden=true;actions.renderCompareTray();actions.renderRecommendations();actions.renderExplorer();});
     el("shareRanking").addEventListener("click",()=>void actions.shareCard("ranking"));
     el("compareMovementBoard").addEventListener("click",()=>{state.compare=core.normalizeShortlist(state.shortlist,state.exercises,movementBoardLimit);actions.renderCompareTray();actions.renderRecommendations();actions.renderExplorer();actions.activateFeature("battle",{focus:true,scroll:true,smooth:true,announce:true,historyMode:"push"});actions.openComparison();});
-    el("clearMovementBoard").addEventListener("click",()=>{state.shortlist=[];actions.saveMovementBoard();actions.renderMovementBoard({message:"Saved exercises cleared."});actions.renderRecommendations();actions.renderExplorer();el("movementBoardTitle").focus?.({preventScroll:true});actions.showToast("Saved exercises cleared.");});
+    el("clearMovementBoard").addEventListener("click",()=>{state.shortlist=[];actions.saveMovementBoard();actions.renderMovementBoard({message:"Decision board cleared."});actions.renderRecommendations();actions.renderExplorer();el("movementBoardTitle").focus?.({preventScroll:true});actions.showToast("Decision board cleared.");});
     el("logoutButton").addEventListener("click",async event=>{
       const button=event.currentTarget;if(button.disabled)return;button.disabled=true;
       try{await actions.api("/api/logout",{method:"POST"});window.location.replace("/");}

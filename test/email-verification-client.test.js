@@ -290,9 +290,6 @@ test("an ended login verification offers sign-in recovery instead of signup copy
 
 test("verification keeps safe new destinations in completion and account recovery links",async()=>{
   const destinations=[
-    ["/discover.html#sessionBuilder","/discover.html#sessionBuilder"],["/discover.html#progressWorkspace","/discover.html#progressWorkspace"],
-    ["/discover.html#savedExercises","/discover.html#savedExercises"],["/discover.html#exploreWorkspace","/discover.html#exploreWorkspace"],
-    ["/discover.html#sessionBuilder%0a","/planner.html"],["/discover.html#//outside.test","/planner.html"],
     ["workout","/workout.html"],["/workout.html","/workout.html"],
     ["/workout.html?day=Monday","/workout.html?day=Monday"],["/workout.html?day=Sunday","/workout.html?day=Sunday"],
     ["onboarding","/onboarding.html"],["/onboarding.html","/onboarding.html"],
@@ -314,7 +311,7 @@ test("verification keeps safe new destinations in completion and account recover
         await page.elements.get("verificationForm").emit("submit",{preventDefault(){}});
         assert.deepEqual(page.navigations,[destination]);
       }else{
-        const accountNext=/[?#]/.test(destination)?destination:destination.slice(1,-5);
+        const accountNext=destination.includes("?")?destination:destination.slice(1,-5);
         assert.equal(page.elements.get("verificationRestart").href,`/account.html?${new URLSearchParams({mode:"signup",next:accountNext})}`);
         assert.equal(page.elements.get("verificationSignIn").href,`/account.html?${new URLSearchParams({mode:"login",next:accountNext})}`);
       }

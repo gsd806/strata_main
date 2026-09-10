@@ -149,12 +149,12 @@ test("imported exercises cannot bypass current movement constraints or equipment
   ]){
     const schedule=scheduleWith({Monday:[target]});
     schedule.Monday.sourceItems=[{exerciseId,sets:5,reps:"5–8"}];
-    assert.throws(()=>Monthly.generateMonthPlan({startDate:"2026-09-07",exercisesPerTarget:1,schedule,exercises,preferences:profile}),/Monday's imported .+ does not match your saved equipment or exercise constraints/);
+    assert.throws(()=>Monthly.generateMonthPlan({startDate:"2026-09-07",exercisesPerTarget:1,schedule,exercises,preferences:profile}),/Monday's imported .+ does not match your saved equipment or movement constraints/);
     assert.deepEqual(schedule.Monday.sourceItems,[{exerciseId,sets:5,reps:"5–8"}],"rejected generation preserves the imported draft");
   }
 });
 
 test("eligibility failures never silently admit unverified exercises",()=>{
   const broken={...byId("machine-shoulder-press"),metrics:null};
-  assert.throws(()=>Monthly.generateMonthPlan({startDate:"2026-09-07",exercisesPerTarget:1,schedule:scheduleWith({Monday:["shoulders"]}),exercises:[broken],preferences}),/Could not verify the saved equipment and exercise constraints/);
+  assert.throws(()=>Monthly.generateMonthPlan({startDate:"2026-09-07",exercisesPerTarget:1,schedule:scheduleWith({Monday:["shoulders"]}),exercises:[broken],preferences}),/Could not verify the saved equipment and movement constraints/);
 });

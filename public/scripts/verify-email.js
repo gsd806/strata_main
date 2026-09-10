@@ -3,16 +3,12 @@
 const el=(id)=>document.getElementById(id);
 const params=new URLSearchParams(location.search);
 
-function safeNext(raw,exerciseId,inheritedHash=""){
+function safeNext(raw,exerciseId){
   const addIsSafe=Boolean(exerciseId&&/^[a-z0-9-]{2,80}$/.test(exerciseId));
   if(raw==="planner"||raw==="/planner.html")return addIsSafe?`/planner.html?add=${encodeURIComponent(exerciseId)}`:"/planner.html";
   if(/^\/planner\.html\?add=[a-z0-9-]{2,80}$/.test(raw||""))return raw;
   if(raw==="pricing"||raw==="/pricing"||raw==="/pricing.html")return "/pricing";
-  if(raw==="discover"||raw==="/discover.html")raw=`/discover.html${inheritedHash||""}`;
-  if(typeof raw==="string"&&raw.startsWith("/discover.html#")){
-    try{const hash=decodeURIComponent(raw.slice(15));if(/^(today|todayWorkspace|plan|planWorkspace|explore|exploreWorkspace|progress|progressWorkspace|recommendations|library|exerciseExplorer|battle|profile|community|communityPlans|monthly|monthlyPlan|session|sessionBuilder|block|trainingBlockWorkspace|saved|savedExercises)$/.test(hash)&&!/[\r\n]/.test(hash))return `/discover.html#${hash}`;}catch{}
-  }
-  if(raw==="/discover.html"||(inheritedHash&&(raw==="/discover.html"+inheritedHash)))return "/discover.html";
+  if(raw==="discover"||raw==="/discover.html")return "/discover.html";
   if(raw==="admin"||raw==="/admin"||raw==="/admin.html")return "/admin";
   if(/^\/workout\.html\?day=(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)$/.test(raw||""))return raw;
   if(raw==="workout"||raw==="/workout.html")return "/workout.html";
@@ -23,7 +19,7 @@ function safeNext(raw,exerciseId,inheritedHash=""){
 function accountLocation(destination,mode="signup"){
   const query=new URLSearchParams({mode:mode==="login"?"login":"signup"});
   if(destination==="/pricing")query.set("next","pricing");
-  else if(safeNext(destination).startsWith("/discover.html"))query.set("next",destination==="/discover.html"?"discover":safeNext(destination));
+  else if(destination==="/discover.html")query.set("next","discover");
   else if(destination==="/admin")query.set("next","admin");
   else if(destination.startsWith("/workout.html"))query.set("next",destination==="/workout.html"?"workout":destination);
   else if(destination==="/onboarding.html")query.set("next","onboarding");
@@ -35,7 +31,7 @@ function accountLocation(destination,mode="signup"){
   return `/account.html?${query}`;
 }
 
-const next=safeNext(params.get("next"),params.get("add"),location.hash);
+const next=safeNext(params.get("next"),params.get("add"));
 const form=el("verificationForm"),codeInput=el("verificationCode"),verifyButton=el("verificationSubmit");
 const resendForm=el("resendForm"),resendButton=el("resendSubmit");
 const messageNode=el("verificationMessage"),statusNode=el("verificationStatus"),stateNode=el("verificationState");

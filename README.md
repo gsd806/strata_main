@@ -1,16 +1,16 @@
 # STRATA — Exercise Rankings and Workout Planning
 
-STRATA is an evidence-informed workout index with server-backed, email-verified accounts, Strata+ access, and weekly, community, and monthly workout planning. It includes 200 resistance-training exercises—25 per muscle group, including 50 bodyweight options—across 8 muscle groups and 26 sub-muscle targets. Build 7.8.3 is an installable Progressive Web App (PWA) with previous workout results, Resend-powered account email, Paddle-powered Strata+ subscriptions, and a private owner dashboard.
+STRATA is an evidence-informed workout index with server-backed, email-verified accounts, a private Strata+ studio, and weekly, community, and monthly workout planning. It includes 200 resistance-training exercises—25 per muscle group, including 50 bodyweight options—across 8 muscle groups and 26 sub-muscle targets. Build 7.8.2 is an installable Progressive Web App (PWA) with Training Memory, Resend-powered account email, Paddle-powered Strata+ subscriptions, and a private owner dashboard.
 
-**Build 7.8.3 is a UX cleanup organized around Exercises, Plan, Train, Progress, and Account.** The weekly Plan is the single planning hub, with optional workout creation, guided setup, training blocks, monthly schedules, templates, and shared plans. Train owns today's workout; Progress shows completed logs with honest loading and empty states. Strata+ is an access level. See the [7.8.3 release guide](docs/release-7.8.3.md) for behavior and validation.
+**Build 7.8.2 is a performance-based weight progression update for Train.** After a completed session, see an exact next target without needing a check-in. Two complete comparable sessions at the top of the rep range can suggest a small weight increase; otherwise build reps or repeat the recorded load. The next session shows the target with an explicit Apply button. See the [7.8.2 release guide](docs/release-7.8.2.md) for behavior and validation.
 
 The [7.8.0 release](docs/release-7.8.0.md) established the training loop from week preview through account verification, a deliberate seven-day no-card trial, Plan review, training, and completed-workout evidence. Its owner-elevation and Paddle lifecycle protections remain in place, along with enforced logic, state, API, rendering, event, and coordinator boundaries across the seven largest browser surfaces. See [release readiness](docs/release-readiness.md) and the [founder plan](docs/founder-plan.md).
 
-STRATA also includes a login-free local weekly planner, account-synced plans, structured community-plan sharing, a dated monthly schedule, community ratings, printable exports, and a private administrator help desk. Strata+ is a **$0.99 USD per month recurring subscription** and offers one optional free 7-day trial per eligible account. The trial requires no card, ends automatically, and never converts into a subscription; subscribing always requires explicit checkout. Paddle is the merchant of record, and the server grants paid access only after a matching transaction is provider-verified and linked to validated signed subscription state. Prior lifetime buyers remain grandfathered with no recurring charge.
+STRATA also includes a login-free local weekly planner, account-synced plans, structured community-plan sharing, a deterministic 31-day workspace, community ratings, printable exports, and a private administrator help desk. Strata+ is a **$0.99 USD per month recurring subscription** and offers one optional free 7-day trial per eligible account. The trial requires no card, ends automatically, and never converts into a subscription; subscribing always requires explicit checkout. Paddle is the merchant of record, and the server grants paid access only after a matching transaction is provider-verified and linked to validated signed subscription state. Prior lifetime buyers remain grandfathered with no recurring charge.
 
 See [CHANGELOG.md](CHANGELOG.md) for the concise release history.
 
-Start at `/` for the exercise library and optional starter-week preview, `/planner.html` for the weekly Plan hub, `/workout.html` for Train, `/discover.html#progressWorkspace` for Progress, and `/account.html` for account and access management. Existing Discover tool hashes remain supported; legacy Today and Plan hashes redirect to their primary destinations. A guest week stays on the device through signup and requires an explicit claim, compare, or keep choice before replacing an account plan.
+Start at `/` for the no-account recommendation and complete-week preview, `/planner.html` for free manual planning, or `/discover.html` for the private Strata+ Today/Plan/Progress/Explore workspace. A guest week remains on the device through signup and is never allowed to overwrite an account Plan without a visible claim, compare, or keep choice. Signed-in plans, workouts, optional check-ins, training blocks, and approved adaptations sync to the account.
 
 ## Requirements
 
@@ -30,7 +30,7 @@ Copy `.env.example` to `.env` and fill in the required values when testing email
 
 ## Project structure
 
-Build 7.8.3 separates browser files from private server code while preserving every public URL used by visitors, Paddle, Render, and installed PWAs:
+Build 7.8.2 separates browser files from private server code while preserving every public URL used by visitors, Paddle, Render, and installed PWAs:
 
 ```text
 server.js          Stable npm/Render bootstrap
@@ -97,7 +97,7 @@ Account APIs, authentication routes, and health checks bypass the service worker
 
 ## Public pricing, support, and policies
 
-Build 7.8.3 has public, mobile-friendly pages at `/pricing`, `/contact`, `/policies`, `/terms`, `/privacy`, and `/refunds`. The Policies directory is the single public entry point for legal documents and the founder story. The published refund window is 14 calendar days after an eligible monthly charge. Subscription cancellation and refunds are separate actions. Support is available through the Contact form and at `stratafitness.official@gmail.com`.
+Build 7.8.2 has public, mobile-friendly pages at `/pricing`, `/contact`, `/policies`, `/terms`, `/privacy`, and `/refunds`. The Policies directory is the single public entry point for legal documents and the founder story. The published refund window is 14 calendar days after an eligible monthly charge. Subscription cancellation and refunds are separate actions. Support is available through the Contact form and at `stratafitness.official@gmail.com`.
 
 Paddle receives payment information; STRATA does not receive or store full payment-card or bank-account details. Do not change the displayed amount or monthly renewal interval independently of the live Paddle catalog. Members open short-lived Paddle portal links from Account to manage payment or cancellation. Before accepting payments, make sure the public operator details match the identity required by Paddle and applicable law rather than inventing missing legal information.
 

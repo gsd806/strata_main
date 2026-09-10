@@ -109,7 +109,7 @@ function progressionForWorkout(workout,histories,checkIn,progressionRule="reps-t
     const source=recordedSets(entry),targetSets=source.map((set)=>({...set})),completed=summary(source);
     const previous=findPreviousWorkout(workout,Array.isArray(histories)?histories:[],entry),prior=previous?recordedSets(previous.entry):[];
     const range=prescribedRange(entry),timed=entry.measurement==="timed",metric=timed?"seconds":"reps";
-    let action="repeat",basis="baseline",explanation="Use these recorded sets as a baseline. Complete another comparable workout before increasing the target.";
+    let action="repeat",basis="baseline",explanation="Use these recorded sets as a baseline. Complete another comparable session before increasing the target.";
     let target={...completed};
     const hold=checkIn&&(checkIn.comfort<=2||checkIn.energy<=2||checkIn.difficulty>=5);
     const ambiguous=entries.filter((candidate)=>formatKey(candidate)===formatKey(entry)).length!==1||previous?.ambiguous;
@@ -122,7 +122,7 @@ function progressionForWorkout(workout,histories,checkIn,progressionRule="reps-t
     } else if (hold) {
       basis="hold";
       const reason=checkIn.comfort<=2?`comfort ${checkIn.comfort}/5`:checkIn.energy<=2?`energy ${checkIn.energy}/5`:`difficulty ${checkIn.difficulty}/5`;
-      explanation=`You reported ${reason}. Keep the recorded targets unchanged; adjust or stop an exercise if it does not feel right.`;
+      explanation=`You reported ${reason}. Keep the recorded targets unchanged; adjust or stop a movement if it does not feel right.`;
     } else if (highEffort(entry)||previous&&highEffort(previous.entry)) {
       basis="hold";explanation="A recorded set was above RPE 8 or below 2 reps in reserve. Repeat these targets before increasing the demand.";
     } else if (!sameLoad(source)) {
@@ -130,17 +130,17 @@ function progressionForWorkout(workout,histories,checkIn,progressionRule="reps-t
     } else if (!previous) {
       // A first exposure is useful guidance even without a check-in.
     } else if (Date.parse(workout.date)-Date.parse(previous.workout.date)>28*86400000) {
-      basis="stale-baseline";explanation="The previous comparable workout was more than 28 days earlier. Repeat these recorded sets to establish a fresh baseline before increasing the target.";
+      basis="stale-baseline";explanation="The previous comparable session was more than 28 days earlier. Repeat these recorded sets to establish a fresh baseline before increasing the target.";
     } else if (!fullyCompleted(previous.entry,prior)) {
-      basis="incomplete";explanation="The previous comparable workout did not have every set completed with valid values. Repeat these recorded sets to establish a complete baseline.";
+      basis="incomplete";explanation="The previous comparable session did not have every set completed with valid values. Repeat these recorded sets to establish a complete baseline.";
     } else if (!samePrescription(entry,previous.entry)||source.length!==prior.length||!sameLoad(prior)||source[0]?.weight!==prior[0]?.weight) {
-      basis="baseline";explanation="The previous workout used a different prescription, set count, or load. Repeat these recorded sets to establish a comparable baseline.";
+      basis="baseline";explanation="The previous session used a different prescription, set count, or load. Repeat these recorded sets to establish a comparable baseline.";
     } else if (!range) {
       basis="prescription-needed";explanation="Review the exercise prescription and set a clear numeric rep range or a range in seconds before increasing these recorded targets.";
     } else if (underperformed(entry,source,prior)) {
-      basis="repeat-comparable";explanation="At least one set was below the previous comparable result, or either workout fell below the prescribed minimum. Repeat each recorded set before increasing the target.";
+      basis="repeat-comparable";explanation="At least one set was below the previous comparable result, or either session fell below the prescribed minimum. Repeat each recorded set before increasing the target.";
     } else if (timed&&progressionRule==="reps-only"||!timed&&progressionRule==="time") {
-      basis="block-rule";explanation=`This training block uses ${timed?"repetitions-only":"time-based"} progression, so these recorded targets stay unchanged for review.`;
+      basis="block-rule";explanation=`This block uses ${timed?"repetitions-only":"time-based"} progression, so these recorded targets stay unchanged for review.`;
     } else {
       const lowIndex=weakest(source),value=Number(source[lowIndex]?.[metric]),ceiling=range?.high??(timed?3600:1000);
       const bothAtTop=!!range&&source.every((set)=>Number(set[metric])>=range.high)&&prior.every((set)=>Number(set[metric])>=range.high);
@@ -153,17 +153,17 @@ function progressionForWorkout(workout,histories,checkIn,progressionRule="reps-t
           action=assisted?"reduce_assistance":"increase_load";basis="comparable-progression";
           for (const set of targetSets) { set.weight=next;set.reps=range.low; }
           target=summary(targetSets);
-          explanation=`Every set reached the top of the ${range.low}–${range.high} rep range in two comparable workouts. If reps felt controlled, try ${next} ${entry.unit}${assisted?" of assistance":""} for ${range.low} reps per set next time.`;
+          explanation=`Every set reached the top of the ${range.low}–${range.high} rep range in two comparable sessions. If reps felt controlled, try ${next} ${entry.unit}${assisted?" of assistance":""} for ${range.low} reps per set next time.`;
         }
       } else if (value<ceiling) {
         const selected=targetSets[lowIndex];
         if (selected) {
           selected[metric]=Math.min(ceiling,value+(timed?5:1));target={reps:selected.reps,weight:selected.weight,seconds:selected.seconds};
           action=timed?"increase_time":"increase_reps";basis="comparable-progression";
-          explanation=`You completed every set and matched the previous comparable workout. If ${timed?"the holds":"reps"} felt controlled, aim for ${selected[metric]} ${timed?"seconds":"reps"} on set ${lowIndex+1}; keep the other sets unchanged.`;
+          explanation=`You completed every set and matched the previous comparable session. If ${timed?"the holds":"reps"} felt controlled, aim for ${selected[metric]} ${timed?"seconds":"reps"} on set ${lowIndex+1}; keep the other sets unchanged.`;
         }
       } else {
-        basis="at-target";explanation=bothAtTop?"You have reached the prescribed target. Repeat these sets or review the prescription before increasing it.":"Every set reached the top of the range this time. Repeat these targets; two comparable workouts at the top are needed before a load change.";
+        basis="at-target";explanation=bothAtTop?"You have reached the prescribed target. Repeat these sets or review the prescription before increasing it.":"Every set reached the top of the range this time. Repeat these targets; two comparable sessions at the top are needed before a load change.";
       }
     }
     suggestions.push({exerciseId:entry.exerciseId,entryId:entry.id,name:EXERCISE_BY_ID.get(entry.exerciseId)?.name||entry.exerciseId,

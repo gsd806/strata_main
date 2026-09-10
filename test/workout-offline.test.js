@@ -5,7 +5,7 @@ const assert=require("node:assert/strict");
 const {readFileSync}=require("node:fs");
 const {join}=require("node:path");
 
-const BUILD="7.8.3";
+const BUILD="7.8.2";
 const ROOT=join(__dirname,".."),read=(path)=>readFileSync(join(ROOT,path),"utf8");
 
 test("the service worker uses a generic offline workout shell without caching private pages or APIs",()=>{
@@ -33,8 +33,7 @@ test("offline continuation is bound to a prior account, expiry, exact draft, and
   assert.match(offline,/identity\.user\?\.discovery\?\.active!==true/);
   assert.match(offline,/Number\(latest\.revision\)!==Number\(state\.record\.workout\.revision\)/);
   assert.match(offline,/"Conflict — Review"/);
-  assert.match(html,/Changes stay on this device until you reconnect and confirm the original account and active access/);
-  assert.match(html,/If another version exists, you choose which changes to keep/);
+  assert.match(html,/This shell contains no cached account page or private API response/);
   assert.match(html,/Saved on device/);
   assert.match(html,/Sync pending/);
 });

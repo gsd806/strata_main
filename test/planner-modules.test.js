@@ -99,18 +99,3 @@ test("planner entrypoint composes bounded modules in dependency order",()=>{
   assert.ok(main.split("\n").length<700,"planner orchestration should stay focused after workflow extraction");
   for(const globalName of ["StrataPlannerConflicts","StrataPlannerTemplates","StrataPlannerSharing","StrataPlannerActivation"])assert.match(main,new RegExp(`globalThis\\.${globalName}`),`entrypoint should explicitly compose ${globalName}`);
 });
-
-test("Plan hub keeps the week primary and groups optional tools without duplicate controls",()=>{
-  const html=readFileSync(join(ROOT,"public","pages","planner.html"),"utf8");
-  assert.match(html,/<title>Your plan — STRATA<\/title>/);
-  assert.match(html,/<details class="planning-tools" id="planningTools">/);
-  assert.ok(html.indexOf('id="weekBoard"')<html.indexOf('id="planningTools"'),"The editable week comes before optional tools");
-  assert.ok(html.indexOf('id="weekSection"')<html.indexOf('id="libraryPanel"'),"Mobile and keyboard reading order starts with the week");
-  assert.match(html,/href="\/onboarding\.html"[\s\S]*Generate a week/);
-  for(const hash of ["sessionBuilder","trainingBlockWorkspace","monthlyPlan","communityPlans"])assert.match(html,new RegExp(`href="/discover\\.html#${hash}"`));
-  for(const id of ["manageWeekTemplates","exportWeeklyPlan","shareWeeklyPlan","copySourceDay","copyTargetDay","previewCopyDay"])assert.ok(html.indexOf(`id="${id}"`)>html.indexOf('id="planningTools"'),`${id} belongs to Planning tools`);
-  const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(match=>match[1]);assert.equal(new Set(ids).size,ids.length,"Existing controls must never be duplicated");
-  assert.match(html,/STRATA’s fixed exercise score\. It does not change based on your profile\./);
-  assert.doesNotMatch(html,/id="planInsights" open/);
-  assert.doesNotMatch(html,/>[^<]*(?:SESSION|TRAINING ARCHITECTURE|movement)[^<]*</i);
-});

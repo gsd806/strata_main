@@ -14,7 +14,7 @@ const DAYS=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunda
 const USER={id:"session-selection-member",name:"Session Selection",discovery:{active:true}};
 const CSRF="session-selection-csrf";
 const PREFERENCES={goal:"hypertrophy",level:"Advanced",days:4,equipment:[...new Set(CATALOG.map((exercise)=>exercise.equipment))],preferences:[],limitations:[]};
-const MODES=[{value:"random",label:"Random"},{value:"not-in-week",label:"Not in my week"},{value:"needs-focus",label:"Less-trained muscle targets"},{value:"preferences",label:"My preferences"}];
+const MODES=[{value:"random",label:"Random"},{value:"not-in-week",label:"Not in my week"},{value:"needs-focus",label:"Needs focus"},{value:"preferences",label:"My preferences"}];
 let browser;
 
 function fixtureWeek(){
@@ -74,7 +74,7 @@ async function fixture(t,{plan=fixtureWeek(),workouts=focusHistory(),historyAvai
   await page.locator("#sessionBuilder").waitFor({state:"visible"});
   await page.waitForFunction(()=>!globalThis.document.querySelector("#sessionStatus")?.textContent?.startsWith("Loading"));
   if(historyAvailable)await page.waitForFunction(()=>globalThis.document.querySelector("#progressSessions")?.textContent!=="—"||globalThis.document.querySelector("#progressFirstWorkout")?.hidden===false);
-  else await page.waitForFunction(()=>globalThis.document.querySelector("#progressRetry")?.hidden===false);
+  else await page.waitForFunction(()=>globalThis.document.querySelector("#todayPreviousValue")?.textContent==="History unavailable");
   return{page,writes,errors,unexpected,savedPlan:()=>structuredClone(savedPlan)};
 }
 async function selectedIds(page){return page.locator("#sessionResults .session-result-card [data-open-detail]").evaluateAll((nodes)=>nodes.map((node)=>node.getAttribute("data-open-detail")));}
@@ -92,11 +92,8 @@ test("session choices honor muscle targets, invalidate stale previews, and save 
   const choices=await page.locator("#sessionSelectionMode option").evaluateAll((nodes)=>nodes.map((node)=>({value:node.value,label:node.textContent.trim()})));
   assert.deepEqual(choices,MODES);assert.equal(await page.locator("#sessionSelectionMode").inputValue(),"random");assert.equal(await page.locator("#sessionAddAll").isHidden(),true);
   await page.selectOption("#sessionLength","20");await page.selectOption("#sessionMuscleGroup","chest");await page.selectOption("#sessionMuscleTarget","Upper chest");
-  assert.equal(await page.locator("#sessionBuilder .button-accent:visible").count(),1);
   const combinations=new Set();
   for(let build=0;build<4;build+=1)combinations.add((await generate(page)).slice().sort().join(","));
-  assert.equal(await page.locator("#sessionBuilder .button-accent:visible").count(),1,"A built workout gives the Add action primary emphasis");
-  assert.equal(await page.locator("#sessionBuilder .button-accent:visible").getAttribute("id"),"sessionAddAll");
   assert.ok(combinations.size>1,"Repeated random builds must draw fresh movement choices");
   for(const {value} of MODES){
     await page.selectOption("#sessionSelectionMode",value);

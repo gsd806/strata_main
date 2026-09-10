@@ -97,7 +97,7 @@ test("release version, cache keys, asset URLs, and catalog claims stay aligned",
   const serviceWorker=read("service-worker.js");
   const pages=["index.html","account.html","verify-email.html","forgot-password.html","reset-password.html","delete-account.html","admin.html","planner.html","discover.html","onboarding.html","workout.html","workout-offline.html","install.html","offline.html","pricing.html","contact.html","policies.html","terms.html","privacy.html","refunds.html"];
 
-  assert.equal(version,"7.8.3");
+  assert.equal(version,"7.8.2");
   assert.match(serviceWorker,new RegExp(`const BUILD="${versionPattern}";`));
   assert.match(serviceWorker,/const CACHE_PREFIX="strata-static-";/);
   assert.match(serviceWorker,/const STATIC_CACHE=`\$\{CACHE_PREFIX\}\$\{BUILD\}`;/);
@@ -132,7 +132,7 @@ test("release version, cache keys, asset URLs, and catalog claims stay aligned",
   },{}));
   assert.ok(perGroup.length===8&&perGroup.every((count)=>count===25));
 
-  assert.match(read("pages/index.html"),/Exercises — STRATA/i);
+  assert.match(read("pages/index.html"),/STRATA — Your Next Workout, Ready/i);
   assert.match(read("pages/index.html"),/id="catalogTotal">200</);
   assert.match(read("pages/discover.html"),/id="catalogTotal">200</);
   assert.match(read("pages/planner.html"),/id="libraryCount">200</);
@@ -198,7 +198,7 @@ test("every ordinary app page exposes consistent PWA and mobile metadata",()=>{
 
   const workoutOffline=read("pages/workout-offline.html");
   assert.match(workoutOffline,/name="viewport"[^>]*viewport-fit=cover/i);
-  assert.match(workoutOffline,/Log sets on this device. Reconnect to review and sync your workout/i);
+  assert.match(workoutOffline,/This shell contains no cached account page or private API response/i);
   assert.match(workoutOffline,/id="syncWorkout"[^>]*>Review &amp; sync</i);
   assert.doesNotMatch(workoutOffline,/src="\/pwa\.js/i,"the cached recovery shell must not register another worker");
 });
@@ -348,7 +348,7 @@ test("install guide is beginner-friendly, device-specific, and progressively enh
   assert.match(html,/no App Store download/i);
   assert.match(html,/No app-store account/);
   assert.match(html,/Updates automatically/);
-  assert.match(html,/uses your existing account/i);
+  assert.match(html,/account still syncs across your devices/i);
   assert.match(html,/saved changes still need an internet connection/i);
   for(const platform of ["ios","android","desktop-chrome","desktop-edge"]) {
     const card=html.match(new RegExp(`<article[^>]+data-platform="${platform}"[\\s\\S]*?<\\/article>`));

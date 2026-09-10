@@ -21,7 +21,7 @@ test("plan analysis explains actual volume, timing, coverage, equipment, and rep
   assert.ok(result.equipment.some(({label})=>label==="Dumbbells"));
   assert.deepEqual(result.duplicates[0].uniqueDays,["Monday","Wednesday","Friday"]);
   assert.ok(result.alerts.some(({id})=>id==="high-frequency-repeats"));
-  assert.match(result.nextAction,/Review repeated exercises/);
+  assert.match(result.nextAction,/Review repeated movements/);
 });
 
 test("analysis flags only observable density and never invents recovery claims",()=>{

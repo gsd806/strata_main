@@ -123,7 +123,7 @@ function openReplacement(day,instanceId){
   const item=itemByInstance(day,instanceId);if(!state.ready||state.conflictDraft||!item)return false;
   state.replacement={day,instanceId,exerciseId:item.exerciseId,revision:state.revision};
   el("replaceExerciseSearch").value="";
-  el("replaceExerciseDescription").textContent=`Replace ${exerciseById(item.exerciseId)?.name||"this exercise"} on ${day}. Keep ${item.sets} sets × ${item.reps}. Review the prescription for the new exercise.`;
+  el("replaceExerciseDescription").textContent=`Replace ${exerciseById(item.exerciseId)?.name||"this exercise"} on ${day}. Keep ${item.sets} sets × ${item.reps}. Review the prescription for the new movement.`;
   renderReplacementOptions();el("replaceExerciseDialog").showModal();focusSoon("#replaceExerciseSearch");return true;
 }
 function renderReplacementOptions(){
@@ -131,14 +131,14 @@ function renderReplacementOptions(){
   const exercises=state.exercises.filter((exercise)=>exercise.id!==state.replacement?.exerciseId&&(!query||`${exercise.name} ${exercise.sub} ${exercise.equipment}`.toLowerCase().includes(query)));
   el("replaceExerciseSelect").innerHTML='<option value="">Choose a replacement</option>'+exercises.map((exercise)=>`<option value="${escapeHtml(exercise.id)}">${escapeHtml(exercise.name)} · ${escapeHtml(exercise.equipment)}</option>`).join("");
   el("replaceExerciseSelect").value=exercises.some((exercise)=>exercise.id===current)?current:"";
-  el("replaceExerciseStatus").textContent=`${exercises.length} matching exercises. Your sets and reps will be retained.`;
+  el("replaceExerciseStatus").textContent=`${exercises.length} matching movements. Your sets and reps will be retained.`;
   el("confirmReplaceExercise").disabled=!el("replaceExerciseSelect").value;
 }
 function confirmReplacement(){
   const pending=state.replacement,id=el("replaceExerciseSelect").value,item=pending&&itemByInstance(pending.day,pending.instanceId);
   if(!pending||!state.ready||state.conflictDraft||state.revision!==pending.revision||!item||item.exerciseId!==pending.exerciseId){el("replaceExerciseStatus").textContent="Your week changed while this dialog was open. Close it and choose the exercise again.";return false;}
   if(!exerciseById(id)||id===item.exerciseId)return false;
-  item.exerciseId=id;state.replacement=null;el("replaceExerciseDialog").close();renderWeek(instanceSelector("data-replace-item",item.instanceId));queueSave();showToast("Exercise replaced. Sets and reps were retained; adjust them for this exercise.");return true;
+  item.exerciseId=id;state.replacement=null;el("replaceExerciseDialog").close();renderWeek(instanceSelector("data-replace-item",item.instanceId));queueSave();showToast("Exercise replaced. Sets and reps were retained; adjust them for this movement.");return true;
 }
 const templateActions=TEMPLATES.createController({
   state,el,storage:localStorage,days:DAYS,makeId,escapeHtml,validateWeekPlan,planConflictSummary,firstTrainingDay:STATE.firstTrainingDay,persistSelectedDay,renderWeek,renderLibrary,queueSave,renderUndo,showToast,focusSoon
@@ -150,7 +150,6 @@ function instanceSelector(attribute,instanceId){return `[${attribute}="${String(
 function setReady(ready){
   state.ready=ready;
   el("plannerSearch").disabled=!ready;
-  el("editWeeklyPlan").disabled=!ready;
   el("exportWeeklyPlan").disabled=!ready;
   el("shareWeeklyPlan").disabled=!ready;
   el("retryPlanSave").disabled=!ready;
@@ -187,7 +186,7 @@ function downloadWeeklyPlan(){
   const url=URL.createObjectURL(blob),link=document.createElement("a");
   link.href=url;link.download=`strata-weekly-plan-${new Date().toISOString().slice(0,10)}.json`;link.hidden=true;
   document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
-  showToast("Weekly plan downloaded. Import it from Templates and import in Planning tools.");
+  showToast("Weekly plan downloaded. Import it from Week templates or in Strata+.");
 }
 
 function planMovementCount(plan=state.plan){
@@ -218,7 +217,7 @@ function resetLibraryWindow(){state.libraryLimit=libraryPageSize();}
 function renderLibrary(){
   const items=filteredExercises(),visibleItems=items.slice(0,state.libraryLimit);
   el("libraryCount").textContent=items.length;
-  el("libraryResultStatus").textContent=items.length?`Showing ${visibleItems.length} of ${items.length} matching exercise${items.length===1?"":"s"}.`:`No matching exercises.`;
+  el("libraryResultStatus").textContent=items.length?`Showing ${visibleItems.length} of ${items.length} matching movement${items.length===1?"":"s"}.`:`No matching movements.`;
   el("libraryList").innerHTML=RENDER.libraryMarkup(items,{selectedDay:state.selectedDay,visibleLimit:state.libraryLimit,pageSize:libraryPageSize()});
   renderMobileHandoff();
 }
@@ -243,36 +242,27 @@ function renderWeek(focusSelector=null){
 }
 
 function renderSummary(){
-  const total=planMovementCount(),trainingDays=DAYS.filter((day)=>state.plan.days[day].length).length;
-  const totalSets=DAYS.reduce((sum,day)=>sum+state.plan.days[day].reduce((count,item)=>count+Number(item.sets||0),0),0),restConflict=hasRestConflict();
-  const peak=Math.max(1,...DAYS.map((day)=>state.plan.days[day].length)),distribution=DAYS.map((day)=>`${day}: ${state.plan.days[day].length} exercises`).join(", ");
-  const next=nextScheduledDay(),plusActive=state.user?.discovery?.active===true;
-  let guidance;
-  if(restConflict)guidance={title:"A rest day still has exercises.",detail:`Move exercises off ${restDays().filter((day)=>state.plan.days[day].length).join(", ")} before saving.`,href:"",action:""};
-  else if(!total)guidance={title:"You have not built a weekly plan yet.",detail:"Choose a day, then add exercises from the library.",href:"",action:""};
-  else guidance={title:next?.isToday?`${next.day} has ${next.movements} scheduled exercise${next.movements===1?"":"s"}.`:"Nothing is scheduled for today.",detail:next?.isToday?"Edit the exercises, sets, and reps below.":`Your next workout is ${next?.day}. You can choose another day or edit your week.`,href:plusActive?`/workout.html?day=${encodeURIComponent(next?.day||"")}`:"",action:plusActive?`Open ${next?.day} in Train`:""};
-  el("editWeeklyPlan").innerHTML=`${total?"Edit week":"Build your first week"} <span aria-hidden="true">→</span>`;
-  el("weekSection").dataset.empty=String(!total);
-  el("weekSummary").innerHTML=`<div class="summary-stat"><span>Exercises</span><strong>${total}</strong></div><div class="summary-stat"><span>Training days</span><strong>${trainingDays}</strong></div><div class="summary-stat"><span>Working sets</span><strong>${totalSets}</strong></div><div class="summary-stat ${restConflict?"summary-warning":""}"><span>Rest days</span><strong>${restDays().length}</strong></div><section class="week-readiness ${restConflict?"needs-attention":"plan-overview"}" aria-label="Plan guidance"><div><strong>${guidance.title}</strong><p>${guidance.detail}</p></div>${guidance.href?`<a href="${guidance.href}">${guidance.action} <span aria-hidden="true">→</span></a>`:""}</section>`;
-  el("weekDistribution").innerHTML=`<div class="week-distribution" role="img" aria-label="Weekly exercise distribution. ${distribution}">${DAYS.map((day)=>`<div aria-hidden="true"><span>${state.plan.days[day].length}</span><div class="week-bar-track"><i style="height:${Math.max(3,state.plan.days[day].length/peak*100)}%" class="${isRestDay(day)?"is-rest":""}"></i></div><small>${day.slice(0,3)}</small></div>`).join("")}</div>`;
+  const total=DAYS.reduce((sum,day)=>sum+state.plan.days[day].length,0);
+  const trainingDays=DAYS.filter((day)=>state.plan.days[day].length).length;
+  const totalSets=DAYS.reduce((sum,day)=>sum+state.plan.days[day].reduce((count,item)=>count+Number(item.sets||0),0),0);
+  const restConflict=hasRestConflict();
+  const peak=Math.max(1,...DAYS.map((day)=>state.plan.days[day].length));
+  const distribution=DAYS.map((day)=>`${day}: ${state.plan.days[day].length} exercises`).join(", ");
+  const next=nextScheduledDay();
+  let readiness;
+  if(restConflict)readiness={tone:"needs-attention",label:"Plan check",title:"Clear the recovery conflict.",detail:`Move exercises off ${restDays().filter((day)=>state.plan.days[day].length).join(", ")} before this week can save cleanly.`,action:"",href:""};
+  else if(!total)readiness={tone:"getting-started",label:"Next move",title:"Build your first training day.",detail:"Choose a destination day, then add one movement from the library. Sets and reps remain editable.",action:"Choose a movement",href:"#libraryPanel"};
+  else {
+    const noRecovery=restDays().length===0,plusActive=state.user?.discovery?.active===true;
+    const nextDetail=`${next?.isToday?"Today":`Next scheduled: ${next?.day||"your plan"}`} · ${next?.movements||total} movement${(next?.movements||total)===1?"":"s"}.${noRecovery?" Consider marking an open day for recovery.":" Changes save automatically."}`;
+    readiness={
+      tone:noRecovery?"review-recovery":"ready",label:noRecovery?"Recovery check":plusActive?"Train-ready":"Free plan ready",title:noRecovery?"Your week is built. Recovery is unmarked.":plusActive?"Your week is ready to train.":"Your free week is ready.",
+      detail:plusActive?nextDetail:`${nextDetail} Guided workouts and set logging are included in Strata+.`,
+      action:plusActive?`Review ${next?.day||DAYS.find((day)=>state.plan.days[day].length)} workout`:"See guided workout tools",href:plusActive?`/workout.html?day=${encodeURIComponent(next?.day||DAYS.find((day)=>state.plan.days[day].length))}`:"/pricing"
+    };
+  }
+  el("weekSummary").innerHTML=`<div class="summary-stat"><span>Scheduled movements</span><strong>${total}</strong></div><div class="summary-stat"><span>Training days</span><strong>${trainingDays}</strong></div><div class="summary-stat"><span>Working sets</span><strong>${totalSets}</strong></div><div class="summary-stat ${restConflict?"summary-warning":""}"><span>Rest days</span><strong>${restDays().length}${restConflict?" · clear":""}</strong></div><div class="week-distribution" role="img" aria-label="Weekly exercise distribution. ${distribution}">${DAYS.map((day)=>`<div aria-hidden="true"><span>${state.plan.days[day].length}</span><div class="week-bar-track"><i style="height:${Math.max(3,state.plan.days[day].length/peak*100)}%" class="${isRestDay(day)?"is-rest":""}"></i></div><small>${day.slice(0,3)}</small></div>`).join("")}</div><section class="week-readiness ${readiness.tone}" aria-label="Plan guidance"><div><span>${readiness.label}</span><strong>${readiness.title}</strong><p>${readiness.detail}</p></div>${readiness.href?`<a href="${readiness.href}">${readiness.action} <span aria-hidden="true">→</span></a>`:""}</section>`;
   renderInsights();
-}
-
-function focusWeekEditor(){
-  if(!state.ready||state.accountChanged||state.conflictDraft)return;
-  const library=planMovementCount()===0,target=library?el("plannerSearch"):el("weekBoard").querySelector("[data-item-sets]")||el("weekBoard");
-  (library?el("libraryPanel"):target).scrollIntoView?.({behavior:window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches?"auto":"smooth",block:"center"});
-  target.focus?.({preventScroll:true});
-}
-
-async function loadPlanAdjustment(){
-  const notice=el("planAdjustmentNotice"),userId=String(state.user?.id||"");notice.hidden=true;
-  if(state.guest||state.user?.discovery?.active!==true)return;
-  try{
-    await verifyPlannerIdentity();const result=await api("/api/training");await verifyPlannerIdentity();
-    if(state.accountChanged||String(state.user?.id||"")!==userId||result.csrfToken!==state.csrfToken)return;
-    notice.hidden=result.adaptation?.status!=="pending";
-  }catch{notice.hidden=true;}
 }
 
 function insightRows(entries,emptyMessage){
@@ -284,9 +274,9 @@ function syncCopyDayOptions(){
   const source=el("copySourceDay"),target=el("copyTargetDay"),previousSource=source.value,previousTarget=target.value;
   const defaultSource=state.plan&&DAYS.find((day)=>state.plan.days[day].length)||"Monday";
   const sourceDay=DAYS.includes(previousSource)?previousSource:defaultSource;
-  source.innerHTML=DAYS.map((day)=>`<option value="${day}"${day===sourceDay?" selected":""}>${day} · ${state.plan?.days?.[day]?.length||0} exercises</option>`).join("");
+  source.innerHTML=DAYS.map((day)=>`<option value="${day}"${day===sourceDay?" selected":""}>${day} · ${state.plan?.days?.[day]?.length||0} movements</option>`).join("");
   const targets=DAYS.filter((day)=>day!==sourceDay),nextDay=DAYS[(DAYS.indexOf(sourceDay)+1)%DAYS.length],targetDay=targets.includes(previousTarget)?previousTarget:nextDay;
-  target.innerHTML=targets.map((day)=>`<option value="${day}"${day===targetDay?" selected":""}>${day} · ${state.plan?.days?.[day]?.length||0} exercises${isRestDay(day)?" · recovery day":""}</option>`).join("");
+  target.innerHTML=targets.map((day)=>`<option value="${day}"${day===targetDay?" selected":""}>${day} · ${state.plan?.days?.[day]?.length||0} movements${isRestDay(day)?" · recovery day":""}</option>`).join("");
   el("previewCopyDay").disabled=!state.ready||!state.plan?.days?.[sourceDay]?.length;
 }
 
@@ -295,9 +285,9 @@ function renderInsights(){
   el("planInsights").hidden=false;
   const analysis=INSIGHTS.analyzePlan(state.plan,state.exercises),largest=analysis.days.reduce((best,day)=>day.workingSets>best.workingSets?day:best,analysis.days[0]);
   el("insightMetrics").innerHTML=`<div><span>Planning estimate</span><strong>${analysis.metrics.estimatedMinutes} min</strong><small>sets + transitions</small></div><div><span>Largest day</span><strong>${largest.workingSets?escapeHtml(largest.day):"—"}</strong><small>${largest.workingSets} working sets</small></div><div><span>Primary areas</span><strong>${analysis.muscles.length}</strong><small>catalog groups</small></div><div><span>Equipment setups</span><strong>${analysis.equipment.length}</strong><small>across the week</small></div>`;
-  el("insightMuscles").innerHTML=insightRows(analysis.muscles,"Add exercises to see primary-muscle distribution.");
-  el("insightPatterns").innerHTML=insightRows(analysis.patterns,"Add exercises to see pattern distribution.");
-  el("insightEquipment").innerHTML=insightRows(analysis.equipment,"Add exercises to see equipment concentration.");
+  el("insightMuscles").innerHTML=insightRows(analysis.muscles,"Add movements to see primary-muscle distribution.");
+  el("insightPatterns").innerHTML=insightRows(analysis.patterns,"Add movements to see pattern distribution.");
+  el("insightEquipment").innerHTML=insightRows(analysis.equipment,"Add movements to see equipment concentration.");
   el("insightAlerts").innerHTML=analysis.alerts.length?analysis.alerts.map((alert)=>`<article class="insight-alert ${escapeHtml(alert.tone)}"><strong>${escapeHtml(alert.title)}</strong><p>${escapeHtml(alert.detail)}</p><span>${escapeHtml(alert.action)}</span></article>`).join(""):'<article class="insight-alert clear"><strong>No obvious structure conflicts</strong><p>The current week has no observable density, duplicate, high-frequency, or recovery-marker flags.</p><span>Review, then train</span></article>';
   el("insightNextAction").textContent=analysis.nextAction;
   syncCopyDayOptions();
@@ -311,7 +301,7 @@ function openCopyDayPreview(trigger){
     const skippedNames=preview.skipped.map((id)=>exerciseById(id)?.name||id),before=state.plan.days[targetDay].length,after=preview.plan.days[targetDay].length;
     state.copyPreview={...preview,baseRevision:state.revision,basePlan:JSON.stringify(state.plan)};state.copyTrigger=trigger;
     el("copyDayDialogDescription").textContent=`${sourceDay} → ${targetDay}. This is a preview; your editable week has not changed.`;
-    el("copyDayPreview").innerHTML=`<div class="copy-preview-counts"><div><span>Destination now</span><strong>${before}</strong><small>exercises</small></div><div><span>After approval</span><strong>${after}</strong><small>exercises</small></div><div><span>New copies</span><strong>${preview.added}</strong><small>exercises added</small></div></div><p><strong>${mode==="replace"?"Replace":"Add missing"}:</strong> ${mode==="replace"?`${preview.replaced} destination exercise${preview.replaced===1?"":"s"} will be replaced by copies from ${escapeHtml(sourceDay)}.`:`Existing exercises stay; exercises already on the day are not duplicated.`}</p>${skippedNames.length?`<p><strong>Already present:</strong> ${skippedNames.map(escapeHtml).join(", ")}.</p>`:""}${isRestDay(targetDay)?`<p><strong>Recovery marker:</strong> ${escapeHtml(targetDay)} will become a training day.</p>`:""}`;
+    el("copyDayPreview").innerHTML=`<div class="copy-preview-counts"><div><span>Destination now</span><strong>${before}</strong><small>movements</small></div><div><span>After approval</span><strong>${after}</strong><small>movements</small></div><div><span>New copies</span><strong>${preview.added}</strong><small>new identities</small></div></div><p><strong>${mode==="replace"?"Replace":"Add missing"}:</strong> ${mode==="replace"?`${preview.replaced} destination movement${preview.replaced===1?"":"s"} will be replaced by copies from ${escapeHtml(sourceDay)}.`:`Existing movements stay; matching exercise IDs are not duplicated.`}</p>${skippedNames.length?`<p><strong>Already present:</strong> ${skippedNames.map(escapeHtml).join(", ")}.</p>`:""}${isRestDay(targetDay)?`<p><strong>Recovery marker:</strong> ${escapeHtml(targetDay)} will become a training day.</p>`:""}`;
     el("confirmCopyDay").checked=false;el("applyCopyDay").disabled=true;el("copyDayStatus").textContent=preview.changed?"No changes applied. Confirm only after reviewing this preview.":"The destination already matches this copy.";
     el("confirmCopyDay").disabled=!preview.changed;
     el("copyDayDialog").showModal();requestAnimationFrame(()=>el("copyDayDialogTitle").focus());
@@ -331,7 +321,7 @@ function applyCopyDayPreview(){
   const targetDay=preview.targetDay,added=preview.added;
   state.plan=copyPlan(preview.plan);state.undoRemoval=null;state.copyPreview=null;
   el("copyDayDialog").close();renderWeek();renderLibrary();queueSave();
-  showToast(`${preview.sourceDay} copied to ${targetDay}. ${added} exercise${added===1?"":"s"} added; follow the save status for confirmation.`);
+  showToast(`${preview.sourceDay} copied to ${targetDay}. ${added} movement${added===1?"":"s"} added; follow the save status for confirmation.`);
   requestAnimationFrame(()=>el("previewCopyDay").focus());
 }
 
@@ -586,23 +576,22 @@ function restoreExerciseGuideFocus(){const trigger=exerciseGuideTrigger;exercise
 function bindPlannerUIEvents(){
   EVENTS.bindPlannerEvents({document,window,location,el,state,searchDebounceMs:SEARCH_DEBOUNCE_MS,actions:{
     api,init,addExercise,moveItem,persistSelectedDay,renderLibrary,renderFilters,resetLibraryWindow,openExerciseGuide,instanceSelector,renderWeek,showToast,openReplacement,removeItem,setRestDay,moveWithinDay,libraryPageSize,unpublishSharedPlan,updatePrescriptionInput,
-    downloadWeeklyPlan,focusWeekEditor,undoLastRemoval,openTemplates,saveWeekTemplate,weekTemplates,previewTemplate,importWeekTemplate,useWeekTemplate,deleteWeekTemplate,syncCopyDayOptions,openCopyDayPreview,applyCopyDayPreview,closeCopyDayPreview,renderReplacementOptions,confirmReplacement,restoreExerciseGuideFocus,selectRecoveredDraft,
+    downloadWeeklyPlan,undoLastRemoval,openTemplates,saveWeekTemplate,weekTemplates,previewTemplate,importWeekTemplate,useWeekTemplate,deleteWeekTemplate,syncCopyDayOptions,openCopyDayPreview,applyCopyDayPreview,closeCopyDayPreview,renderReplacementOptions,confirmReplacement,restoreExerciseGuideFocus,selectRecoveredDraft,
     setSaveStatus,flushSave,reviewConflictDraft,keepLatestPlan,renderActivationCandidate,toggleActivationComparison,setActivationStatus,keepAccountActivationPlan,claimActivationPlan,openSharePanel,closeSharePanel,publishWeeklyPlan,loadSharedPlans,sendKeepaliveSave
   }});
 }
 
 async function init({guestOnly=false}={}){
   setReady(false);
-  el("planAdjustmentNotice").hidden=true;
   if(el("copyDayDialog").open)el("copyDayDialog").close();
   state.copyPreview=null;state.copyTrigger=null;
   hideActivationPanel();
   setSaveStatus("Loading plan…");
-  el("libraryList").innerHTML='<div class="loading">Loading exercises…</div>';
+  el("libraryList").innerHTML='<div class="loading">Loading movements…</div>';
   el("weekSummary").innerHTML="";
   el("weekBoard").innerHTML='<div class="planner-load-state">Loading your weekly plan…</div>';
   try{
-    const exercises=await api("/exercises.json?v=7.8.3");
+    const exercises=await api("/exercises.json?v=7.8.2");
     if(!Array.isArray(exercises))throw new Error("STRATA returned an incomplete exercise library.");
     state.exercises=exercises;
     let result;
@@ -616,7 +605,7 @@ async function init({guestOnly=false}={}){
     const storedAccountPlan=copyPlan(state.plan);
     const repairedRest=repairLegacyRestDay();
     state.selectedDay=STATE.readSelectedDay(localStorage,plannerSelectionContext(),state.plan);
-    el("userName").textContent=state.user?.name||"Member";
+    el("userName").textContent="Account";
     if(!state.guest&&result.user.name)el("userName").setAttribute("aria-label",`${result.user.name} account`);
     else el("userName").removeAttribute("aria-label");
     el("userName").hidden=state.guest;
@@ -626,20 +615,20 @@ async function init({guestOnly=false}={}){
     el("plannerModeNotice").innerHTML=state.guest
       ? '<strong>Free device plan.</strong> No account required. This week stays in this browser. <a href="/account.html?mode=login&amp;next=planner">Use a synced plan</a>.'
       : result.user.discovery?.active===true
-        ? '<strong>Synced account plan.</strong> Changes save across your signed-in devices. <a href="/account.html">Strata+ access</a>.'
+        ? '<strong>Synced account plan.</strong> Changes save across your signed-in devices. <a href="/discover.html">Open Strata+</a>.'
         : '<strong>Free synced plan.</strong> Changes save across your signed-in devices. <a href="/pricing">See what Strata+ adds</a>.';
     setReady(true);
     resetLibraryWindow();renderFilters();renderLibrary();renderWeek();renderShareAccess();setSaveStatus("Saved");
     const oversized=DAYS.some((day)=>state.plan.days[day].length>MAX_DAY_ITEMS)||DAYS.reduce((n,day)=>n+state.plan.days[day].length,0)>MAX_WEEK_ITEMS;
     if(oversized)el("plannerModeNotice").innerHTML+='<p><strong>Large saved draft preserved.</strong> Export a copy, then reduce to 30 exercises per day and 140 per week before syncing or importing.</p>';
-    if(!state.guest){void loadSharedPlans();void loadPlanAdjustment();}
+    if(!state.guest)void loadSharedPlans();
     if(!state.guest){const renderedPlan=state.plan;state.plan=storedAccountPlan;const recovered=offerRecoveredDraft();if(recovered){renderWeek();renderLibrary();return;}state.plan=renderedPlan;}
     if(repairedRest){queueSave();showToast("Scheduled exercises preserved. Conflicting rest markers removed.");}
     handlePendingAdd();
     if(!state.guest)offerDevicePlan();
   }catch(error){
     state.ready=false;
-    el("plannerSearch").disabled=true;el("editWeeklyPlan").disabled=true;el("exportWeeklyPlan").disabled=true;el("shareWeeklyPlan").disabled=true;
+    el("plannerSearch").disabled=true;el("exportWeeklyPlan").disabled=true;el("shareWeeklyPlan").disabled=true;
     el("plannerShell").setAttribute("aria-busy","false");el("libraryPanel").setAttribute("aria-busy","false");
     setSaveStatus("Unable to load",true);renderLoadError(error);
   }

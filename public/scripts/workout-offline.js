@@ -18,7 +18,7 @@
       return{context:{...context,authorizedUntil:timestamp(context.authorizedUntil)},record:{...record,key:context.draftKey}};
     }catch{return null;}
   }
-  function exercise(id){return state.catalog.get(id)||{name:String(id||"Exercise")};}
+  function exercise(id){return state.catalog.get(id)||{name:String(id||"Movement")};}
   function input(value,attribute,label){return `<label>${esc(label)}<input type="number" inputmode="decimal" min="0" max="1000" step="0.01" data-value="${attribute}" value="${value??""}" /></label>`;}
   function render(){
     const workout=state.record.workout,counts=W.progress(workout);
@@ -61,7 +61,7 @@
   async function initialize(){
     const restored=readContext();if(!restored){unavailable("Reconnect, sign in to the original account, and open an active workout once before continuing it offline.");return;}
     state.context=restored.context;state.record=restored.record;
-    try{const response=await fetch("/exercises.json?v=7.8.3");if(response.ok){const catalog=await response.json();state.catalog=new Map(catalog.map((item)=>[item.id,item]));}}catch{/* Exercise IDs remain usable if the public catalog is unavailable. */}
+    try{const response=await fetch("/exercises.json?v=7.8.2");if(response.ok){const catalog=await response.json();state.catalog=new Map(catalog.map((item)=>[item.id,item]));}}catch{/* Exercise IDs remain usable if the public catalog is unavailable. */}
     $("offlineUnavailable").hidden=true;$("offlineSession").hidden=false;render();$("offlineSessionTitle").focus();
   }
   $("offlineEntries").addEventListener("input",(event)=>{

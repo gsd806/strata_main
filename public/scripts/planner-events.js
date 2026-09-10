@@ -92,7 +92,6 @@
     el("exerciseGuideDialog").addEventListener("close",actions.restoreExerciseGuideFocus);
     el("draftRecoverySelect").addEventListener("change",event=>actions.selectRecoveredDraft(event.target.value));
     el("exportWeeklyPlan").addEventListener("click",actions.downloadWeeklyPlan);
-    el("editWeeklyPlan").addEventListener("click",actions.focusWeekEditor);
     el("retryPlanSave").addEventListener("click",async event=>{
       const button=event.currentTarget;
       if(state.conflictDraft){actions.reviewConflictDraft();return;}

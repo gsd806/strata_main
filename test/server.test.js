@@ -67,12 +67,12 @@ test.before(startServer);
 test.after(stopServer);
 
 test("serves rankings and gates private account pages",async()=>{
-  assert.equal(BUILD,"7.8.3");
+  assert.equal(BUILD,"7.8.2");
   const home=await request("/");
   assert.equal(home.response.status,200);
   assert.equal(home.response.headers.get("cache-control"),"private, no-store");
   assert.match(home.response.headers.get("vary"),/Cookie/i);
-  assert.match(home.data,/Choose your exercises/);
+  assert.match(home.data,/YOUR NEXT<br \/>WORKOUT/);
   assert.match(home.data,/id="signupButton"[^>]*>Sign up/);
   assert.match(home.data,/id="accountButton"[^>]*>Log in/);
   assert.match(home.data,BUILD_LABEL);
@@ -171,12 +171,12 @@ test("creates an account with a private default plan",async()=>{
   assert.equal(signedInHome.response.headers.get("cache-control"),"private, no-store");
   assert.match(signedInHome.data,/Test profile/);
   assert.match(signedInHome.data,/id="signupButton"[^>]* hidden/);
-  assert.match(signedInHome.data,/id="discoverButton"[^>]*href="\/pricing"[^>]*>View Strata\+ access/);
+  assert.match(signedInHome.data,/id="discoverButton"[^>]*href="\/pricing"[^>]*>Unlock Strata\+/);
 
   const plannerPage=await request("/planner.html",{headers:{Cookie:signup.cookie}});
   assert.equal(plannerPage.response.status,200);
   assert.equal(plannerPage.response.headers.get("cache-control"),"no-cache");
-  assert.match(plannerPage.data,/Your plan/);
+  assert.match(plannerPage.data,/BUILD YOUR/);
   assert.match(plannerPage.data,BUILD_LABEL);
 
   const discoverPage=await request("/discover.html",{headers:{Cookie:signup.cookie},redirect:"manual"});
@@ -435,7 +435,7 @@ test("keeps unpaid accounts out of Strata+ while the free planner remains availa
 
   const planner=await request("/planner.html",{headers:{Cookie:signup.cookie}});
   assert.equal(planner.response.status,200);
-  assert.match(planner.data,/Your plan/);
+  assert.match(planner.data,/BUILD YOUR/);
   const plan=await request("/api/plan",{headers:{Cookie:signup.cookie}});
   assert.equal(plan.response.status,200);
 

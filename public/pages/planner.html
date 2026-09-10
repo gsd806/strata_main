@@ -4,37 +4,36 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#10110f" />
-    <meta name="description" content="Build your weekly plan and use optional workout, training block, monthly schedule, and sharing tools." />
+    <meta name="description" content="Build an autosaved weekly training schedule with accessible day, reorder, sets, and reps controls." />
     <meta name="application-name" content="STRATA" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="STRATA" />
-    <title>Your plan — STRATA</title>
+    <title>Weekly Plan — STRATA</title>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icons/strata-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="/fonts.css?v=7.8.3" />
-    <link rel="stylesheet" href="planner.css?v=7.8.3" />
-    <link rel="stylesheet" href="/product-signals.css?v=7.8.3" />
-    <link rel="stylesheet" href="/experience.css?v=7.8.3" />
-    <script src="/motion.js?v=7.8.3"></script>
-    <link rel="stylesheet" href="/product-nav.css?v=7.8.3" />
+    <link rel="stylesheet" href="/fonts.css?v=7.8.2" />
+    <link rel="stylesheet" href="planner.css?v=7.8.2" />
+    <link rel="stylesheet" href="/product-signals.css?v=7.8.2" />
+    <link rel="stylesheet" href="/experience.css?v=7.8.2" />
+    <script src="/motion.js?v=7.8.2"></script>
   </head>
   <body>
     <a class="skip-link" href="#weekTitle">Skip to weekly plan</a>
     <header class="planner-header">
-      <div class="planner-identity"><a class="brand" href="/" aria-label="STRATA home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>STRATA</span></a><div class="header-center"><span class="live-dot" aria-hidden="true"></span><span id="saveStatus" role="status" aria-live="polite" aria-atomic="true">Loading plan…</span><button class="save-retry" id="retryPlanSave" type="button" hidden>Retry</button></div></div>
-      <nav class="planner-primary-nav planner-primary-nav-desktop" aria-label="Primary navigation"><a href="/" data-product-owner="exercises">Exercises</a><a href="/planner.html" data-product-owner="plan" aria-current="page">Plan</a><a href="/workout.html" data-product-owner="train">Train</a><a href="/discover.html#progressWorkspace" data-product-owner="progress">Progress</a><a href="/account.html" data-product-owner="account">Account</a></nav>
-      <div class="user-menu"><span class="account-name" id="userName" hidden>Member</span><a id="plannerSignIn" href="/account.html?mode=login&amp;next=planner" hidden>Sign in</a><button id="logoutButton" type="button" hidden>Sign out</button></div>
-      <nav class="planner-primary-nav planner-primary-nav-mobile" aria-label="Primary navigation"><a href="/" data-product-owner="exercises">Exercises</a><a href="/planner.html" data-product-owner="plan" aria-current="page">Plan</a><a href="/workout.html" data-product-owner="train">Train</a><a href="/discover.html#progressWorkspace" data-product-owner="progress">Progress</a><a href="/account.html" data-product-owner="account">Account</a></nav>
+      <div class="planner-identity"><a class="brand" href="/" aria-label="STRATA rankings"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>STRATA</span></a><div class="header-center"><span class="live-dot" aria-hidden="true"></span><span id="saveStatus" role="status" aria-live="polite" aria-atomic="true">Loading plan…</span><button class="save-retry" id="retryPlanSave" type="button" hidden>Retry</button></div></div>
+      <nav class="planner-primary-nav planner-primary-nav-desktop" aria-label="Primary navigation"><a href="/">Rankings</a><a href="/discover.html">Strata+</a><a href="/planner.html" aria-current="page">Plan</a><a href="/workout.html">Train</a></nav>
+      <div class="user-menu"><a class="account-link" id="userName" href="/account.html" hidden>Account</a><a id="plannerSignIn" href="/account.html?mode=login&amp;next=planner" hidden>Account</a><button id="logoutButton" type="button" hidden>Sign out</button></div>
+      <nav class="planner-primary-nav planner-primary-nav-mobile" aria-label="Primary navigation"><a href="/">Rankings</a><a href="/discover.html">Strata+</a><a href="/planner.html" aria-current="page">Plan</a><a href="/workout.html">Train</a></nav>
     </header>
 
     <div class="planner-mode-notice" id="plannerModeNotice" role="status"><strong>Free device plan.</strong> No account required. This week stays in this browser. <a href="/account.html?mode=login&amp;next=planner">Use a synced plan</a>.</div>
-    <nav class="planner-mobile-switcher" aria-label="Planner workspace"><a href="#libraryPanel">Exercise library <span aria-hidden="true">↓</span></a><a href="#weekTitle">This week <span aria-hidden="true">↑</span></a></nav>
+    <nav class="planner-mobile-switcher" aria-label="Planner workspace"><a href="#libraryPanel">Exercise library <span aria-hidden="true">↑</span></a><a href="#weekTitle">My week <span aria-hidden="true">↓</span></a></nav>
 
     <section class="plan-conflict-panel device-plan-panel" id="devicePlanPanel" aria-labelledby="devicePlanTitle" hidden>
       <div class="plan-conflict-heading">
-        <div><p class="eyebrow" id="devicePlanEyebrow">Saved device plan</p><h2 id="devicePlanTitle" tabindex="-1">Choose your saved week</h2></div>
+        <div><p class="eyebrow" id="devicePlanEyebrow">Your preview survived</p><h2 id="devicePlanTitle" tabindex="-1">BRING YOUR <em>WEEK WITH YOU.</em></h2></div>
         <p id="devicePlanLead">Your account and this browser have different weeks. Nothing has been copied or overwritten. Compare both, then explicitly claim the device week or keep the account week.</p>
       </div>
       <label class="device-plan-source" id="devicePlanSourceLabel" hidden>Device week to review<select id="devicePlanSource"></select></label>
@@ -54,7 +53,7 @@
 
     <section class="plan-conflict-panel" id="planConflictPanel" aria-labelledby="planConflictTitle" hidden>
       <div class="plan-conflict-heading">
-        <div><p class="eyebrow">Save conflict</p><h2 id="planConflictTitle" tabindex="-1">Choose which week to keep</h2></div>
+        <div><p class="eyebrow">Save conflict</p><h2 id="planConflictTitle" tabindex="-1">CHOOSE WHICH <em>WEEK TO KEEP.</em></h2></div>
         <p id="planConflictMessage">Your account changed in another tab or device. Nothing has been overwritten. Compare both copies, then keep the account version or review your unsaved changes before explicitly saving them.</p>
       </div>
       <label class="draft-recovery-label" id="draftRecoveryLabel" hidden>Other recoverable drafts on this device<select id="draftRecoverySelect"></select></label>
@@ -72,51 +71,40 @@
     <p class="draft-storage-notice" id="draftStorageNotice" role="alert" hidden>This browser cannot keep a recovery draft. Keep this page open until your changes show Saved, or export your week before leaving.</p>
 
     <main class="planner-shell" id="plannerShell" aria-busy="true">
-      <section class="week-section" id="weekSection" aria-labelledby="weekTitle">
-        <div class="week-toolbar">
-          <div><p class="eyebrow">Weekly plan</p><h1 id="weekTitle" tabindex="-1">Your plan</h1><p class="week-intro">Choose what you train each day, then use the optional tools when you need more structure.</p></div>
-          <button class="dark-button week-primary-action" id="editWeeklyPlan" type="button" disabled>Build your first week <span aria-hidden="true">→</span></button>
+      <aside class="library-panel" id="libraryPanel" aria-label="Exercise library" aria-busy="true" tabindex="-1">
+        <div class="library-heading"><div><p>Exercise library</p><span>Ranked by STRATA FitScore</span></div><strong id="libraryCount">200</strong></div>
+        <label class="planner-search"><span class="sr-only">Search exercise library</span><span aria-hidden="true">⌕</span><input id="plannerSearch" type="search" placeholder="Search all movements" disabled /></label>
+        <div class="planner-day-picker">
+          <div class="planner-day-picker-heading"><span id="quickAddDayLabel">Add exercises to</span><strong id="quickAddDayValue">Monday</strong></div>
+          <div class="planner-day-chips" id="plannerDayNav" role="group" aria-labelledby="quickAddDayLabel"></div>
         </div>
-        <div class="this-week-heading"><div><h2 id="thisWeekTitle">This week</h2><p>Your weekly plan contains the workouts assigned to each day.</p></div><button class="outline-button" id="undoPlanRemoval" type="button" disabled>Undo removal <span aria-hidden="true">↶</span></button></div>
-        <div class="week-summary" id="weekSummary" aria-label="Plan summary"></div>
-        <p class="plan-adjustment-notice" id="planAdjustmentNotice" hidden><a href="/discover.html#trainingBlockWorkspace">Review a suggested change to your weekly plan <span aria-hidden="true">→</span></a></p>
-        <p class="week-scroll-hint" id="weekScrollHint"><span aria-hidden="true">↔</span> Scroll sideways to see all seven days. Edit sets and reps directly on each exercise.</p>
-        <div class="week-board" id="weekBoard" role="region" aria-label="Weekly workout schedule" aria-describedby="weekScrollHint" aria-busy="true" tabindex="0"><div class="planner-load-state">Loading your weekly plan…</div></div>
-        <details class="planning-tools" id="planningTools">
-          <summary><span><strong>Planning tools</strong><small>Build or copy workouts, plan ahead, and reuse weeks.</small></span><i aria-hidden="true">+</i></summary>
-          <div class="planning-tools-body">
-            <section class="planning-tool-group" aria-labelledby="workoutToolsTitle">
-              <h2 id="workoutToolsTitle">Build workouts or a week</h2>
-              <a class="plan-tool-link" href="/onboarding.html"><span><strong>Generate a week <small class="plan-access-label">Strata+</small></strong><small>Preview a week from your goals, equipment, and available days before saving it.</small></span><b aria-hidden="true">→</b></a>
-              <a class="plan-tool-link" href="/discover.html#sessionBuilder"><span><strong>Workout builder <small class="plan-access-label">Strata+</small></strong><small>Create one workout from your available time, equipment, and target muscles, then add it to a day.</small></span><b aria-hidden="true">→</b></a>
-            <section class="copy-day-tool" aria-labelledby="copyDayTitle">
-              <div><small>Reuse a workout</small><h3 id="copyDayTitle">Copy a workout to another day</h3><p>Choose two days and review the exercises before applying the copy.</p></div>
-              <div class="copy-day-controls">
-                <label>Copy from<select id="copySourceDay"></select></label>
-                <label>Copy to<select id="copyTargetDay"></select></label>
-                <label>Destination behavior<select id="copyDayMode"><option value="merge">Add missing exercises</option><option value="replace">Replace destination day</option></select></label>
-                <button class="dark-button" id="previewCopyDay" type="button">Review copy <span aria-hidden="true">→</span></button>
-              </div>
-            </section>
-            </section>
-            <section class="planning-tool-group" aria-labelledby="longerPlanningTitle">
-              <h2 id="longerPlanningTitle">Longer-term planning</h2>
-              <div class="plan-tool-grid">
-                <a class="plan-tool-link" href="/discover.html#trainingBlockWorkspace"><span><strong>Training block <small class="plan-access-label">Strata+</small></strong><small>Repeat and review your weekly plan over four to eight weeks.</small></span><b aria-hidden="true">→</b></a>
-                <a class="plan-tool-link" href="/discover.html#monthlyPlan"><span><strong>Monthly schedule <small class="plan-access-label">Strata+</small></strong><small>Place workouts on actual dates and export a calendar-style schedule.</small></span><b aria-hidden="true">→</b></a>
-              </div>
-            </section>
-            <section class="planning-tool-group" aria-labelledby="reuseWeekTitle">
-              <h2 id="reuseWeekTitle">Templates and shared plans</h2>
-              <p>Save a reusable week, import or export a backup, or copy a week shared by another member.</p>
-              <div class="toolbar-actions plan-file-actions"><button class="outline-button" id="manageWeekTemplates" type="button" disabled>Templates and import <span aria-hidden="true">▧</span></button><button class="outline-button" id="exportWeeklyPlan" type="button" disabled>Export week <span aria-hidden="true">↓</span></button><button class="outline-button share-week-button" id="shareWeeklyPlan" type="button" aria-controls="shareWeeklyPanel" aria-expanded="false" disabled>Share week <span aria-hidden="true">↗</span></button></div>
-              <a class="plan-tool-link" href="/discover.html#communityPlans"><span><strong>Browse shared plans <small class="plan-access-label">Strata+</small></strong><small>Preview a member’s week before choosing whether to replace your current plan.</small></span><b aria-hidden="true">→</b></a>
+        <div class="planner-filter-heading"><span>Filter movements</span><small>Swipe for more <span aria-hidden="true">→</span></small></div>
+        <div class="planner-filter-rail"><div class="planner-filters" id="plannerFilters" role="group" aria-label="Exercise muscle filters"></div></div>
+        <p class="drag-note"><span aria-hidden="true">↗</span><span class="drag-note-wide">Drag onto any day, or choose a quick-add day and select Add. Use each card’s day and arrow controls to move it without dragging.</span><span class="drag-note-compact">Choose a day, select Add, then <a class="planner-jump-link" href="#weekTitle">view my week <span aria-hidden="true">↓</span></a></span></p>
+        <p class="sr-only" id="libraryResultStatus" role="status" aria-live="polite" aria-atomic="true"></p>
+        <div class="library-list" id="libraryList"><div class="loading">Loading movements…</div></div>
+        <div class="planner-mobile-handoff" aria-live="polite"><span id="mobileAddDestination">Add to Monday</span><a id="mobileWeekLink" href="#day-title-0">View Monday · 0 exercises</a></div>
+      </aside>
+
+      <section class="week-section" aria-labelledby="weekTitle">
+        <div class="week-toolbar">
+          <div><p class="eyebrow">Weekly training architecture</p><h1 id="weekTitle" tabindex="-1">BUILD YOUR <em>WEEK.</em></h1><p class="week-intro">Shape a balanced seven-day plan, then fine-tune sets, reps, and recovery as you go.</p></div>
+          <div class="toolbar-actions"><button class="outline-button" id="undoPlanRemoval" type="button" disabled>Undo removal <span aria-hidden="true">↶</span></button><button class="outline-button" id="manageWeekTemplates" type="button" disabled>Week templates <span aria-hidden="true">▧</span></button><button class="outline-button" id="exportWeeklyPlan" type="button" disabled>Export week <span aria-hidden="true">↓</span></button><button class="outline-button share-week-button" id="shareWeeklyPlan" type="button" aria-controls="shareWeeklyPanel" aria-expanded="false" disabled>Share week <span aria-hidden="true">↗</span></button></div>
+        </div>
+        <details class="planner-guide">
+          <summary><span>New to Plan?</span><strong>Build a weekly plan in three steps</strong><i aria-hidden="true">+</i></summary>
+          <ol class="planner-workflow" aria-label="Build a weekly plan in three steps">
+            <li><span>01</span><p><strong>Choose a day</strong><small>Set the destination in the library or on the board.</small></p></li>
+            <li><span>02</span><p><strong>Add movements</strong><small>Search, filter, then add the exercises that fit.</small></p></li>
+            <li><span>03</span><p><strong>Set your volume</strong><small>Adjust sets and reps; every change saves automatically.</small></p></li>
+          </ol>
+        </details>
         <section class="share-week-panel" id="shareWeeklyPanel" aria-labelledby="shareWeeklyTitle" hidden>
           <div class="share-week-heading">
-            <div><p class="eyebrow">Community plans</p><h2 id="shareWeeklyTitle" tabindex="-1">Share your week</h2></div>
+            <div><p class="eyebrow">Community plans</p><h2 id="shareWeeklyTitle" tabindex="-1">SHARE YOUR <em>WEEK.</em></h2></div>
             <button class="share-panel-close" id="closeShareWeekly" type="button" aria-label="Close weekly-plan sharing panel">×</button>
           </div>
-          <p class="share-week-lead">Publish a copy of your weekly plan for other members to preview and use. Publishing again updates your one shared week.</p>
+          <p class="share-week-lead">Publish a copy of your current weekly plan to the Strata+ community library. Other members can preview it and apply it to their own Plan. You can keep one shared week active at a time; publishing again updates that copy.</p>
           <div class="share-guest" id="sharePlanGuest" hidden>
             <strong>Sign in to share.</strong>
             <p>Your planner stays free. A free STRATA account is all you need to publish a week.</p>
@@ -129,78 +117,61 @@
                 <label>Short description <textarea id="sharePlanDescription" name="description" maxlength="240" rows="3" placeholder="Optional: who this week is for, its focus, or equipment used" aria-describedby="sharePlanStatus"></textarea><span id="shareDescriptionCount" aria-hidden="true">0 / 240</span></label>
               </div>
               <div class="share-privacy-note"><strong>Your display name will be visible.</strong><p>Your email address is never included. Publishing creates a community copy; editing your private plan later will not silently change that shared copy.</p></div>
-              <label class="share-confirm"><input id="sharePlanConfirm" type="checkbox" aria-describedby="sharePlanStatus" required /> <span>I want to publish this weekly plan with my display name.</span></label>
+              <label class="share-confirm"><input id="sharePlanConfirm" type="checkbox" aria-describedby="sharePlanStatus" required /> <span>I confirm that I want this plan and my display name to appear in the Strata+ community library.</span></label>
               <p class="share-plan-status" id="sharePlanStatus" role="status" aria-live="polite"></p>
-              <button class="dark-button publish-plan-button" id="publishWeeklyPlan" type="submit">Publish shared week <span aria-hidden="true">↗</span></button>
+              <button class="dark-button publish-plan-button" id="publishWeeklyPlan" type="submit">Publish to Strata+ <span aria-hidden="true">↗</span></button>
             </form>
             <section class="own-shares" aria-labelledby="ownSharesTitle">
-              <div class="own-shares-heading"><div><p class="eyebrow">Manage sharing</p><h3 id="ownSharesTitle">Your shared week</h3></div><button class="outline-button" id="refreshSharedPlans" type="button">Refresh <span aria-hidden="true">↻</span></button></div>
+              <div class="own-shares-heading"><div><p class="eyebrow">Manage sharing</p><h3 id="ownSharesTitle">YOUR SHARED WEEK.</h3></div><button class="outline-button" id="refreshSharedPlans" type="button">Refresh <span aria-hidden="true">↻</span></button></div>
               <div class="own-shared-plans" id="ownSharedPlans"><p class="share-list-empty">Loading your shared plan…</p></div>
             </section>
           </div>
         </section>
-
-            </section>
-        <details class="plan-insights" id="planInsights">
-          <summary><span><small>Plan details</small><strong>Review exercise distribution and time</strong></span><i aria-hidden="true">+</i></summary>
+        <div class="week-summary" id="weekSummary" aria-label="Plan summary"></div>
+        <details class="plan-insights" id="planInsights" open>
+          <summary><span><small>Plan evidence</small><strong>Review balance, duration, and repeats</strong></span><i aria-hidden="true">+</i></summary>
           <div class="plan-insights-body">
-            <div id="weekDistribution"></div>
-            <p class="plan-insights-boundary">Time estimates use planned sets and exercise transitions. The charts show how this week distributes exercises and sets.</p>
-            <div class="insight-metrics" id="insightMetrics" aria-label="Weekly plan estimates"></div>
+            <p class="plan-insights-boundary">These are planning estimates from the exercises and sets in this week—not recovery, injury, or readiness scores. You decide whether repeated movements and uneven distribution are intentional.</p>
+            <div class="insight-metrics" id="insightMetrics" aria-label="Plan evidence summary"></div>
             <div class="insight-distributions">
               <section aria-labelledby="insightMuscleTitle"><h3 id="insightMuscleTitle">Primary muscle sets</h3><div id="insightMuscles"></div></section>
-              <section aria-labelledby="insightPatternTitle"><h3 id="insightPatternTitle">Exercise patterns</h3><div id="insightPatterns"></div></section>
+              <section aria-labelledby="insightPatternTitle"><h3 id="insightPatternTitle">Movement patterns</h3><div id="insightPatterns"></div></section>
               <section aria-labelledby="insightEquipmentTitle"><h3 id="insightEquipmentTitle">Equipment concentration</h3><div id="insightEquipment"></div></section>
             </div>
-            <section class="insight-alerts" aria-labelledby="insightAlertsTitle"><div class="insight-section-heading"><div><small>Review points</small><h3 id="insightAlertsTitle">What to review</h3></div><strong id="insightNextAction"></strong></div><div id="insightAlerts"></div></section>
-
+            <section class="insight-alerts" aria-labelledby="insightAlertsTitle"><div class="insight-section-heading"><div><small>Review points</small><h3 id="insightAlertsTitle">What deserves a decision</h3></div><strong id="insightNextAction"></strong></div><div id="insightAlerts"></div></section>
+            <section class="copy-day-tool" aria-labelledby="copyDayTitle">
+              <div><small>Copy a day</small><h3 id="copyDayTitle">Repeat structure without silent edits</h3><p>Choose a source and destination, then review a non-saving preview before anything changes.</p></div>
+              <div class="copy-day-controls">
+                <label>Copy from<select id="copySourceDay"></select></label>
+                <label>Copy to<select id="copyTargetDay"></select></label>
+                <label>Destination behavior<select id="copyDayMode"><option value="merge">Add missing movements</option><option value="replace">Replace destination day</option></select></label>
+                <button class="dark-button" id="previewCopyDay" type="button">Review copy <span aria-hidden="true">→</span></button>
+              </div>
+            </section>
           </div>
         </details>
-        <details class="planner-guide">
-          <summary><span>New to Plan?</span><strong>Build a weekly plan in three steps</strong><i aria-hidden="true">+</i></summary>
-          <ol class="planner-workflow" aria-label="Build a weekly plan in three steps">
-            <li><span>01</span><p><strong>Choose a day</strong><small>Set the destination in the library or on the board.</small></p></li>
-            <li><span>02</span><p><strong>Add exercises</strong><small>Search, filter, then add the exercises that fit.</small></p></li>
-            <li><span>03</span><p><strong>Adjust sets and reps</strong><small>Adjust sets and reps; every change saves automatically.</small></p></li>
-          </ol>
-        </details>
-          </div>
-        </details>
+        <p class="week-scroll-hint" id="weekScrollHint"><span aria-hidden="true">↔</span> Swipe or scroll sideways to review all seven days. Choose a destination day in the exercise library before selecting Add.</p>
+        <div class="week-board" id="weekBoard" role="region" aria-label="Weekly workout schedule" aria-describedby="weekScrollHint" aria-busy="true" tabindex="0"><div class="planner-load-state">Loading your weekly plan…</div></div>
       </section>
-      <aside class="library-panel" id="libraryPanel" aria-label="Exercise library" aria-busy="true" tabindex="-1">
-        <div class="library-heading"><div><p>Exercise library</p><span>Ranked by FitScore</span></div><strong id="libraryCount">200</strong></div>
-        <details class="planner-score-help"><summary>What is FitScore?</summary><p>STRATA’s fixed exercise score. It does not change based on your profile.</p></details>
-        <label class="planner-search"><span class="sr-only">Search exercise library</span><span aria-hidden="true">⌕</span><input id="plannerSearch" type="search" placeholder="Search exercises" disabled /></label>
-        <div class="planner-day-picker">
-          <div class="planner-day-picker-heading"><span id="quickAddDayLabel">Add exercises to</span><strong id="quickAddDayValue">Monday</strong></div>
-          <div class="planner-day-chips" id="plannerDayNav" role="group" aria-labelledby="quickAddDayLabel"></div>
-        </div>
-        <div class="planner-filter-heading"><span>Filter exercises</span><small>Swipe for more <span aria-hidden="true">→</span></small></div>
-        <div class="planner-filter-rail"><div class="planner-filters" id="plannerFilters" role="group" aria-label="Exercise muscle filters"></div></div>
-        <p class="drag-note"><span aria-hidden="true">↗</span><span class="drag-note-wide">Drag onto any day, or choose a quick-add day and select Add. Use each card’s day and arrow controls to move it without dragging.</span><span class="drag-note-compact">Choose a day, select Add, then <a class="planner-jump-link" href="#weekTitle">view my week <span aria-hidden="true">↓</span></a></span></p>
-        <p class="sr-only" id="libraryResultStatus" role="status" aria-live="polite" aria-atomic="true"></p>
-        <div class="library-list" id="libraryList"><div class="loading">Loading exercises…</div></div>
-        <div class="planner-mobile-handoff" aria-live="polite"><span id="mobileAddDestination">Add to Monday</span><a id="mobileWeekLink" href="#day-title-0">View Monday · 0 exercises</a></div>
-      </aside>
       <div class="signal-consent-host" data-product-signals-consent-host></div>
     </main>
 
     <dialog class="planner-dialog" id="replaceExerciseDialog" aria-labelledby="replaceExerciseTitle" aria-describedby="replaceExerciseDescription">
-      <div class="planner-dialog-heading"><h2 id="replaceExerciseTitle">Replace exercise</h2><button class="outline-button" id="closeReplaceExercise" type="button">Cancel</button></div>
+      <div class="planner-dialog-heading"><h2 id="replaceExerciseTitle">REPLACE EXERCISE.</h2><button class="outline-button" id="closeReplaceExercise" type="button">Cancel</button></div>
       <p id="replaceExerciseDescription"></p>
-      <label>Search exercises<input id="replaceExerciseSearch" type="search" autocomplete="off" placeholder="Name, muscle or equipment" /></label>
+      <label>Search movements<input id="replaceExerciseSearch" type="search" autocomplete="off" placeholder="Name, muscle or equipment" /></label>
       <label>Replacement exercise<select id="replaceExerciseSelect" aria-describedby="replaceExerciseStatus"></select></label>
       <p class="planner-dialog-status" id="replaceExerciseStatus" role="status" aria-live="polite"></p>
       <button class="dark-button" id="confirmReplaceExercise" type="button" disabled>Confirm replacement</button>
     </dialog>
 
     <dialog class="planner-dialog exercise-guide-dialog" id="exerciseGuideDialog" aria-labelledby="exerciseGuideTitle">
-      <div class="planner-dialog-heading"><h2 id="exerciseGuideTitle" tabindex="-1">Exercise guide</h2><button class="outline-button" id="closeExerciseGuide" type="button" aria-label="Close exercise guide">Close</button></div>
+      <div class="planner-dialog-heading"><h2 id="exerciseGuideTitle" tabindex="-1">EXERCISE GUIDE.</h2><button class="outline-button" id="closeExerciseGuide" type="button" aria-label="Close exercise guide">Close</button></div>
       <div id="exerciseGuideBody"></div>
     </dialog>
 
     <dialog class="planner-dialog week-templates-dialog" id="weekTemplatesDialog" aria-labelledby="weekTemplatesTitle" aria-describedby="weekTemplatesDescription">
-      <div class="planner-dialog-heading"><h2 id="weekTemplatesTitle">Templates and import</h2><button class="outline-button" id="closeWeekTemplates" type="button">Close</button></div>
+      <div class="planner-dialog-heading"><h2 id="weekTemplatesTitle">WEEK TEMPLATES.</h2><button class="outline-button" id="closeWeekTemplates" type="button">Close</button></div>
       <p id="weekTemplatesDescription">Save reusable copies of your current week. Templates stay on this device, separately for each account and the free device plan. Export your week for a portable backup; import it here on another device.</p>
       <div class="template-save-row"><label>Name this week<input id="weekTemplateName" type="text" maxlength="60" autocomplete="off" placeholder="My strength week" /></label><button class="outline-button" id="saveWeekTemplate" type="button">Save week template</button></div>
       <div class="template-save-row"><label>Saved weeks<select id="weekTemplateSelect"></select></label><button class="outline-button" id="previewWeekTemplate" type="button" disabled>Preview week</button></div>
@@ -214,30 +185,30 @@
     </dialog>
 
     <dialog class="planner-dialog copy-day-dialog" id="copyDayDialog" aria-labelledby="copyDayDialogTitle" aria-describedby="copyDayDialogDescription">
-      <div class="planner-dialog-heading"><h2 id="copyDayDialogTitle" tabindex="-1">Review workout copy</h2><button class="outline-button" id="closeCopyDay" type="button">Cancel</button></div>
-      <p id="copyDayDialogDescription">Review the exercises that will be copied before confirming.</p>
+      <div class="planner-dialog-heading"><h2 id="copyDayDialogTitle" tabindex="-1">REVIEW DAY COPY.</h2><button class="outline-button" id="closeCopyDay" type="button">Cancel</button></div>
+      <p id="copyDayDialogDescription">This is a preview. Your week has not changed.</p>
       <div class="copy-day-preview" id="copyDayPreview"></div>
       <label class="template-replace-confirm"><input id="confirmCopyDay" type="checkbox" /> <span id="confirmCopyDayLabel">I reviewed this day copy and want to apply it to my editable week.</span></label>
       <p class="planner-dialog-status" id="copyDayStatus" role="status" aria-live="polite"></p>
       <button class="dark-button" id="applyCopyDay" type="button" disabled>Apply reviewed copy</button>
     </dialog>
 
-    <footer class="build-footer">STRATA · Build 7.8.3 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
+    <footer class="build-footer">STRATA · Build 7.8.2 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
     <div class="planner-toast" id="plannerToast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=7.8.3"></script>
-    <script src="/product-signals.js?v=7.8.3"></script>
-    <script src="/discovery-core.js?v=7.8.3"></script>
-    <script src="/activation-core.js?v=7.8.3"></script>
-    <script src="/plan-insights-core.js?v=7.8.3"></script>
-    <script src="/planner-logic.js?v=7.8.3"></script>
-    <script src="/planner-state.js?v=7.8.3"></script>
-    <script src="/planner-api.js?v=7.8.3"></script>
-    <script src="/planner-render.js?v=7.8.3"></script>
-    <script src="/planner-conflicts.js?v=7.8.3"></script>
-    <script src="/planner-templates.js?v=7.8.3"></script>
-    <script src="/planner-sharing.js?v=7.8.3"></script>
-    <script src="/planner-activation.js?v=7.8.3"></script>
-    <script src="/planner-events.js?v=7.8.3"></script>
-    <script src="planner.js?v=7.8.3"></script>
+    <script src="/pwa.js?v=7.8.2"></script>
+    <script src="/product-signals.js?v=7.8.2"></script>
+    <script src="/discovery-core.js?v=7.8.2"></script>
+    <script src="/activation-core.js?v=7.8.2"></script>
+    <script src="/plan-insights-core.js?v=7.8.2"></script>
+    <script src="/planner-logic.js?v=7.8.2"></script>
+    <script src="/planner-state.js?v=7.8.2"></script>
+    <script src="/planner-api.js?v=7.8.2"></script>
+    <script src="/planner-render.js?v=7.8.2"></script>
+    <script src="/planner-conflicts.js?v=7.8.2"></script>
+    <script src="/planner-templates.js?v=7.8.2"></script>
+    <script src="/planner-sharing.js?v=7.8.2"></script>
+    <script src="/planner-activation.js?v=7.8.2"></script>
+    <script src="/planner-events.js?v=7.8.2"></script>
+    <script src="planner.js?v=7.8.2"></script>
   </body>
 </html>

@@ -50,8 +50,7 @@ test("font files, homepage photographs, credits, and licenses stay bundled",()=>
   const home=read("public/pages/index.html"),homeCss=read("public/styles/styles.css");
   assert.match(homeCss,/background-image:\s*url\(["']\/images\/hero-training\.jpg["']\)/);
   assert.match(home,/src="\/images\/training-story\.jpg"/);
-  assert.doesNotMatch(home,/<section class="hero"/,"The exercise library must precede marketing content.");
-  assert.ok(home.indexOf('id="rankings"')<home.indexOf('id="preview"'),"Exercises must appear before the optional starter week.");
+  assert.match(home,/<div class="hero-credit">[\s\S]*?href="https:\/\/unsplash\.com\/photos\/a-man-doing-a-pull-up-on-a-bar-in-a-gym-ThLzcgVeU5I"[\s\S]*?Corey Young \/ Unsplash[\s\S]*?<\/div>/);
   assert.match(home,/<div class="editorial-image">[\s\S]*?href="https:\/\/unsplash\.com\/photos\/a-woman-lifting-a-barbell-in-a-gym-t7SyUNppIeA"[\s\S]*?HamZa NOUASRIA \/ Unsplash[\s\S]*?<\/div>/);
   for(const path of ["hero-training.jpg","training-story.jpg"]){
     const body=readFileSync(join(PUBLIC,"images",path));

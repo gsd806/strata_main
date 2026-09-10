@@ -16,7 +16,7 @@
       const candidate=selectedActivationCandidate();if(!candidate)return false;
       const directClaim=logic.isEmptyPlan(state.plan);state.activationDirectClaim=directClaim;
       el("devicePlanEyebrow").textContent=directClaim?"Your first week is ready":"Your preview survived";
-      el("devicePlanTitle").innerHTML=directClaim?'Save your week':'Choose your saved week';
+      el("devicePlanTitle").innerHTML=directClaim?'SAVE YOUR <em>WEEK.</em>':'BRING YOUR <em>WEEK WITH YOU.</em>';
       el("devicePlanLead").textContent=directClaim
         ? "Your account week is empty. Save this device week directly—there is no existing schedule to compare or replace."
         : "Your account and this browser have different weeks. Nothing has been copied or overwritten. Compare both, then explicitly claim the device week or keep the account week.";
@@ -41,7 +41,7 @@
       if(!candidates.length){hideActivationPanel();return false;}
       state.activationCandidates=candidates;state.activationCandidateId=candidates[0].id;
       const source=el("devicePlanSource");
-      source.innerHTML=candidates.map((candidate)=>`<option value="${escapeHtml(candidate.id)}">${escapeHtml(candidate.label)} · ${planMovementCount(candidate.plan)} exercises</option>`).join("");
+      source.innerHTML=candidates.map((candidate)=>`<option value="${escapeHtml(candidate.id)}">${escapeHtml(candidate.label)} · ${planMovementCount(candidate.plan)} movements</option>`).join("");
       source.value=state.activationCandidateId;el("devicePlanSourceLabel").hidden=candidates.length<2;
       renderActivationCandidate();el("devicePlanPanel").hidden=false;focusSoon("#devicePlanTitle");return true;
     }

@@ -37,7 +37,7 @@ class Element{
   close(){this.open=false;}
   focus(){focusedSelector=`#${this.id}`;}
   querySelector(selector){
-    if(this.id!=="libraryList"&&!(this.id==="weekBoard"&&selector==="[data-item-sets]"&&this.innerHTML.includes("data-item-sets")))return null;
+    if(this.id!=="libraryList")return null;
     return {focus(){focusedSelector=selector;}};
   }
 }
@@ -145,14 +145,13 @@ function clickSelectDay(day){
   assert.match(plannerCss,/\.library-list \{[^}]*grid-auto-rows:max-content/,"Library rows must grow with wrapped exercise names instead of clipping them");
   assert.match(html,/id="exportWeeklyPlan"[^>]*>Export week/,"Export should use a short, familiar label");
   assert.match(html,/id="shareWeeklyPlan"[^>]*>Share week/,"Community publishing should not be described as a file upload");
-  assert.match(html,/href="\/account\.html"/,"Planners should have a direct account link");
+  assert.match(html,/id="userName" href="\/account\.html"/,"Signed-in planners should have a direct account link");
   assert.equal((html.match(/class="planner-workflow"/g)||[]).length,1,"Planner onboarding should be a single compact workflow");
   assert.match(html,/Build a weekly plan in three steps/,"Planner workflow should describe its purpose to assistive technology");
   assert.match(plannerCss,/\.day-empty::before\s*\{[^}]*content:"\+"/,"Empty days should have a visible add cue");
-  assert.match(elements.get("weekSummary").innerHTML,/class="week-readiness plan-overview"/,"The weekly overview should describe its schedule without claiming readiness");
-  assert.match(elements.get("weekSummary").innerHTML,/>Open Monday in Train/,"The weekly overview should expose a secondary route to its scheduled workout");
-  assert.match(elements.get("editWeeklyPlan").innerHTML,/^Edit week /,"An existing week has one clear editing action");
-  assert.match(elements.get("weekDistribution").innerHTML,/class="week-distribution"/,"The exercise distribution remains available inside optional plan details");
+  assert.match(elements.get("weekSummary").innerHTML,/class="week-readiness ready"/,"A valid week should render clear train-ready guidance");
+  assert.match(elements.get("weekSummary").innerHTML,/>Review Monday workout/,"A signed-in train-ready week should expose one clear review action before the final start");
+  assert.match(elements.get("weekSummary").innerHTML,/class="week-distribution"/,"The planner should render its weekly distribution as a deliberate summary graphic");
 
   clickSelectDay("Tuesday");
   assert.equal(vm.runInContext("state.selectedDay",context),"Tuesday","Day chips must update the quick-add target");
@@ -260,7 +259,7 @@ function clickSelectDay(day){
   assert.equal(elements.get("plannerShell").inert,true,"Editing stays locked while the user considers the newer account copy");
   assert.equal(elements.get("planConflictPanel").hidden,false,"Conflict recovery must expose choices outside the inert planner");
   assert.match(elements.get("latestPlanSummary").innerHTML,/5–7/,"The comparison must show the latest account copy");
-  assert.match(elements.get("localPlanSummary").innerHTML,/conflicting-local-item|exercise/i,"The comparison must show the unsaved local copy");
+  assert.match(elements.get("localPlanSummary").innerHTML,/conflicting-local-item|movement/i,"The comparison must show the unsaved local copy");
   assert.equal(elements.get("retryPlanSave").textContent,"Review my changes");
   await Promise.all((elements.get("reviewLocalPlan").listeners.click||[]).map((handler)=>handler({currentTarget:elements.get("reviewLocalPlan")})));
   assert.equal(vm.runInContext("state.conflictReview",context),true);
@@ -361,7 +360,7 @@ function clickSelectDay(day){
   assert.equal(result.firstPagePreserved,true,"Load more should preserve the original first page order");
   assert.equal(result.loadMoreStillAvailable,true,"A 200-item library should have more results after 64 cards");
   assert.equal(result.focusedFirstNewCard,true,"Focus should move to the first newly revealed card");
-  assert.match(result.resultStatus,/Showing 64 of 200 matching exercises\./);
+  assert.match(result.resultStatus,/Showing 64 of 200 matching movements\./);
   const preservedPlan=vm.runInContext("copyPlan(state.plan)",context);
   vm.runInContext("state.plan=emptyPlan(); state.plan.days.Monday=Array.from({length:30},(_,i)=>({instanceId:'limit-'+i,exerciseId:state.exercises[0].id,sets:3,reps:'8-12'}));state.plan.days.Tuesday=[{instanceId:'move-limit',exerciseId:state.exercises[1].id,sets:3,reps:'8-12'}];",context);
   assert.equal(vm.runInContext("addExercise(state.exercises[0].id,'Monday')",context),false,"31st daily item must be rejected before mutation");
@@ -393,7 +392,7 @@ function clickSelectDay(day){
   assert.match(html,/id="manageWeekTemplates"/);
   assert.match(html,/<dialog[^>]+id="replaceExerciseDialog"[^>]+aria-labelledby=/,"Replacement must use an accessible modal dialog");
   assert.match(elements.get("weekBoard").innerHTML,/data-replace-item="editing-item"/);
-  assert.equal(elements.has("startPlannedWorkout"),false,"Workout starts belong in Train");
+  assert.equal(elements.has("startPlannedWorkout"),false,"Workout starts belong in Strata+");
   assert.equal(run("removeItem('Monday','editing-item')"),true);
   run("state.plan.days.Tuesday.push({instanceId:'newer-edit',exerciseId:state.exercises[1].id,sets:2,reps:'12'});queueSave();");
   assert.equal(run("undoLastRemoval()"),true,"Undo must restore only the removed item, preserving later edits");
@@ -632,29 +631,5 @@ function clickSelectDay(day){
   assert.equal(elements.get("accountChangedNotice").hidden,false);
   assert.equal(elements.get("plannerShell").inert,true);
   assert.match(run("state.draftKey"),/user-u1:/,"Account-change recovery stays scoped to the original owner");
-  // Plan hub: one primary action follows the actual weekly state.
-  reset({plan:JSON.parse(run("JSON.stringify(emptyPlan())"))});
-  assert.match(elements.get("weekSummary").innerHTML,/You have not built a weekly plan yet\./);
-  assert.match(elements.get("editWeeklyPlan").innerHTML,/^Build your first week /);
-  run("focusWeekEditor()");assert.equal(focusedSelector,"#plannerSearch","An empty plan takes keyboard focus to the exercise search");
-  reset();run("focusWeekEditor()");assert.equal(focusedSelector,"[data-item-sets]","Edit week focuses an existing prescription without another modal");
-  assert.match(elements.get("editWeeklyPlan").innerHTML,/^Edit week /);
-  assert.doesNotMatch(elements.get("weekSummary").innerHTML,/ready to train|Free plan ready|Train-ready/i);
-  run("state.plan=emptyPlan();state.plan.days[DAYS[(new Date().getDay()+7)%7]]=[{instanceId:'tomorrow',exerciseId:state.exercises[0].id,sets:3,reps:'8–12'}];renderSummary()");
-  assert.match(elements.get("weekSummary").innerHTML,/Nothing is scheduled for today\./);
-
-  // A compact adjustment appears only for this verified Plus account.
-  reset({guest:false});run("state.user.discovery={active:true}");
-  let adjustmentState="pending",adjustmentIdentity="u1",trainingReads=0;
-  context.fetch=async(path)=>{
-    if(path==="/api/me")return {ok:true,json:async()=>({user:{id:adjustmentIdentity},csrfToken:"planner-csrf"})};
-    if(path==="/api/training"){trainingReads+=1;return {ok:true,json:async()=>({adaptation:adjustmentState?{status:adjustmentState}:null,csrfToken:"planner-csrf"})};}
-    throw new Error("Unexpected adjustment request");
-  };
-  await run("loadPlanAdjustment()");assert.equal(elements.get("planAdjustmentNotice").hidden,false);
-  adjustmentState=null;await run("loadPlanAdjustment()");assert.equal(elements.get("planAdjustmentNotice").hidden,true);
-  run("state.user.discovery.active=false");const readsBefore=trainingReads;await run("loadPlanAdjustment()");assert.equal(trainingReads,readsBefore,"Free accounts do not fetch a premium training endpoint");
-  run("state.user.discovery.active=true");adjustmentState="pending";adjustmentIdentity="u2";await run("loadPlanAdjustment()");
-  assert.equal(elements.get("planAdjustmentNotice").hidden,true);assert.equal(run("state.accountChanged"),true);
-  console.log(JSON.stringify({...result,plannerCapacityGuards:true,legacyDraftPreserved:true,offlineGuestMode:true,removalUndo:true,exerciseReplacement:true,scopedWeekTemplates:true,portableWeekImport:true,accountDraftRecovery:true,multipleDraftIsolation:true,accountSwitchGuard:true,guestStaleWriteGuard:true,guestLockSnapshots:true,guestStorageRetry:true,planHubPrimaryAction:true,planAdjustmentIsolation:true},null,2));
+  console.log(JSON.stringify({...result,plannerCapacityGuards:true,legacyDraftPreserved:true,offlineGuestMode:true,removalUndo:true,exerciseReplacement:true,scopedWeekTemplates:true,portableWeekImport:true,accountDraftRecovery:true,multipleDraftIsolation:true,accountSwitchGuard:true,guestStaleWriteGuard:true,guestLockSnapshots:true,guestStorageRetry:true},null,2));
 })().catch((error)=>{console.error(error);process.exitCode=1;});

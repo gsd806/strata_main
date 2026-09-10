@@ -18,25 +18,6 @@
   color: var(--accent);
 }
 
-body nav[aria-label="Primary navigation"] [data-product-owner] {
-  min-width: 44px;
-  min-height: 44px;
-  text-transform: none;
-}
-
-nav[aria-label="Primary navigation"] [aria-current="page"] {
-  color: var(--accent, #d4f578);
-}
-
-.planner-header .planner-primary-nav-desktop [aria-current="page"] { color: var(--ink, #10110f); }
-
-@media (max-width: 680px) {
-  .install-page .install-header nav { grid-template-columns: repeat(5,minmax(0,1fr)); }
-  .install-page .install-header nav a:nth-child(n+5) { display: inline-grid; }
-  .install-page .install-header nav a:nth-child(4) { border-right: 1px solid rgba(255,255,255,.1); }
-  .install-page .install-header nav a:last-child { border-right: 0; }
-}
-
 @media (max-width: 600px) {
   header:not(.account-header) .product-nav {
     width: 100%;
@@ -65,13 +46,4 @@ nav[aria-label="Primary navigation"] [aria-current="page"] {
     padding-inline: 4px;
     font-size: 11px;
   }
-}
-
-.planner-header .account-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-@media (max-width: 480px) { .planner-header .account-name { max-width: 78px; } }
-
-@media (max-width: 760px) { .plus-studio .studio-nav-mobile { grid-template-columns: repeat(5,minmax(0,1fr)); } }
-@media (max-width: 800px) {
-  .home-page .mobile-public-nav { grid-template-columns: repeat(5,minmax(0,1fr)); }
-  body nav[aria-label="Primary navigation"] [data-product-owner] { letter-spacing: 0; padding-inline: 2px; font-size: 11px; }
 }

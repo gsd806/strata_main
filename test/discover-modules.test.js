@@ -20,8 +20,8 @@ test("Discover state creates isolated mutable workspaces from immutable configur
   const first=State.createState(),second=State.createState();
   first.shortlist.push("one");first.aggregate.set("one",{overall:5});
   assert.deepEqual(second.shortlist,[]);assert.equal(second.aggregate.size,0);
-  assert.equal(State.FEATURE_DEFAULT,"recommendations");
-  assert.deepEqual(Object.keys(State.FEATURE_CONFIG),["progress","recommendations","library","battle","profile","community","monthly","session","block","saved"]);
+  assert.equal(State.FEATURE_DEFAULT,"today");
+  assert.deepEqual(Object.keys(State.FEATURE_CONFIG).slice(0,4),["today","plan","progress","explore"]);
   assert.equal(State.LIMITS.movementBoard,4);
 });
 
@@ -39,7 +39,7 @@ test("Discover navigation owns one visible destination and dismisses transient s
   const document={body:element("body"),getElementById:id=>panels.get(id)||null,querySelectorAll:()=>links};
   let dismissed=0,activated="";
   const navigation=Navigation.createFeatureNavigation({config:State.FEATURE_CONFIG,defaultFeature:State.FEATURE_DEFAULT,state,document,window:{matchMedia:()=>({matches:true})},onDestinationChange:()=>dismissed+=1,onActivate:name=>{activated=name;}});
-  assert.equal(navigation.activate("recommendations"),true);assert.equal(activated,"recommendations");
+  assert.equal(navigation.activate("today"),true);assert.equal(activated,"today");
   assert.equal(navigation.activate("progress"),true);assert.equal(dismissed,1);assert.equal(state.activeFeature,"progress");
   assert.equal(panels.get("progressWorkspace").hidden,false);
   assert.equal([...panels.values()].filter(panel=>!panel.hidden).length,1);
@@ -60,23 +60,10 @@ test("Progress derives truthful summaries and lets the renderer replace zero car
   const workout={id:"w1",status:"completed",date:"2026-09-09",planDay:"Wednesday",startedAt:1,exerciseSummaries:[{exerciseId:"press",measurement:"reps",loadType:"external",unit:"kg",completedSets:3,maxWeight:20,maxReps:8,volume:480}]};
   const summary=Progress.snapshot({workouts:[workout],weeklyPlan,days,now});
   assert.equal(summary.adherence,"1 / 1");assert.equal(summary.volume,"480 kg·reps");assert.equal(summary.sessions,"1");
-  const nodes=new Map(["progressAdherence","progressVolume","progressConsistency","progressSessions","progressAdherenceDetail","progressVolumeDetail","progressConsistencyDetail","progressSessionsDetail","repeatImprovementScope","repeatImprovementTitle","personalBestScope","personalBestTitle","repeatImprovementList","personalBestList","progressFirstWorkout","progressFirstAction","progressHistoryContent"].map(id=>[id,{id,hidden:false,textContent:"",innerHTML:""}]));
+  const nodes=new Map(["progressAdherence","progressVolume","progressConsistency","progressSessions","progressAdherenceDetail","progressVolumeDetail","progressConsistencyDetail","progressSessionsDetail","repeatImprovementScope","repeatImprovementTitle","personalBestScope","personalBestTitle","repeatImprovementList","personalBestList","progressFirstWorkout","progressHistoryContent"].map(id=>[id,{id,hidden:false,textContent:"",innerHTML:""}]));
   const renderer=Render.createProgressRenderer({element:id=>nodes.get(id),escapeHtml:value=>String(value),exerciseName:id=>id,readableDate:value=>value,days});
   renderer.render({workouts:[],weeklyPlan,historyAvailable:true,hasMore:false,now});
   assert.equal(nodes.get("progressFirstWorkout").hidden,false);assert.equal(nodes.get("progressHistoryContent").hidden,true);
-  assert.equal(nodes.get("progressFirstAction").textContent,"Start first workout");assert.equal(nodes.get("progressFirstAction").href,"/workout.html");
-  const emptyPlan={days:{}};
-  renderer.render({workouts:[],weeklyPlan:emptyPlan,historyAvailable:true,hasMore:false,now});
-  assert.equal(nodes.get("progressFirstAction").textContent,"Build your first week");assert.equal(nodes.get("progressFirstAction").href,"/planner.html");
-  const active={id:"active /?id#one",status:"active",exerciseSummaries:[]};
-  for(const plan of [weeklyPlan,emptyPlan]){
-    renderer.render({workouts:[null,{...active,id:""},active],weeklyPlan:plan,historyAvailable:true,hasMore:false,now});
-    assert.equal(nodes.get("progressFirstWorkout").hidden,false);assert.equal(nodes.get("progressHistoryContent").hidden,true,"An active workout must not count as completed progress");
-    assert.equal(nodes.get("progressFirstAction").textContent,"Resume workout");assert.equal(nodes.get("progressFirstAction").href,"/workout.html#resume=active%20%2F%3Fid%23one");
-    assert.equal(decodeURIComponent(new URL(nodes.get("progressFirstAction").href,"https://strata.test").hash.slice("#resume=".length)),active.id);
-  }
-  renderer.render({workouts:[null,{...active,id:""},{id:"incomplete",status:"active"}],weeklyPlan:emptyPlan,historyAvailable:true,hasMore:false,now});
-  assert.equal(nodes.get("progressFirstAction").textContent,"Build your first week");
   renderer.render({workouts:[workout],weeklyPlan,historyAvailable:true,hasMore:false,now});
   assert.equal(nodes.get("progressFirstWorkout").hidden,true);assert.equal(nodes.get("progressHistoryContent").hidden,false);assert.equal(nodes.get("progressSessions").textContent,"1");
 });
@@ -84,9 +71,9 @@ test("Progress derives truthful summaries and lets the renderer replace zero car
 test("Discover catalog keeps community and personal display rules outside the page shell",()=>{
   const state=State.createState();state.aggregate.set("press",{rating_count:2,overall:4.25});
   const catalog=Catalog.createCatalog({state,aggregateFor:id=>state.aggregate.get(id),personalResult:()=>({eligible:true,match:92,reasons:[]})});
-  assert.deepEqual(catalog.communitySummary("press"),{count:2,hasRatings:true,score:"4.3",label:"4.3/5 · 2 ratings",attribution:"Rated by 2 Strata+ users"});
-  assert.equal(catalog.personalLabel({eligible:true,match:92,reasons:[]}),"92% match for you");
-  assert.equal(catalog.personalLabel({eligible:false,match:0,reasons:["equipment"]},{long:true}),"Excluded by your preferences — equipment");
+  assert.deepEqual(catalog.communitySummary("press"),{count:2,hasRatings:true,score:"8.5",label:"8.5/10 · 2 ratings",attribution:"Rated by 2 Strata+ users"});
+  assert.equal(catalog.personalLabel({eligible:true,match:92,reasons:[]}),"92% personal match");
+  assert.equal(catalog.personalLabel({eligible:false,match:0,reasons:["equipment"]},{long:true}),"Profile mismatch — equipment");
 });
 
 test("Discover detail, community, session, and sharing factories expose focused responsibilities",()=>{
@@ -100,5 +87,5 @@ test("Discover detail, community, session, and sharing factories expose focused 
   assert.equal(session.preferredDay("Tuesday"),"Tuesday");
   state.recommendations=[{exercise:{name:"Press"},result:{match:91}}];
   const sharing=Sharing.createSharing({state,titleCase:value=>value});
-  assert.deepEqual(sharing.cardLines("ranking"),{eyebrow:"Recommended exercises",title:"balanced selection",score:"91",scoreLabel:"Match for you",lines:["1. Press — 91% match"],footer:"3 days · Intermediate · community ratings separate"});
+  assert.deepEqual(sharing.cardLines("ranking"),{eyebrow:"PERSONALIZED SHORTLIST",title:"balanced selection",score:"91",scoreLabel:"TOP PERSONAL MATCH",lines:["1. Press — 91% match"],footer:"3 days · Intermediate · community ratings separate"});
 });

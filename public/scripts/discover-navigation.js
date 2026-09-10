@@ -1,9 +1,9 @@
-/* global module, require */
+/* global module */
 (function(root,factory){
-  const api=factory(typeof module==="object"&&module.exports?require("./app-navigation"):root.StrataAppNavigation);
+  const api=factory();
   if(typeof module==="object"&&module.exports)module.exports=api;
   root.StrataDiscoverNavigation=api;
-})(typeof globalThis!=="undefined"?globalThis:this,function(appNavigation){
+})(typeof globalThis!=="undefined"?globalThis:this,function(){
   "use strict";
 
   function createToastController(element,{duration=2200,setTimer=setTimeout,clearTimer=clearTimeout}={}){
@@ -22,11 +22,10 @@
   }
 
   function createFeatureNavigation({config,defaultFeature,state,document,window,onActivate=()=>{},onDestinationChange=()=>{}}){
-    let historyQueued=false,redirectingTo="";
+    let historyQueued=false;
     const element=(id)=>document.getElementById(id);
     function featureName(value){
       const raw=String(value||"").replace(/^#/,"");
-      const alias=appNavigation.featureAlias(raw);if(alias&&(Object.hasOwn(config,alias)||appNavigation.legacyDestination(raw)))return alias;
       if(Object.hasOwn(config,raw))return raw;
       return Object.keys(config).find((name)=>config[name].panelId===raw)||null;
     }
@@ -44,7 +43,6 @@
       globalThis.history?.[method]?.({feature:name},"",hash);
     }
     function activate(value,{focus=false,scroll=false,smooth=false,announce=false,historyMode="none"}={}){
-      const destination=appNavigation.legacyDestination(value);if(destination){if(redirectingTo!==destination){redirectingTo=destination;window.location?.replace?.(destination);}return true;}
       const name=featureName(value)||defaultFeature,item=config[name],panel=featurePanel(name);
       if(!panel)return false;
       const changed=Boolean(state.activeFeature&&state.activeFeature!==name);
@@ -59,10 +57,12 @@
         link.classList.toggle("active",active);
         link.setAttribute?.("aria-controls",config[target]?.panelId||"");
         link.setAttribute?.("aria-expanded",String(active));
-        if(active)link.setAttribute?.("aria-current","location");else link.removeAttribute?.("aria-current");
+        if(link.classList.contains("feature-block")||link.classList.contains("destination-link")){
+          if(active)link.setAttribute?.("aria-current","location");else link.removeAttribute?.("aria-current");
+        }
       }
-      document.body.dataset.activeFeature=name;appNavigation.updateProductNavigation({feature:name,label:item.label,document});updateFeatureHistory(name,historyMode);
-      if(announce&&element("featureStatus"))element("featureStatus").textContent=`${item.label} opened.`;
+      document.body.dataset.activeFeature=name;updateFeatureHistory(name,historyMode);
+      if(announce&&element("featureStatus"))element("featureStatus").textContent=`${item.label} workspace opened.`;
       onActivate(name);
       if(scroll||focus){
         const move=()=>{
@@ -87,11 +87,10 @@
         if(rawHash==="featureHub")return;
         const requested=featureFromLocation();
         if(rawHash&&!requested)return;
-        if(!appNavigation.legacyDestination(requested))redirectingTo="";
         activate(requested||defaultFeature,{scroll:Boolean(requested)});
       });
     }
-    function bindHistory(){window.addEventListener?.("popstate",restore);window.addEventListener?.("hashchange",restore);window.addEventListener?.("pageshow",event=>{if(event.persisted)redirectingTo="";});}
+    function bindHistory(){window.addEventListener?.("popstate",restore);window.addEventListener?.("hashchange",restore);}
     return{activate,bindHistory,featureFromLocation,featureHash,featureName,featurePanel,initialize,restore,updateFeatureHistory};
   }
 

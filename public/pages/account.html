@@ -13,46 +13,46 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icons/strata-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="/fonts.css?v=7.8.3" />
-    <link rel="stylesheet" href="account.css?v=7.8.3" />
-    <link rel="stylesheet" href="/product-nav.css?v=7.8.3" />
-    <link rel="stylesheet" href="/experience.css?v=7.8.3" />
-    <script src="/motion.js?v=7.8.3"></script>
+    <link rel="stylesheet" href="/fonts.css?v=7.8.2" />
+    <link rel="stylesheet" href="account.css?v=7.8.2" />
+    <link rel="stylesheet" href="/product-nav.css?v=7.8.2" />
+    <link rel="stylesheet" href="/experience.css?v=7.8.2" />
+    <script src="/motion.js?v=7.8.2"></script>
   </head>
   <body class="account-page-shell">
     <a class="skip-link" href="#accountPage">Skip to account</a>
     <header class="account-header product-header">
       <a class="brand" href="/" aria-label="STRATA home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>STRATA</span></a>
-      <nav class="account-nav product-nav" aria-label="Primary navigation"><a class="back-link" href="/" data-product-owner="exercises">Exercises</a><a class="back-link" href="/planner.html" data-product-owner="plan">Plan</a><a class="back-link" href="/workout.html" data-product-owner="train">Train</a><a class="back-link" href="/discover.html#progressWorkspace" data-product-owner="progress">Progress</a><a class="back-link" href="/account.html" data-product-owner="account" aria-current="page">Account</a></nav>
+      <nav class="account-nav product-nav" aria-label="Primary"><a class="back-link" href="/">Rankings</a><a class="back-link" href="/discover.html">Strata+</a><a class="back-link" href="/planner.html">Plan</a><a class="back-link" href="/workout.html">Train</a><a class="back-link" href="/account.html" aria-current="page">Account</a></nav>
     </header>
     <main class="account-page" id="accountPage" aria-busy="false">
       <section class="account-intro">
         <p class="kicker"><span></span> Private account access</p>
-        <h1>Your account</h1>
-        <p>Manage your profile, Strata+ access, billing, and account security. Sign in to sync your weekly plan across devices.</p>
+        <h1>YOUR TRAINING.<br /><em>REMEMBERED.</em></h1>
+        <p>Sign in to keep your Strata+ preferences, community ratings, weekly plan, and 31-day plan connected to one account.</p>
         <div class="activation-handoff" data-activation-handoff role="status" hidden><strong>Your week is still here.</strong><span data-activation-handoff-detail></span><small>Finish account access, then compare this device preview with the account week before anything is saved.</small></div>
         <div class="storage-state" id="storageState" role="status" aria-live="polite"><i></i><span>Checking permanent account storage…</span></div>
       </section>
 
       <section class="signed-in-card" id="signedInCard" hidden aria-labelledby="signedInTitle">
         <div class="account-dashboard-head">
-          <div><p class="kicker" id="accountGreeting">Welcome back</p><h2 id="signedInTitle">Account overview</h2><p id="signedInIdentity"></p></div>
-          <a class="account-primary-action" id="accountPrimaryAction" href="/planner.html"><span id="accountPrimaryLabel">Build your first week</span><span aria-hidden="true">→</span></a>
+          <div><p class="kicker" id="accountGreeting">Welcome back</p><h2 id="signedInTitle">YOUR NEXT MOVE.</h2><p id="signedInIdentity"></p></div>
+          <a class="account-primary-action" id="accountPrimaryAction" href="/planner.html"><span id="accountPrimaryLabel">Build your week</span><span aria-hidden="true">→</span></a>
         </div>
 
         <div class="account-training-grid">
           <section class="account-next-card" aria-labelledby="accountNextTitle">
             <p class="account-section-label" id="accountNextEyebrow">Next up</p>
-            <h3 id="accountNextTitle">Loading your week…</h3>
+            <h3 id="accountNextTitle">LOADING YOUR WEEK…</h3>
             <p id="accountNextDetail" role="status" aria-live="polite">Reading your saved plan.</p>
             <dl class="account-next-metrics" id="accountNextMetrics" hidden>
-              <div><dt>Exercises</dt><dd id="accountNextMovements">0</dd></div>
+              <div><dt>Movements</dt><dd id="accountNextMovements">0</dd></div>
               <div><dt>Working sets</dt><dd id="accountNextSets">0</dd></div>
             </dl>
           </section>
 
           <section class="account-week-card" aria-labelledby="accountWeekTitle">
-            <div class="account-section-head"><div><p class="account-section-label">Current week</p><h3 id="accountWeekTitle">This week</h3></div><strong id="accountWeekScore">—</strong></div>
+            <div class="account-section-head"><div><p class="account-section-label">Current week</p><h3 id="accountWeekTitle">WEEKLY PROGRESS</h3></div><strong id="accountWeekScore">—</strong></div>
             <progress id="accountWeekProgress" value="0" max="1" hidden aria-labelledby="accountWeekTitle" aria-describedby="accountWeekDetail">0%</progress>
             <p id="accountWeekDetail">Loading your schedule.</p>
             <ol class="account-week-days" id="accountWeekDays" aria-label="This week's training days"></ol>
@@ -62,25 +62,25 @@
         <div class="account-insight-grid">
           <section class="account-insight-card" aria-labelledby="accountWinsTitle">
             <p class="account-section-label">Saved activity</p>
-            <h3 id="accountWinsTitle">Recent workouts</h3>
+            <h3 id="accountWinsTitle">RECENT MOMENTUM</h3>
             <ul class="account-wins-list" id="accountWinsList" hidden></ul>
-            <p class="account-insight-empty" id="accountWinsEmpty">Loading recent workouts.</p>
+            <p class="account-insight-empty" id="accountWinsEmpty">Loading recent sessions.</p>
           </section>
           <section class="account-insight-card account-adaptation-card" aria-labelledby="accountAdaptationTitle">
-            <p class="account-section-label">Workout comparison</p>
-            <h3 id="accountAdaptationTitle">Complete your first workout</h3>
-            <p id="accountAdaptationDetail">Log a workout to start comparing recorded sets for the same exercise.</p>
+            <p class="account-section-label">Training signal</p>
+            <h3 id="accountAdaptationTitle">BUILD A CLEAN BASELINE.</h3>
+            <p id="accountAdaptationDetail">Complete saved sessions and STRATA will compare repeat movements without guessing about recovery or form.</p>
           </section>
         </div>
 
         <div class="account-stat-grid" aria-label="Account overview">
-          <div><span>Planned exercises</span><strong id="accountPlanCount">0</strong><small><b id="accountWorkoutDays">0</b> training days</small></div>
-          <div id="accountStrataAccess"><span>Strata+ access</span><strong id="accountAccessState">Checking</strong><small id="accountAccessDetail">Confirming access…</small></div>
-          <div><span>Member since</span><strong id="accountMemberSince">—</strong><small>Account created</small></div>
+          <div><span>Plan movements</span><strong id="accountPlanCount">0</strong><small><b id="accountWorkoutDays">0</b> training days</small></div>
+          <div><span>Strata+ access</span><strong id="accountAccessState">Checking</strong><small id="accountAccessDetail">Confirming access…</small></div>
+          <div><span>Member since</span><strong id="accountMemberSince">—</strong><small>Private account workspace</small></div>
         </div>
         <p class="account-discovery-status" id="accountDiscoveryStatus" role="status" aria-live="polite"></p>
         <section class="account-billing" id="accountBilling" aria-labelledby="accountBillingTitle" hidden>
-          <div class="account-billing-head"><div><p class="account-section-label">Billing</p><h3 id="accountBillingTitle">Monthly subscription</h3></div><strong id="accountBillingBadge">Active</strong></div>
+          <div class="account-billing-head"><div><p class="account-section-label">Billing</p><h3 id="accountBillingTitle">MONTHLY SUBSCRIPTION</h3></div><strong id="accountBillingBadge">Active</strong></div>
           <p id="accountBillingDetail">Checking your Strata+ billing status.</p>
           <div class="account-billing-actions">
             <button id="accountManageSubscription" type="button">Manage in Paddle <span aria-hidden="true">↗</span></button>
@@ -90,7 +90,7 @@
           <p class="account-billing-status" id="accountBillingStatus" role="status" aria-live="polite" tabindex="-1"></p>
         </section>
         <section class="account-self-service" aria-labelledby="accountSelfServiceTitle">
-          <div class="account-self-service-head"><p class="account-section-label">Privacy &amp; access</p><h3 id="accountSelfServiceTitle">Your account data</h3></div>
+          <div class="account-self-service-head"><p class="account-section-label">Privacy &amp; access</p><h3 id="accountSelfServiceTitle">YOUR ACCOUNT DATA</h3></div>
           <div class="account-self-service-grid">
             <div class="account-sessions" aria-labelledby="accountSessionsTitle">
               <h4 id="accountSessionsTitle">Signed-in sessions</h4>
@@ -108,10 +108,10 @@
           </div>
         </section>
         <div class="account-message signed-in-message" id="signedInMessage" role="alert" hidden></div>
-        <div class="signed-actions"><a href="/planner.html">Edit weekly plan →</a><a id="accountDiscoveryAction" href="/pricing">View Strata+ options →</a><a id="accountAdminAction" href="/admin" hidden>Open admin dashboard →</a><button id="accountLogout" type="button"><span class="button-idle">Sign out</span><span class="button-busy">Signing out…</span></button></div>
+        <div class="signed-actions"><a href="/planner.html">Edit weekly plan →</a><a id="accountDiscoveryAction" href="/pricing">Unlock Strata+ →</a><a id="accountAdminAction" href="/admin" hidden>Open admin dashboard →</a><button id="accountLogout" type="button"><span class="button-idle">Sign out</span><span class="button-busy">Signing out…</span></button></div>
         <section class="account-security" aria-labelledby="accountSecurityTitle">
           <p class="panel-index">Account controls</p>
-          <h3 id="accountSecurityTitle">Account security</h3>
+          <h3 id="accountSecurityTitle">ACCOUNT SECURITY</h3>
           <p>Reset your password through a secure link sent to your registered email. Completing a reset signs out every device. Account deletion does not cancel a Paddle subscription or refund a charge; manage those billing actions above before deleting your account.</p>
           <div class="security-actions">
             <button id="accountPasswordReset" type="button"><span class="button-idle">Email password-reset link</span><span class="button-busy">Sending reset link…</span><span aria-hidden="true">→</span></button>
@@ -124,7 +124,7 @@
 
       <section class="account-loading" id="accountLoading" aria-labelledby="accountLoadingTitle" hidden>
         <p class="kicker">Account session</p>
-        <h2 id="accountLoadingTitle">Checking your account…</h2>
+        <h2 id="accountLoadingTitle">CHECKING YOUR ACCOUNT…</h2>
         <p id="accountLoadingMessage" role="status" aria-live="polite">Confirming whether you are already signed in.</p>
         <button class="account-reload" id="accountReload" type="button" hidden>Reload current account <span aria-hidden="true">↻</span></button>
       </section>
@@ -137,7 +137,7 @@
         <div class="auth-grid">
           <article class="auth-panel" id="signupPanel" aria-labelledby="signupTitle">
             <p class="panel-index">01 / New account</p>
-            <h2 id="signupTitle" tabindex="-1">Create account</h2>
+            <h2 id="signupTitle" tabindex="-1">CREATE ACCOUNT</h2>
             <p>Build a private profile and save your plan between visits. We’ll email a 6-digit code to confirm it’s you.</p>
             <form id="signupForm" action="/auth/signup" method="post" aria-labelledby="signupTitle" aria-describedby="signupMessage">
               <div class="account-message panel-message" id="signupMessage" role="alert" tabindex="-1" hidden></div>
@@ -152,7 +152,7 @@
           </article>
           <article class="auth-panel" id="loginPanel" aria-labelledby="loginTitle">
             <p class="panel-index">02 / Returning account</p>
-            <h2 id="loginTitle" tabindex="-1">Sign in</h2>
+            <h2 id="loginTitle" tabindex="-1">SIGN IN</h2>
             <p>Use the exact email and password entered during signup.</p>
             <form id="loginForm" action="/auth/login" method="post" aria-labelledby="loginTitle" aria-describedby="loginMessage">
               <div class="account-message panel-message" id="loginMessage" role="alert" tabindex="-1" hidden></div>
@@ -168,15 +168,15 @@
         </div>
       </section>
     </main>
-    <footer class="build-footer">STRATA · Build 7.8.3 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
-    <script src="/pwa.js?v=7.8.3"></script>
-    <script src="/activation-core.js?v=7.8.3"></script>
-    <script src="/activation-handoff.js?v=7.8.3"></script>
-    <script src="account-logic.js?v=7.8.3"></script>
-    <script src="account-state.js?v=7.8.3"></script>
-    <script src="account-api.js?v=7.8.3"></script>
-    <script src="account-render.js?v=7.8.3"></script>
-    <script src="account-events.js?v=7.8.3"></script>
-    <script src="account.js?v=7.8.3"></script>
+    <footer class="build-footer">STRATA · Build 7.8.2 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
+    <script src="/pwa.js?v=7.8.2"></script>
+    <script src="/activation-core.js?v=7.8.2"></script>
+    <script src="/activation-handoff.js?v=7.8.2"></script>
+    <script src="account-logic.js?v=7.8.2"></script>
+    <script src="account-state.js?v=7.8.2"></script>
+    <script src="account-api.js?v=7.8.2"></script>
+    <script src="account-render.js?v=7.8.2"></script>
+    <script src="account-events.js?v=7.8.2"></script>
+    <script src="account.js?v=7.8.2"></script>
   </body>
 </html>
