@@ -1,5 +1,5 @@
 "use strict";
-/* global document, getComputedStyle */
+/* global document, getComputedStyle, NodeFilter */
 
 const assert=require("node:assert/strict");
 const {readFileSync}=require("node:fs");
@@ -62,6 +62,43 @@ test("Strata+ content keeps long labels and persistent controls in separate resp
         const styles=await page.evaluate(()=>{const close=getComputedStyle(document.querySelector(".detail-hero .icon-button")),kicker=getComputedStyle(document.querySelector(".detail-hero .kicker"));return{closeColor:close.color,kickerDisplay:kicker.display};});
         assert.equal(styles.closeColor,"rgb(250, 249, 245)",`detail close control must remain visible at ${width}px`);
         assert.notEqual(styles.kickerDisplay,"none",`detail heading must not become a blank bar at ${width}px`);
+      }
+    }
+  }finally{await page.close();await browser.close();}
+});
+
+test("pricing benefits keep their descriptions in the readable content column",{timeout:30_000},async()=>{
+  const options={headless:true};
+  if(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH)options.executablePath=resolve(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH);
+  const browser=await chromium.launch(options),page=await browser.newPage({viewport:{width:1252,height:900}});
+  try{
+    const pricing=read("public/pages/pricing.html"),benefits=pricing.match(/<ul class="feature-list plus-benefits">[\s\S]*?<\/ul>/)?.[0];
+    assert.ok(benefits,"pricing page must include the Strata+ benefit list");
+    const styles=`${read("public/styles/site-info.css")}\n${read("public/styles/experience.css")}`;
+    for(const width of [1440,1252,981,980,768,430,320]){
+      await page.setViewportSize({width,height:Math.max(700,Math.round(width*.75))});
+      await page.setContent(`<style>${styles}</style><body class="pricing-page"><main class="info-main"><div class="info-container pricing-grid"><article class="price-card">${benefits}</article><article class="free-card"></article></div></main></body>`);
+      const result=await layout(page),rows=await page.locator(".plus-benefits li").evaluateAll((items)=>items.map((item)=>{
+        const itemBox=item.getBoundingClientRect(),heading=item.querySelector("strong"),headingBox=heading.getBoundingClientRect(),descriptionRects=[];
+        const walker=document.createTreeWalker(item,NodeFilter.SHOW_TEXT);
+        while(walker.nextNode()){
+          const text=walker.currentNode;
+          if(!text.nodeValue.trim()||heading.contains(text))continue;
+          const range=document.createRange();range.selectNodeContents(text);
+          descriptionRects.push(...[...range.getClientRects()].filter((rect)=>rect.width>0).map((rect)=>({left:rect.left,width:rect.width})));
+        }
+        return{left:itemBox.left,width:itemBox.width,height:itemBox.height,headingLeft:headingBox.left,lineHeight:parseFloat(getComputedStyle(item).lineHeight),descriptionRects};
+      }));
+      assert.equal(rows.length,4,`pricing must keep all four benefits at ${width}px`);
+      assert.ok(result.overflow<=1,`pricing benefit list overflows ${width}px by ${result.overflow}px`);
+      for(const [index,row] of rows.entries()){
+        assert.ok(row.descriptionRects.length>0,`pricing benefit ${index+1} must expose readable copy at ${width}px`);
+        const descriptionLeft=Math.min(...row.descriptionRects.map(({left})=>left));
+        const widestLine=Math.max(...row.descriptionRects.map(({width:lineWidth})=>lineWidth));
+        const availableWidth=row.width-(row.headingLeft-row.left);
+        assert.ok(descriptionLeft>=row.headingLeft-1,`pricing benefit ${index+1} description fell into the icon column at ${width}px`);
+        assert.ok(widestLine>=Math.min(120,availableWidth*.55),`pricing benefit ${index+1} description is trapped in a ${widestLine}px text column at ${width}px`);
+        assert.ok(row.height<=row.lineHeight*10,`pricing benefit ${index+1} became ${row.height}px tall at ${width}px`);
       }
     }
   }finally{await page.close();await browser.close();}

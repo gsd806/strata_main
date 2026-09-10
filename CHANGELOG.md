@@ -1,5 +1,14 @@
 # Changelog
 
+## 7.7.1 — Pricing benefit layout
+
+- Keep every pricing benefit heading and description together in the full content column while retaining its separate checkmark column.
+- Use shrink-safe grid tracks and content wrappers for both Strata+ and free-tier benefit lists across desktop, tablet, mobile, and text-zoom layouts.
+- Add an enforced browser geometry regression at widths from 320 through 1440 px, including the reported 1252 px case, so readable text width is checked rather than overflow alone.
+- Advance the build and service-worker cache to 7.7.1 so installed PWAs receive the corrected pricing HTML and CSS.
+
+See [release guide](docs/release-7.7.1.md) and [current verification](docs/release-readiness.md).
+
 ## 7.7.0 — Founder account controls
 
 - Grant complimentary Strata+ for a custom duration, exact expiry, or until revoked, including the owner's account, while keeping the grant visible when paid access also exists.
