@@ -20,7 +20,7 @@ test("homepage exposes pricing, contact, and the public policy directory without
   const footer=home.match(/<nav class="footer-links"[\s\S]*?<\/nav>/)?.[0]||"";
   for(const route of ["/pricing","/contact","/policies"])assert.match(home,new RegExp(`href="${route}"`),`${route} homepage link`);
   for(const route of ["/terms","/privacy","/refunds"])assert.match(policies,new RegExp(`href="${route}"`),`${route} policy-directory link`);
-  assert.deepEqual(mobileLinks,[["#rankings","Rankings"],["/discover.html","Strata+"],["/planner.html","Plan"],["/workout.html","Train"]]);
+  assert.deepEqual(mobileLinks,[["/","Exercises"],["/planner.html","Plan"],["/workout.html","Train"],["/discover.html#progressWorkspace","Progress"],["/account.html","Account"]]);
   assert.equal((footer.match(/href="\/policies"/g)||[]).length,1,"homepage footer must expose one Policies destination");
   assert.doesNotMatch(footer,/href="\/(?:terms|privacy|refunds)"/,"the policy hub replaces redundant legal links in the homepage footer");
   assert.match(home,/mailto:stratafitness\.official@gmail\.com/i);
@@ -60,7 +60,7 @@ test("core footers use the policy directory instead of repeating every legal pag
 });
 
 test("published Strata+ price and refund promise are exact and consistent",()=>{
-  assert.equal(BUILD,"7.8.2");
+  assert.equal(BUILD,"7.8.3");
   const pricingHtml=read("pricing.html"),pricing=text("pricing.html"),refunds=text("refunds.html"),terms=text("terms.html");
   assert.match(pricing,/Strata\+/);
   assert.match(pricing,/\$0\.99 USD/i);
@@ -68,9 +68,9 @@ test("published Strata+ price and refund promise are exact and consistent",()=>{
   assert.match(pricing,/recurring monthly subscription/i);
   assert.match(pricing,/renews every month until canceled/i);
   assert.match(pricing,/Trials never charge you automatically/i);
-  assert.match(pricing,/session building/i);
-  assert.match(pricing,/community week previews/i);
-  assert.match(pricing,/31-day planner/i);
+  assert.match(pricing,/workout building/i);
+  assert.match(pricing,/shared week previews/i);
+  assert.match(pricing,/monthly schedule \(31 days\)/i);
   assert.match(pricing,/workout check-ins/i);
   assert.match(pricing,/Review suggested plan changes before saving/i);
   assert.match(pricing,/exercise setup and technique guides/i);
@@ -106,7 +106,8 @@ test("customer-facing product branding is Strata+ while compatibility identifier
   assert.doesNotMatch(visibleCopy,/\bDiscovery\b/);
   assert.match(manifest,/"name": "Strata\+ Studio"/);
   assert.match(read("pricing.html"),/id="buyDiscovery"/);
-  assert.match(read("discover.html"),/href="\/discover\.html"/);
+  assert.match(read("discover.html"),/id="featureHub"/);
+  assert.match(read("discover.html"),/data-feature-panel="block"/);
 });
 
 test("contact and policy pages publish the official support address and cross-links",()=>{
@@ -115,7 +116,7 @@ test("contact and policy pages publish the official support address and cross-li
   assert.match(contact,new RegExp(`mailto:${email.replace(".","\\.")}`,"i"));
   assert.match(text("contact.html"),new RegExp(email.replace(".","\\."),"i"));
   for(const page of ["pricing.html","contact.html","policies.html","terms.html","privacy.html","refunds.html"]){
-    assert.match(read(page),/class="info-nav"[^>]*>[\s\S]*href="\/planner\.html">Plan<\/a>/,`${page} Plan navigation`);
+    assert.match(read(page),/class="info-nav"[^>]*>[\s\S]*href="\/planner\.html"[^>]*>Plan<\/a>/,`${page} Plan navigation`);
   }
   for(const page of ["policies.html","terms.html","privacy.html","refunds.html"]) {
     const html=read(page);
@@ -175,4 +176,17 @@ test("public copy describes recurring checkout, cancellation, and grandfathered 
   assert.match(pricingClient,/previous monthly subscription is canceled and will not renew/);
   assert.match(pricingClient,/error\.code==="CHECKOUT_PREPARING"/);
   assert.doesNotMatch(pricingClient,/error\.status===409/,"a concurrent-checkout response must stay retryable instead of impersonating a completed payment");
+});
+
+
+test("account and support pages use functional titles and one Strata+ access destination",()=>{
+  const account=read("account.html"),pricing=read("pricing.html"),onboarding=read("onboarding.html"),install=read("install.html");
+  assert.match(account,/<h1>Your account<\/h1>/);
+  assert.match(account,/id="accountStrataAccess"/);
+  assert.match(account,/Signed-in sessions/);
+  assert.match(pricing,/id="pageTitle">Strata\+ access<\/h1>/);
+  assert.match(pricing,/id="openDiscovery" href="\/planner\.html"[^>]*>Open Plan/);
+  assert.match(onboarding,/id="setupTitle">Set up your week<\/h1>/);
+  assert.match(install,/id="installTitle">Install STRATA<\/h1>/);
+  for(const copy of [pricing,onboarding])assert.doesNotMatch(visibleText(copy),/\b(?:sessions?|movements?|Training Memory|studio)\b/i);
 });

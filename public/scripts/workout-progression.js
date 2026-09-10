@@ -38,26 +38,26 @@
       if(!state.memoryReady)return state.memoryError?unavailable("Saved history is unavailable. Enter today’s values manually until it can be checked."):{status:"loading",explanation:"Checking your saved training before choosing the next target…"};
       if(!["reps","timed"].includes(entry.measurement)||!["external","bodyweight","assisted"].includes(entry.loadType)||!["kg","lb"].includes(entry.unit))return unavailable();
       const memory=memoryFor(entry);
-      if(!memory)return{status:"baseline",explanation:"Log this exercise once to establish a baseline for your next session."};
-      if(!Array.isArray(memory.sets)||!memory.sets.length)return unavailable("No sets were completed for this exercise in the latest matching session. Enter today’s values to establish a fresh baseline.");
+      if(!memory)return{status:"baseline",explanation:"Log this exercise once to establish a baseline for your next workout."};
+      if(!Array.isArray(memory.sets)||!memory.sets.length)return unavailable("No sets were completed for this exercise in the latest matching workout. Enter today’s values to establish a fresh baseline.");
       if(typeof memory.workoutId!=="string"||!/^[A-Za-z0-9_-]{1,100}$/.test(memory.workoutId)||memory.workoutId===state.workout.id)return unavailable();
       if(context&&!current(context))return unavailable();
       const record=cache.get(memory.workoutId);
-      if(!record||record.status==="loading")return{status:"loading",explanation:"Checking the next target from your previous comparable session…"};
+      if(!record||record.status==="loading")return{status:"loading",explanation:"Checking the next target from your previous comparable workout…"};
       if(record.status!=="ready")return unavailable();
       const candidates=record.progression.suggestions.filter((item)=>item&&W.formatKey(item)===W.formatKey(entry));
       const range=prescription(entry.prescribedReps,entry.measurement);
       const matches=candidates.filter((item)=>range&&prescription(item.prescribedReps,entry.measurement)===range&&item.setCount===entry.sets.length);
       if(!matches.length)return candidates.length?{status:"mismatch",explanation:"Your rep range or number of sets changed. Review the previous performance and enter a fresh target for this prescription."}:unavailable("No next target matches this exercise’s current logging format. Enter today’s values manually.");
-      if(matches.length!==1)return unavailable("This exercise has more than one matching prescription in the previous session. Review its recorded sets and choose today’s values manually.");
+      if(matches.length!==1)return unavailable("This exercise has more than one matching prescription in the previous workout. Review its recorded sets and choose today’s values manually.");
       const suggestion=matches[0],sourceDay=calendarDay(suggestion.sourceDate),activeDay=calendarDay(state.workout.date),startedAt=suggestion.sourceStartedAt;
-      if(!Number.isSafeInteger(startedAt)||!Number.isSafeInteger(state.workout.startedAt)||startedAt>=state.workout.startedAt||startedAt<0||sourceDay===null||activeDay===null||sourceDay>activeDay||suggestion.sourceDate!==memory.date)return unavailable("The previous session’s timing could not be matched safely. Enter today’s values manually.");
+      if(!Number.isSafeInteger(startedAt)||!Number.isSafeInteger(state.workout.startedAt)||startedAt>=state.workout.startedAt||startedAt<0||sourceDay===null||activeDay===null||sourceDay>activeDay||suggestion.sourceDate!==memory.date)return unavailable("The previous workout’s timing could not be matched safely. Enter today’s values manually.");
       const sets=validSets(suggestion.targetSets,entry,entry.sets.length);
       if(!sets)return unavailable("The saved next target is incomplete or outside the supported logging range. Enter today’s values manually.");
       if(activeDay-sourceDay>28){
         const repeated=validSets(memory.sets,entry,entry.sets.length);
         if(!repeated)return unavailable("It has been over 28 days since this exercise, and its recorded sets do not match today’s prescription. Establish a fresh baseline manually.");
-        const explanation="It has been over 28 days since this exercise. Use the previous values as a fresh baseline, adjust them to how you feel today, and log a comparable session before increasing.";
+        const explanation="It has been over 28 days since this exercise. Use the previous values as a fresh baseline, adjust them to how you feel today, and log a comparable workout before increasing.";
         const held={...suggestion,action:"repeat",basis:"returning-baseline",target:{reps:repeated[0].reps,weight:repeated[0].weight,seconds:repeated[0].seconds},targetSets:repeated,explanation};
         return{status:"ready",suggestion:held,sets:repeated,explanation,sourceDate:suggestion.sourceDate};
       }

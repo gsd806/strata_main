@@ -7,6 +7,10 @@ const salt=Buffer.alloc(16,8).toString("base64"),password="navigation-password-1
 const user={id:"navigation-user",email:"navigation@example.test",email_verified_at:Date.now(),auth_version:1,password_salt:salt,password_hash:scryptSync(password,Buffer.from(salt,"base64"),64,{N:16384,r:8,p:1,maxmem:64*1024*1024}).toString("base64")};
 const destinations=[
   ["discover","/discover.html"],["/discover.html","/discover.html"],
+  ["/discover.html#sessionBuilder","/discover.html#sessionBuilder"],["/discover.html#progressWorkspace","/discover.html#progressWorkspace"],
+  ["/discover.html#trainingBlockWorkspace","/discover.html#trainingBlockWorkspace"],["/discover.html#savedExercises","/discover.html#savedExercises"],
+  ["/discover.html#planWorkspace","/discover.html#planWorkspace"],["/discover.html#%65xploreWorkspace","/discover.html#exploreWorkspace"],
+  ["/discover.html#sessionBuilder%0a","/planner.html"],["/discover.html#unknown","/planner.html"],["/discover.html#//outside.test","/planner.html"],
   ["workout","/workout.html"],["/workout.html","/workout.html"],
   ["onboarding","/onboarding.html"],["/onboarding.html","/onboarding.html"],
   ["https://outside.test/workout.html","/planner.html"],["//outside.test/onboarding.html","/planner.html"],
@@ -52,6 +56,6 @@ test("native authentication failures carry new destinations across account and v
     const location=new URL(await form.submit(path,requested,{trusted:false}),"https://strata.test");
     assert.equal(location.origin,"https://strata.test");
     assert.equal(location.pathname,path.includes("verification")||path==="/auth/verify-email"?"/verify-email.html":"/account.html");
-    assert.equal(location.searchParams.get("next"),destination.includes("?")?destination:destination.slice(1,-5));
+    assert.equal(location.searchParams.get("next"),/[?#]/.test(destination)?destination:destination.slice(1,-5));
   }
 });

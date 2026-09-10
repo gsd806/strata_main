@@ -108,7 +108,7 @@ test("Needs focus discloses unavailable, empty, irrelevant, and truncated histor
   assert.match(Core.buildSession({...base,workoutHistoryAvailable:true}).selectionNote,/No completed sets were found/);
   assert.match(Core.buildSession({...base,workoutHistoryAvailable:true,workouts:[workout("back","2026-09-10",[["neutral-pulldown",8]])]}).selectionNote,/No completed sets were found for this focus/);
   const partial=Core.buildSession({...base,workouts:history,workoutHistoryAvailable:true,workoutHistoryHasMore:true});
-  assert.match(partial.selectionNote,/older sessions may be missing/);
+  assert.match(partial.selectionNote,/older workouts may be missing/);
   assert.ok(partial.items[0].reasons.some((reason)=>reason.includes("available history")));
   const withoutDate={...history[0],date:undefined,completedAt:now.getTime()};
   assert.match(Core.buildSession({...base,workouts:[withoutDate],workoutHistoryAvailable:true}).selectionNote,/Prioritizes/);
@@ -131,8 +131,8 @@ test("My preferences uses repeated completed choices and names history as the ev
   const preferred="archer-pushup",history=[workout("one","2026-09-10",[[preferred,3]]),workout("two","2026-09-09",[[preferred,2]])],base={...chestOptions,selectionMode:"preferences",workoutHistoryAvailable:true};
   const result=Core.buildSession({...base,workouts:history,workoutHistoryHasMore:true});
   assert.equal(result.items[0].exerciseId,preferred);
-  assert.ok(result.items[0].reasons.some((reason)=>reason.includes("completed in 2 of your saved sessions")));
-  assert.match(result.selectionNote,/older sessions may be missing/);
+  assert.ok(result.items[0].reasons.some((reason)=>reason.includes("completed in 2 of your saved workouts")));
+  assert.match(result.selectionNote,/older workouts may be missing/);
   assert.doesNotMatch(result.items[0].reasons.join(" "),/you like|you love/);
   const once=Core.buildSession({...base,workouts:[history[0]]});
   assert.match(once.selectionNote,/No shortlist, own ratings, or repeated completed choices/);

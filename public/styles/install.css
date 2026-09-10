@@ -157,3 +157,6 @@ html { overflow-x:clip; }
 :where(.hero-grid > *,.hero-copy,.install-actions > *,.section-heading > *,.device-grid > *,.card-head > *,.help-grid > *,.offline-shell > *,.offline-options > *) { min-width:0; }
 :where(.hero-copy,.install-status,.install-assurances,.button,.section-heading > p,.card-head,.device-match,.browser-note,.device-card li,.card-tip,.help-grid li,.privacy-note,.offline-shell > p,.offline-options span,.offline-options strong,.install-footer) { overflow-wrap:anywhere; }
 .button { max-width:100%; height:auto; padding-top:10px; padding-bottom:10px; text-align:left; white-space:normal; }
+
+/* Installation titles use the same sentence case as the rest of STRATA. */
+.install-page h1,.install-page h2,.install-page h3 { text-transform:none; }

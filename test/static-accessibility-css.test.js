@@ -10,7 +10,7 @@ const PROJECT_ROOT=path.join(__dirname,"..");
 const read=(name)=>fs.readFileSync(path.join(PROJECT_ROOT,name),"utf8");
 const homeClient=()=>["home-logic.js","home-state.js","home-api.js","home-render.js","home-events.js","app.js"].map(name=>read(`public/scripts/${name}`)).join("\n");
 const discoverClient=()=>["discover-api.js","discover-navigation.js","discover-progress.js","discover-render.js","discover-catalog.js","discover-detail.js","discover-community.js","discover-session.js","discover-sharing.js","discover-events.js","discover.js"].map(name=>read(`public/scripts/${name}`)).join("\n");
-const workoutClient=()=>["workout-state.js","workout-api.js","workout-calendar.js","workout-render.js","workout-guidance.js","workout-history.js","workout-events.js","workout.js"].map(name=>read(`public/scripts/${name}`)).join("\n");
+const workoutClient=()=>["workout-state.js","workout-api.js","workout-calendar.js","workout-render.js","workout-guidance.js","workout-history.js","workout-events.js","workout-context.js","workout.js"].map(name=>read(`public/scripts/${name}`)).join("\n");
 
 test("homepage styles keep live comparison UI and omit retired modal families",()=>{
   const css=read("public/styles/styles.css");
@@ -79,18 +79,19 @@ test("plan-saving surfaces use consistent announced states and actionable errors
 test("planner and workout share clear Plan and Train navigation at mobile widths",()=>{
   const plannerHtml=read("public/pages/planner.html"),workoutHtml=read("public/pages/workout.html"),discoverHtml=read("public/pages/discover.html");
   const plannerCss=read("public/styles/planner.css"),workoutCss=read("public/styles/workout.css");
-  const destinations=/Rankings<\/a><a[^>]*>Strata\+<\/a><a[^>]*>Plan<\/a><a[^>]*>Train<\/a>/;
+  const destinations=/Exercises<\/a><a[^>]*>Plan<\/a><a[^>]*>Train<\/a><a[^>]*>Progress<\/a><a[^>]*>Account<\/a>/;
   assert.match(plannerHtml,destinations);assert.match(workoutHtml,destinations);assert.match(discoverHtml,destinations);
-  assert.match(plannerHtml,/href="\/planner\.html" aria-current="page">Plan<\/a>/);
-  assert.match(workoutHtml,/href="\/workout\.html" aria-current="page">Train<\/a>/);
+  assert.match(plannerHtml,/href="\/planner\.html"[^>]*aria-current="page">Plan<\/a>/);
+  assert.match(workoutHtml,/href="\/workout\.html"[^>]*aria-current="page">Train<\/a>/);
   for(const [name,html,desktop,user,mobile] of [
     ["Planner",plannerHtml,'class="planner-primary-nav planner-primary-nav-desktop"','class="user-menu"','class="planner-primary-nav planner-primary-nav-mobile"'],
-    ["Workout",workoutHtml,'class="workout-nav workout-nav-desktop"','class="header-account"','class="workout-nav workout-nav-mobile"'],
     ["Strata+",discoverHtml,'class="studio-nav studio-nav-desktop"','class="studio-user"','class="studio-nav studio-nav-mobile"']
   ]){
     assert.ok(html.indexOf(desktop)<html.indexOf(user),`${name} desktop navigation must precede account controls in keyboard order`);
     assert.ok(html.indexOf(user)<html.indexOf(mobile),`${name} mobile account controls must precede the bottom navigation in keyboard order`);
   }
+  assert.doesNotMatch(workoutHtml,/class="header-account"/);
+  assert.ok(workoutHtml.indexOf('class="workout-nav workout-nav-desktop"')<workoutHtml.indexOf('class="workout-nav workout-nav-mobile"'));
   assert.match(plannerCss,/\.planner-primary-nav-mobile\{display:none\}/);
   assert.match(plannerCss,/@media\(max-width:760px\)\{[\s\S]*?\.planner-primary-nav-desktop\{display:none\}[\s\S]*?\.planner-primary-nav-mobile\{display:grid\}/);
   assert.match(workoutCss,/\.site-header \.workout-nav-mobile\{display:none\}/);
@@ -98,12 +99,12 @@ test("planner and workout share clear Plan and Train navigation at mobile widths
   const discoverCss=read("public/styles/discover.css");
   assert.match(discoverCss,/\.studio-nav-mobile \{ display:none; \}/);
   assert.match(discoverCss,/@media\(max-width:800px\)[\s\S]*?\.plus-studio \.studio-nav-desktop \{ display:none; \}[\s\S]*?\.plus-studio \.studio-nav-mobile \{ display:flex; \}/);
-  assert.match(plannerCss,/\.planner-primary-nav\{position:fixed;[^}]*grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
+  assert.match(plannerCss,/\.planner-primary-nav\{position:fixed;[^}]*grid-template-columns:repeat\(5,minmax\(0,1fr\)\)/);
   assert.match(plannerCss,/\.planner-primary-nav a\{[^}]*font-size:11px/);
   assert.match(plannerCss,/@media\(max-width:760px\)\{[\s\S]*?\.planner-header\{background:var\(--ink\);backdrop-filter:none\}/);
   assert.match(workoutCss,/@media\(max-width:760px\)\{[\s\S]*?\.site-header nav\{position:fixed/);
   assert.match(discoverCss,/@media\(max-width:760px\)\s*\{[\s\S]*?\.plus-studio \.studio-nav\s*\{[^}]*position:fixed/);
-  assert.match(workoutCss,/\.site-header nav\{position:fixed;[^}]*grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
+  assert.match(workoutCss,/\.site-header nav\{position:fixed;[^}]*grid-template-columns:repeat\(5,minmax\(0,1fr\)\)/);
   assert.match(workoutCss,/@media\(max-width:760px\)\{[\s\S]*?\.workout-page \.site-header\{[^}]*background:var\(--bg\);backdrop-filter:none\}/);
 });
 
@@ -111,12 +112,12 @@ test("workout empty days and planner mobile hand-offs expose useful 44px actions
   const plannerHtml=read("public/pages/planner.html"),plannerCss=read("public/styles/planner.css");
   const workoutHtml=read("public/pages/workout.html"),workout=workoutClient(),workoutCss=read("public/styles/workout.css");
   assert.match(workoutHtml,/id="chooseScheduledDay" hidden/);assert.match(workoutHtml,/id="openPlannerFromEmpty"[^>]*hidden/);
-  assert.match(workout,/startButton\.hidden=!items\.length/);assert.match(workout,/You already have a workout in progress/);
+  assert.match(workout,/start\.hidden=!items\.length/);assert.match(workout,/You already have a workout in progress/);
   assert.match(workout,/record\?\.dirty\)items\.push/);assert.match(workout,/status!=="active"\|\|!recoveryIds\.has/);assert.match(workout,/recoveryIndex>=0/);
   assert.match(workoutCss,/\.mode-notice a,\.text-link,footer a\{[^}]*min-width:44px;min-height:44px/);
   assert.match(workoutHtml,/id="anotherSession">Choose another workout<\/button>/);
   assert.doesNotMatch(workoutHtml,/Back to my plan/);
-  assert.match(plannerHtml,/class="planner-mobile-switcher"[^>]*>[\s\S]*Exercise library[\s\S]*My week/);
+  assert.match(plannerHtml,/class="planner-mobile-switcher"[^>]*>[\s\S]*Exercise library[\s\S]*This week/);
   assert.match(plannerHtml,/id="libraryPanel"[^>]*tabindex="-1"/);
   assert.match(plannerCss,/\.planner-mobile-switcher\{position:sticky;[^}]*display:grid/);
   assert.match(plannerCss,/\.planner-jump-link\{[^}]*min-height:44px/);
@@ -127,7 +128,7 @@ test("workout empty days and planner mobile hand-offs expose useful 44px actions
   assert.match(workoutHtml,/id="historyError"[^>]*role="alert"/);
   assert.match(workoutHtml,/href="\/pricing">Review Strata\+ access<\/a>/);
   assert.match(workoutHtml,/href="\/planner\.html">Return to free Plan<\/a>/);
-  assert.match(workoutHtml,/id="openPlannerFromEmpty"[^>]*>Add exercises to my week/);
+  assert.match(workoutHtml,/id="openPlannerFromEmpty"[^>]*>Build your first week/);
   assert.match(workoutHtml,/id="checkInForm"[^>]*aria-labelledby="checkInTitle"/);
   for(const id of ["checkInDifficulty","checkInEnergy","checkInComfort","checkInEnjoyment"])assert.match(workoutHtml,new RegExp(`id="${id}" required`));
   assert.match(workoutHtml,/STRATA does not detect recovery, fatigue, pain, or injury/);
@@ -142,7 +143,8 @@ test("workout empty days and planner mobile hand-offs expose useful 44px actions
 test("planner only offers workout logging to active Strata+ accounts",()=>{
   const planner=read("public/scripts/planner.js");
   assert.match(planner,/plusActive=state\.user\?\.discovery\?\.active===true/);
-  assert.match(planner,/action:plusActive\?`Review \$\{next\?\.day\|\|DAYS\.find/);
+  assert.match(planner,/action:plusActive\?`Open \$\{next\?\.day\} in Train`:""/);
+  assert.match(planner,/total\?"Edit week":"Build your first week"/);
   assert.match(planner,/href:plusActive\?`\/workout\.html\?day=/);
   assert.match(planner,/Free device plan/);
   assert.match(planner,/Free synced plan/);

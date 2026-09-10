@@ -20,7 +20,7 @@
     function currentSharedPlan(){return state.sharedPlans.find((plan)=>plan&&plan.published!==false)||null;}
     function syncShareForm(plan=currentSharedPlan()){
       const publishButton=el("publishWeeklyPlan");
-      publishButton.innerHTML=plan?'Update Strata+ copy <span aria-hidden="true">↗</span>':'Publish to Strata+ <span aria-hidden="true">↗</span>';
+      publishButton.innerHTML=plan?'Update shared week <span aria-hidden="true">↗</span>':'Publish shared week <span aria-hidden="true">↗</span>';
       if(!plan)return;
       if(!el("sharePlanTitle").value.trim())el("sharePlanTitle").value=String(plan.title||"").slice(0,80);
       if(!el("sharePlanDescription").value.trim())el("sharePlanDescription").value=String(plan.description||"").slice(0,240);
@@ -33,7 +33,7 @@
       }
       container.innerHTML=plans.map((plan)=>{
         const id=escapeHtml(plan.id),title=escapeHtml(plan.title||"Shared week"),description=escapeHtml(plan.description||"No description added."),movementCount=planMovementCount(plan.plan),confirming=state.pendingUnpublish===String(plan.id);
-        return `<article class="own-share-card"><div><h4>${title}</h4><p>${description}</p></div><div class="own-share-meta"><span>${movementCount} movement${movementCount===1?"":"s"}</span><span>${escapeHtml(shareDate(plan.updatedAt||plan.createdAt))}</span><span>By ${escapeHtml(plan.authorName||state.user?.name||"You")}</span></div><button class="unpublish-plan" data-unpublish-plan="${id}" type="button" ${state.shareBusy?"disabled":""}>${confirming?"Confirm unpublish":"Unpublish"}</button></article>`;
+        return `<article class="own-share-card"><div><h4>${title}</h4><p>${description}</p></div><div class="own-share-meta"><span>${movementCount} exercise${movementCount===1?"":"s"}</span><span>${escapeHtml(shareDate(plan.updatedAt||plan.createdAt))}</span><span>By ${escapeHtml(plan.authorName||state.user?.name||"You")}</span></div><button class="unpublish-plan" data-unpublish-plan="${id}" type="button" ${state.shareBusy?"disabled":""}>${confirming?"Confirm unpublish":"Unpublish"}</button></article>`;
       }).join("");
       syncShareForm(plans[0]);
       if(focusId)focusSoon(`[data-unpublish-plan="${String(focusId).replace(/[^a-zA-Z0-9_-]/g,"")}"]`);

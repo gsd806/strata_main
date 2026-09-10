@@ -8,6 +8,9 @@
   "use strict";
   function bind({$,state,workout:W,number,signal,actions,windowLike=globalThis.window,documentLike=globalThis.document,locationLike=globalThis.location,historyLike=globalThis.history,confirmImpl=globalThis.confirm}){
     const {initialize,renderPlan,toast,selectWorkout,markDirty,errorMessage,entryFor,hasActuals,exercise,openSwap,toggleSuperset,applyRemembered,renderSession,startRest,tick,rememberPreferences,focusNextSet,flushSave,persistDraft,returnToPlan,exportDraft,resolveAdaptation,recover,removeDraft,scanDrafts,showCompleted,upsertHistory,openDetail,loadHistory,renderMetricOptions,renderChart,closeSwap,renderSwapComparison,applyWorkoutSwap,reviewPlanSwap,approvePlanSwap,assertIdentity,status,saveError}=actions;
+    windowLike.addEventListener("hashchange",()=>{if(locationLike.hash==="#historySection"&&!state.blocked&&!$("historySection").hidden)actions.showHistory();});
+    $("resumeWorkout").addEventListener("click",()=>void actions.resumeWorkout());
+    $("retryWorkoutHistory").addEventListener("click",()=>void loadHistory());
     $("retryLoad").addEventListener("click",()=>void initialize());
     $("planDay").addEventListener("change",()=>{
       state.day=$("planDay").value;
@@ -21,13 +24,13 @@
     });
     $("startWorkout").addEventListener("click",()=>{
       if(state.workout?.status==="active"||state.blocked)return;
-      if(state.historyBusy){toast("Checking your saved sessions. Try again in a moment.");return;}
+      if(state.historyBusy){toast("Checking your saved workouts. Try again in a moment.");return;}
       const active=state.history.find((item)=>item.status==="active");
       if(active){
         toast("You already have a workout in progress. Resume it before starting another.");
         const recoveryIndex=state.recoveries.findIndex((record)=>record.dirty&&record.workout.id===active.id);
         if(recoveryIndex>=0){$("recoveryPanel").scrollIntoView({block:"start"});$("recoveryList").querySelector(`[data-recover="${recoveryIndex}"]`)?.focus();}
-        else{$("historySection").scrollIntoView({block:"start"});[...$("historyList").querySelectorAll("[data-history]")].find((button)=>button.dataset.history===active.id)?.focus();}
+        else{$("workoutHistory").open=true;$("historySection").scrollIntoView({block:"start"});[...$("historyList").querySelectorAll("[data-history]")].find((button)=>button.dataset.history===active.id)?.focus();}
         return;
       }
       try{selectWorkout(W.createWorkout(state.plan,state.day,state.catalog),{dirty:true});markDirty();signal("workout_started");$("sessionPanel").scrollIntoView({block:"start"});}
@@ -73,7 +76,7 @@
     $("timerToggle").addEventListener("click",()=>{if(!state.workout||state.workout.status!=="active")return;const remaining=W.remainingSeconds(state.workout.restEndsAt);if(state.workout.restEndsAt&&remaining>0){state.pausedSeconds=remaining;state.workout.restEndsAt=null;markDirty();tick();}else startRest(state.pausedSeconds||Number($("restDuration").value));});
     $("timerReset").addEventListener("click",()=>{if(!state.workout||state.workout.status!=="active")return;state.workout.restEndsAt=null;state.pausedSeconds=null;state.timerAnnounced=false;markDirty();tick();});
     $("restDuration").addEventListener("change",()=>{rememberPreferences();tick();});$("autoRest").addEventListener("change",rememberPreferences);$("nextSet").addEventListener("click",focusNextSet);$("saveNow").addEventListener("click",()=>void flushSave());
-    $("closeSession").addEventListener("click",async()=>{if(!state.workout||state.workout.status!=="active"||state.conflict||state.blocked)return;const invalid=$("sessionEntries").querySelector("input[aria-invalid=true]");if(invalid){invalid.focus();errorMessage("Correct or clear the highlighted actual value before saving and closing.");return;}if(state.dirty)await flushSave();if(state.dirty||state.saving||state.conflict||state.blocked)return;persistDraft();returnToPlan();toast("Session saved. Resume it from your history whenever you’re ready.");});
+    $("closeSession").addEventListener("click",async()=>{if(!state.workout||state.workout.status!=="active"||state.conflict||state.blocked)return;const invalid=$("sessionEntries").querySelector("input[aria-invalid=true]");if(invalid){invalid.focus();errorMessage("Correct or clear the highlighted actual value before saving and closing.");return;}if(state.dirty)await flushSave();if(state.dirty||state.saving||state.conflict||state.blocked)return;persistDraft();returnToPlan();toast("Workout saved. Resume it when you’re ready.");});
     $("exportDraft").addEventListener("click",exportDraft);$("exportConflict").addEventListener("click",exportDraft);
     $("finishWorkout").addEventListener("click",()=>{if(!state.workout||state.conflict||state.blocked||state.workout.status!=="active")return;const invalid=$("sessionEntries").querySelector("input[aria-invalid=true]");if(invalid){invalid.focus();errorMessage("Correct or clear the highlighted actual value before finishing.");return;}const counts=W.progress(state.workout);if(!counts.completed)return;$("finishDialogMessage").textContent=`You’ve completed ${counts.completed} of ${counts.total} sets. ${counts.total-counts.completed} sets will remain unfinished.`;$("finishDialog").returnValue="cancel";$("finishDialog").showModal();});
     $("finishDialog").addEventListener("close",()=>{if($("finishDialog").returnValue!=="finish"||state.blocked||state.conflict||!state.workout)return;state.workout.status="completed";state.workout.completedAt=Date.now();state.workout.elapsedSeconds=Math.min(604800,Math.max(0,Math.floor((state.workout.completedAt-state.workout.startedAt)/1000)));state.workout.restEndsAt=null;state.pausedSeconds=null;markDirty({save:false});renderSession();signal("workout_completed");void flushSave();});

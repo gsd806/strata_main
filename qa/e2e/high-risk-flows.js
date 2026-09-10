@@ -562,6 +562,26 @@ test("security-sensitive browser journeys",{timeout:120_000},async(t)=>{
     assert.equal(new URL(account.page.url()).pathname,"/discover.html","A signed webhook must unlock the protected Strata+ page.");
     await account.page.waitForFunction((name)=>globalThis.document.querySelector("#userName")?.textContent===name,"Payment E2E");
     assert.equal(await account.page.locator("#discoveryLoadError").isHidden(),true);
+    for(const [hash,panel,owner] of [["sessionBuilder","sessionBuilder","plan"],["trainingBlockWorkspace","trainingBlockWorkspace","plan"],["progressWorkspace","progressWorkspace","progress"],["exploreWorkspace","exerciseExplorer","exercises"]]){
+      await goto(account.page,`/discover.html#${hash}`);
+      await account.page.locator(`#${panel}`).waitFor({state:"visible"});
+      assert.deepEqual(await account.page.locator('header nav [aria-current="page"]').evaluateAll(nodes=>[...new Set(nodes.map(node=>node.dataset.productOwner))]),[owner],`${hash} has exactly one primary owner`);
+      assert.equal(await account.page.locator("#planToolBreadcrumb").isVisible(),owner==="plan");
+      assert.equal(await account.page.locator("#exerciseToolNavigation").isVisible(),owner==="exercises");
+      assert.deepEqual(await account.page.locator('#exerciseToolNavigation [aria-current="location"]').evaluateAll(nodes=>nodes.map(node=>node.dataset.featureTarget)),owner==="exercises"?["library"]:[]);
+    }
+    await account.page.locator('[data-feature-target="saved"]').click();
+    await account.page.locator("#savedExercises").waitFor({state:"visible"});
+    assert.match(await account.page.title(),/^Saved exercises/);
+    assert.deepEqual(await account.page.locator('#exerciseToolNavigation [aria-current="location"]').evaluateAll(nodes=>nodes.map(node=>node.dataset.featureTarget)),["saved"]);
+    await account.page.goBack();await account.page.locator("#exerciseExplorer").waitFor({state:"visible"});
+    await account.page.goForward();await account.page.locator("#savedExercises").waitFor({state:"visible"});
+    for(const [legacy,destination] of [["planWorkspace","/planner.html"],["todayWorkspace","/workout.html"]]){
+      await goto(account.page,`/discover.html#${legacy}`);
+      await account.page.waitForURL(url=>url.pathname===destination,{waitUntil:"commit"});
+      await account.page.locator(legacy==="planWorkspace"?"#weekTitle":"#workoutTitle").waitFor({state:"visible"});
+      assert.equal(new URL(account.page.url()).pathname,destination,"Old workspace links must reach the canonical page.");
+    }
 
     await account.context.close();
   });

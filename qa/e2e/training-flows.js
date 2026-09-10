@@ -79,12 +79,12 @@ test("training journeys use real browser controls and isolated local fixtures",{
   await t.test("a visitor can inspect a private recommendation preview before signup",async()=>{
     const {context,page}=await newPage({viewport:{width:320,height:760},reducedMotion:"reduce"});
     await goto(page,"/");
-    const submit=page.locator("#quickPreviewSubmit");await submit.waitFor({state:"visible"});await page.waitForFunction(()=>!globalThis.document.querySelector("#quickPreviewSubmit")?.disabled);
+    await page.locator("#preview > summary").click();const submit=page.locator("#quickPreviewSubmit");await submit.waitFor({state:"visible"});await page.waitForFunction(()=>!globalThis.document.querySelector("#quickPreviewSubmit")?.disabled);
     await page.selectOption("#quickPreviewGoal","hypertrophy");await page.selectOption("#quickPreviewGroup","chest");await page.selectOption("#quickPreviewEquipment","Dumbbells");await page.selectOption("#quickPreviewLevel","Intermediate");await submit.click();
     await page.locator("#quickPreviewResults .preview-result").first().waitFor({state:"visible"});
     assert.equal(await page.locator("#quickPreviewResults .preview-result").count(),3);
     assert.equal((await page.locator("#quickPreviewSummary").textContent())?.trim(),"3-day week ready");
-    assert.match(await page.locator("#quickWeekMeta").textContent(),/^3 training days · \d+ movements · 35 minutes per session$/);
+    assert.match(await page.locator("#quickWeekMeta").textContent(),/^3 training days · \d+ exercises · 35 minutes per workout$/);
     assert.equal(await page.locator("#quickWeekGrid .quick-week-day").count(),7,"The preview must show every day before signup.");
     assert.equal(await page.locator("#quickWeekGrid .quick-week-day:not(.is-recovery)").count(),3,"The selected three-day schedule must remain visible.");
     assert.equal(await page.locator(".preview-reasons").count(),3);
@@ -138,6 +138,7 @@ test("training journeys use real browser controls and isolated local fixtures",{
     await page.waitForFunction(id=>!JSON.parse(localStorage.getItem("strata_guest_plan_v1")).days.Monday.some(item=>item.instanceId===id),instance);
     await page.click("#undoPlanRemoval");
     await page.waitForFunction(id=>JSON.parse(localStorage.getItem("strata_guest_plan_v1")).days.Monday.some(item=>item.instanceId===id),instance);
+    await page.locator("#planningTools > summary").click();
     await page.click("#manageWeekTemplates");await page.fill("#weekTemplateName","My reusable week");await page.click("#saveWeekTemplate");
     await page.click("#closeWeekTemplates");await page.locator("[data-quick-add]").first().click();
     await page.waitForFunction(count=>Object.values(JSON.parse(localStorage.getItem("strata_guest_plan_v1")).days).flat().length===count,originalCount+1);
@@ -251,10 +252,10 @@ test("training journeys use real browser controls and isolated local fixtures",{
     first=page.locator("#sessionEntries [data-entry]").nth(0);await openMore(first);await first.locator('[data-format="effortType"]').selectOption("rpe");first=page.locator("#sessionEntries [data-entry]").nth(0);await openMore(first);await first.locator('[data-set="0"] [data-actual="effort"]').fill("8.5");await first.locator("[data-entry-note]").fill("Bench notch 3; controlled lowering.");
     await first.locator(".advanced-tools summary").click();await first.locator("[data-warmup-load]").fill("100");await first.locator("[data-calc-warmup]").click();assert.match(await first.locator("[data-warmup-result]").textContent(),/40% · 40 kg × 8[\s\S]*80% · 80 kg × 3/);await first.locator("[data-plate-target]").fill("100");await first.locator("[data-calc-plates]").click();assert.match(await first.locator("[data-plate-result]").textContent(),/per side/);
     await first.locator("[data-toggle-superset]").click();cards=page.locator("#sessionEntries [data-entry]");assert.equal(await cards.filter({has:page.locator(".superset-badge")}).count(),2);
-    second=cards.nth(1);const originalPlan=(await accountPlan(context)).plan;await openMore(second);await second.locator("[data-open-swap]").click();await page.locator("#swapDialog").waitFor({state:"visible"});assert.equal(await page.locator("#swapTitle").evaluate((node)=>node===globalThis.document.activeElement),true);assert.match(await page.locator("#swapComparison").textContent(),/Current[\s\S]*Alternative[\s\S]*FitScore[\s\S]*stability/i);
+    second=cards.nth(1);const originalPlan=(await accountPlan(context)).plan;await openMore(second);await second.locator("[data-open-swap]").click();await page.locator("#swapDialog").waitFor({state:"visible"});assert.equal(await page.locator("#swapTitle").evaluate((node)=>node===globalThis.document.activeElement),true);assert.match(await page.locator("#swapComparison").textContent(),/Current[\s\S]*Stability \d+\/100[\s\S]*Alternative[\s\S]*FitScore \d+\/100[\s\S]*Stability \d+\/100/);
     await page.click("#reviewPlanSwap");await page.locator("#planSwapReview").waitFor({state:"visible"});assert.deepEqual((await accountPlan(context)).plan,originalPlan,"Reviewing a proposal must not change Plan");await page.click("#cancelPlanSwap");
     const workoutOnlyId=await page.locator("#swapExercise").inputValue();await page.click("#swapWorkoutOnly");await page.locator("#swapDialog").waitFor({state:"hidden"});assert.deepEqual((await accountPlan(context)).plan,originalPlan,"Workout-only replacement must leave Plan unchanged");await page.waitForFunction(()=>globalThis.document.querySelectorAll('#sessionEntries [data-entry]')[1]?.querySelector('.exercise-more > summary')===globalThis.document.activeElement);
-    cards=page.locator("#sessionEntries [data-entry]");second=cards.nth(1);assert.match(await second.textContent(),/Replaced .* for this session/);assert.ok(workoutOnlyId);
+    cards=page.locator("#sessionEntries [data-entry]");second=cards.nth(1);assert.match(await second.textContent(),/Replaced .* for this workout/);assert.ok(workoutOnlyId);
     await openMore(second);await second.locator("[data-open-swap]").click();const lastingChoice=await page.locator("#swapExercise option").evaluateAll((options,original)=>options.map((option)=>option.value).find((value)=>value!==original),originalPlan.days.Monday[1].exerciseId);assert.ok(lastingChoice);await page.locator("#swapExercise").selectOption(lastingChoice);const approvedId=await page.locator("#swapExercise").inputValue();await page.click("#reviewPlanSwap");
     const planSaving=page.waitForResponse(response=>new URL(response.url()).pathname==="/api/plan"&&response.request().method()==="PUT");await page.click("#approvePlanSwap");const planSaved=await planSaving;assert.equal(planSaved.status(),200,await planSaved.text());await page.locator("#swapDialog").waitFor({state:"hidden"});
     assert.equal((await accountPlan(context)).plan.days.Monday[1].exerciseId,approvedId,"Only explicit approval changes the saved Plan");
@@ -274,9 +275,9 @@ test("training journeys use real browser controls and isolated local fixtures",{
     assert.equal(await page.locator("#chooseScheduledDay").isVisible(),true);assert.match(await page.locator("#chooseScheduledDay").textContent(),/Monday workout/);
     assert.equal(await page.locator("#openPlannerFromEmpty").isHidden(),true);
     await page.click("#chooseScheduledDay");assert.equal(await page.locator("#planDay").inputValue(),"Monday");
-    assert.match(await page.locator("#startWorkout").textContent(),/Start Monday workout/);
-    const startLayout=await page.evaluate(()=>{const start=globalThis.document.querySelector("#startWorkout").getBoundingClientRect(),hero=globalThis.getComputedStyle(globalThis.document.querySelector(".hero"));return{bottom:start.bottom,viewport:globalThis.innerHeight,heroDisplay:hero.display,overflow:globalThis.document.documentElement.scrollWidth-globalThis.document.documentElement.clientWidth};});
-    assert.equal(startLayout.heroDisplay,"none","The entitled mobile workout summary should lead instead of a second marketing hero");assert.ok(startLayout.bottom<=startLayout.viewport-56,`Start action must fit above mobile navigation (${startLayout.bottom}/${startLayout.viewport})`);assert.ok(startLayout.overflow<=1);
+    assert.match(await page.locator("#startWorkout").textContent(),/Start workout/);
+    const startLayout=await page.evaluate(()=>{const start=globalThis.document.querySelector("#startWorkout").getBoundingClientRect();return{bottom:start.bottom,viewport:globalThis.innerHeight,overflow:globalThis.document.documentElement.scrollWidth-globalThis.document.documentElement.clientWidth};});
+    assert.equal(await page.locator("#workoutTitle").isVisible(),true);assert.equal(await page.locator("#workoutTitle").textContent(),"Train");assert.ok(startLayout.bottom<=startLayout.viewport-56,`Start action must fit above mobile navigation (${startLayout.bottom}/${startLayout.viewport})`);assert.ok(startLayout.overflow<=1);
     const creating=page.waitForResponse(response=>new URL(response.url()).pathname==="/api/workouts"&&response.request().method()==="POST");
     await page.click("#startWorkout");const created=await creating;assert.equal(created.status(),201,await created.text());const workoutId=(await created.json()).workout.id;
     await page.locator("#sessionPanel").waitFor({state:"visible"});
@@ -294,9 +295,9 @@ test("training journeys use real browser controls and isolated local fixtures",{
     await page.click("#accountPrimaryAction");await page.locator("#sessionPanel").waitFor({state:"visible"});
     assert.equal(await page.locator("#sessionTitle").evaluate(node=>globalThis.document.activeElement===node),true,"Account’s next action should resume the active session directly");
     let duplicateStarts=0;page.on("request",request=>{if(new URL(request.url()).pathname==="/api/workouts"&&request.method()==="POST")duplicateStarts++;});
-    await goto(page,"/workout.html?day=Monday");const resume=page.locator('#historyList [data-history]').first();await resume.waitFor({state:"visible"});
+    await goto(page,"/workout.html?day=Monday");const resume=page.locator("#resumeWorkout");await resume.waitFor({state:"visible"});
     assert.equal(await page.locator('#recoveryList [data-recover]').count(),0,"A clean saved active session must not also appear as recovery");
-    assert.equal(await page.getByRole("button",{name:"Resume",exact:true}).count(),1,"A clean active session has exactly one Resume surface");
+    assert.equal(await page.locator("#resumeWorkout").isVisible(),true,"A clean active workout exposes its primary Resume action");
     assert.equal(await page.locator("#startWorkout").isHidden(),true,"An active session must not expose a redundant Start action");
     await resume.click();assert.equal(duplicateStarts,0,"Resuming must not create or orphan another account session");
     await page.locator("#sessionPanel").waitFor({state:"visible"});
@@ -313,11 +314,11 @@ test("training journeys use real browser controls and isolated local fixtures",{
     await page.waitForFunction(()=>globalThis.document.querySelector('#checkInStatus')?.textContent==="Saved");
     await page.locator('#progressionPanel').waitFor({state:"visible"});assert.match(await page.locator('#progressionPanel').textContent(),/Targets use your completed sets[\s\S]*Review and apply a target when you next train the same exercise/i);
     const restoredCheckIn=await context.request.get(`/api/workouts/${workoutId}/check-in`);assert.equal(restoredCheckIn.status(),200);assert.deepEqual((await restoredCheckIn.json()).checkIn.difficulty,3);
-    await page.locator("#historyList [data-history]").first().click();
+    await page.locator("#historyTitle").click();await page.locator("#historyList [data-history]").first().click();
     await page.locator("#detailDialog").waitFor({state:"visible"});const details=await page.locator("#detailBody").textContent();
     assert.match(details,/40/);assert.match(details,/8/);assert.match(details,/kg/);
     await page.click("#closeDetail");await page.reload({waitUntil:"domcontentloaded"});
-    await page.locator("#historyList [data-history]").first().waitFor({state:"visible"});assert.equal(await page.locator("#historyList [data-history]").count(),1,"A completed session survives reload without duplication");
+    await page.locator("#historyTitle").click();await page.locator("#historyList [data-history]").first().waitFor({state:"visible"});assert.equal(await page.locator("#historyList [data-history]").count(),1,"A completed session survives reload without duplication");
     await context.close();
   });
   await t.test("a low-energy check-in proposes a review-first Plan change that the member explicitly approves",async()=>{
@@ -388,8 +389,9 @@ test("training journeys use real browser controls and isolated local fixtures",{
     await goto(page,"/workout.html?guest=1");assert.match(page.url(),/account.html/);
     await signup(context,"setup");
     await goto(page,"/onboarding.html");assert.match(page.url(),/pricing/);
-    await activatePlus(context);await goto(page,"/discover.html");
-    const firstWeekAction=page.getByRole('link',{name:'Build my first week',exact:true});
+    await activatePlus(context);await goto(page,"/planner.html");await plannerReady(page);
+    await page.locator("#planningTools > summary").click();
+    const firstWeekAction=page.getByRole("link",{name:/Generate a week/});
     await firstWeekAction.waitFor({state:"visible"});assert.equal(new URL(await firstWeekAction.getAttribute('href'),baseUrl).pathname,'/onboarding.html');
     await firstWeekAction.click();
     await page.waitForFunction(()=>globalThis.document.querySelector('#setupFields')?.disabled===false);

@@ -17,12 +17,16 @@
     "Email verification is temporarily unavailable. Please try again later."
   ]);
 
-  function safeNext(raw,exerciseId){
+  function safeNext(raw,exerciseId,inheritedHash=""){
     const addIsSafe=Boolean(exerciseId&&/^[a-z0-9-]{2,80}$/.test(exerciseId));
     if(raw==="planner"||raw==="/planner.html")return addIsSafe?`/planner.html?add=${encodeURIComponent(exerciseId)}`:"/planner.html";
     if(/^\/planner\.html\?add=[a-z0-9-]{2,80}$/.test(raw||""))return raw;
     if(raw==="pricing"||raw==="/pricing"||raw==="/pricing.html")return "/pricing";
-    if(raw==="discover"||raw==="/discover.html")return "/discover.html";
+    if(raw==="discover"||raw==="/discover.html")raw=`/discover.html${inheritedHash||""}`;
+    if(typeof raw==="string"&&raw.startsWith("/discover.html#")){
+      try{const hash=decodeURIComponent(raw.slice(15));if(/^(today|todayWorkspace|plan|planWorkspace|explore|exploreWorkspace|progress|progressWorkspace|recommendations|library|exerciseExplorer|battle|profile|community|communityPlans|monthly|monthlyPlan|session|sessionBuilder|block|trainingBlockWorkspace|saved|savedExercises)$/.test(hash)&&!/[\r\n]/.test(hash))return `/discover.html#${hash}`;}catch{}
+    }
+    if(raw==="/discover.html"||(inheritedHash&&(raw==="/discover.html"+inheritedHash)))return "/discover.html";
     if(raw==="admin"||raw==="/admin"||raw==="/admin.html")return "/admin";
     if(/^\/workout\.html\?day=(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)$/.test(raw||""))return raw;
     if(raw==="workout"||raw==="/workout.html")return "/workout.html";
@@ -33,7 +37,7 @@
   function verificationLocation(destination,{deliveryState="",purpose="signup"}={}){
     const query=new URLSearchParams();
     if(destination==="/pricing")query.set("next","pricing");
-    else if(destination==="/discover.html")query.set("next","discover");
+    else if(safeNext(destination).startsWith("/discover.html"))query.set("next",destination==="/discover.html"?"discover":safeNext(destination));
     else if(destination==="/admin")query.set("next","admin");
     else if(destination.startsWith("/workout.html"))query.set("next",destination==="/workout.html"?"workout":destination);
     else if(destination==="/onboarding.html")query.set("next","onboarding");

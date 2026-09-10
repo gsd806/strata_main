@@ -144,7 +144,7 @@ function adaptationForFeedback({workout,plan,planUpdatedAt,checkIn}) {
     const name=EXERCISE_BY_ID.get(item.exerciseId)?.name||item.exerciseId;
     return {
       kind:"reduce_sets",title:`Reduce one set of ${name}`,
-      explanation:`${signal}. This optional change reduces the next planned dose; it does not diagnose recovery or injury.`,
+      explanation:`${signal}. This optional change removes one set of this exercise from your weekly plan. It does not diagnose recovery or injury.`,
       change:{day,instanceId:item.instanceId,exerciseId:item.exerciseId,fromSets:item.sets,toSets:item.sets-1},
       expectedPlanUpdatedAt:planUpdatedAt,
       checkInUpdatedAt:Number.isSafeInteger(checkIn.updatedAt)?checkIn.updatedAt:null
@@ -177,7 +177,7 @@ function createTrainingService({store,auth,requireAccess,trustedOrigin,rateAllow
   async function completedWorkout(userId,id) {
     const workout=workoutFromRow(await store.workout(userId,id));
     if (!workout) throw trainingError("Workout not found.",404,"WORKOUT_NOT_FOUND");
-    if (workout.status!=="completed") throw trainingError("Finish this workout before adding a check-in or progression target.",409,"WORKOUT_NOT_COMPLETED");
+    if (workout.status!=="completed") throw trainingError("Finish this workout before adding a check-in or viewing progression guidance.",409,"WORKOUT_NOT_COMPLETED");
     return workout;
   }
   /** Resolve the newest full prior workout for each format, including sources beyond the first history page.
@@ -219,7 +219,7 @@ function createTrainingService({store,auth,requireAccess,trustedOrigin,rateAllow
     const [{history,limited},blockRow]=await Promise.all([previousWorkouts(userId,workout),store.trainingBlock(userId)]);
     const block=blockPayload(blockRow),activeBlock=block?.status==="active"?block:null;
     const result=progressionForWorkout(workout,history,checkIn,activeBlock?.progressionRule,Boolean(activeBlock&&activeBlock.lightWeek===activeBlock.currentWeek));
-    return {...result,historyLimited:limited,suggestions:result.suggestions.map((suggestion)=>limited?{...suggestion,explanation:`${suggestion.explanation} Only the 5,000 most recent saved sessions were checked.`}:suggestion)};
+    return {...result,historyLimited:limited,suggestions:result.suggestions.map((suggestion)=>limited?{...suggestion,explanation:`${suggestion.explanation} Only the 5,000 most recent saved workouts were checked.`}:suggestion)};
   }
   /** @param {string} userId */
   async function latestProgression(userId) {

@@ -147,9 +147,9 @@ test("workout state and calendar helpers keep recovery data safe at malformed ed
   const next=WorkoutCalendar.nextPlannedSession(plan,Workout.DAYS,new Date(2026,8,7,9));
   assert.deepEqual(next,{day:"Tuesday",date:"2026-09-08",movements:3,workingSets:2});
   const ics=decodeURIComponent(WorkoutCalendar.event(next).href);
-  assert.match(ics,/3 planned movements · 2 working sets/);
+  assert.match(ics,/3 planned exercises · 2 working sets/);
   const singular=decodeURIComponent(WorkoutCalendar.event({...next,movements:1,workingSets:1}).href);
-  assert.match(singular,/1 planned movement · 1 working set/);
+  assert.match(singular,/1 planned exercise · 1 working set/);
 });
 
 test("planner boundaries preserve explicit conflicts and guest storage fallbacks",async()=>{

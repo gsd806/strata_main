@@ -33,7 +33,7 @@
       $("adaptationProposal").hidden=!state.adaptation;
       if(!state.adaptation)return;
       const change=state.adaptation.change||{};
-      $("adaptationTitle").textContent=state.adaptation.title||"Review a smaller next session.";
+      $("adaptationTitle").textContent=state.adaptation.title||"Review a smaller next workout.";
       $("adaptationExplanation").textContent=state.adaptation.explanation||"Your check-in supports reviewing one small change.";
       $("adaptationChange").textContent=`${change.day||"Planned day"} · ${exercise(change.exerciseId).name} · ${Number(change.fromSets)||"—"} to ${Number(change.toSets)||"—"} sets`;
       $("acceptAdaptation").disabled=false;$("dismissAdaptation").disabled=false;$("adaptationStatus").textContent="";
@@ -48,7 +48,7 @@
       }
       const suggestions=Array.isArray(result?.progression?.suggestions)?result.progression.suggestions:[];
       $("progressionPanel").hidden=false;
-      $("progressionList").innerHTML=suggestions.length?suggestions.map((suggestion)=>`<article class="progression-suggestion"><div><span>${esc(actionLabel(suggestion.action))}</span><h4>${esc(exercise(suggestion.exerciseId).name)}</h4></div><div class="progression-target"><strong>${esc(suggestionTarget(suggestion,number))}</strong>${Array.isArray(suggestion.targetSets)?`<ol class="progression-sets">${suggestion.targetSets.map((target,index)=>`<li>Set ${index+1} · ${esc(suggestionTarget({...suggestion,target},number))}</li>`).join("")}</ol>`:""}</div><p>${esc(suggestion.explanation||"Review this target against your next planned session.")}</p><small>${esc(suggestion.timing||"Next time you train this exercise")} · review before applying</small></article>`).join(""):"<p class='muted'>No progression change is suggested from this session. Keep the current targets and continue logging comparable sets.</p>";
+      $("progressionList").innerHTML=suggestions.length?suggestions.map((suggestion)=>`<article class="progression-suggestion"><div><span>${esc(actionLabel(suggestion.action))}</span><h4>${esc(exercise(suggestion.exerciseId).name)}</h4></div><div class="progression-target"><strong>${esc(suggestionTarget(suggestion,number))}</strong>${Array.isArray(suggestion.targetSets)?`<ol class="progression-sets">${suggestion.targetSets.map((target,index)=>`<li>Set ${index+1} · ${esc(suggestionTarget({...suggestion,target},number))}</li>`).join("")}</ol>`:""}</div><p>${esc(suggestion.explanation||"Review this target against your next planned workout.")}</p><small>${esc(suggestion.timing||"Next time you train this exercise")} · review before applying</small></article>`).join(""):"<p class='muted'>No progression change is suggested from this workout. Keep the current targets and continue logging comparable sets.</p>";
       renderAdaptation(result?.adaptation||null);
     }
 

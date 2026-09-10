@@ -1,5 +1,16 @@
 # Changelog
 
+## 7.8.3 — One application, one weekly Plan
+
+- Unify navigation as Exercises, Plan, Train, Progress, and Account; preserve existing tool links and safe sign-in return paths.
+- Make the weekly Plan the main hub and progressively disclose workout creation, guided setup, training blocks, monthly schedules, templates, exports, and shared plans.
+- Put the exercise library first, explain FitScore and Match for you, and show community ratings consistently out of five.
+- Distinguish empty, loading, failed, active-workout, and access-expired states; show practical workout context and preserve 7.8.2 weight progression.
+- Use literal, sentence-case copy and canonical Workout, Weekly plan, Training block, and Monthly schedule vocabulary.
+- Advance asset and PWA cache versions to 7.8.3 without changing saved-data formats, billing rules, or scoring/selection calculations.
+
+Validation is recorded in the [7.8.3 release guide](docs/release-7.8.3.md).
+
 ## 7.8.2 — Weight progression in Train
 
 - Show specific per-set next targets after completion, with optional effort and check-in feedback.
