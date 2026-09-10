@@ -132,8 +132,7 @@
       void (async()=>{const saved=await actions.flushSave();if(saved)location.assign(destination.href);else{state.navigating=false;actions.showToast("Your plan is still unsaved. Retry before leaving this page.");}})();
     });
     document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")actions.sendKeepaliveSave();});
-    window.addEventListener("pagehide",()=>{actions.destroyMuscleChart?.();actions.sendKeepaliveSave();});
-    window.addEventListener("pageshow",()=>{if(state.ready&&!state.accountChanged)actions.restoreMuscleChart?.();});
+    window.addEventListener("pagehide",actions.sendKeepaliveSave);
     window.addEventListener("beforeunload",event=>{if(state.ready&&state.savedRevision<state.revision){actions.sendKeepaliveSave();event.preventDefault();event.returnValue="";}});
   }
 

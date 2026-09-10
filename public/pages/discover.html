@@ -13,11 +13,11 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icons/strata-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="/fonts.css?v=7.8.1" />
-    <link rel="stylesheet" href="/experience.css?v=7.8.1" />
-    <link rel="stylesheet" href="discover.css?v=7.8.1" />
-    <link rel="stylesheet" href="/product-signals.css?v=7.8.1" />
-    <script src="/motion.js?v=7.8.1"></script>
+    <link rel="stylesheet" href="/fonts.css?v=7.8.0" />
+    <link rel="stylesheet" href="/experience.css?v=7.8.0" />
+    <link rel="stylesheet" href="discover.css?v=7.8.0" />
+    <link rel="stylesheet" href="/product-signals.css?v=7.8.0" />
+    <script src="/motion.js?v=7.8.0"></script>
   </head>
   <body class="plus-studio">
     <a class="skip-link" href="#todayWorkspace">Skip to today’s training</a>
@@ -134,26 +134,6 @@
               <article><span>Consistency</span><strong id="progressConsistency">—</strong><p id="progressConsistencyDetail">Weeks with at least one completed session, last four weeks.</p></article>
               <article><span>Saved sessions</span><strong id="progressSessions">—</strong><p id="progressSessionsDetail">Completed sessions in the loaded history window.</p></article>
             </div>
-            <section class="training-memory-trend" id="trainingMemoryTrend" aria-labelledby="trainingMemoryTrendTitle" aria-describedby="trainingMemoryTrendDescription">
-              <header class="training-memory-trend-head">
-                <div><p class="kicker">Training Memory · exact comparisons</p><h3 id="trainingMemoryTrendTitle">TRAINING MEMORY TREND</h3><p id="trainingMemoryTrendDescription">Follow one recorded movement across completed sessions. Measurement, load type, and unit stay separate so the line means what it says.</p></div>
-                <div class="training-memory-trend-controls" id="trainingMemoryTrendControls" hidden>
-                  <label for="trainingMemoryMovement"><span>Movement &amp; format</span><select id="trainingMemoryMovement" name="trainingMemoryMovement"><option value="">Loading recorded movements…</option></select></label>
-                  <label for="trainingMemoryMetric"><span>Measure</span><select id="trainingMemoryMetric" name="trainingMemoryMetric"><option value="">Choose a movement first</option></select></label>
-                </div>
-              </header>
-              <div class="training-memory-chart-frame" id="trainingMemoryChartFrame" hidden>
-                <div class="training-memory-chart" id="trainingMemoryChart"></div>
-                <div class="training-memory-chart-meta"><p id="trainingMemoryTrendStatus" role="status" aria-live="polite" aria-atomic="true">Preparing your recorded history…</p><span id="trainingMemoryTrendScope">Only completed, like-for-like sessions are compared.</span></div>
-              </div>
-              <div class="training-memory-trend-empty" id="trainingMemoryTrendEmpty">
-                <span aria-hidden="true">↗</span><div><strong id="trainingMemoryTrendEmptyTitle">REPEAT A MOVEMENT TO DRAW THE LINE.</strong><p id="trainingMemoryTrendEmptyDetail">One completed session is a baseline, not a trend. Complete the same movement again with the same logging format and unit.</p></div>
-              </div>
-              <details class="training-memory-exact" id="trainingMemoryExact" hidden>
-                <summary>View exact session values <span aria-hidden="true">+</span></summary>
-                <div class="training-memory-exact-scroll" id="trainingMemoryExactValues" role="region" aria-label="Exact Training Memory session values" tabindex="0"></div>
-              </details>
-            </section>
             <div class="progress-detail-grid">
               <section aria-labelledby="repeatImprovementTitle"><p class="kicker" id="repeatImprovementScope">Comparable sessions</p><h3 id="repeatImprovementTitle">REPEAT IMPROVEMENTS</h3><div id="repeatImprovementList" class="progress-list"><p class="progress-empty">Repeat an exercise in two completed sessions to see a like-for-like change.</p></div></section>
               <section aria-labelledby="personalBestTitle"><p class="kicker" id="personalBestScope">From your recorded history</p><h3 id="personalBestTitle">LOGGED PERSONAL BESTS</h3><div id="personalBestList" class="progress-list"><p class="progress-empty">Your strongest comparable performances will appear after you log workouts.</p></div></section>
@@ -366,7 +346,7 @@
 
     </main>
 
-    <footer class="build-footer">STRATA · Build 7.8.1 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
+    <footer class="build-footer">STRATA · Build 7.8.0 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
 
     <aside class="compare-tray" id="compareTray" hidden aria-label="Exercise comparison tray">
       <div><span>EXERCISE BATTLE</span><p id="compareNames">Choose 2–4 exercises</p></div>
@@ -399,25 +379,22 @@
     </dialog>
     <noscript><div class="no-script-note" role="status"><strong>Strata+ needs JavaScript for personalized tools.</strong> The page content remains available, but saving, filtering, comparing, and plan building require JavaScript.</div></noscript>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=7.8.1"></script>
-    <script src="/product-signals.js?v=7.8.1"></script>
-    <script src="discovery-core.js?v=7.8.1"></script>
-    <script src="monthly-plan-core.js?v=7.8.1"></script>
-    <script src="training-block-core.js?v=7.8.1"></script>
-    <script src="discover-state.js?v=7.8.1"></script>
-    <script src="discover-api.js?v=7.8.1"></script>
-    <script src="discover-navigation.js?v=7.8.1"></script>
-    <script src="discover-progress.js?v=7.8.1"></script>
-    <script src="/particle-charts-1.0.0.min.js?v=7.8.1" integrity="sha384-joGLiJhhw9MfAzG3mRZB0Qm16f7kfXvhb0FxHC7mlfK/lH4Ih3w3DkhbSoXGfKPQ" crossorigin="anonymous"></script>
-    <script src="particle-chart-core.js?v=7.8.1"></script>
-    <script src="discover-chart.js?v=7.8.1"></script>
-    <script src="discover-render.js?v=7.8.1"></script>
-    <script src="discover-catalog.js?v=7.8.1"></script>
-    <script src="discover-detail.js?v=7.8.1"></script>
-    <script src="discover-community.js?v=7.8.1"></script>
-    <script src="discover-session.js?v=7.8.1"></script>
-    <script src="discover-sharing.js?v=7.8.1"></script>
-    <script src="discover-events.js?v=7.8.1"></script>
-    <script src="discover.js?v=7.8.1"></script>
+    <script src="/pwa.js?v=7.8.0"></script>
+    <script src="/product-signals.js?v=7.8.0"></script>
+    <script src="discovery-core.js?v=7.8.0"></script>
+    <script src="monthly-plan-core.js?v=7.8.0"></script>
+    <script src="training-block-core.js?v=7.8.0"></script>
+    <script src="discover-state.js?v=7.8.0"></script>
+    <script src="discover-api.js?v=7.8.0"></script>
+    <script src="discover-navigation.js?v=7.8.0"></script>
+    <script src="discover-progress.js?v=7.8.0"></script>
+    <script src="discover-render.js?v=7.8.0"></script>
+    <script src="discover-catalog.js?v=7.8.0"></script>
+    <script src="discover-detail.js?v=7.8.0"></script>
+    <script src="discover-community.js?v=7.8.0"></script>
+    <script src="discover-session.js?v=7.8.0"></script>
+    <script src="discover-sharing.js?v=7.8.0"></script>
+    <script src="discover-events.js?v=7.8.0"></script>
+    <script src="discover.js?v=7.8.0"></script>
   </body>
 </html>

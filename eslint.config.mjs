@@ -25,7 +25,7 @@ const correctnessRules={
 
 export default [
   {
-    ignores:["node_modules/**","coverage/**","data/**","test-runtime/**","public/scripts/vendor/**"]
+    ignores:["node_modules/**","coverage/**","data/**","test-runtime/**"]
   },
   js.configs.recommended,
   {

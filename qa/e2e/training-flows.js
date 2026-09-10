@@ -237,53 +237,8 @@ test("training journeys use real browser controls and isolated local fixtures",{
       const startedAt=past.startedAt+2_000+index*1_000,distractor={id:`memory-newer-${index}`,title:`Newer unrelated ${index}`,planDay:"Tuesday",date:"2026-09-02",status:"completed",startedAt,completedAt:startedAt+500,elapsedSeconds:500,restEndsAt:null,entries:[{id:`memory-newer-entry-${index}`,exerciseId:secondExercise.id,planInstanceId:"memory-plan-second",measurement:"reps",loadType:"external",unit:"kg",prescribedReps:"8–12",note:"",effortType:"none",supersetGroup:"",replacedFromExerciseId:"",sets:[{reps:8,weight:20+index,seconds:null,completed:true,effort:null}]}]};
       const distractorSave=await context.request.post("/api/workouts",{headers:{Origin:baseUrl,"X-CSRF-Token":csrf,"X-Strata-User":user.id},data:{workout:distractor}});assert.equal(distractorSave.status(),201,await distractorSave.text());
     }
-    await goto(page,"/discover.html#progressWorkspace");
-    const particleRoot=page.locator("#trainingMemoryChart .pchart-root");await particleRoot.waitFor({state:"visible"});
-    assert.equal(await particleRoot.count(),1,"Progress should construct one particle-chart root");
-    assert.equal(await page.locator("#trainingMemoryChart canvas.pchart-canvas").count(),1,"Progress should expose the chart canvas");
-    assert.equal(await page.locator("#trainingMemoryChart .pchart-a11y table").count(),1,"The particle chart should retain its screen-reader data table");
-    const chartDescription=await page.locator("#trainingMemoryChart canvas").getAttribute("aria-describedby");assert.ok(chartDescription&&await page.locator(`#${chartDescription}`).count(),"The chart description must reference a real status node");
-    assert.equal(await page.locator("#trainingMemoryExactValues tbody tr").count(),12,"The visible exact-values fallback should mirror the bounded chart window");
-    await page.selectOption("#trainingMemoryMetric","volume");
-    assert.equal(await page.locator("#trainingMemoryChart .pchart-root").count(),1,"Changing the metric should update the existing chart instead of appending another root");
-    assert.match(await page.locator("#trainingMemoryExactValues").textContent(),/312 kg·reps/);
-    const pageShowPreflight=await page.evaluate(()=>{
-      globalThis.dispatchEvent(new globalThis.PageTransitionEvent("pageshow",{persisted:true}));
-      return{mainHidden:globalThis.document.querySelector("main").hidden,chart:globalThis.document.querySelector("#trainingMemoryChart").innerHTML,exact:globalThis.document.querySelector("#trainingMemoryExactValues").innerHTML,movement:globalThis.document.querySelector("#trainingMemoryMovement").innerHTML,metric:globalThis.document.querySelector("#trainingMemoryMetric").innerHTML};
-    });
-    assert.deepEqual(pageShowPreflight,{mainHidden:true,chart:"",exact:"",movement:"",metric:""},"A persisted-page restore must synchronously purge private chart DOM before awaiting identity");
-    await particleRoot.waitFor({state:"visible"});
-    assert.equal(await particleRoot.count(),1,"Same-account page restoration should rebuild one chart root without duplication");
-    assert.equal(await page.locator("#trainingMemoryExactValues tbody tr").count(),12,"Same-account restoration should recover the exact chart window only after identity validation");
-    await page.setViewportSize({width:320,height:760});await page.evaluate(()=>new Promise(resolve=>globalThis.requestAnimationFrame(()=>globalThis.requestAnimationFrame(resolve))));
-    await page.locator("#trainingMemoryExact summary").click();
-    const chartLayout=await page.evaluate(()=>{
-      const bounds=(node)=>{const box=node.getBoundingClientRect();return{left:box.left,right:box.right,width:box.width,height:box.height};},panel=bounds(globalThis.document.querySelector("#trainingMemoryTrend")),chart=bounds(globalThis.document.querySelector("#trainingMemoryChart")),root=bounds(globalThis.document.querySelector("#trainingMemoryChart .pchart-root")),controls=[...globalThis.document.querySelectorAll("#trainingMemoryTrendControls select")].map(bounds),exact=globalThis.document.querySelector("#trainingMemoryExactValues");
-      return{overflow:globalThis.document.documentElement.scrollWidth-globalThis.document.documentElement.clientWidth,panel,chart,root,controls,exactOverflow:exact.scrollWidth-exact.clientWidth};
-    });
-    assert.ok(chartLayout.overflow<=1,`Training Memory chart overflows 320px by ${chartLayout.overflow}px`);
-    for(const [name,box] of [["chart host",chartLayout.chart],["particle root",chartLayout.root]])assert.ok(box.left>=chartLayout.panel.left-.5&&box.right<=chartLayout.panel.right+.5,`${name} must stay inside the 320px Progress panel`);
-    assert.ok(chartLayout.controls.every(({left,right,height})=>left>=chartLayout.panel.left-.5&&right<=chartLayout.panel.right+.5&&height>=44),"Chart selectors must remain contained 44px targets at 320px");
-    assert.ok(chartLayout.exactOverflow>0,"Wide exact values should scroll inside their own container instead of widening the page");
-    await page.setViewportSize({width:390,height:844});
     const memoryRequests=[];page.on("request",(request)=>{const url=new URL(request.url());if(url.pathname==="/api/workouts"&&url.searchParams.get("memory")==="1")memoryRequests.push(url.search);});
-    await goto(page,"/workout.html?day=Monday");await page.locator("#startWorkout").waitFor({state:"visible"});
-    const workoutChart=page.locator("#performanceChartCanvas .pchart-root");await workoutChart.waitFor({state:"visible"});
-    assert.equal(await workoutChart.count(),1,"Workout History should construct one particle-chart root for comparable sessions");
-    assert.equal(await page.locator("#performanceChartCanvas canvas.pchart-canvas").count(),1,"Workout History should expose one chart canvas");
-    assert.equal(await page.locator("#performanceChartCanvas .pchart-a11y table").count(),1,"Workout History should retain Particle Charts' screen-reader table");
-    assert.equal(await page.locator("#chartTableBody tr").count(),20,"Workout History should retain every exact value in the loaded comparison window");
-    const workoutChartDescription=(await page.locator("#performanceChartCanvas canvas").getAttribute("aria-describedby")||"").split(/\s+/u).filter(Boolean);assert.deepEqual(workoutChartDescription,["chartStatus","chartScope"]);for(const id of workoutChartDescription)assert.equal(await page.locator(`#${id}`).count(),1,`${id} must be a real chart description node`);
-    await page.selectOption("#chartMetric","volume");assert.equal(await page.locator("#performanceChartCanvas .pchart-root").count(),1,"Changing the Workout History metric must update the existing root");assert.equal(await page.locator("#chartTableBody tr").count(),20,"The exact values must remain after a chart update");
-    await page.setViewportSize({width:320,height:760});await page.evaluate(()=>new Promise(resolve=>globalThis.requestAnimationFrame(()=>globalThis.requestAnimationFrame(resolve))));await page.locator("#chartData summary").click();
-    const workoutChartLayout=await page.evaluate(()=>{
-      const bounds=(node)=>{const box=node.getBoundingClientRect();return{left:box.left,right:box.right,height:box.height};},panel=bounds(globalThis.document.querySelector(".progress-panel")),frame=bounds(globalThis.document.querySelector("#performanceChartFrame")),host=bounds(globalThis.document.querySelector("#performanceChartCanvas")),root=bounds(globalThis.document.querySelector("#performanceChartCanvas .pchart-root")),controls=[...globalThis.document.querySelectorAll("#chartControls select")].map(bounds),exact=globalThis.document.querySelector(".chart-table-scroll");
-      return{overflow:globalThis.document.documentElement.scrollWidth-globalThis.document.documentElement.clientWidth,panel,frame,host,root,controls,exactOverflow:exact.scrollWidth-exact.clientWidth};
-    });
-    assert.ok(workoutChartLayout.overflow<=1,`Workout History overflows 320px by ${workoutChartLayout.overflow}px`);
-    for(const [name,box] of [["chart frame",workoutChartLayout.frame],["chart host",workoutChartLayout.host],["particle root",workoutChartLayout.root]])assert.ok(box.left>=workoutChartLayout.panel.left-.5&&box.right<=workoutChartLayout.panel.right+.5,`${name} must stay inside the 320px Workout History panel`);
-    assert.ok(workoutChartLayout.controls.every(({left,right,height})=>left>=workoutChartLayout.panel.left-.5&&right<=workoutChartLayout.panel.right+.5&&height>=44),"Workout History selectors must remain contained 44px targets at 320px");assert.ok(workoutChartLayout.exactOverflow>0,"Workout History exact values should scroll internally instead of widening the page");
-    await page.setViewportSize({width:390,height:844});await page.click("#startWorkout");await page.locator("#sessionPanel").waitFor({state:"visible"});
+    await goto(page,"/workout.html?day=Monday");await page.locator("#startWorkout").waitFor({state:"visible"});await page.click("#startWorkout");await page.locator("#sessionPanel").waitFor({state:"visible"});
     let cards=page.locator("#sessionEntries [data-entry]"),first=cards.nth(0),second=cards.nth(1);
     const openMore=async(card)=>{const details=card.locator(".exercise-more");if(!await details.evaluate((node)=>node.open))await details.locator(":scope > summary").click();};
     await page.waitForFunction(()=>globalThis.document.querySelector("#sessionEntries [data-entry] .memory-previous")?.textContent?.includes("2026-09-01"));

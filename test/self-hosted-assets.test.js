@@ -2,7 +2,6 @@
 
 const test=require("node:test");
 const assert=require("node:assert/strict");
-const {createHash}=require("node:crypto");
 const {readFileSync,readdirSync,statSync}=require("node:fs");
 const {join}=require("node:path");
 const {securityHeaders}=require("../src/http");
@@ -13,9 +12,6 @@ const PAGES=join(PUBLIC,"pages");
 const STYLES=join(PUBLIC,"styles");
 const BUILD=require(join(ROOT,"package.json")).strataBuild||require(join(ROOT,"package.json")).version;
 const read=(path)=>readFileSync(join(ROOT,path),"utf8");
-const PARTICLE_CHART_FILE="public/scripts/vendor/particle-charts-1.0.0.min.js";
-const PARTICLE_CHART_SHA256="decc110ce9f87238e2c3b682ff73844422af772147ce6f43c8a646f29f39404a";
-const PARTICLE_CHART_SRI="sha384-joGLiJhhw9MfAzG3mRZB0Qm16f7kfXvhb0FxHC7mlfK/lH4Ih3w3DkhbSoXGfKPQ";
 
 function contrastRatio(foreground,background) {
   const luminance=(hex)=>{
@@ -70,30 +66,6 @@ test("font files, homepage photographs, credits, and licenses stay bundled",()=>
   assert.match(notices,/training-story\.jpg[\s\S]*HamZa NOUASRIA/);
 });
 
-test("Particle Charts is an exact pinned same-origin artifact with its complete license",()=>{
-  const artifact=readFileSync(join(ROOT,PARTICLE_CHART_FILE));
-  assert.equal(artifact.length,63_336);
-  assert.equal(createHash("sha256").update(artifact).digest("hex"),PARTICLE_CHART_SHA256);
-  assert.match(artifact.toString("utf8",0,240),/Particle Charts v1\.0\.0[\s\S]*MIT Licence/);
-
-  for(const [file,label,adapter] of [["discover.html","Strata+","discover-chart.js"],["planner.html","Plan","planner-charts.js"],["workout.html","Workout History","workout-chart.js"]]){
-    const page=read(`public/pages/${file}`);
-    const scriptTag=page.match(/<script\b[^>]*\bsrc="\/particle-charts-1\.0\.0\.min\.js\?v=[^"]+"[^>]*><\/script>/i)?.[0]||"";
-    assert.ok(scriptTag,`${label} must load the pinned Particle Charts artifact from the STRATA origin`);
-    assert.match(scriptTag,new RegExp(`\\?v=${BUILD.replace(/\./g,"\\.")}(?:"|&)`));
-    assert.match(scriptTag,new RegExp(`\\bintegrity="${PARTICLE_CHART_SRI.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}"`));
-    assert.doesNotMatch(page,/https?:\/\/(?:cdn\.jsdelivr\.net|unpkg\.com)\/[^"'\s]*particle-charts/i);
-    assert.match(page,new RegExp(`src="/?particle-chart-core\\.js\\?v=${BUILD.replace(/\./g,"\\.")}"`));
-    assert.match(page,new RegExp(`src="/?${adapter.replace(".","\\.")}\\?v=${BUILD.replace(/\./g,"\\.")}"`));
-  }
-
-  const notices=read("docs/third-party-assets.md");
-  assert.match(notices,/Particle Charts v1\.0\.0/);
-  assert.match(notices,new RegExp(PARTICLE_CHART_SHA256));
-  assert.match(notices,new RegExp(PARTICLE_CHART_SRI.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")));
-  assert.match(notices,/Copyright \(c\) 2026 Blake Williford[\s\S]*Permission is hereby granted, free of charge[\s\S]*THE SOFTWARE IS PROVIDED "AS IS"/);
-});
-
 test("privacy copy and the content policy describe and enforce same-origin assets",()=>{
   const privacy=read("public/pages/privacy.html");
   assert.match(privacy,/serves its display fonts and homepage photographs from the same STRATA origin/i);
@@ -105,7 +77,7 @@ test("privacy copy and the content policy describe and enforce same-origin asset
   assert.deepEqual(directives["font-src"],["'self'"]);
   assert.deepEqual(directives["style-src"],["'self'","'unsafe-inline'"]);
   assert.deepEqual(directives["img-src"],["'self'","https://*.paddle.com","data:"]);
-  assert.doesNotMatch(csp,/fonts\.googleapis|fonts\.gstatic|images\.unsplash|cdn\.jsdelivr|unpkg\.com/i);
+  assert.doesNotMatch(csp,/fonts\.googleapis|fonts\.gstatic|images\.unsplash/i);
 });
 
 test("homepage source notes meet normal-text contrast",()=>{

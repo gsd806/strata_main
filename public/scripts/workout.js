@@ -9,14 +9,12 @@
   const C=globalThis.StrataWorkoutCalendar;
   const H=globalThis.StrataWorkoutHistory;
   const Q=globalThis.StrataWorkoutGuidance;
-  const V=globalThis.StrataWorkoutChart;
   const $=(id)=>document.getElementById(id);
   const signal=name=>globalThis.StrataSignals?.record?.(name);
   const state=S.create(W,location);
   const view=R.create({state,workout:W,discovery:G});
   const {esc,number,exercise,formatLabel,hasActuals,memoryFor}=view;
   const saveError=S.saveError;
-  const chartView=V.create({$,state,workout:W,exercise,formatLabel,esc,number});
   function toast(message){
     $("workoutToast").textContent=message;$("workoutToast").classList.add("is-visible");
     clearTimeout(state.toastTimer);state.toastTimer=setTimeout(()=>$("workoutToast").classList.remove("is-visible"),5000);
@@ -48,24 +46,25 @@
   async function api(path,options={}){
     return client.request(path,options);
   }
-  function hidePrivateWorkoutView(){
-    chartView.clear();document.body.classList.remove("has-workout-access");
-    for(const id of ["trainingRoom","historySection","recoveryPanel","conflictPanel"])$(id).hidden=true;
-    for(const id of ["detailDialog","finishDialog","swapDialog"])if($(id).open)$(id).close();
-    $("detailTitle").textContent="";$("detailBody").innerHTML="";
-  }
   function blockSession(){
-    state.blocked=true;hidePrivateWorkoutView();clearTimeout(state.saveTimer);persistDraft();
+    state.blocked=true;clearTimeout(state.saveTimer);persistDraft();
+    document.body.classList.remove("has-workout-access");
     clearOfflineContext();
+    $("trainingRoom").hidden=true;$("historySection").hidden=true;$("recoveryPanel").hidden=true;$("conflictPanel").hidden=true;
     $("modeNotice").textContent="Your account session changed. Your draft belongs to the original account and has been kept on this device where storage is available.";
     $("loadError").hidden=false;$("loadErrorMessage").textContent="Reload the workout room to use the current account. Sign in to the original account to recover its draft. Account sessions never switch into guest mode automatically.";
     $("retryLoad").textContent="Reload workout room";
+    if($("detailDialog").open)$("detailDialog").close();
+    if($("finishDialog").open)$("finishDialog").close();
+    if($("swapDialog").open)$("swapDialog").close();
   }
   function blockAccess(){
-    state.blocked=true;hidePrivateWorkoutView();clearTimeout(state.saveTimer);persistDraft();
+    state.blocked=true;clearTimeout(state.saveTimer);persistDraft();
+    document.body.classList.remove("has-workout-access");
     clearOfflineContext();
-    $("accessPanel").hidden=false;
+    $("trainingRoom").hidden=true;$("historySection").hidden=true;$("recoveryPanel").hidden=true;$("conflictPanel").hidden=true;$("accessPanel").hidden=false;
     $("modeNotice").textContent="Strata+ access ended. Saved sessions and device drafts are kept; your free Plan is unchanged.";
+    if($("detailDialog").open)$("detailDialog").close();if($("finishDialog").open)$("finishDialog").close();if($("swapDialog").open)$("swapDialog").close();
   }
   const client=A.create({state,onSessionBlocked:blockSession,onAccessBlocked:blockAccess,onIdentity:(current)=>{authorizeOffline(current.user.discovery);writeOfflineContext();}});
   async function assertIdentity(){
@@ -74,13 +73,6 @@
   async function accountRead(path){
     return client.accountRead(path);
   }
-  function revealPrivateWorkoutView(){
-    if(state.blocked)return;
-    $("loadError").hidden=true;$("accessPanel").hidden=true;$("retryLoad").textContent="Try again";document.body.classList.add("has-workout-access");$("trainingRoom").hidden=false;$("historySection").hidden=false;
-    $("modeNotice").innerHTML=`<strong>${esc(state.user.name||"Your account")} · Strata+ active.</strong> Workouts sync securely and can recover on this device. <a href='/account.html'>Account</a>`;
-    renderPlan();renderRecovery();historyView.render();if(state.workout)renderSession();
-  }
-  function identityCheckFailed(error){$("loadError").hidden=false;$("loadErrorMessage").textContent=`${saveError(error)} Private workout details stay hidden until the account check succeeds.`;$("retryLoad").textContent="Retry account check";$("modeNotice").textContent="Workout details hidden while STRATA confirms your account.";}
   function persistDraft(){
     if(!state.workout||!state.ownerId)return true;
     if(state.workout.status==="completed"&&!state.dirty){removeDraft();return true;}
@@ -395,7 +387,7 @@
     state.workout.restEndsAt=Date.now()+seconds*1000;state.pausedSeconds=null;state.timerAnnounced=false;markDirty();tick();
   }
   const guidance=Q.create({$,state,accountRead,api,assertIdentity,saveError,exercise,esc,number,renderPlan});
-  const historyView=H.create({$,state,workout:W,view,esc,chart:chartView,accountRead,saveError,blockSession,renderPlan,mergeMemory,memoryReadyFor,renderSession,loadWorkoutMemory,fetchWorkout,selectWorkout,toast,recover,locationLike:location,historyLike:history});
+  const historyView=H.create({$,state,workout:W,view,esc,number,exercise,formatLabel,accountRead,saveError,blockSession,renderPlan,mergeMemory,memoryReadyFor,renderSession,loadWorkoutMemory,fetchWorkout,selectWorkout,toast,recover,locationLike:location,historyLike:history});
   async function initialize(){
     if(state.loading)return;
     if(state.blocked){location.reload();return;}
@@ -422,7 +414,7 @@
       $("modeNotice").textContent="The workout room could not load. Your saved sessions and device drafts have been kept.";
     }finally{state.loading=false;}
   }
-  E.bind({$,state,workout:W,number,signal,actions:{initialize,renderPlan,toast,selectWorkout,markDirty,errorMessage,entryFor,hasActuals,exercise,openSwap,toggleSuperset,applyRemembered,renderSession,startRest,tick,rememberPreferences,focusNextSet,flushSave,persistDraft,returnToPlan,exportDraft,resolveAdaptation:guidance.resolve,recover,removeDraft,scanDrafts,showCompleted,upsertHistory:historyView.upsert,openDetail:historyView.openDetail,loadHistory:historyView.load,renderMetricOptions:chartView.renderMetricOptions,renderChart:chartView.render,closeSwap,renderSwapComparison,applyWorkoutSwap,reviewPlanSwap,approvePlanSwap,assertIdentity,hidePrivateWorkoutView,revealPrivateWorkoutView,identityCheckFailed,saveCheckIn:guidance.save}});
+  E.bind({$,state,workout:W,number,signal,actions:{initialize,renderPlan,toast,selectWorkout,markDirty,errorMessage,entryFor,hasActuals,exercise,openSwap,toggleSuperset,applyRemembered,renderSession,startRest,tick,rememberPreferences,focusNextSet,flushSave,persistDraft,returnToPlan,exportDraft,resolveAdaptation:guidance.resolve,recover,removeDraft,scanDrafts,showCompleted,upsertHistory:historyView.upsert,openDetail:historyView.openDetail,loadHistory:historyView.load,renderMetricOptions:historyView.renderMetricOptions,renderChart:historyView.renderChart,closeSwap,renderSwapComparison,applyWorkoutSwap,reviewPlanSwap,approvePlanSwap,assertIdentity,status,saveError,saveCheckIn:guidance.save}});
   setInterval(tick,1000);
   void initialize();
 })();

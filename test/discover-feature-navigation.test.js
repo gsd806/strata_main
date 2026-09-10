@@ -7,7 +7,7 @@ const {join}=require("node:path");
 
 const PROJECT_ROOT=join(__dirname,"..");
 const read=(...parts)=>readFileSync(join(PROJECT_ROOT,"public",...parts),"utf8");
-const discoverModules=["discover-state.js","discover-api.js","discover-navigation.js","discover-progress.js","particle-chart-core.js","discover-chart.js","discover-render.js","discover-catalog.js","discover-detail.js","discover-community.js","discover-session.js","discover-sharing.js","discover-events.js","discover.js"];
+const discoverModules=["discover-state.js","discover-api.js","discover-navigation.js","discover-progress.js","discover-render.js","discover-catalog.js","discover-detail.js","discover-community.js","discover-session.js","discover-sharing.js","discover-events.js","discover.js"];
 const discoverScript=()=>discoverModules.map(name=>read("scripts",name)).join("\n");
 
 test("Strata+ progressively enhances four primary destinations and focused supporting tools",()=>{
@@ -39,10 +39,6 @@ test("Strata+ loads bounded state, API, navigation, feature controllers, renderi
   const html=read("pages","discover.html"),names=discoverModules;
   let previous=-1;
   for(const name of names){const index=html.indexOf(`src="${name}?v=`);assert.ok(index>previous,`${name} must load after its dependencies`);previous=index;}
-  const progressIndex=html.indexOf('src="discover-progress.js?v='),vendorIndex=html.indexOf('src="/particle-charts-1.0.0.min.js?v='),coreIndex=html.indexOf('src="particle-chart-core.js?v='),chartIndex=html.indexOf('src="discover-chart.js?v=');
-  assert.ok(progressIndex<vendorIndex&&vendorIndex<coreIndex&&coreIndex<chartIndex,"the pinned runtime and shared STRATA chart core must load between pure progress logic and its adapter");
-  assert.match(html,/src="\/particle-charts-1\.0\.0\.min\.js\?v=[^"]+" integrity="sha384-[^"]+" crossorigin="anonymous"/);
-  assert.doesNotMatch(html,/(?:unpkg|jsdelivr|cdnjs)[^"']*particle/i,"the chart runtime must stay on the STRATA origin");
   for(const name of names.slice(0,-1))assert.ok(read("scripts",name).split("\n").length<=120,`${name} should remain a small boundary module`);
   assert.ok(read("scripts","discover.js").split("\n").length<=700,"the incremental shell should stay below the second-pass module budget");
 });
@@ -161,21 +157,13 @@ test("Today presents one primary action with an honest, comparable training brie
 
 test("Progress reports bounded log-derived measures without pretending to assess recovery",()=>{
   const html=read("pages","discover.html"),script=discoverScript();
-  for(const id of ["progressWorkspace","progressAdherence","progressVolume","progressConsistency","progressSessions","repeatImprovementList","personalBestList","trainingMemoryTrend","trainingMemoryTrendTitle","trainingMemoryTrendDescription","trainingMemoryTrendControls","trainingMemoryMovement","trainingMemoryMetric","trainingMemoryChartFrame","trainingMemoryChart","trainingMemoryTrendStatus","trainingMemoryTrendScope","trainingMemoryTrendEmpty","trainingMemoryTrendEmptyTitle","trainingMemoryTrendEmptyDetail","trainingMemoryExact","trainingMemoryExactValues"]){
+  for(const id of ["progressWorkspace","progressAdherence","progressVolume","progressConsistency","progressSessions","repeatImprovementList","personalBestList"]){
     assert.match(html,new RegExp(`\\bid="${id}"`),id);
   }
-  assert.match(html,/id="trainingMemoryTrend"[^>]*aria-labelledby="trainingMemoryTrendTitle"[^>]*aria-describedby="trainingMemoryTrendDescription"/);
-  assert.match(html,/<label for="trainingMemoryMovement"><span>Movement &amp; format<\/span><select id="trainingMemoryMovement"/);
-  assert.match(html,/<label for="trainingMemoryMetric"><span>Measure<\/span><select id="trainingMemoryMetric"/);
-  assert.match(html,/id="trainingMemoryTrendStatus" role="status" aria-live="polite" aria-atomic="true"/);
-  assert.match(html,/<details class="training-memory-exact" id="trainingMemoryExact"[^>]*>[\s\S]*?<summary>View exact session values/);
   assert.match(html,/They describe training history—not recovery, injury risk, or guaranteed results/);
   assert.match(html,/load volume is load × repetitions from completed sets/);
   assert.match(script,/\/api\/workouts\?limit=100&offset=0/);
   assert.match(script,/summaryKey\(summary,metric\)/);
-  assert.match(script,/ChartCore\.createProgressChart\(\{element:el,state,exerciseName,readableDate,escapeHtml\}\)/);
-  assert.match(script,/trainingMemoryMovement"\)\.addEventListener\("change"[\s\S]*?state\.progressChartMetric="";actions\.renderProgressChart\(\)/);
-  assert.match(script,/trainingMemoryMetric"\)\.addEventListener\("change"[\s\S]*?actions\.renderProgressChart\(\)/);
   assert.match(html,/Weeks with at least one completed session, last four weeks/);
   assert.match(script,/summary\.loadType!=="external"/,"assistance and bodyweight must not be added to external load volume");
   const assistedMetricLine=script.split("\n").find((line)=>line.includes('summary.loadType==="assisted"'))||"";
@@ -226,8 +214,6 @@ test("training blocks and adaptations require explicit, concurrency-aware approv
 test("Strata+ clears private state before focus and visibility account revalidation",()=>{
   const script=discoverScript();
 
-  assert.match(script,/function clearPrivateWorkspace\(\)\{\s*progressChartController\?\.clear\(\{wipe:true\}\);\s*workspaceGeneration\+=1/,
-    "private chart canvas, controls, and accessible table must be wiped before the account generation changes");
   assert.match(script,/function clearPrivateWorkspace\(\)\{[\s\S]*?workspaceGeneration\+=1;workspaceReady=false;[\s\S]*?state\.user=null;state\.csrfToken="";[\s\S]*?main\.hidden=true;main\.inert=true/);
   assert.match(script,/requestGeneration!==getGeneration\(\)[\s\S]*?STALE_WORKSPACE_RESPONSE/);
   assert.match(script,/String\(data\.user\?\.id\|\|""\)!==String\(identity\.user\?\.id\|\|""\)/);

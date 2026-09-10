@@ -1,7 +1,6 @@
 "use strict";
 
 const INSIGHTS=globalThis.StrataPlanInsights;
-const CHARTS=globalThis.StrataPlannerCharts;
 const LOGIC=globalThis.StrataPlannerLogic;
 const STATE=globalThis.StrataPlannerState;
 const API=globalThis.StrataPlannerApi;
@@ -22,7 +21,6 @@ const MAX_DAY_ITEMS=LOGIC.MAX_DAY_ITEMS;
 const MAX_WEEK_ITEMS=LOGIC.MAX_WEEK_ITEMS;
 const state=STATE.createState({desktopPageSize:LIBRARY_DESKTOP_PAGE_SIZE});
 const el=(id)=>document.getElementById(id);
-const muscleChart=CHARTS?.createMuscleChart({host:el("plannerMuscleChart"),shell:el("plannerMuscleChartShell")});
 const signal=name=>globalThis.StrataSignals?.record?.(name);
 const apiClient=API.createClient({
   fetchImpl:(...args)=>fetch(...args),
@@ -267,8 +265,8 @@ function renderSummary(){
   renderInsights();
 }
 
-function insightRows(entries,emptyMessage,limit=6){
-  const rows=entries.slice(0,limit),peak=Math.max(1,...rows.map((entry)=>Number(entry.sets)||0));
+function insightRows(entries,emptyMessage){
+  const rows=entries.slice(0,6),peak=Math.max(1,...rows.map((entry)=>Number(entry.sets)||0));
   return rows.length?rows.map((entry)=>`<div class="insight-row"><span>${escapeHtml(entry.label)}</span><div aria-hidden="true"><i style="width:${Math.max(3,(Number(entry.sets)||0)/peak*100)}%"></i></div><strong>${Number(entry.sets)||0} sets</strong></div>`).join(""):`<p class="insight-empty">${escapeHtml(emptyMessage)}</p>`;
 }
 
@@ -283,12 +281,11 @@ function syncCopyDayOptions(){
 }
 
 function renderInsights(){
-  if(!INSIGHTS||!state.plan){muscleChart?.destroy();el("planInsights").hidden=true;return;}
+  if(!INSIGHTS||!state.plan){el("planInsights").hidden=true;return;}
   el("planInsights").hidden=false;
   const analysis=INSIGHTS.analyzePlan(state.plan,state.exercises),largest=analysis.days.reduce((best,day)=>day.workingSets>best.workingSets?day:best,analysis.days[0]);
   el("insightMetrics").innerHTML=`<div><span>Planning estimate</span><strong>${analysis.metrics.estimatedMinutes} min</strong><small>sets + transitions</small></div><div><span>Largest day</span><strong>${largest.workingSets?escapeHtml(largest.day):"—"}</strong><small>${largest.workingSets} working sets</small></div><div><span>Primary areas</span><strong>${analysis.muscles.length}</strong><small>catalog groups</small></div><div><span>Equipment setups</span><strong>${analysis.equipment.length}</strong><small>across the week</small></div>`;
-  el("insightMuscles").innerHTML=insightRows(analysis.muscles,"Add movements to see primary-muscle distribution.",8);
-  muscleChart?.render(analysis.muscles);
+  el("insightMuscles").innerHTML=insightRows(analysis.muscles,"Add movements to see primary-muscle distribution.");
   el("insightPatterns").innerHTML=insightRows(analysis.patterns,"Add movements to see pattern distribution.");
   el("insightEquipment").innerHTML=insightRows(analysis.equipment,"Add movements to see equipment concentration.");
   el("insightAlerts").innerHTML=analysis.alerts.length?analysis.alerts.map((alert)=>`<article class="insight-alert ${escapeHtml(alert.tone)}"><strong>${escapeHtml(alert.title)}</strong><p>${escapeHtml(alert.detail)}</p><span>${escapeHtml(alert.action)}</span></article>`).join(""):'<article class="insight-alert clear"><strong>No obvious structure conflicts</strong><p>The current week has no observable density, duplicate, high-frequency, or recovery-marker flags.</p><span>Review, then train</span></article>';
@@ -580,13 +577,12 @@ function bindPlannerUIEvents(){
   EVENTS.bindPlannerEvents({document,window,location,el,state,searchDebounceMs:SEARCH_DEBOUNCE_MS,actions:{
     api,init,addExercise,moveItem,persistSelectedDay,renderLibrary,renderFilters,resetLibraryWindow,openExerciseGuide,instanceSelector,renderWeek,showToast,openReplacement,removeItem,setRestDay,moveWithinDay,libraryPageSize,unpublishSharedPlan,updatePrescriptionInput,
     downloadWeeklyPlan,undoLastRemoval,openTemplates,saveWeekTemplate,weekTemplates,previewTemplate,importWeekTemplate,useWeekTemplate,deleteWeekTemplate,syncCopyDayOptions,openCopyDayPreview,applyCopyDayPreview,closeCopyDayPreview,renderReplacementOptions,confirmReplacement,restoreExerciseGuideFocus,selectRecoveredDraft,
-    setSaveStatus,flushSave,reviewConflictDraft,keepLatestPlan,renderActivationCandidate,toggleActivationComparison,setActivationStatus,keepAccountActivationPlan,claimActivationPlan,openSharePanel,closeSharePanel,publishWeeklyPlan,loadSharedPlans,sendKeepaliveSave,destroyMuscleChart:()=>muscleChart?.destroy(),restoreMuscleChart:()=>{if(INSIGHTS&&state.plan)muscleChart?.render(INSIGHTS.analyzePlan(state.plan,state.exercises).muscles);}
+    setSaveStatus,flushSave,reviewConflictDraft,keepLatestPlan,renderActivationCandidate,toggleActivationComparison,setActivationStatus,keepAccountActivationPlan,claimActivationPlan,openSharePanel,closeSharePanel,publishWeeklyPlan,loadSharedPlans,sendKeepaliveSave
   }});
 }
 
 async function init({guestOnly=false}={}){
   setReady(false);
-  muscleChart?.destroy();
   if(el("copyDayDialog").open)el("copyDayDialog").close();
   state.copyPreview=null;state.copyTrigger=null;
   hideActivationPanel();
@@ -595,7 +591,7 @@ async function init({guestOnly=false}={}){
   el("weekSummary").innerHTML="";
   el("weekBoard").innerHTML='<div class="planner-load-state">Loading your weekly plan…</div>';
   try{
-    const exercises=await api("/exercises.json?v=7.8.1");
+    const exercises=await api("/exercises.json?v=7.8.0");
     if(!Array.isArray(exercises))throw new Error("STRATA returned an incomplete exercise library.");
     state.exercises=exercises;
     let result;

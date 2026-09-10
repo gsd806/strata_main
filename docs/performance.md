@@ -34,17 +34,17 @@ The command reports median and p95 latency and exits nonzero when either exceeds
 
 ## Recorded baseline
 
-The Build 7.8.1 source candidate passed every checked-in budget on the local Darwin arm64 host under Node 25.8.2. Each path used eight warm-ups followed by 40 measured samples:
+The Build 7.8.0 source candidate passed every checked-in budget on the local Darwin arm64 host under Node 25.8.2. Each path used eight warm-ups followed by 40 measured samples:
 
 | Operation | Observed median | Observed p95 |
 | --- | ---: | ---: |
-| Health endpoint | 0.436 ms | 0.733 ms |
-| Status endpoint | 0.316 ms | 1.253 ms |
-| Authenticated plan endpoint | 0.324 ms | 0.403 ms |
-| Authenticated plan-save endpoint | 0.542 ms | 0.772 ms |
-| Session lookup | 0.008 ms | 0.011 ms |
-| Plan lookup | 0.004 ms | 0.006 ms |
-| Plan compare-and-swap | 0.044 ms | 0.053 ms |
+| Health endpoint | 0.413 ms | 0.663 ms |
+| Status endpoint | 0.357 ms | 0.892 ms |
+| Authenticated plan endpoint | 0.320 ms | 0.385 ms |
+| Authenticated plan-save endpoint | 0.416 ms | 0.818 ms |
+| Session lookup | 0.008 ms | 0.010 ms |
+| Plan lookup | 0.004 ms | 0.005 ms |
+| Plan compare-and-swap | 0.044 ms | 0.054 ms |
 
 This source-candidate capture used isolated local HTTP, SQLite, and fixture-backed storage. It is regression evidence for the selected code paths, not a production claim or a measurement of hosted Turso, Resend, Paddle, Internet, or multi-user behavior. The supported runtime and CI target remain Node 24, so promotion still requires a green Node 24 CI result.
 

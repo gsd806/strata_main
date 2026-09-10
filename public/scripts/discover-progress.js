@@ -35,49 +35,6 @@
     return null;
   }
   function summaryKey(summary,metric){return `${String(summary.exerciseId||"")}:${String(summary.measurement||"")}:${String(summary.loadType||"")}:${String(summary.unit||"")}:${metric.key}`;}
-  function chartFormatKey(summary){
-    if(!summary||typeof summary.exerciseId!=="string"||!summary.exerciseId.trim()||!["reps","timed"].includes(summary.measurement)||!["external","bodyweight","assisted"].includes(summary.loadType)||!["kg","lb"].includes(summary.unit))return"";
-    return JSON.stringify([summary.exerciseId,summary.measurement,summary.loadType,summary.unit]);
-  }
-  function chartFormatLabel(summary){
-    if(!chartFormatKey(summary))return"";
-    const measurement=summary.measurement==="timed"?"Timed":"Repetitions",load=summary.loadType==="external"?"External load":summary.loadType==="assisted"?"Assisted":"Bodyweight";
-    return `${measurement} · ${load}${summary.loadType==="bodyweight"?"":` · ${summary.unit}`}`;
-  }
-  function chartMetrics(summary){
-    if(!chartFormatKey(summary))return[];
-    if(summary.measurement==="timed")return[{key:"maxSeconds",label:"Longest set",unit:"seconds"},{key:"totalSeconds",label:"Total time",unit:"seconds"}];
-    if(summary.loadType==="external")return[{key:"maxWeight",label:"Heaviest completed set",unit:summary.unit},{key:"volume",label:"External load × reps",unit:`${summary.unit}·reps`},{key:"maxReps",label:"Most reps in one set",unit:"reps"}];
-    if(summary.loadType==="assisted")return[{key:"minAssistance",label:"Least assistance",unit:`${summary.unit} assistance`},{key:"maxReps",label:"Most reps in one set",unit:"reps"},{key:"totalReps",label:"Total repetitions",unit:"reps"}];
-    return[{key:"maxReps",label:"Most reps in one set",unit:"reps"},{key:"totalReps",label:"Total repetitions",unit:"reps"}];
-  }
-  function chartSeries(workouts,key,metric,limit=12){
-    const bounded=Math.max(1,Math.min(24,Math.round(Number(limit)||12))),points=[];
-    for(const workout of completedWorkouts(workouts).slice().reverse()){
-      const startedAt=Number(workout.startedAt),date=String(workout.date||""),parsed=Date.parse(`${date}T00:00:00Z`);if(!Number.isFinite(startedAt)||startedAt<=0||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(parsed)||new Date(parsed).toISOString().slice(0,10)!==date)continue;
-      const matches=workout.exerciseSummaries.filter((summary)=>chartFormatKey(summary)===key&&Number(summary.completedSets)>0),sample=matches[0];
-      if(!sample||!chartMetrics(sample).some((item)=>item.key===metric))continue;
-      const values=matches.map((summary)=>Number(summary[metric])).filter((value)=>Number.isFinite(value)&&value>=0);if(!values.length)continue;
-      const value=metric.startsWith("max")||metric==="minAssistance"?(metric==="minAssistance"?Math.min(...values):Math.max(...values)):values.reduce((total,current)=>total+current,0);
-      points.push({id:workout.id,date,startedAt,value:Math.round(value*100)/100});
-    }
-    return points.slice(-bounded);
-  }
-  function chartEntries(workouts){
-    const summaries=new Map();
-    for(const workout of completedWorkouts(workouts))for(const summary of workout.exerciseSummaries){const key=chartFormatKey(summary);if(key&&!summaries.has(key)&&Number(summary.completedSets)>0)summaries.set(key,summary);}
-    return[...summaries].map(([key,summary])=>{
-      const metrics=chartMetrics(summary).map((metric)=>({...metric,points:chartSeries(workouts,key,metric.key)})).filter((metric)=>metric.points.length);
-      const lastStartedAt=Math.max(0,...metrics.flatMap((metric)=>metric.points.map((point)=>point.startedAt)));
-      return{key,exerciseId:summary.exerciseId,format:chartFormatLabel(summary),lastStartedAt,metrics,pointCount:Math.max(0,...metrics.map((metric)=>metric.points.length))};
-    }).filter((entry)=>entry.metrics.length).sort((a,b)=>b.lastStartedAt-a.lastStartedAt||a.key.localeCompare(b.key));
-  }
-  function preferredChartEntry(entries,currentKey=""){
-    const safe=Array.isArray(entries)?entries:[];return safe.find((entry)=>entry.key===currentKey)||safe.find((entry)=>entry.pointCount>=2)||safe[0]||null;
-  }
-  function preferredChartMetric(entry,currentMetric=""){
-    const metrics=Array.isArray(entry?.metrics)?entry.metrics:[];return metrics.find((metric)=>metric.key===currentMetric)||metrics.find((metric)=>metric.points.length>=2)||metrics[0]||null;
-  }
   function progressRecords(workouts){
     const chronological=completedWorkouts(workouts).slice().reverse(),previous=new Map(),improvements=[],bests=new Map();
     for(const workout of chronological)for(const summary of workout.exerciseSummaries){
@@ -113,5 +70,5 @@
     };
   }
 
-  return{chartEntries,chartFormatKey,chartFormatLabel,chartMetrics,chartSeries,compactNumber,completedThisWeek,completedWorkouts,formatDuration,fourWeekConsistency,preferredChartEntry,preferredChartMetric,progressRecords,safeWorkoutList,scheduledDays,snapshot,summaryKey,summaryMetric,weekContext};
+  return{compactNumber,completedThisWeek,completedWorkouts,formatDuration,fourWeekConsistency,progressRecords,safeWorkoutList,scheduledDays,snapshot,summaryKey,summaryMetric,weekContext};
 });

@@ -59,13 +59,6 @@ const requests=[];
 const guestStorageWrites=[];
 const storedValues=new Map();
 const windowListeners={};
-const particleInstances=[];
-class FakeParticleChart{
-  constructor(host,options){assert.equal(host.hidden,false,"Planner chart host must be measurable before construction");this.host=host;this.options=options;this.updates=[];this.destroyCalls=0;particleInstances.push(this);}
-  update(data,options){this.updates.push({data,options});}
-  destroy(){this.destroyCalls+=1;}
-  resize(){}
-}
 const context={
   console,document,history:{replaceState(){}},location:{search:"",href:"http://strata.test/planner.html",origin:"http://strata.test",assign(){}},
   window:{
@@ -85,12 +78,12 @@ const context={
     if(path==="/api/community-plans/shared-runtime"&&options.method==="DELETE")return {ok:true,json:async()=>({ok:true})};
     return {ok:false,status:404,json:async()=>({error:"Not found"})};
   },
-  ParticleCharts:{ParticleChart:FakeParticleChart},requestAnimationFrame:(callback)=>callback(),setTimeout,clearTimeout,URL,URLSearchParams
+  requestAnimationFrame:(callback)=>callback(),setTimeout,clearTimeout,URL,URLSearchParams
 };
 context.globalThis=context;
 context.StrataDiscovery=Discovery;
 vm.createContext(context);
-for(const script of ["activation-core.js","plan-insights-core.js","particle-chart-core.js","planner-charts.js","planner-logic.js","planner-state.js","planner-api.js","planner-render.js","planner-conflicts.js","planner-templates.js","planner-sharing.js","planner-activation.js","planner-events.js"]){
+for(const script of ["activation-core.js","planner-logic.js","planner-state.js","planner-api.js","planner-render.js","planner-conflicts.js","planner-templates.js","planner-sharing.js","planner-activation.js","planner-events.js"]){
   vm.runInContext(readPublic("scripts",script),context,{filename:script});
 }
 vm.runInContext(readPublic("scripts","planner.js"),context,{filename:"planner.js"});
@@ -130,22 +123,6 @@ function clickSelectDay(day){
   const initialIds=renderedIds();
   const initialMarkup=elements.get("libraryList").innerHTML;
   const dayNavMarkup=elements.get("plannerDayNav").innerHTML;
-  assert.equal(particleInstances.length,1,"Planner should construct one primary-muscle chart from PlanInsights");
-  assert.deepEqual(Array.from(particleInstances[0].options.data.labels),["Chest"]);
-  assert.deepEqual(Array.from(particleInstances[0].options.data.series[0].data),[3]);
-  assert.equal(elements.get("plannerMuscleChartShell").hidden,false);
-  assert.match(elements.get("insightMuscles").innerHTML,/Chest[\s\S]*3 sets/,"Exact accessible rows must remain beside the visual chart");
-  const exactMuscleRows=elements.get("insightMuscles").innerHTML;
-  for(const handler of windowListeners.pagehide||[])handler({persisted:true});
-  assert.equal(particleInstances[0].destroyCalls,1,"Planner should release the chart when entering the back-forward cache");
-  assert.equal(elements.get("plannerMuscleChartShell").hidden,true);
-  for(const handler of windowListeners.pageshow||[])handler({persisted:true});
-  assert.equal(particleInstances.length,2,"A back-forward-cache restore should recreate the released chart once");
-  assert.equal(elements.get("plannerMuscleChartShell").hidden,false);
-  assert.equal(elements.get("insightMuscles").innerHTML,exactMuscleRows,"Restoring the visual chart must not replace the exact accessible rows");
-  for(const handler of windowListeners.pageshow||[])handler({persisted:true});
-  assert.equal(particleInstances.length,2,"Repeated page-show events should update one chart instead of appending another");
-  assert.equal(particleInstances[1].updates.length,1);
   assert.equal(initialIds.length,32,"Desktop planner should initially render 32 library cards");
   assert.equal(new Set(initialIds).size,32,"Initial planner page must not contain duplicate cards");
   assert.match(initialMarkup,/data-load-more-library/,"Expanded catalog should expose Load more");

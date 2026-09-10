@@ -9,7 +9,7 @@ const vm=require("node:vm");
 const PROJECT_ROOT=path.join(__dirname,"..");
 const read=(name)=>fs.readFileSync(path.join(PROJECT_ROOT,name),"utf8");
 const homeClient=()=>["home-logic.js","home-state.js","home-api.js","home-render.js","home-events.js","app.js"].map(name=>read(`public/scripts/${name}`)).join("\n");
-const discoverClient=()=>["discover-api.js","discover-navigation.js","discover-progress.js","particle-chart-core.js","discover-chart.js","discover-render.js","discover-catalog.js","discover-detail.js","discover-community.js","discover-session.js","discover-sharing.js","discover-events.js","discover.js"].map(name=>read(`public/scripts/${name}`)).join("\n");
+const discoverClient=()=>["discover-api.js","discover-navigation.js","discover-progress.js","discover-render.js","discover-catalog.js","discover-detail.js","discover-community.js","discover-session.js","discover-sharing.js","discover-events.js","discover.js"].map(name=>read(`public/scripts/${name}`)).join("\n");
 const workoutClient=()=>["workout-state.js","workout-api.js","workout-calendar.js","workout-render.js","workout-guidance.js","workout-history.js","workout-events.js","workout.js"].map(name=>read(`public/scripts/${name}`)).join("\n");
 
 test("homepage styles keep live comparison UI and omit retired modal families",()=>{
@@ -56,32 +56,6 @@ test("Discover defines the compact hero gap only once",()=>{
   assert.equal(css.match(/\.hero-layout\s*\{\s*gap:\s*34px;\s*\}/g)?.length,1);
 });
 
-test("the Training Memory chart stays named, keyboard reachable, responsive, and reduced-motion safe",()=>{
-  const html=read("public/pages/discover.html"),css=read("public/styles/discover.css"),chart=read("public/scripts/discover-chart.js");
-
-  assert.match(html,/<section class="training-memory-trend" id="trainingMemoryTrend" aria-labelledby="trainingMemoryTrendTitle" aria-describedby="trainingMemoryTrendDescription">/);
-  assert.match(html,/<label for="trainingMemoryMovement"><span>Movement &amp; format<\/span><select id="trainingMemoryMovement" name="trainingMemoryMovement">/);
-  assert.match(html,/<label for="trainingMemoryMetric"><span>Measure<\/span><select id="trainingMemoryMetric" name="trainingMemoryMetric">/);
-  assert.match(html,/id="trainingMemoryTrendStatus" role="status" aria-live="polite" aria-atomic="true"/);
-  assert.match(html,/id="trainingMemoryExactValues" role="region" aria-label="Exact Training Memory session values" tabindex="0"/);
-  assert.match(chart,/<table><caption>\$\{escapeHtml\(metric\.label\)\} by completed session<\/caption><thead><tr><th scope="col">Session<\/th><th scope="col">Exact value<\/th>/);
-  assert.match(chart,/<th scope="row">\$\{escapeHtml\(readableDate\(point\.date\)\)\}<\/th>/);
-  assert.match(chart,/canvas\.setAttribute\("aria-label",/);
-  assert.match(chart,/canvas\.setAttribute\("aria-describedby","trainingMemoryTrendStatus"\)/,
-    "the canvas description must reference the live status element that exists in the page");
-
-  assert.match(css,/\.training-memory-trend\s*\{[^}]*min-width:0;[^}]*overflow:hidden/);
-  assert.match(css,/\.training-memory-trend-controls\s*\{[^}]*min-width:0;[^}]*grid-template-columns:minmax\(0,1\.35fr\) minmax\(0,\.85fr\)/);
-  assert.match(css,/\.training-memory-trend-controls select\s*\{[^}]*width:100%;[^}]*min-width:0;[^}]*min-height:48px/);
-  assert.match(css,/\.training-memory-trend-controls select:focus-visible\s*\{[^}]*outline:3px solid var\(--accent\);[^}]*outline-offset:2px/);
-  assert.match(css,/\.training-memory-chart\s*\{[^}]*width:100%;[^}]*min-width:0;[^}]*overflow:hidden/);
-  assert.match(css,/\.training-memory-chart canvas\s*\{[^}]*display:block;[^}]*max-width:100%/);
-  assert.match(css,/\.training-memory-exact-scroll\s*\{[^}]*max-width:100%;[^}]*overflow-x:auto/);
-  assert.match(css,/\.training-memory-exact-scroll:focus-visible\s*\{[^}]*outline:3px solid var\(--accent\)/);
-  assert.match(css,/@media\(max-width:680px\)[\s\S]*?\.training-memory-trend-controls\s*\{[^}]*grid-template-columns:minmax\(0,1fr\)[^}]*\}[\s\S]*?\.training-memory-chart\s*\{[^}]*height:clamp\(240px,76vw,300px\)/);
-  assert.match(css,/@media\(prefers-reduced-motion:reduce\)[\s\S]*?\.training-memory-exact > summary span\s*\{[^}]*transition:none/);
-});
-
 test("every native dialog has an accessible name and restores its trigger",()=>{
   for(const page of ["public/pages/index.html","public/pages/admin.html","public/pages/discover.html"]){
     const html=read(page),dialogs=[...html.matchAll(/<dialog\b([^>]*)>/g)];
@@ -100,16 +74,6 @@ test("plan-saving surfaces use consistent announced states and actionable errors
   assert.match(discover,/data-rating-status role="status" aria-live="polite"/);
   assert.match(planner,/PLAN_CHANGED/);
   assert.match(discover,/latest plan is loaded; review the selected day/i);
-});
-
-test("planner muscle-set chart keeps exact text values and bounded responsive layout",()=>{
-  const html=read("public/pages/planner.html"),css=read("public/styles/planner.css");
-  assert.match(html,/id="plannerMuscleChartShell" aria-hidden="true" hidden/,"the animated chart must stay out of the accessibility tree");
-  assert.match(html,/id="plannerMuscleChart" hidden>[\s\S]*?id="insightMuscles"/,"exact muscle rows must remain after the visual chart");
-  assert.match(css,/\.planner-muscle-chart-shell\{[^}]*height:clamp\(280px,30vw,330px\)[^}]*overflow:hidden/);
-  assert.match(css,/\.planner-muscle-chart\{[^}]*width:100%;height:100%;min-width:0;overflow:hidden/);
-  assert.match(css,/@media\(max-width:600px\)[\s\S]*?\.planner-muscle-chart-shell\{[^}]*height:300px/);
-  assert.match(css,/\.insight-muscle-values\{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
 });
 
 test("planner and workout share clear Plan and Train navigation at mobile widths",()=>{

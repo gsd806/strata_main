@@ -37,40 +37,28 @@ class Element{
   closest(){return null;}
   get selectedOptions(){const labels={hypertrophy:"Hypertrophy selection",strength:"Strength skill",balanced:"Balanced","time-efficient":"Time-efficient setup"};return [{textContent:labels[this.value]||this.value}];}
 }
-const particleAudit={constructs:0,updates:0,destroys:0,resizes:0,lastData:null,lastOptions:null};
-class FakeParticleChart{
-  constructor(host,options){
-    this.host=host;this.destroyed=false;particleAudit.constructs+=1;particleAudit.lastData=options.data;particleAudit.lastOptions=options;
-    const canvas=new Element("trainingMemoryFakeCanvas");canvas.classList.add("pchart-canvas");host.queryResults.set("canvas",canvas);host.innerHTML='<div class="pchart-root"><canvas class="pchart-canvas"></canvas></div>';
-  }
-  update(data,options){assert.equal(this.destroyed,false,"a destroyed chart must never be updated");particleAudit.updates+=1;particleAudit.lastData=data;particleAudit.lastOptions=options;}
-  resize(){particleAudit.resizes+=1;}
-  destroy(){if(this.destroyed)return;this.destroyed=true;particleAudit.destroys+=1;this.host.queryResults.delete("canvas");this.host.innerHTML="";}
-}
 const elements=new Map(ids.map((id)=>[id,new Element(id)]));
 const mainElement=new Element("main");
-const documentListeners={},windowListeners={};
 const document={
   body:new Element("body"),
   getElementById(id){return elements.get(id)||null;},
   querySelector(selector){return selector==="main"?mainElement:null;},
   querySelectorAll(selector){if(selector==="dialog")return [elements.get("detailDialog"),elements.get("communityApplyDialog"),elements.get("trainingBlockActionDialog")];return [];},
-  addEventListener(type,handler){(documentListeners[type]||=[]).push(handler);},
+  addEventListener(){},
   createElement(){return new Element("created");}
 };
 const weeklyPlan={version:1,restDay:"Sunday",days:Object.fromEntries(["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].map((day)=>[day,day==="Monday"?[{instanceId:"runtime-plan-item",exerciseId:"flat-dumbbell-press",sets:3,reps:"8–12"}]:[]]))};
 const response={user:{id:"u1",name:"Runtime Audit",email:"audit@example.test",discovery:{active:true}},csrfToken:"csrf",exercises,methodology:discovery.methodology,sources:discovery.sources,limitedConfidenceExercises:discovery.limitedConfidenceExercises,preferences:{version:1,goal:"hypertrophy",level:"Intermediate",days:4,equipment:[...new Set(exercises.map((exercise)=>exercise.equipment))],preferences:["stable","long-range"],limitations:[]},ratings:{aggregates:[],user:[]},weeklyPlan,weeklyPlanUpdatedAt:1_700_000_000_100};
 const communityPlan={id:"11111111-1111-4111-8111-111111111111",title:"Runtime <Week>",description:"A shared smoke-test plan.",authorName:"Other Member",plan:weeklyPlan,createdAt:1_700_000_000_000,updatedAt:1_700_000_000_000};
-const previousWorkoutSummary={id:"runtime-workout-previous",title:"Previous Monday workout",planDay:"Monday",date:localDateOffset(-7),status:"completed",startedAt:1_699_395_200_000,completedAt:1_699_397_000_000,elapsedSeconds:1800,totalSets:3,completedSets:3,exerciseCount:1,exerciseSummaries:[{exerciseId:"flat-dumbbell-press",measurement:"reps",loadType:"external",unit:"kg",completedSets:3,totalReps:24,maxReps:8,maxWeight:20,volume:480,totalSeconds:0,maxSeconds:null}]};
-const workoutSummary={id:"runtime-workout",title:"Monday workout",planDay:"Monday",date:localDateOffset(),status:"completed",startedAt:1_700_000_000_000,completedAt:1_700_001_800_000,elapsedSeconds:1800,totalSets:3,completedSets:3,exerciseCount:1,exerciseSummaries:[{exerciseId:"flat-dumbbell-press",measurement:"reps",loadType:"external",unit:"kg",completedSets:3,totalReps:30,maxReps:10,maxWeight:22,volume:660,totalSeconds:0,maxSeconds:null}]};
+const workoutSummary={id:"runtime-workout",title:"Monday workout",planDay:"Monday",date:localDateOffset(),status:"completed",startedAt:1_700_000_000_000,completedAt:1_700_001_800_000,elapsedSeconds:1800,totalSets:3,completedSets:3,exerciseCount:1,exerciseSummaries:[{exerciseId:"flat-dumbbell-press",measurement:"reps",loadType:"external",unit:"kg",completedSets:3,totalReps:24,maxReps:8,maxWeight:20,volume:480,totalSeconds:0,maxSeconds:null}]};
 const trainingBlock={version:1,title:"Runtime block",goal:"hypertrophy",weeks:6,currentWeek:2,lightWeek:6,startDate:localDateOffset(-7),status:"active",progressionRule:"reps-then-load",milestones:[],revision:3,updatedAt:1_700_000_000_500};
 const adaptation={id:"adapt-runtime",sourceWorkoutId:"runtime-workout",status:"pending",kind:"reduce_sets",title:"Reduce one set of Flat Dumbbell Press",explanation:"Your optional check-in supported a lower next-session dose.",change:{day:"Monday",instanceId:"runtime-plan-item",exerciseId:"flat-dumbbell-press",fromSets:3,toSets:2},requiresApproval:true,expectedPlanUpdatedAt:response.weeklyPlanUpdatedAt,createdAt:1_700_000_000_600,resolvedAt:null};
 const fetches=[],requests=[],navigations=[];let discoveryAttempts=0,planSaveRevision=1_700_000_000_300;
-const context={console,document,window:{location:{replace(path){navigations.push(path);}},addEventListener(type,handler){(windowListeners[type]||=[]).push(handler);}},location:{},navigator:{},ParticleCharts:{ParticleChart:FakeParticleChart},particleAudit,requests,fetch:async(path,options={})=>{
+const context={console,document,window:{location:{replace(path){navigations.push(path);}}},location:{},navigator:{},requests,fetch:async(path,options={})=>{
   fetches.push(path);requests.push({path,options});
   if(path==="/api/discovery"&&++discoveryAttempts===1)throw new TypeError("Failed to fetch");
   if(path==="/api/me"&&context.forceIdentityChange)return {ok:true,json:async()=>({user:{...response.user,id:"u2"},csrfToken:"csrf-other"})};
-  if(path==="/api/workouts?limit=100&offset=0")return {ok:true,json:async()=>({workouts:[workoutSummary,previousWorkoutSummary],hasMore:false,csrfToken:"csrf"})};
+  if(path==="/api/workouts?limit=100&offset=0")return {ok:true,json:async()=>({workouts:[workoutSummary],hasMore:false,csrfToken:"csrf"})};
   if(path==="/api/training")return {ok:true,json:async()=>({block:trainingBlock,progression:{workoutId:"runtime-workout",suggestions:[{exerciseId:"flat-dumbbell-press",explanation:"Two comparable sessions reached the prescribed repetitions."}]},adaptation,csrfToken:"csrf"})};
   if(path==="/api/training-block"&&options.method==="PUT"){const body=JSON.parse(options.body);return {ok:true,json:async()=>({block:{...trainingBlock,...body.block,revision:4,updatedAt:1_700_000_000_700},adaptation,csrfToken:"csrf"})};}
   if(path==="/api/training/adaptations/adapt-runtime"&&options.method==="POST"){const decision=JSON.parse(options.body).decision;return {ok:true,json:async()=>decision==="dismiss"?{adaptation:{...adaptation,status:"dismissed"},planUpdatedAt:null}:{adaptation:{...adaptation,status:"accepted"},plan:weeklyPlan,planUpdatedAt:1_700_000_000_800}};}
@@ -87,7 +75,7 @@ vm.createContext(context);
 vm.runInContext(readPublic("scripts","discovery-core.js"),context,{filename:"discovery-core.js"});
 vm.runInContext(readPublic("scripts","monthly-plan-core.js"),context,{filename:"monthly-plan-core.js"});
 vm.runInContext(readPublic("scripts","training-block-core.js"),context,{filename:"training-block-core.js"});
-for(const name of ["discover-state.js","discover-api.js","discover-navigation.js","discover-progress.js","particle-chart-core.js","discover-chart.js","discover-render.js","discover-catalog.js","discover-detail.js","discover-community.js","discover-session.js","discover-sharing.js","discover-events.js"])vm.runInContext(readPublic("scripts",name),context,{filename:name});
+for(const name of ["discover-state.js","discover-api.js","discover-navigation.js","discover-progress.js","discover-render.js","discover-catalog.js","discover-detail.js","discover-community.js","discover-session.js","discover-sharing.js","discover-events.js"])vm.runInContext(readPublic("scripts",name),context,{filename:name});
 vm.runInContext(readPublic("scripts","discover.js"),context,{filename:"discover.js"});
 assert.equal(vm.runInContext("state.activeFeature",context),"today","feature navigation must initialize before discovery data resolves");
 assert.equal(vm.runInContext('Object.keys(FEATURE_CONFIG).filter((name)=>featureNavigation.featurePanel(name).hidden).length',context),10,"only the default workspace should remain visible during discovery loading");
@@ -101,13 +89,7 @@ assert.equal(vm.runInContext('Object.keys(FEATURE_CONFIG).filter((name)=>feature
   for(let count=0;count<5;count+=1)await new Promise(setImmediate);
   assert.equal(elements.get("discoveryLoadError").hidden,true,"a successful retry must clear the error UI");
   const todayComparable=/Flat Dumbbell Press/.test(elements.get("todayPreviousValue").textContent);
-  const progressRendered=elements.get("progressSessions").textContent==="2"&&/kg·reps/.test(elements.get("progressVolume").textContent);
-  const chartCanvas=elements.get("trainingMemoryChart").querySelector("canvas"),chartDescription=chartCanvas.attributes["aria-describedby"];
-  const progressChartConstructed=particleAudit.constructs===1&&particleAudit.updates===0&&elements.get("trainingMemoryChart").innerHTML.match(/class="pchart-root"/g)?.length===1&&Array.from(particleAudit.lastData.series[0].data).join(",")==="20,22";
-  const progressChartAccessible=/Flat Dumbbell Press: Heaviest completed set across 2 matching completed sessions\./.test(chartCanvas.attributes["aria-label"]||"")&&Boolean(elements.get(chartDescription));
-  const progressExactValues=/20 kg/.test(elements.get("trainingMemoryExactValues").innerHTML)&&/22 kg/.test(elements.get("trainingMemoryExactValues").innerHTML);
-  elements.get("trainingMemoryMetric").value="volume";await elements.get("trainingMemoryMetric").emit("change",{target:elements.get("trainingMemoryMetric")});
-  const progressChartUpdated=particleAudit.constructs===1&&particleAudit.updates===1&&elements.get("trainingMemoryChart").innerHTML.match(/class="pchart-root"/g)?.length===1&&Array.from(particleAudit.lastData.series[0].data).join(",")==="480,660"&&/480 kg·reps/.test(elements.get("trainingMemoryExactValues").innerHTML)&&/660 kg·reps/.test(elements.get("trainingMemoryExactValues").innerHTML);
+  const progressRendered=elements.get("progressSessions").textContent==="1"&&/kg·reps/.test(elements.get("progressVolume").textContent);
   vm.runInContext("globalThis.savedProgressWorkouts=state.workouts;state.workouts=[];renderProgress();",context);
   const firstWorkoutState=elements.get("progressFirstWorkout").hidden===false&&elements.get("progressHistoryContent").hidden===true;
   vm.runInContext("state.workouts=savedProgressWorkouts;renderProgress();",context);
@@ -220,7 +202,7 @@ assert.equal(vm.runInContext('Object.keys(FEATURE_CONFIG).filter((name)=>feature
     sessionConflictHandled,
     weeklyPulse:/planned movement/.test(elements.get("weeklyPulseDetail").textContent)&&/^width:\d+(?:\.\d+)?%$/.test(elements.get("weeklyPulseBar").attributes.style),
     todayComparable,
-    progressRendered,progressChartConstructed,progressChartAccessible,progressExactValues,progressChartUpdated,firstWorkoutState,
+    progressRendered,firstWorkoutState,
     trainingBlockSaved:Boolean(blockRequest&&blockRequest.options.headers["X-CSRF-Token"]==="csrf"&&blockBody.expectedRevision===3&&blockBody.expectedUserId==="u1"&&blockBody.block.weeks===8&&blockBody.block.currentWeek===2&&blockBody.block.status==="active"&&blockBody.block.lightWeek===8&&blockBody.block.startDate===trainingBlock.startDate),
     trainingBlockReview:!elements.get("trainingBlockReview").hidden&&elements.get("trainingBlockWorkoutCount").textContent==="1 / 1"&&/Chest/.test(elements.get("trainingBlockMuscles").innerHTML)&&!/explicitly skipped|explicitly replaced/.test(elements.get("trainingBlockSignals").innerHTML),
     blockControlsWorked,
@@ -232,18 +214,9 @@ assert.equal(vm.runInContext('Object.keys(FEATURE_CONFIG).filter((name)=>feature
   await context.dismissRacePromise;context.forceIdentityChange=false;
   result.dismissRaceSafe=navigations.at(-1)==="/discover.html"&&elements.get("discoveryLoadError").hidden===false&&mainElement.hidden===true&&vm.runInContext("state.user===null&&state.csrfToken===''&&state.progressionSuggestion===null&&state.trainingBlock===null",context);
   await vm.runInContext("init()",context);
-  for(let count=0;count<5;count+=1)await new Promise(setImmediate);
-  assert.ok(elements.get("trainingMemoryChart").innerHTML.includes('class="pchart-root"'),"focus privacy coverage requires a mounted chart");
-  const chartConstructsBeforePageShow=particleAudit.constructs,chartDestroysBeforePageShow=particleAudit.destroys;
-  for(const handler of windowListeners.pageshow||[])handler({persisted:true});
-  result.pageShowPrivacyCleared=mainElement.hidden===true&&particleAudit.destroys===chartDestroysBeforePageShow+1&&elements.get("trainingMemoryChart").innerHTML===""&&elements.get("trainingMemoryExactValues").innerHTML===""&&elements.get("trainingMemoryMovement").innerHTML===""&&elements.get("trainingMemoryMetric").innerHTML==="";
-  for(let count=0;count<8;count+=1)await new Promise(setImmediate);
-  result.pageShowSameAccountRestored=mainElement.hidden===false&&particleAudit.constructs===chartConstructsBeforePageShow+1&&(elements.get("trainingMemoryChart").innerHTML.match(/class="pchart-root"/g)||[]).length===1&&vm.runInContext("state.user?.id==='u1'&&state.workouts.length===2",context);
   context.forceIdentityChange=true;
-  const chartDestroysBeforeFocus=particleAudit.destroys;
   const focusPromise=vm.runInContext("revalidateMemberWorkspaceWhenVisible()",context);
   result.focusPrivacyCleared=mainElement.hidden===true&&elements.get("userName").textContent==="Checking account…"&&vm.runInContext("state.user===null&&state.csrfToken===''&&state.workouts.length===0&&state.weeklyPlan===null",context);
-  result.focusChartPrivacyCleared=particleAudit.destroys>chartDestroysBeforeFocus&&elements.get("trainingMemoryTrend").hidden===true&&elements.get("trainingMemoryChart").innerHTML===""&&elements.get("trainingMemoryExactValues").innerHTML===""&&elements.get("trainingMemoryMovement").innerHTML===""&&elements.get("trainingMemoryMetric").innerHTML===""&&vm.runInContext("state.progressChartKey===''&&state.progressChartMetric===''",context);
   await focusPromise;context.forceIdentityChange=false;
   result.focusAccountSafe=navigations.at(-1)==="/discover.html"&&mainElement.hidden===true&&vm.runInContext("state.user===null&&state.workouts.length===0&&state.trainingBlock===null",context);
   assert.equal(result.recommendations,8);
@@ -260,6 +233,6 @@ assert.equal(vm.runInContext('Object.keys(FEATURE_CONFIG).filter((name)=>feature
   assert.equal(result.unknownHashFeature,"library");
   assert.equal(result.battleSlots,4);
   assert.ok(result.battleRows>=10);
-  for(const key of ["discoveryFetch","battleBuilder","battleTable","battleVisible","battleStatus","detailOpen","bodyLocked","scoreAudit","evidence","alternatives","ratings","ratingDraftPreserved","communityFetch","communityRendered","communitySevenDayPreview","communityConfirmation","communityApplied","communityPlanLink","sessionGenerated","sessionOptions","sessionAdded","sessionPlanRevision","sessionPlanLink","sessionConflictHandled","weeklyPulse","todayComparable","progressRendered","progressChartConstructed","progressChartAccessible","progressExactValues","progressChartUpdated","firstWorkoutState","trainingBlockSaved","trainingBlockReview","blockControlsWorked","progressionFormatted","progressionAccepted","dismissRaceSafe","pageShowPrivacyCleared","pageShowSameAccountRestored","focusPrivacyCleared","focusChartPrivacyCleared","focusAccountSafe"])assert.equal(result[key],true,key);
+  for(const key of ["discoveryFetch","battleBuilder","battleTable","battleVisible","battleStatus","detailOpen","bodyLocked","scoreAudit","evidence","alternatives","ratings","ratingDraftPreserved","communityFetch","communityRendered","communitySevenDayPreview","communityConfirmation","communityApplied","communityPlanLink","sessionGenerated","sessionOptions","sessionAdded","sessionPlanRevision","sessionPlanLink","sessionConflictHandled","weeklyPulse","todayComparable","progressRendered","firstWorkoutState","trainingBlockSaved","trainingBlockReview","blockControlsWorked","progressionFormatted","progressionAccepted","dismissRaceSafe","focusPrivacyCleared","focusAccountSafe"])assert.equal(result[key],true,key);
   console.log(JSON.stringify(result,null,2));
 })().catch(error=>{console.error(error);process.exitCode=1;});
