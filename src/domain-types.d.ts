@@ -855,7 +855,7 @@ export interface AdminService {
   cleanup(now?:number):Promise<void>;
   adminIdentity(session:AccountIdentityRow,options?:{allowBootstrap?:boolean}):Promise<{active:boolean;boundNow:boolean;principal:JsonObject|null}>;
   maybeClaimAdminForLogin(user:UserRow):Promise<UserRow>;
-  requireAdmin(request:HttpRequest,response:HttpResponse,options?:{elevated?:boolean;allowBootstrap?:boolean}):Promise<SessionRow|null>;
+  requireAdmin(request:HttpRequest,response:HttpResponse,options?:{allowBootstrap?:boolean}):Promise<SessionRow|null>;
   requireAdminMutation(request:HttpRequest,response:HttpResponse,session:SessionRow):boolean;
   sensitiveAdminText(value:unknown):boolean;
   cleanAdminTarget(value:unknown):string;

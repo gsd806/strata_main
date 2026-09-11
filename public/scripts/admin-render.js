@@ -153,8 +153,8 @@
       if(dialog.open)dialog.close();syncDialogLock();if(returnFocus&&document.contains(returnFocus))requestFrame(()=>returnFocus.focus());
     }
     function clearPrivateData(){
-      const textIds=["elevationIdentity","userDialogTitle","userDialogEmail","userDetailStatus","userResultCount","usersStatus","supportDialogTitle","supportDialogIdentity","ticketMessage","supportUpdateMessage","supportResultCount","supportStatus","auditStatus","overviewStatus","productSignalStatus","confirmTitle","confirmDescription","confirmationPhrase","confirmMessage","globalMessage"];
-      const valueIds=["elevationPassword","elevationCode","userQuery","ticketNote","ticketResponse","actionReason","actionConfirmation"];
+      const textIds=["userDialogTitle","userDialogEmail","userDetailStatus","userResultCount","usersStatus","supportDialogTitle","supportDialogIdentity","ticketMessage","supportUpdateMessage","supportResultCount","supportStatus","auditStatus","overviewStatus","productSignalStatus","confirmTitle","confirmDescription","confirmMessage","globalMessage"];
+      const valueIds=["userQuery","ticketNote","ticketResponse"];
       const containerIds=["userResults","supportResults","auditResults","productSignalRows","userFacts","supportFacts"];
       clearTimeout(globalMessageTimer);globalMessageTimer=undefined;
       for(const id of textIds)el(id).textContent="";
@@ -167,11 +167,10 @@
       const active=state.pendingAction==="grant-plus",unit=el("grantUnit").value,dated=unit==="until",unlimited=unit==="indefinite";
       el("grantAmountField").hidden=dated||unlimited;el("grantUntilField").hidden=!dated;el("grantAmount").required=active&&!dated&&!unlimited;el("grantUntil").required=active&&dated;
     }
-    function openActionConfirmation(action,trigger,details,confirmation){
+    function openActionConfirmation(action,trigger,details){
       if(!details||!state.selectedUser)return;
-      state.pendingAction=action;state.actionTrigger=trigger;el("confirmTitle").textContent=details.title;el("confirmDescription").textContent=`${details.description} Target: ${userEmail(state.selectedUser)}.`;el("confirmationPhrase").textContent=confirmation;
-      el("actionReason").value=action==="delete-account"?"Administrator requested account removal":"";el("grantFields").hidden=action!=="grant-plus";updateGrantFields();el("actionConfirmation").value="";
-      el("actionConfirmation").setAttribute("autocapitalize",action==="send-delete-link"||action==="delete-account"?"none":"characters");el("actionConfirmation").inputMode=action==="send-delete-link"?"email":"text";
+      state.pendingAction=action;state.actionTrigger=trigger;el("confirmTitle").textContent=details.title;el("confirmDescription").textContent=`${details.description} Target: ${userEmail(state.selectedUser)}.`;
+      el("submitAction").textContent=`${details.button||"Confirm action"} →`;el("grantFields").hidden=action!=="grant-plus";updateGrantFields();
       el("confirmMessage").hidden=true;el("confirmMessage").textContent="";el("confirmDialog").showModal();syncDialogLock();requestFrame(()=>el("cancelAction").focus());
     }
     function updateSupportSubmitLabel(){el("saveSupportUpdate").textContent=el("ticketResponse").value.trim().length>0?"Save and send response →":"Save update →";}

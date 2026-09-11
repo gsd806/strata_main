@@ -9,7 +9,7 @@ const ADMIN_CONTROLS_TABLE=`CREATE TABLE IF NOT EXISTS admin_account_controls (
   updated_at INTEGER NOT NULL,
   CHECK(grant_expires_at IS NULL OR (grant_starts_at IS NOT NULL AND grant_expires_at>grant_starts_at))
 )`;
-const ADMIN_ACTOR_VALID=`EXISTS (SELECT 1 FROM admin_principal ap JOIN users actor ON actor.id=ap.user_id JOIN sessions s ON s.user_id=actor.id AND s.auth_version=actor.auth_version JOIN admin_elevations ae ON ae.session_token_hash=s.token_hash WHERE ap.slot='primary' AND ap.user_id=? AND ap.configured_email=actor.email COLLATE NOCASE AND actor.email_verified_at IS NOT NULL AND actor.suspended_at IS NULL AND s.token_hash=? AND s.expires_at>? AND ae.expires_at>?)`;
+const ADMIN_ACTOR_VALID=`EXISTS (SELECT 1 FROM admin_principal ap JOIN users actor ON actor.id=ap.user_id JOIN sessions s ON s.user_id=actor.id AND s.auth_version=actor.auth_version WHERE ap.slot='primary' AND ap.user_id=? AND ap.configured_email=actor.email COLLATE NOCASE AND actor.email_verified_at IS NOT NULL AND actor.suspended_at IS NULL AND s.token_hash=? AND s.expires_at>?)`;
 /** @param {string} alias @param {string} [clock] */
 function activeGrant(alias,clock="(SELECT now FROM entitlement_clock)"){return `${alias}.grant_starts_at IS NOT NULL AND ${alias}.grant_starts_at<=${clock} AND ${alias}.grant_revoked_at IS NULL AND (${alias}.grant_expires_at IS NULL OR ${alias}.grant_expires_at>${clock})`;}
 const CONTROL_COLUMNS="ac.grant_starts_at,ac.grant_expires_at,ac.grant_revoked_at,ac.checkout_blocked_at,COALESCE(ac.revision,0) AS controls_revision";

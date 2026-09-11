@@ -8,7 +8,6 @@ const {createHash}=require("node:crypto");
 const {mkdirSync,mkdtempSync,rmSync}=require("node:fs");
 const {join}=require("node:path");
 const {DatabaseSync}=require("node:sqlite");
-const {adminMfaChallenge,getEmailVerificationConfig}=require("../src/email");
 
 const PROJECT_ROOT=join(__dirname,"..");
 const ADMIN_EMAIL="stratafitness.official@gmail.com";
@@ -55,7 +54,7 @@ async function startProvider(){
   providerBase=await listen(provider);
 }
 
-function appEnvironment(dataDir,adminEmail,{verificationEnabled="true",adminMfaRequired="false"}={}){
+function appEnvironment(dataDir,adminEmail,{verificationEnabled="true"}={}){
   const env={
     ...process.env,
     PORT:"0",HOST:"127.0.0.1",NODE_ENV:"test",TRUST_PROXY:"true",
@@ -70,7 +69,6 @@ function appEnvironment(dataDir,adminEmail,{verificationEnabled="true",adminMfaR
     EMAIL_REPLY_TO:ADMIN_EMAIL,SUPPORT_EMAIL:ADMIN_EMAIL,
     EMAIL_VERIFICATION_SECRET:EMAIL_SECRET,RESEND_API_BASE:providerBase
   };
-  env.ADMIN_EMAIL_MFA_REQUIRED=adminMfaRequired;
   if(adminEmail===undefined)delete env.ADMIN_EMAIL;
   else env.ADMIN_EMAIL=adminEmail;
   return env;
@@ -142,11 +140,6 @@ function request(path,options={}){
 function cookieValue(header,name){
   const match=String(header).match(new RegExp(`(?:^|,\\s*)${name}=([^;,]*)`));
   return match?`${name}=${match[1]}`:"";
-}
-
-function cookieToken(cookie){
-  const separator=String(cookie).indexOf("=");
-  return separator<0?"":decodeURIComponent(String(cookie).slice(separator+1));
 }
 
 function sha256(value){
@@ -248,13 +241,13 @@ function assertAdminResponseRedacted(data,secretValues=[]){
   for(const value of secretValues.filter(Boolean))assert.ok(!serialized.includes(String(value)),`admin response exposed secret value ${String(value).slice(0,8)}…`);
 }
 
-async function adminAction(admin,targetId,action,confirmation,reason="Customer requested this support action.",overrides={}){
-  return jsonRequest(`/api/admin/users/${encodeURIComponent(targetId)}/actions`,{action,confirmation,reason},{cookie:admin.cookie,csrf:admin.csrf,...overrides});
+async function adminAction(admin,targetId,action,overrides={}){
+  return jsonRequest(`/api/admin/users/${encodeURIComponent(targetId)}/actions`,{action},{cookie:admin.cookie,csrf:admin.csrf,...overrides});
 }
 
 test.before(async()=>{
   await startProvider();
-  const launched=await launchApp("  STRATAFITNESS.OFFICIAL@GMAIL.COM  ","admin-http-",{adminMfaRequired:"true"});
+  const launched=await launchApp("  STRATAFITNESS.OFFICIAL@GMAIL.COM  ","admin-http-");
   app=launched.child;
   base=launched.base;
   runtimeDir=launched.dataDir;
@@ -338,7 +331,7 @@ test("an unverified exact email, aliases, forged role fields, and anonymous call
     assert.equal(anonymousApi.response.status,401,`${path} must reject anonymous callers`);
     assertPrivateJson(anonymousApi.response);
     const nonAdminApi=await request(path,{headers:{Cookie:nonAdmin.cookie}});
-    assert.equal(nonAdminApi.response.status,403,`${path} must reject ordinary accounts before elevation or data access`);
+    assert.equal(nonAdminApi.response.status,403,`${path} must reject ordinary accounts before private data access`);
     assert.equal(nonAdminApi.data.code,"ADMIN_REQUIRED");
     assertPrivateJson(nonAdminApi.response);
   }
@@ -356,46 +349,7 @@ test("an unverified exact email, aliases, forged role fields, and anonymous call
   assert.equal(nonAdminPage.response.headers.get("cache-control"),"no-store");
 });
 
-test("administrator email MFA fails closed when account-email delivery is disabled",async()=>{
-  const initial=await launchApp(ADMIN_EMAIL,"admin-mfa-unavailable-",{verificationEnabled:"false",adminMfaRequired:"true"});
-  let restarted;
-  try{
-    const signup=await requestAt(initial.base,"/api/signup",{
-      method:"POST",headers:{"Content-Type":"application/json",Origin:initial.base},
-      body:JSON.stringify({name:"Unavailable MFA Owner",email:ADMIN_EMAIL,password:ADMIN_PASSWORD})
-    });
-    assert.equal(signup.response.status,201);
-    await stopChild(initial.child);
-    const database=new DatabaseSync(join(initial.dataDir,"strata.sqlite"));
-    database.prepare("UPDATE users SET email_verified_at=? WHERE email=?").run(Date.now(),ADMIN_EMAIL);
-    database.close();
-
-    restarted=await launchAppInDirectory(ADMIN_EMAIL,initial.dataDir,{verificationEnabled:"false",adminMfaRequired:"true"});
-    const loggedIn=await requestAt(restarted.base,"/api/login",{
-      method:"POST",headers:{"Content-Type":"application/json",Origin:restarted.base},
-      body:JSON.stringify({email:ADMIN_EMAIL,password:ADMIN_PASSWORD})
-    });
-    assert.equal(loggedIn.response.status,200);
-    const cookie=cookieValue(loggedIn.setCookie,"strata_session");
-    const identity=await requestAt(restarted.base,"/api/me",{headers:{Cookie:cookie}});
-    assert.equal(identity.response.status,200);
-    assert.equal(identity.data.user.isAdmin,true);
-    const elevation=await requestAt(restarted.base,"/api/admin/elevate",{
-      method:"POST",headers:{"Content-Type":"application/json",Origin:restarted.base,Cookie:cookie,"X-CSRF-Token":identity.data.csrfToken},
-      body:JSON.stringify({password:ADMIN_PASSWORD})
-    });
-    assert.equal(elevation.response.status,503);
-    assert.equal(elevation.data.code,"ADMIN_MFA_UNAVAILABLE");
-    const adminSession=await requestAt(restarted.base,"/api/admin/session",{headers:{Cookie:cookie}});
-    assert.equal(adminSession.response.status,200);
-    assert.equal(adminSession.data.elevated,false,"failed email delivery must never fall back to password-only elevation");
-  }finally{
-    await stopChild(restarted?.child||initial.child);
-    rmSync(initial.dataDir,{recursive:true,force:true});
-  }
-});
-
-test("the verified exact address binds ownership, forces a fresh login, and requires password elevation",async()=>{
+test("the verified exact address binds ownership, forces a fresh login, and opens Admin immediately",async()=>{
   const firstSession=await verifiedSignup({
     name:"STRATA Owner",
     email:"  STRATAFITNESS.OFFICIAL@GMAIL.COM ",
@@ -419,119 +373,36 @@ test("the verified exact address binds ownership, forces a fresh login, and requ
 
   const session=await request("/api/admin/session",{headers:{Cookie:admin.cookie}});
   assert.equal(session.response.status,200);
-  assert.deepEqual(session.data,{admin:true,elevated:false,elevatedUntil:null});
+  assert.deepEqual(session.data,{admin:true,elevated:true,elevatedUntil:null});
   assertPrivateJson(session.response);
 
   for(const path of ["/api/admin/overview","/api/admin/product-signals","/api/admin/users","/api/admin/audit","/api/admin/support"]){
-    const lockedRead=await request(path,{headers:{Cookie:admin.cookie}});
-    assert.equal(lockedRead.response.status,428,`${path} must require a fresh password confirmation`);
-    assert.equal(lockedRead.data.code,"ADMIN_ELEVATION_REQUIRED");
+    const authorized=await request(path,{headers:{Cookie:admin.cookie}});
+    assert.equal(authorized.response.status,200,`${path} must open for the authenticated bound owner`);
+    assertPrivateJson(authorized.response);
   }
-  const lockedMutation=await jsonRequest("/api/admin/users/random-user-id-0000000/actions",{
-    action:"suspend",confirmation:"SUSPEND",reason:"Checking elevation before target lookup."
-  },{cookie:admin.cookie,csrf:admin.csrf});
-  assert.equal(lockedMutation.response.status,428);
-  assert.equal(lockedMutation.data.code,"ADMIN_ELEVATION_REQUIRED");
+  const deliveriesBefore=deliveries.length;
+  for(const path of ["/api/admin/elevate","/api/admin/elevate/verify"]){
+    const retired=await jsonRequest(path,{password:ADMIN_PASSWORD,code:"123456"},{cookie:admin.cookie,csrf:admin.csrf});
+    assert.equal(retired.response.status,404,`${path} must remain retired`);
+    assertPrivateJson(retired.response);
+  }
+  assert.equal(deliveries.length,deliveriesBefore,"opening Admin must not send a password or email-code challenge");
+  assert.equal((await request("/api/me",{headers:{Cookie:admin.cookie}})).response.status,200,"retired endpoints must not rotate or revoke the owner session");
 
-  const noOrigin=await jsonRequest("/api/admin/elevate",{password:ADMIN_PASSWORD},{cookie:admin.cookie,csrf:admin.csrf,origin:false});
-  assert.equal(noOrigin.response.status,403);
-  assert.equal(noOrigin.data.code,"ADMIN_ORIGIN_REQUIRED");
-  const wrongCsrf=await jsonRequest("/api/admin/elevate",{password:ADMIN_PASSWORD},{cookie:admin.cookie,csrf:"wrong-admin-csrf"});
-  assert.equal(wrongCsrf.response.status,403);
-  assert.equal(wrongCsrf.data.code,"INVALID_CSRF");
-  const wrongPassword=await jsonRequest("/api/admin/elevate",{password:"wrong-password-123"},{cookie:admin.cookie,csrf:admin.csrf});
-  assert.equal(wrongPassword.response.status,401);
-  assert.equal(wrongPassword.data.code,"ADMIN_PASSWORD_INCORRECT");
-  assert.equal(cookieValue(wrongPassword.setCookie,"strata_session"),"","a failed step-up must not rotate or clear the signed-in session");
-  assert.equal((await request("/api/admin/session",{headers:{Cookie:admin.cookie}})).data.elevated,false);
-
-  const preElevationCookie=admin.cookie;
-  const preElevationCsrf=admin.csrf;
-  const passwordStep=await jsonRequest("/api/admin/elevate",{password:ADMIN_PASSWORD},{cookie:admin.cookie,csrf:admin.csrf});
-  assert.equal(passwordStep.response.status,202);
-  assert.equal(passwordStep.data.mfaRequired,true);
-  assert.match(passwordStep.data.maskedEmail,/gmail\.com$/);
-  const mfaCookie=cookieValue(passwordStep.setCookie,"strata_admin_mfa");
-  assert.ok(mfaCookie,"password confirmation must issue an HttpOnly, session-bound MFA challenge");
-  assert.match(passwordStep.setCookie,/\bHttpOnly\b/);
-  assert.match(passwordStep.setCookie,/\bSameSite=Strict\b/);
-  assert.equal((await request("/api/admin/session",{headers:{Cookie:admin.cookie}})).data.elevated,false,"password alone must not elevate Admin");
-  const adminCode=verificationCode(latestDelivery("Your STRATA Admin security code"));
-  const challengeCookie=`${admin.cookie}; ${mfaCookie}`;
-  const crossSession=await jsonRequest("/api/admin/elevate/verify",{code:adminCode},{cookie:`${parallelAdminSession.cookie}; ${mfaCookie}`,csrf:parallelAdminSession.csrf});
-  assert.equal(crossSession.response.status,401,"an MFA code must stay bound to the session that requested it");
-  assert.equal(crossSession.data.code,"ADMIN_MFA_INCORRECT");
-  const expiredChallenge=adminMfaChallenge(getEmailVerificationConfig(appEnvironment(runtimeDir,ADMIN_EMAIL,{adminMfaRequired:"true"})),{
-    sessionTokenHash:sha256(cookieToken(admin.cookie)),challengeId:"expired-admin-code-0001",expiresAt:Date.now()-1
-  });
-  const expiredCookie=`${admin.cookie}; strata_admin_mfa=${expiredChallenge.challengeId}.${expiredChallenge.expiresAt}.${expiredChallenge.signature}`;
-  const expiredCode=await jsonRequest("/api/admin/elevate/verify",{code:expiredChallenge.code},{cookie:expiredCookie,csrf:admin.csrf});
-  assert.equal(expiredCode.response.status,410);
-  assert.equal(expiredCode.data.code,"ADMIN_MFA_EXPIRED");
-  const wrongCode=await jsonRequest("/api/admin/elevate/verify",{code:adminCode==="000000"?"000001":"000000"},{cookie:challengeCookie,csrf:admin.csrf});
-  assert.equal(wrongCode.response.status,401);
-  assert.equal(wrongCode.data.code,"ADMIN_MFA_INCORRECT");
-  assert.equal((await request("/api/admin/session",{headers:{Cookie:admin.cookie}})).data.elevated,false);
-  const elevated=await jsonRequest("/api/admin/elevate/verify",{code:adminCode},{cookie:challengeCookie,csrf:admin.csrf});
-  assert.equal(elevated.response.status,200,JSON.stringify(elevated.data));
-  assert.ok(Number(elevated.data.elevatedUntil)>Date.now());
-  const rotatedCookie=cookieValue(elevated.setCookie,"strata_session");
-  assert.ok(rotatedCookie,"successful elevation must issue a replacement session cookie");
-  assert.notEqual(cookieToken(rotatedCookie),cookieToken(preElevationCookie),"successful elevation must rotate the bearer session token");
-  assert.match(elevated.setCookie,/\bHttpOnly\b/);
-  assert.match(elevated.setCookie,/\bSameSite=Strict\b/);
-  assert.equal(typeof elevated.data.csrfToken,"string","the browser needs the replacement CSRF token for later admin mutations");
-  assert.ok(elevated.data.csrfToken.length>=24);
-  assert.notEqual(elevated.data.csrfToken,preElevationCsrf,"elevation must rotate CSRF together with the session cookie");
-  assertPrivateJson(elevated.response);
-
-  assert.equal((await request("/api/me",{headers:{Cookie:preElevationCookie}})).response.status,401,"the pre-elevation cookie must be revoked");
-  assert.equal((await request("/api/admin/session",{headers:{Cookie:preElevationCookie}})).response.status,401,"the pre-elevation cookie must not remain an admin session");
-  const rotatedMe=await request("/api/me",{headers:{Cookie:rotatedCookie}});
-  assert.equal(rotatedMe.response.status,200);
-  assert.equal(rotatedMe.data.csrfToken,elevated.data.csrfToken);
-  assert.equal(rotatedMe.data.user.isAdmin,true);
-  admin={...admin,cookie:rotatedCookie,csrf:elevated.data.csrfToken};
-
-  const staleCsrf=await jsonRequest("/api/admin/users/random-user-id-0000000/actions",{
-    action:"suspend",confirmation:"SUSPEND",reason:"Confirming the old CSRF value is invalid."
-  },{cookie:admin.cookie,csrf:preElevationCsrf});
-  assert.equal(staleCsrf.response.status,403);
-  assert.equal(staleCsrf.data.code,"INVALID_CSRF");
-  const elevatedSession=await request("/api/admin/session",{headers:{Cookie:admin.cookie}});
-  assert.equal(elevatedSession.response.status,200);
-  assert.equal(elevatedSession.data.elevated,true);
   const parallelSessionStatus=await request("/api/admin/session",{headers:{Cookie:parallelAdminSession.cookie}});
   assert.equal(parallelSessionStatus.response.status,200);
-  assert.equal(parallelSessionStatus.data.elevated,false,"password confirmation must elevate only the session that performed it");
+  assert.deepEqual(parallelSessionStatus.data,{admin:true,elevated:true,elevatedUntil:null});
   const parallelOverview=await request("/api/admin/overview",{headers:{Cookie:parallelAdminSession.cookie}});
-  assert.equal(parallelOverview.response.status,428);
-  assert.equal(parallelOverview.data.code,"ADMIN_ELEVATION_REQUIRED");
-
-  const parallelPasswordStep=await jsonRequest("/api/admin/elevate",{password:ADMIN_PASSWORD},{cookie:parallelAdminSession.cookie,csrf:parallelAdminSession.csrf});
-  assert.equal(parallelPasswordStep.response.status,202);
-  const parallelMfaCookie=cookieValue(parallelPasswordStep.setCookie,"strata_admin_mfa");
-  const parallelCode=verificationCode(latestDelivery("Your STRATA Admin security code"));
-  const parallelChallengeCookie=`${parallelAdminSession.cookie}; ${parallelMfaCookie}`;
-  const incorrectParallelCode=parallelCode==="000000"?"000001":"000000";
-  // Four attempts above already used this account-level bucket. Four more
-  // distinct forwarded addresses reach the limit; changing IP cannot reset it.
-  for(let attempt=0;attempt<4;attempt+=1){
-    const denied=await jsonRequest("/api/admin/elevate/verify",{code:incorrectParallelCode},{cookie:parallelChallengeCookie,csrf:parallelAdminSession.csrf});
-    assert.equal(denied.response.status,401);
-  }
-  const identityLimited=await jsonRequest("/api/admin/elevate/verify",{code:incorrectParallelCode},{cookie:parallelChallengeCookie,csrf:parallelAdminSession.csrf});
-  assert.equal(identityLimited.response.status,429);
-  assert.equal(identityLimited.data.code,"ADMIN_MFA_RATE_LIMIT");
+  assert.equal(parallelOverview.response.status,200,"every current bound-owner session may open Admin without step-up");
 
   const freshAdmin=await login(ADMIN_EMAIL,ADMIN_PASSWORD);
   assert.equal(freshAdmin.response.status,200);
   const freshAdminSession=await request("/api/admin/session",{headers:{Cookie:freshAdmin.cookie}});
   assert.equal(freshAdminSession.response.status,200);
-  assert.equal(freshAdminSession.data.elevated,false,"admin elevation must belong only to the confirmed session");
+  assert.deepEqual(freshAdminSession.data,{admin:true,elevated:true,elevatedUntil:null});
   const freshAdminOverview=await request("/api/admin/overview",{headers:{Cookie:freshAdmin.cookie}});
-  assert.equal(freshAdminOverview.response.status,428);
-  assert.equal(freshAdminOverview.data.code,"ADMIN_ELEVATION_REQUIRED");
+  assert.equal(freshAdminOverview.response.status,200);
 
   const page=await request("/admin",{redirect:"manual",headers:{Cookie:admin.cookie}});
   assert.equal(page.response.status,200);
@@ -541,7 +412,7 @@ test("the verified exact address binds ownership, forces a fresh login, and requ
   assert.doesNotMatch(page.data,/re_admin_http_fixture|admin-http-email-secret|PADDLE_API_KEY|TURSO_AUTH_TOKEN/i);
 });
 
-test("admin reads require elevation and return bounded, explicitly redacted account data",async()=>{
+test("admin reads require the bound owner session and return bounded, explicitly redacted account data",async()=>{
   member=await verifiedSignup({
     name:"<img src=x onerror=alert(1)>",
     email:"member@example.test",
@@ -618,7 +489,7 @@ test("admin reads require elevation and return bounded, explicitly redacted acco
 test("denied admin mutations enforce authorization, strict Origin, CSRF, and JSON before side effects",async()=>{
   const before=databaseCounts(member.user.id);
   const path=`/api/admin/users/${encodeURIComponent(member.user.id)}/actions`;
-  const body={action:"suspend",confirmation:"SUSPEND",reason:"Investigating an account security report."};
+  const body={action:"suspend"};
 
   const anonymous=await jsonRequest(path,body);
   assert.equal(anonymous.response.status,401);
@@ -650,20 +521,14 @@ test("denied admin mutations enforce authorization, strict Origin, CSRF, and JSO
   assert.deepEqual(databaseCounts(member.user.id),before,"denied mutations must not change accounts, sessions, actions, audit, support, or email deliveries");
 });
 
-test("admin action validation and primary-owner protection fail before side effects",async()=>{
+test("unknown admin actions and primary-owner targeting fail before side effects",async()=>{
   const memberBefore=databaseCounts(member.user.id);
   const adminBefore=databaseCounts(admin.user.id);
 
-  const shortReason=await adminAction(admin,member.user.id,"suspend","SUSPEND","no");
-  assert.equal(shortReason.response.status,400);
-  assert.equal(shortReason.data.code,"ADMIN_REASON_REQUIRED");
-  const wrongConfirmation=await adminAction(admin,member.user.id,"suspend","not-suspend","A valid review reason.");
-  assert.equal(wrongConfirmation.response.status,400);
-  assert.equal(wrongConfirmation.data.code,"ADMIN_CONFIRMATION_REQUIRED");
-  const unsupportedEntitlement=await adminAction(admin,member.user.id,"grant-complimentary-discovery","GRANT","Testing an unsupported entitlement action.");
+  const unsupportedEntitlement=await adminAction(admin,member.user.id,"grant-complimentary-discovery");
   assert.equal(unsupportedEntitlement.response.status,400);
-  assert.equal(unsupportedEntitlement.data.code,"UNKNOWN_ADMIN_ACTION","unsupported actions must be rejected as unknown before confirmation is interpreted");
-  const selfAction=await adminAction(admin,admin.user.id,"revoke-sessions","REVOKE","Testing primary administrator protection.");
+  assert.equal(unsupportedEntitlement.data.code,"UNKNOWN_ADMIN_ACTION");
+  const selfAction=await adminAction(admin,admin.user.id,"revoke-sessions");
   assert.equal(selfAction.response.status,409);
   assert.equal(selfAction.data.code,"ADMIN_SELF_PROTECTED");
 
@@ -675,7 +540,7 @@ test("session revocation, suspension, and restoration affect only the selected a
   const adminBefore=await request("/api/admin/session",{headers:{Cookie:admin.cookie}});
   assert.equal(adminBefore.response.status,200);
 
-  const revoked=await adminAction(admin,member.user.id,"revoke-sessions","REVOKE","Customer reported an unknown signed-in device.");
+  const revoked=await adminAction(admin,member.user.id,"revoke-sessions");
   assert.equal(revoked.response.status,200);
   assert.match(revoked.data.message,/Signed the account out/i);
   assert.equal((await request("/api/me",{headers:{Cookie:member.cookie}})).response.status,401);
@@ -685,7 +550,7 @@ test("session revocation, suspension, and restoration affect only the selected a
 
   member=await login(member.user.email,MEMBER_PASSWORD);
   assert.equal(member.response.status,200);
-  const suspended=await adminAction(admin,member.user.id,"suspend","SUSPEND","Temporarily pausing access while reviewing the report.");
+  const suspended=await adminAction(admin,member.user.id,"suspend");
   assert.equal(suspended.response.status,200);
   assert.ok(Number(suspended.data.user.suspendedAt)>0);
   assert.equal((await request("/api/me",{headers:{Cookie:member.cookie}})).response.status,401);
@@ -694,7 +559,7 @@ test("session revocation, suspension, and restoration affect only the selected a
   assert.equal(blockedLogin.response.status,403);
   assert.equal(blockedLogin.data.code,"ACCOUNT_SUSPENDED");
 
-  const restored=await adminAction(admin,member.user.id,"restore","RESTORE","Review complete; restoring the customer account.");
+  const restored=await adminAction(admin,member.user.id,"restore");
   assert.equal(restored.response.status,200);
   assert.equal(restored.data.user.suspendedAt,null);
   member=await login(member.user.email,MEMBER_PASSWORD);
@@ -705,7 +570,7 @@ test("session revocation, suspension, and restoration affect only the selected a
 
 test("reset and deletion assistance always emails the stored address, hides tokens, and supports cancellation",async()=>{
   const resetBefore=deliveries.length;
-  const reset=await adminAction(admin,member.user.id,"send-password-reset","SEND RESET","Customer requested help changing their password.");
+  const reset=await adminAction(admin,member.user.id,"send-password-reset");
   assert.equal(reset.response.status,200);
   assert.equal(deliveries.length,resetBefore+1);
   const resetDelivery=latestDelivery("Reset your STRATA password");
@@ -715,7 +580,7 @@ test("reset and deletion assistance always emails the stored address, hides toke
   assertAdminResponseRedacted(reset.data,[resetToken,sha256(resetToken),EMAIL_API_KEY,EMAIL_SECRET,MEMBER_PASSWORD]);
 
   const deletionBefore=deliveries.length;
-  const deletion=await adminAction(admin,member.user.id,"send-delete-link",member.user.email,"Customer requested the self-service deletion confirmation.");
+  const deletion=await adminAction(admin,member.user.id,"send-delete-link");
   assert.equal(deletion.response.status,200);
   assert.equal(deliveries.length,deletionBefore+1);
   const deletionDelivery=latestDelivery("Confirm deletion of your STRATA account");
@@ -724,7 +589,7 @@ test("reset and deletion assistance always emails the stored address, hides toke
   assert.equal(deletion.data.user.accountDeletion.pending,true);
   assertAdminResponseRedacted(deletion.data,[deletionToken,sha256(deletionToken),EMAIL_API_KEY,EMAIL_SECRET]);
 
-  const canceled=await adminAction(admin,member.user.id,"cancel-deletion","CANCEL","Customer withdrew the account deletion request.");
+  const canceled=await adminAction(admin,member.user.id,"cancel-deletion");
   assert.equal(canceled.response.status,200);
   assert.equal(canceled.data.user.accountDeletion.pending,false);
   const deletedStatus=await jsonRequest("/api/account/delete/status",{token:deletionToken});
@@ -894,18 +759,19 @@ test("support management is admin-only, mutation-protected, auditable, and redac
   assertAdminResponseRedacted(audit.data,[EMAIL_API_KEY,EMAIL_SECRET,ADMIN_PASSWORD,MEMBER_PASSWORD,admin.csrf,member.csrf]);
 });
 
-test("secret-shaped admin reasons are rejected before mutation or audit persistence",async()=>{
-  const before=databaseCounts(member.user.id);
+test("Admin derives bounded audit reasons and ignores obsolete client confirmation fields",async()=>{
   const secretReason=`Investigating with Bearer ${EMAIL_API_KEY}`;
-  const result=await adminAction(admin,member.user.id,"restore","RESTORE",secretReason);
-  assert.equal(result.response.status,400);
-  assert.match(String(result.data.code||""),/SENSITIVE|REASON/i);
-  assert.deepEqual(databaseCounts(member.user.id),before);
+  const result=await jsonRequest(`/api/admin/users/${member.user.id}/actions`,{
+    action:"send-password-reset",reason:secretReason,confirmation:"WRONG"
+  },{cookie:admin.cookie,csrf:admin.csrf});
+  assert.equal(result.response.status,200);
   const audit=await request("/api/admin/audit",{headers:{Cookie:admin.cookie}});
+  const event=audit.data.events.find((entry)=>entry.action==="send-password-reset"&&entry.target?.id===member.user.id);
+  assert.ok(event);assert.equal(event.reason,"Owner initiated a password-reset email from Admin.");assert.ok(event.reason.length<=200);
   assert.ok(!JSON.stringify(audit.data).includes(EMAIL_API_KEY));
 });
 
-test("elevated Admin automatically pauses deletion targets and preserves accounts with live billing",async()=>{
+test("Admin automatically pauses deletion targets and preserves accounts with live billing",async()=>{
   const target=await verifiedSignup({name:"Delete Me",email:"delete-me@example.test",password:"delete-me-password-123"});
   const support=await jsonRequest("/api/support",{name:"Ignored",email:"ignored@example.test",category:"privacy",subject:"Delete this test account",referenceId:"direct-delete-test",message:"Please remove the account after the guarded administrator review.",website:""},{cookie:target.cookie});
   assert.equal(support.response.status,201);
@@ -918,25 +784,21 @@ test("elevated Admin automatically pauses deletion targets and preserves account
     .run("sub_direct_admin_delete",target.user.id,"txn_direct_admin_delete","ctm_retained_by_paddle","active","pri_monthly_delete_test","pro_monthly_delete_test",null,null,createdAt+86_400_000,createdAt,createdAt,createdAt);
   db.close();
 
-  const exact=`DELETE ${target.user.email}`;
-  const active=await adminAction(admin,target.user.id,"delete-account",exact,"Customer requested permanent account removal after verification.");
+  const active=await adminAction(admin,target.user.id,"delete-account");
   assert.equal(active.response.status,409);
   assert.equal(active.data.code,"SUBSCRIPTION_ACTIVE");
   assert.equal((await request("/api/me",{headers:{Cookie:target.cookie}})).response.status,401);
   assert.ok(databaseCounts(target.user.id).user);
 
-  const self=await adminAction(admin,admin.user.id,"delete-account",`DELETE ${ADMIN_EMAIL}`,"Testing the protected owner boundary.");
+  const self=await adminAction(admin,admin.user.id,"delete-account");
   assert.equal(self.response.status,409);
   assert.equal(self.data.code,"ADMIN_SELF_PROTECTED");
 
   const detail=await request(`/api/admin/users/${target.user.id}`,{headers:{Cookie:admin.cookie}});
   assert.ok(detail.data.user.suspendedAt);
-  const wrong=await adminAction(admin,target.user.id,"delete-account","DELETE wrong@example.test","Customer requested permanent account removal after verification.");
-  assert.equal(wrong.response.status,400);
-  assert.equal(wrong.data.code,"ADMIN_CONFIRMATION_REQUIRED");
   assert.ok(databaseCounts(target.user.id).user);
 
-  const subscribed=await adminAction(admin,target.user.id,"delete-account",exact,"Customer requested permanent account removal after verification.");
+  const subscribed=await adminAction(admin,target.user.id,"delete-account");
   assert.equal(subscribed.response.status,409);
   assert.equal(subscribed.data.code,"SUBSCRIPTION_ACTIVE");
   const canceledDb=openDatabase();
@@ -944,7 +806,7 @@ test("elevated Admin automatically pauses deletion targets and preserves account
   canceledDb.close();
 
   const beforeAudit=databaseCounts(target.user.id).audits;
-  const deleted=await adminAction(admin,target.user.id,"delete-account",exact,"Customer requested permanent account removal after verification.");
+  const deleted=await adminAction(admin,target.user.id,"delete-account");
   assert.equal(deleted.response.status,200);
   assert.match(deleted.data.message,/permanently deleted from STRATA/i);
   assert.doesNotMatch(JSON.stringify(deleted.data),/delete-me@example\.test|ctm_retained_by_paddle/i);
@@ -962,7 +824,7 @@ test("elevated Admin automatically pauses deletion targets and preserves account
   check.close();
   assert.equal(databaseCounts(target.user.id).audits,beforeAudit+1,"deletion and its success audit must commit together");
 
-  const replay=await adminAction(admin,target.user.id,"delete-account",exact,"Customer requested permanent account removal after verification.");
+  const replay=await adminAction(admin,target.user.id,"delete-account");
   assert.equal(replay.response.status,404);
   assert.equal(replay.data.code,"ADMIN_TARGET_NOT_FOUND");
   assertPrivateJson(replay.response);
@@ -971,12 +833,11 @@ test("elevated Admin automatically pauses deletion targets and preserves account
 test("admin grants timed or indefinite free Strata+, revokes it, and controls new payment sessions",async()=>{
   const target=await verifiedSignup({name:"Complimentary Member",email:"complimentary@example.test",password:MEMBER_PASSWORD});
   const path=`/api/admin/users/${target.user.id}/actions`;
-  const send=(body,options={})=>jsonRequest(path,{reason:"Founder complimentary membership",...body},{cookie:admin.cookie,csrf:admin.csrf,...options});
-  const grant={action:"grant-plus",confirmation:"GRANT",expectedControlsRevision:0,grant:{unit:"minutes",amount:90}};
+  const send=(body,options={})=>jsonRequest(path,body,{cookie:admin.cookie,csrf:admin.csrf,...options});
+  const grant={action:"grant-plus",expectedControlsRevision:0,grant:{unit:"minutes",amount:90}};
   assert.equal((await send(grant,{cookie:target.cookie,csrf:target.csrf})).response.status,403);
   assert.equal((await send(grant,{csrf:"wrong"})).response.status,403);
   assert.equal((await send({...grant,grant:{unit:"days",amount:-1}})).response.status,400);
-  assert.equal((await send({...grant,confirmation:"WRONG"})).response.status,400);
   const timed=await send(grant);
   assert.equal(timed.response.status,200,JSON.stringify(timed.data));
   assert.equal(timed.data.user.controlsRevision,1);
@@ -994,26 +855,23 @@ test("admin grants timed or indefinite free Strata+, revokes it, and controls ne
   const indefinite=await send({...grant,expectedControlsRevision:1,grant:{unit:"indefinite"}});
   assert.equal(indefinite.response.status,200);
   assert.equal(indefinite.data.user.discovery.adminGrant.expiresAt,null);
-  const revoked=await send({action:"revoke-plus",confirmation:"REVOKE PLUS",expectedControlsRevision:2});
+  const revoked=await send({action:"revoke-plus",expectedControlsRevision:2});
   assert.equal(revoked.response.status,200);
   assert.equal(revoked.data.user.discovery.active,false);
-  const held=await send({action:"close-checkouts",confirmation:"CLOSE CHECKOUTS",expectedControlsRevision:3});
+  const held=await send({action:"close-checkouts",expectedControlsRevision:3});
   assert.equal(held.response.status,200,JSON.stringify(held.data));
   assert.equal(held.data.user.checkoutBlocked,true);
   assert.match(held.data.message,/No unfinished/);
   const blocked=await jsonRequest("/api/billing/checkout",{},{cookie:target.cookie,csrf:target.csrf});
   assert.equal(blocked.data.code,"CHECKOUT_BLOCKED");
-  const enabled=await send({action:"enable-checkouts",confirmation:"ENABLE CHECKOUTS",expectedControlsRevision:4});
+  const enabled=await send({action:"enable-checkouts",expectedControlsRevision:4});
   assert.equal(enabled.response.status,200);
   assert.equal(enabled.data.user.checkoutBlocked,false);
 });
 
-test("one confirmed admin deletion pauses and removes an active account; wrong confirmation has no effect",async()=>{
+test("one reviewed admin deletion pauses and removes an active account without typed fields",async()=>{
   const target=await verifiedSignup({name:"Easy Removal",email:"easy-removal@example.test",password:MEMBER_PASSWORD});
-  const wrong=await adminAction(admin,target.user.id,"delete-account","DELETE wrong@example.test");
-  assert.equal(wrong.response.status,400);
-  assert.equal((await request("/api/me",{headers:{Cookie:target.cookie}})).response.status,200);
-  const deleted=await adminAction(admin,target.user.id,"delete-account",`DELETE ${target.user.email}`);
+  const deleted=await adminAction(admin,target.user.id,"delete-account");
   assert.equal(deleted.response.status,200,JSON.stringify(deleted.data));
   assert.equal((await request("/api/me",{headers:{Cookie:target.cookie}})).response.status,401);
   assert.equal((await request(`/api/admin/users/${target.user.id}`,{headers:{Cookie:admin.cookie}})).response.status,404);

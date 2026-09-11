@@ -245,7 +245,6 @@ async function parityScenario(store) {
   await store.insertUser(deletionTarget);
   await store.claimAdminPrincipal(deletionActor.id,deletionActor.email,7_002);
   await store.insertSession({tokenHash:"parity-delete-admin-session",userId:deletionActor.id,csrfToken:"private-delete-admin-csrf",expiresAt:20_000,createdAt:7_002,authVersion:2});
-  await store.createAdminElevation("parity-delete-admin-session",20_000,7_002);
   const activeAdminDelete=await store.deleteUserByAdmin(deletionTarget.id,7_002,deletionTarget.email,"delete-target-email-hash","parity-delete-admin-session",{id:"parity-delete-audit-active",actorUserId:deletionActor.id,targetUserId:deletionTarget.id,action:"delete-account",reason:"Parity should reject an active account.",result:"success",createdAt:7_002});
   await store.suspendUser(deletionTarget.id,7_003);
   const adminDeleted=await store.deleteUserByAdmin(deletionTarget.id,7_004,deletionTarget.email,"delete-target-email-hash","parity-delete-admin-session",{id:"parity-delete-audit",actorUserId:deletionActor.id,targetUserId:deletionTarget.id,action:"delete-account",reason:"Parity test permanent deletion.",result:"success",createdAt:7_004});
@@ -383,17 +382,16 @@ test("SQLite and Turso adapters expose matching values, mutation results, and se
   }
 });
 
-test("SQLite and Turso grants and payment holds enforce owner elevation, revision, audit and billing isolation",async()=>{
+test("SQLite and Turso grants and payment holds enforce a live bound-owner session, revision, audit and billing isolation",async()=>{
   const pair=await stores();
   try{for(const store of [pair.local,pair.turso]){
     const now=Date.UTC(2026,8,10),actor="grant-owner",target="grant-member",token="grant-owner-session";
     for(const id of [actor,target])await store.insertUser({id,name:id,email:`${id}@example.test`,passwordHash:"hash",passwordSalt:"salt",createdAt:now,emailVerifiedAt:now});
     await store.claimAdminPrincipal(actor,`${actor}@example.test`,now);
-    await store.insertSession({tokenHash:token,userId:actor,csrfToken:"csrf",expiresAt:now+100000,createdAt:now,authVersion:2});
     const base={id:"grant-audit",actorUserId:actor,targetUserId:target,action:"grant-plus",reason:"Complimentary membership",result:"success",createdAt:now};
     const row={grant_starts_at:now,grant_expires_at:now+60000,grant_revoked_at:null,checkout_blocked_at:null};
-    assert.equal(await store.writeAdminControls(target,row,0,token,base),null,"elevation is mandatory at commit");
-    await store.createAdminElevation(token,now+90000,now);
+    assert.equal(await store.writeAdminControls(target,row,0,token,base),null,"a live owner session is mandatory at commit");
+    await store.insertSession({tokenHash:token,userId:actor,csrfToken:"csrf",expiresAt:now+100000,createdAt:now,authVersion:2});
     assert.equal((await store.writeAdminControls(actor,row,0,token,{...base,id:"owner-gift",targetUserId:actor})).revision,1,"owner may grant complimentary access to their own account");
     const saved=await store.writeAdminControls(target,row,0,token,base);
     assert.equal(saved.revision,1);
@@ -420,6 +418,10 @@ test("SQLite and Turso grants and payment holds enforce owner elevation, revisio
     await store.deleteSession(token);
     assert.equal(await store.writeAdminControls(target,row,4,token,{...base,id:"expired"}),null);
     assert.equal((await store.adminControls(target)).revision,4);
+    const expiredToken=`${token}-expired`;
+    await store.insertSession({tokenHash:expiredToken,userId:actor,csrfToken:"csrf-expired",expiresAt:now+200000,createdAt:now+100000,authVersion:2});
+    assert.equal(await store.writeAdminControls(target,row,4,expiredToken,{...base,id:"expired-by-time",createdAt:now+200000}),null,"an expired owner session must fail at the storage boundary");
+    assert.equal((await store.adminControls(target)).revision,4);
   }}finally{await pair.close();}
 });
 
@@ -431,7 +433,6 @@ test("Turso account deletion explicitly removes administrator controls when fore
     for(const id of [actor,directTarget,selfTarget])await store.insertUser({id,name:id,email:`${id}@example.test`,passwordHash:"hash",passwordSalt:"salt",createdAt:now,emailVerifiedAt:now});
     await store.claimAdminPrincipal(actor,`${actor}@example.test`,now);
     await store.insertSession({tokenHash:token,userId:actor,csrfToken:"csrf",expiresAt:now+100000,createdAt:now,authVersion:2});
-    await store.createAdminElevation(token,now+90000,now);
     for(const [index,target] of [directTarget,selfTarget].entries()){
       const row={grant_starts_at:now,grant_expires_at:now+60000,grant_revoked_at:null,checkout_blocked_at:now};
       const audit={id:`delete-controls-grant-${index}`,actorUserId:actor,targetUserId:target,action:"grant-plus",reason:"Deletion cleanup regression fixture",result:"success",createdAt:now+index};

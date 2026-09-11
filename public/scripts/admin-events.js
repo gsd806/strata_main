@@ -44,8 +44,6 @@
     el("cancelSupportUpdate").addEventListener("click",()=>handlers.closeDialog(el("supportDialog"),state.supportDialogTrigger));
     el("supportDialog").addEventListener("close",handlers.syncDialogLock);
     el("refreshAudit").addEventListener("click",()=>{void handlers.loadAudit();});
-    el("elevationForm").addEventListener("submit",handlers.submitElevation);
-    el("elevationRestart").addEventListener("click",()=>handlers.showElevation("Enter your password to request a new administrator email code."));
     document.addEventListener("visibilitychange",handlers.handleVisibilityChange);
     window.addEventListener("focus",handlers.handleVisibilityChange);
     window.addEventListener("pageshow",handlers.handlePageShow);

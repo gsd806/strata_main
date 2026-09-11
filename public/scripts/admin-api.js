@@ -30,8 +30,6 @@
     return{
       identity:()=>request("/api/me"),
       adminSession:()=>request("/api/admin/session"),
-      elevate:(payload)=>post("/api/admin/elevate",payload),
-      verifyElevation:(payload)=>post("/api/admin/elevate/verify",payload),
       overview:()=>request("/api/admin/overview"),
       productSignals:(days)=>request(`/api/admin/product-signals?days=${encodeURIComponent(days)}`),
       users:(params)=>request(`/api/admin/users?${params}`),

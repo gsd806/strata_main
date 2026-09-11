@@ -1,8 +1,8 @@
 "use strict";
 const {cleanText}=require("./plans");
 const {adminGrantState,grantExpiry}=require("./access-controls");
-function createAdminUserActions({store,auth,adminReason,validAdminConfirmation,adminAuditEvent,recordAdminAudit,adminUserPayload,reconcileCheckoutCreationBeforeDeletion,reconcileUnsettledPurchases}){
-  const changed=()=>Object.assign(new Error("Account controls changed or admin confirmation expired. Refresh the account and try again."),{status:409,code:"ADMIN_STATE_CHANGED"});
+function createAdminUserActions({store,auth,adminActionReason,adminAuditEvent,recordAdminAudit,adminUserPayload,reconcileCheckoutCreationBeforeDeletion,reconcileUnsettledPurchases}){
+  const changed=()=>Object.assign(new Error("Account controls changed. Refresh the account and try again."),{status:409,code:"ADMIN_STATE_CHANGED"});
   async function performControlAction(session,target,input,action,reason){
     const existing=await store.adminControls(target.id),revision=input.expectedControlsRevision;
     if(!Number.isSafeInteger(revision)||revision<0||revision!==Number(existing?.revision||0))throw changed();
@@ -40,8 +40,7 @@ function createAdminUserActions({store,auth,adminReason,validAdminConfirmation,a
     const principal=await store.adminPrincipal(),action=cleanText(input?.action,40);
     if(principal?.user_id===target.id&&!["grant-plus","revoke-plus","close-checkouts","enable-checkouts"].includes(action))throw Object.assign(new Error("Use Account Security for the primary administrator account."),{status:409,code:"ADMIN_SELF_PROTECTED"});
     if(!["send-password-reset","send-delete-link","cancel-deletion","revoke-sessions","suspend","restore","delete-account","grant-plus","revoke-plus","close-checkouts","enable-checkouts"].includes(action))throw Object.assign(new Error("Unknown admin action."),{status:400,code:"UNKNOWN_ADMIN_ACTION"});
-    const reason=adminReason(input?.reason);
-    if(!validAdminConfirmation(action,input?.confirmation,target))throw Object.assign(new Error("The confirmation text does not match this action."),{status:400,code:"ADMIN_CONFIRMATION_REQUIRED"});
+    const reason=adminActionReason(action);
     if(["grant-plus","revoke-plus","close-checkouts","enable-checkouts"].includes(action))return performControlAction(session,target,input,action,reason);
     if(action==="send-password-reset"||action==="send-delete-link"){
       const purpose=action==="send-password-reset"?"password_reset":"account_delete";

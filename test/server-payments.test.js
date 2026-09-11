@@ -943,7 +943,7 @@ test("completed checkout recovery reports entitlement only after durable access 
 });
 
 let paymentAdmin;
-async function elevatedPaymentAdmin(){
+async function authenticatedPaymentAdmin(){
   if(paymentAdmin)return paymentAdmin;
   const password="billing-admin-password-123",account=await signup({name:"Billing Admin",email:"billing-admin@example.test",password});
   const db=new DatabaseSync(join(runtimeDir,"strata.sqlite"));
@@ -952,14 +952,13 @@ async function elevatedPaymentAdmin(){
   const loggedIn=await request("/api/login",{method:"POST",headers:{Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({email:account.user.email,password})});
   assert.equal(loggedIn.response.status,200);
   const me=await request("/api/me",{headers:{Cookie:loggedIn.cookie}});
-  const result=await request("/api/admin/elevate",{method:"POST",headers:{Cookie:loggedIn.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":me.data.csrfToken},body:JSON.stringify({password})});
-  assert.equal(result.response.status,200,JSON.stringify(result.data));
-  const match=result.response.headers.get("set-cookie").match(/strata_session=([^;,]+)/);
-  paymentAdmin={cookie:`strata_session=${match[1]}`,csrf:result.data.csrfToken};return paymentAdmin;
+  const session=await request("/api/admin/session",{headers:{Cookie:loggedIn.cookie}});
+  assert.deepEqual(session.data,{admin:true,elevated:true,elevatedUntil:null});
+  paymentAdmin={cookie:loggedIn.cookie,csrf:me.data.csrfToken};return paymentAdmin;
 }
 async function controlPaymentAccount(account,action,revision,grant){
-  const admin=await elevatedPaymentAdmin();
-  return request(`/api/admin/users/${account.user.id}/actions`,{method:"POST",headers:{Cookie:admin.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":admin.csrf},body:JSON.stringify({action,expectedControlsRevision:revision,confirmation:{"close-checkouts":"CLOSE CHECKOUTS","enable-checkouts":"ENABLE CHECKOUTS","grant-plus":"GRANT"}[action],reason:"Admin payment session test",...(grant?{grant}:{})})});
+  const admin=await authenticatedPaymentAdmin();
+  return request(`/api/admin/users/${account.user.id}/actions`,{method:"POST",headers:{Cookie:admin.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":admin.csrf},body:JSON.stringify({action,expectedControlsRevision:revision,...(grant?{grant}:{})})});
 }
 
 test("admin closes fresh checkouts, reports noncancelable states, and retains holds on provider failure",async()=>{

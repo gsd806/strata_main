@@ -31,9 +31,7 @@
     return{
       admin:null,
       csrfToken:"",
-      elevated:false,
-      elevatedUntil:0,
-      mfaPending:false,
+      authorized:false,
       activeSection:"overview",
       loaded:new Set(),
       productSignalRequest:0,

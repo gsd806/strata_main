@@ -4,27 +4,6 @@ const {createAdminUserActions}=require("./admin-user-actions");
 const {adminGrantState}=require("./access-controls");
 const {randomUUID}=require("node:crypto");
 const {cleanText,defaultPlan,sanitizePlan,planStats}=require("./plans");
-const {adminMfaChallenge,maskEmail,sendAdminMfaEmail,verifyAdminMfaChallenge}=require("./email");
-
-const ADMIN_ELEVATION_MS=30*60*1000;
-const ADMIN_MFA_MS=10*60*1000;
-const ADMIN_MFA_COOKIE="strata_admin_mfa";
-
-function cookieValue(header,name){
-  for(const part of String(header||"").split(";")){
-    const trimmed=part.trim(),separator=trimmed.indexOf("=");
-    if(separator<1)continue;
-    try{if(decodeURIComponent(trimmed.slice(0,separator))===name)return decodeURIComponent(trimmed.slice(separator+1));}catch{/* Ignore malformed cookies. */}
-  }
-  return "";
-}
-
-function parseAdminMfaCookie(value){
-  const match=String(value||"").match(/^([A-Za-z0-9_-]{16,100})\.([0-9]{10,16})\.([a-f0-9]{64})$/i);
-  if(!match)return null;
-  const expiresAt=Number(match[2]);
-  return Number.isSafeInteger(expiresAt)?{challengeId:match[1],expiresAt,signature:match[3]}:null;
-}
 
 /**
  * Typed dependency-injection boundary for privileged account operations.
@@ -49,19 +28,6 @@ function createAdminService({
     throw new TypeError("Admin service requires store, auth, service configuration, request guards, and HTTP helpers.");
   }
   const {json,bodyJson}=http;
-  const mfaRequired=Boolean(adminEmail&&(environment.NODE_ENV==="production"||String(environment.ADMIN_EMAIL_MFA_REQUIRED||"").toLowerCase()==="true"));
-
-  function adminMfaCookie(value,maxAge=Math.ceil(ADMIN_MFA_MS/1000)){
-    const parts=[`${ADMIN_MFA_COOKIE}=${encodeURIComponent(value)}`,"Path=/api/admin","HttpOnly","SameSite=Strict",`Max-Age=${Math.max(0,Math.floor(maxAge))}`];
-    if(environment.NODE_ENV==="production"||environment.SECURE_COOKIES==="true")parts.push("Secure");
-    return parts.join("; ");
-  }
-
-  async function completeElevation(session,reason){
-    const now=Date.now(),elevatedUntil=now+ADMIN_ELEVATION_MS,nextSession=auth.prepareSession(session.id,now,session.auth_version);
-    const rotated=await store.rotateAdminSessionForElevation(session.token_hash,nextSession.record,elevatedUntil,adminAuditEvent(session.id,session.id,"admin-elevated",reason),now);
-    return rotated?{elevatedUntil,nextSession}:null;
-  }
 
   function adminPrincipalMatches(principal){
     return Boolean(
@@ -92,7 +58,7 @@ function createAdminService({
     return boundNow?{...user,auth_version:Number(user.auth_version)+1}:user;
   }
 
-  async function requireAdmin(req,res,{elevated=true,allowBootstrap=false}={}){
+  async function requireAdmin(req,res,{allowBootstrap=false}={}){
     const session=await auth.requireSession(req,res);
     if(!session)return null;
     const identity=await adminIdentity(session,{allowBootstrap});
@@ -101,10 +67,6 @@ function createAdminService({
       return null;
     }
     if(!identity.active){json(res,403,{error:"Administrator access required.",code:"ADMIN_REQUIRED"});return null;}
-    if(elevated&&!await store.adminElevation(session.token_hash,Date.now())){
-      json(res,428,{error:"Confirm your password to continue in Admin.",code:"ADMIN_ELEVATION_REQUIRED"});
-      return null;
-    }
     return session;
   }
 
@@ -125,12 +87,20 @@ function createAdminService({
       || /\b(?:re_|pdl_(?:live|sdbx|ntfset)_|live_)[A-Za-z0-9_-]{12,}/i.test(text)
       || /(?:[#?&](?:token|code)=)[A-Za-z0-9_-]{6,}/i.test(text);
   }
-  function adminReason(value){
-    const reason=cleanText(value,200);
-    if(reason.length<4)throw Object.assign(new Error("Add a short reason for this admin action."),{status:400,code:"ADMIN_REASON_REQUIRED"});
-    if(sensitiveAdminText(reason))throw Object.assign(new Error("Do not put passwords, codes, API keys, tokens, or private action links in an admin reason."),{status:400,code:"ADMIN_SENSITIVE_REASON"});
-    return reason;
-  }
+  const ADMIN_ACTION_REASONS=Object.freeze({
+    "send-password-reset":"Owner initiated a password-reset email from Admin.",
+    "send-delete-link":"Owner initiated an account-deletion email from Admin.",
+    "cancel-deletion":"Owner canceled a pending account deletion from Admin.",
+    "revoke-sessions":"Owner revoked account sessions from Admin.",
+    suspend:"Owner paused an account from Admin.",
+    restore:"Owner restored an account from Admin.",
+    "delete-account":"Owner permanently deleted an account from Admin.",
+    "grant-plus":"Owner granted complimentary Strata+ access from Admin.",
+    "revoke-plus":"Owner revoked complimentary Strata+ access from Admin.",
+    "close-checkouts":"Owner blocked new checkout sessions from Admin.",
+    "enable-checkouts":"Owner enabled new checkout sessions from Admin."
+  });
+  function adminActionReason(action){return ADMIN_ACTION_REASONS[action]||"Owner initiated an account action from Admin.";}
   function cleanAdminTarget(value){const id=cleanText(value,100);return /^[A-Za-z0-9_-]{8,100}$/.test(id)?id:"";}
   function adminAuditEvent(actorUserId,targetUserId,action,reason,result="success"){
     return {id:randomUUID(),actorUserId,targetUserId,action,reason,result,createdAt:Date.now()};
@@ -175,50 +145,13 @@ function createAdminService({
     };
   }
 
-  function validAdminConfirmation(action,value,target){
-    const expected={"send-password-reset":"SEND RESET","send-delete-link":target?.email||"","cancel-deletion":"CANCEL","revoke-sessions":"REVOKE",suspend:"SUSPEND",restore:"RESTORE","delete-account":`DELETE ${target?.email||""}`,"grant-plus":"GRANT","revoke-plus":"REVOKE PLUS","close-checkouts":"CLOSE CHECKOUTS","enable-checkouts":"ENABLE CHECKOUTS"}[action];
-    return Boolean(expected&&String(value||"").trim()===expected);
-  }
-  const {performAdminUserAction}=createAdminUserActions({store,auth,adminReason,validAdminConfirmation,adminAuditEvent,recordAdminAudit,adminUserPayload,reconcileCheckoutCreationBeforeDeletion,reconcileUnsettledPurchases});
+  const {performAdminUserAction}=createAdminUserActions({store,auth,adminActionReason,adminAuditEvent,recordAdminAudit,adminUserPayload,reconcileCheckoutCreationBeforeDeletion,reconcileUnsettledPurchases});
 
   async function handleApi(req,res,url){
     if(!url.pathname.startsWith("/api/admin/")||url.pathname.startsWith("/api/admin/support"))return false;
     if(url.pathname==="/api/admin/session"&&req.method==="GET"){
-      const session=await requireAdmin(req,res,{elevated:false,allowBootstrap:true});if(!session)return true;
-      const elevation=await store.adminElevation(session.token_hash,Date.now());
-      json(res,200,{admin:true,elevated:Boolean(elevation),elevatedUntil:elevation?Number(elevation.expires_at):null});return true;
-    }
-    if(url.pathname==="/api/admin/elevate"&&req.method==="POST"){
-      const session=await requireAdmin(req,res,{elevated:false,allowBootstrap:true});if(!session)return true;
-      if(!requireAdminMutation(req,res,session))return true;
-      if(!rateAllowed(req,"admin-elevate-network",80,15*60*1000)||!rateAllowed(req,`identity:admin-elevate:${session.id}`,8,15*60*1000)){json(res,429,{error:"Too many admin confirmation attempts. Wait and try again.",code:"ADMIN_RATE_LIMIT"});return true;}
-      const input=await bodyJson(req),password=String(input?.password||""),user=await store.accountCredentialsById(session.id);
-      if(!user||password.length<1||password.length>128||!await auth.passwordMatches(password,user)){json(res,401,{error:"Password is incorrect.",code:"ADMIN_PASSWORD_INCORRECT"});return true;}
-      if(mfaRequired){
-        if(!emailConfig.enabled){json(res,503,{error:"Administrator email verification is unavailable. Restore account email delivery before using Admin.",code:"ADMIN_MFA_UNAVAILABLE"});return true;}
-        const challengeId=randomUUID(),expiresAt=Date.now()+ADMIN_MFA_MS,challenge=adminMfaChallenge(emailConfig,{sessionTokenHash:session.token_hash,challengeId,expiresAt});
-        try{await sendAdminMfaEmail(emailConfig,{to:user.email,name:user.name,code:challenge.code,challengeId,expiresInMinutes:Math.ceil(ADMIN_MFA_MS/60000)});}
-        catch(error){json(res,error.status||503,{error:error.message||"The administrator security code could not be sent.",code:error.code||"ADMIN_MFA_DELIVERY_UNAVAILABLE"});return true;}
-        const token=`${challenge.challengeId}.${challenge.expiresAt}.${challenge.signature}`;
-        json(res,202,{ok:true,mfaRequired:true,maskedEmail:maskEmail(user.email),expiresAt},{"Set-Cookie":adminMfaCookie(token)});return true;
-      }
-      const completed=await completeElevation(session,"Owner password confirmed");
-      if(!completed){json(res,409,{error:"Your session changed. Sign in and try again.",code:"ADMIN_SESSION_CHANGED"});return true;}
-      json(res,200,{ok:true,elevatedUntil:completed.elevatedUntil,csrfToken:completed.nextSession.csrfToken},{"Set-Cookie":auth.sessionCookie(completed.nextSession.token)});return true;
-    }
-    if(url.pathname==="/api/admin/elevate/verify"&&req.method==="POST"){
-      const session=await requireAdmin(req,res,{elevated:false,allowBootstrap:true});if(!session)return true;
-      if(!requireAdminMutation(req,res,session))return true;
-      if(!mfaRequired){json(res,409,{error:"Administrator email verification is not enabled for this environment.",code:"ADMIN_MFA_NOT_REQUIRED"});return true;}
-      if(!rateAllowed(req,"admin-elevate-code-network",80,15*60*1000)||!rateAllowed(req,`identity:admin-elevate-code:${session.id}`,8,15*60*1000)){json(res,429,{error:"Too many administrator security-code attempts. Wait and request a new code.",code:"ADMIN_MFA_RATE_LIMIT"});return true;}
-      const challenge=parseAdminMfaCookie(cookieValue(req.headers.cookie,ADMIN_MFA_COOKIE)),input=await bodyJson(req),code=String(input?.code||"").trim(),clear={"Set-Cookie":adminMfaCookie("",0)};
-      if(!challenge||challenge.expiresAt<=Date.now()){json(res,410,{error:"The administrator security code expired. Confirm your password to request another one.",code:"ADMIN_MFA_EXPIRED"},clear);return true;}
-      if(!/^[0-9]{6}$/.test(code)||!verifyAdminMfaChallenge(emailConfig,{sessionTokenHash:session.token_hash,...challenge,code})){
-        json(res,401,{error:"That administrator security code is incorrect.",code:"ADMIN_MFA_INCORRECT"});return true;
-      }
-      const completed=await completeElevation(session,"Owner password and registered-email code confirmed");
-      if(!completed){json(res,409,{error:"Your session changed. Sign in and try again.",code:"ADMIN_SESSION_CHANGED"},clear);return true;}
-      json(res,200,{ok:true,elevatedUntil:completed.elevatedUntil,csrfToken:completed.nextSession.csrfToken},{"Set-Cookie":[auth.sessionCookie(completed.nextSession.token),adminMfaCookie("",0)]});return true;
+      const session=await requireAdmin(req,res,{allowBootstrap:true});if(!session)return true;
+      json(res,200,{admin:true,elevated:true,elevatedUntil:null});return true;
     }
     if(url.pathname==="/api/admin/overview"&&req.method==="GET"){
       const session=await requireAdmin(req,res);if(!session)return true;

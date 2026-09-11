@@ -1,5 +1,16 @@
 # Changelog
 
+## 7.8.4 — Direct sole-owner administration
+
+- Let the sole verified account permanently bound as primary owner open Admin with its normal live session; retire the separate Admin password and registered-email-code elevation routes.
+- Remove typed action commands and operator-entered audit reasons while retaining one explicit review dialog before each account action.
+- Generate a bounded, action-specific reason on the server for every administrator audit record instead of trusting client prose.
+- Preserve exact owner binding, live-session and credential-version checks, trusted-Origin, CSRF, JSON-content and rate guards, optimistic revisions, primary-owner self-protection, and redacted private payloads.
+- Keep pause-first account deletion, checkout and subscription reconciliation, billing blockers, and the final atomic owner/session, target-state, billing, and audit predicates intact.
+- Add focused module, integration, SQLite/Turso parity, payment, private-state invalidation, and browser coverage for the simplified workflow without changing account, billing, provider, or stored-data formats.
+
+Validation is recorded in the [7.8.4 release guide](docs/release-7.8.4.md).
+
 ## 7.8.3 — Restored identity and clearer Strata+ states
 
 - Restore the 7.8.1 visual and information-architecture baseline across the homepage, photography, global navigation, four-tab Strata+ workspace, Plan, Train, Account, and Pricing while retaining the functional improvements from 7.8.2.

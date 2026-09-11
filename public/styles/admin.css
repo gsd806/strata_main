@@ -68,18 +68,6 @@ button:disabled { cursor:not-allowed; opacity:.56; }
 .access-panel>p:not(.panel-index) { margin:0; color:rgba(255,255,255,.7); font-size:13px; line-height:1.65; }
 .access-actions { display:grid; gap:8px; margin-top:22px; }
 
-.elevation-panel { min-height:min(590px,calc(100dvh - 230px)); display:grid; align-content:center; gap:30px; margin-top:30px; padding:28px; color:var(--white); background:var(--ink); border-radius:14px; box-shadow:inset 0 3px var(--accent); }
-.elevation-panel .panel-index { color:var(--accent); }
-.elevation-panel h2 { margin:13px 0 12px; font:600 clamp(43px,14vw,70px)/.94 var(--display); text-transform:uppercase; }
-.elevation-panel p:not(.panel-index) { max-width:650px; margin:0; color:rgba(255,255,255,.7); font-size:13px; line-height:1.7; }
-.elevation-panel p strong { color:var(--white); overflow-wrap:anywhere; }
-.elevation-panel form { display:grid; gap:14px; max-width:620px; }
-.elevation-panel .field label { color:rgba(255,255,255,.68); }
-.elevation-panel .field input { color:var(--white); background:rgba(255,255,255,.08); border-color:rgba(255,255,255,.42); }
-.elevation-panel .field input:focus-visible { outline-color:var(--accent); border-color:var(--accent); }
-.button-accent { color:var(--ink); background:var(--accent); border-color:var(--accent); }
-.button-accent:hover:not(:disabled) { color:var(--white); background:var(--orange); border-color:var(--orange); }
-
 .dashboard { padding-top:30px; }
 .section-nav { position:sticky; z-index:20; top:calc(68px + env(safe-area-inset-top)); display:flex; overflow-x:auto; margin:0 0 42px; border:1px solid var(--ink); background:var(--paper); scrollbar-width:thin; }
 .section-nav button { flex:1 0 auto; min-height:50px; padding:0 18px; border:0; border-right:1px solid var(--line); color:var(--muted); background:transparent; text-transform:uppercase; font:500 10px/1 var(--mono); letter-spacing:.06em; }
@@ -273,7 +261,6 @@ dialog::backdrop { background:rgba(10,11,9,.8); backdrop-filter:blur(4px); }
   .product-signal-panel { padding:30px; }
   .record-card>button { grid-template-columns:minmax(0,1fr) auto; }
   .action-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
-  .elevation-panel { grid-template-columns:minmax(0,1fr) minmax(340px,.8fr); align-items:center; padding:52px; }
   body.admin-ready .admin-shell { padding-top:42px; }
   body.admin-ready .admin-hero { gap:22px; padding-bottom:26px; }
   body.admin-ready .admin-hero h1 { font-size:70px; }
@@ -323,7 +310,7 @@ dialog::backdrop { background:rgba(10,11,9,.8); backdrop-filter:blur(4px); }
 
 /* Admin content includes account IDs, emails, provider references, and support copy. */
 :where(.admin-header > *,.admin-shell,.admin-hero > *,.admin-identity,.dashboard,.admin-section,.section-heading > *,.stat-grid > *,.attention-grid > *,.panel-heading > *,.system-grid > *,.activation-grid > *,.product-signal-grid > *,.filter-panel > *,.support-filter > *,.result-toolbar > *,.record-card > button > *,.record-primary,.record-meta,.audit-item > *,.dialog-header > *,.dialog-body,.fact-grid > *,.action-grid > *,.dialog-actions > *) { min-width:0; }
-:where(.admin-identity,.global-message,.dialog-message,.access-panel,.elevation-panel,.section-heading h2,.section-lede,.stat-card,.attention-grid dt,.system-grid,.signal-boundary,.activation-grid dt,.product-signal-grid dt,.panel-heading,.field-hint,.result-toolbar > p,.section-status,.record-primary,.badge,.empty-state,.audit-item,.dialog-lede,.fact-grid dd,.action-zone,.action-grid button,.ticket-message,.admin-footer) { overflow-wrap:anywhere; }
+:where(.admin-identity,.global-message,.dialog-message,.access-panel,.section-heading h2,.section-lede,.stat-card,.attention-grid dt,.system-grid,.signal-boundary,.activation-grid dt,.product-signal-grid dt,.panel-heading,.field-hint,.result-toolbar > p,.section-status,.record-primary,.badge,.empty-state,.audit-item,.dialog-lede,.fact-grid dd,.action-zone,.action-grid button,.ticket-message,.admin-footer) { overflow-wrap:anywhere; }
 .button,.pagination button,.section-nav button { height:auto; padding-top:10px; padding-bottom:10px; white-space:normal; }
 @media(max-width:900px){.admin-header{background:var(--ink)}}
 

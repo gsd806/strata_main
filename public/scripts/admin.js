@@ -4,7 +4,7 @@
 
   const {PRODUCT_SIGNAL_LABELS,SECTION_NAMES,SUPPORT_LIMIT,SUPPORT_STATES,USER_LIMIT,createState}=StrataAdminState;
   const {
-    ACTION_DETAILS,cleanString,expectedConfirmation,firstValue,friendlyError,numberValue,
+    ACTION_DETAILS,cleanString,firstValue,friendlyError,numberValue,
     supportId,supportState,userEmail,userId,userName,userSuspended
   }=StrataAdminLogic;
   const state=createState();
@@ -13,12 +13,9 @@
     document,state,logic:StrataAdminLogic,productSignalLabels:PRODUCT_SIGNAL_LABELS,supportStates:SUPPORT_STATES,requestFrame:requestAnimationFrame
   });
   const {clearPrivateData,closeDialog,el,renderAudit,renderOverview,renderProductSignals,renderSupport,renderUserDetails,renderUsers,setActionAvailability,setBusy,setLastUpdated,setSectionStatus,showGlobal,syncDialogLock,updateGrantFields,updateSupportSubmitLabel}=renderer;
-  let elevationTimer;
-
   function clearAdminData(){
     state.invalidatePrivateOperations();
-    if(elevationTimer){clearTimeout(elevationTimer);elevationTimer=undefined;}
-    state.elevatedUntil=0;state.mfaPending=false;state.loaded.clear();
+    state.loaded.clear();
     state.users.items=[];state.users.total=0;state.users.offset=0;
     state.support.items=[];state.support.total=0;state.support.offset=0;
     state.selectedUser=null;state.selectedTicket=null;state.pendingAction=null;
@@ -26,42 +23,31 @@
     for(const dialog of document.querySelectorAll("dialog[open]"))dialog.close();
     syncDialogLock();clearPrivateData();
     el("grantFields").hidden=true;updateGrantFields();
-    for(const id of ["refreshOverview","userSearchButton","refreshSupport","refreshAudit","submitAction","saveSupportUpdate","elevationSubmit"])el(id).disabled=false;
+    for(const id of ["refreshOverview","userSearchButton","refreshSupport","refreshAudit","submitAction","saveSupportUpdate"])el(id).disabled=false;
     for(const id of ["totalUsersStat","verifiedUsersStat","discoveryUsersStat","openSupportStat","suspendedUsersStat","activeSessionsStat","pendingPaymentsStat","pendingDeletionsStat","firstWorkoutAccountsStat","secondWorkoutAccountsStat","dayEightReturnAccountsStat","trialAccountsStat","paidAccountsStat","renewedSubscriptionsStat"])el(id).textContent="—";
   }
 
   function lockPrivateView(message){
-    clearAdminData();state.admin=null;state.csrfToken="";state.elevated=false;document.body.classList.remove("admin-ready");
-    el("dashboard").hidden=true;el("elevationPanel").hidden=true;el("accessPanel").hidden=false;el("accessActions").hidden=true;
+    clearAdminData();state.admin=null;state.csrfToken="";state.authorized=false;document.body.classList.remove("admin-ready");
+    el("dashboard").hidden=true;el("accessPanel").hidden=false;el("accessActions").hidden=true;
     el("adminIdentity").textContent="Revalidating administrator";el("lastUpdated").textContent="Private data is locked.";el("accessTitle").textContent="CHECKING ADMIN ACCESS.";
     el("accessMessage").textContent=message;el("adminMain").setAttribute("aria-busy","true");
   }
 
-  function setIdentity(user){el("adminIdentity").textContent=`${userName(user)} · ${userEmail(user)}`;const elevationIdentity=el("elevationIdentity");if(elevationIdentity)elevationIdentity.textContent=userEmail(user);}
+  function setIdentity(user){el("adminIdentity").textContent=`${userName(user)} · ${userEmail(user)}`;}
 
   function privateOperationIsCurrent(operation){return state.isCurrentPrivateOperation(operation);}
 
   function showAccess(message,{signedOut=false,focus=false}={}){
-    clearAdminData();state.admin=null;state.csrfToken="";state.elevated=false;document.body.classList.remove("admin-ready");
-    el("dashboard").hidden=true;el("elevationPanel").hidden=true;el("accessPanel").hidden=false;
+    clearAdminData();state.admin=null;state.csrfToken="";state.authorized=false;document.body.classList.remove("admin-ready");
+    el("dashboard").hidden=true;el("accessPanel").hidden=false;
     el("adminIdentity").textContent=signedOut?"No administrator session":"Access unavailable";el("lastUpdated").textContent="Private data is locked.";
     el("accessTitle").textContent=signedOut?"SIGN IN REQUIRED.":"ADMIN ACCESS REQUIRED.";el("accessMessage").textContent=message;el("accessActions").hidden=false;el("adminMain").setAttribute("aria-busy","false");
     if(focus)requestAnimationFrame(()=>el("accessTitle").focus({preventScroll:false}));
   }
 
-  function showElevation(message="Enter your current STRATA password to unlock private administration."){
-    clearAdminData();state.elevated=false;document.body.classList.remove("admin-ready");el("dashboard").hidden=true;el("accessPanel").hidden=true;el("elevationPanel").hidden=false;
-    el("elevationMessage").hidden=true;el("elevationMessage").textContent="";state.mfaPending=false;
-    el("elevationPassword").value="";el("elevationPassword").required=true;el("elevationPassword").closest(".field").hidden=false;
-    el("elevationCode").value="";el("elevationCode").required=false;el("elevationCodeField").hidden=true;el("elevationRestart").hidden=true;el("elevationSubmit").textContent="Unlock admin controls →";
-    const identity=renderer.create("strong","",state.admin?userEmail(state.admin):"your administrator account");identity.id="elevationIdentity";
-    el("elevationInstructions").replaceChildren("Enter the current STRATA password for ",identity,". Production Admin then sends a short-lived code to the registered email. Both checks protect account and support controls if an unlocked device is left unattended.");
-    el("adminMain").setAttribute("aria-busy","false");el("lastUpdated").textContent=message;requestAnimationFrame(()=>el("elevationTitle").focus({preventScroll:false}));
-  }
-
   function handleAuthorizationFailure(error){
     const code=String(error?.code||"").toUpperCase();
-    if(error?.status===428||code==="ADMIN_ELEVATION_REQUIRED"){showElevation("Administrator confirmation expired. Confirm your password again to continue.");return true;}
     if(code==="ADMIN_RELOGIN_REQUIRED"||code==="ADMIN_SESSION_CHANGED"){showAccess("Administrator ownership was secured or your session changed. Sign in again to continue.",{signedOut:true,focus:true});return true;}
     if(error?.status===401){showAccess("Your private session ended. Sign in with the verified administrator account to continue.",{signedOut:true,focus:true});return true;}
     if(error?.status===403){showAccess("This account is signed in, but it is not an approved STRATA administrator.",{focus:true});return true;}
@@ -69,31 +55,31 @@
   }
 
   async function loadProductSignals(){
-    if(!state.elevated)return;const operation=state.capturePrivateOperation(),request=++state.productSignalRequest;
+    if(!state.authorized)return;const operation=state.capturePrivateOperation(),request=++state.productSignalRequest;
     const rows=el("productSignalRows");setBusy(rows,true);setSectionStatus("productSignalStatus","Loading aggregate action counts…");
     try{
       const days=Math.max(1,Math.min(90,Number(el("productSignalDays").value)||30)),data=await client.productSignals(days);
-      if(privateOperationIsCurrent(operation)&&request===state.productSignalRequest&&state.elevated)renderProductSignals(data);
+      if(privateOperationIsCurrent(operation)&&request===state.productSignalRequest&&state.authorized)renderProductSignals(data);
     }catch(error){if(privateOperationIsCurrent(operation)&&request===state.productSignalRequest&&!handleAuthorizationFailure(error))setSectionStatus("productSignalStatus",friendlyError(error),{error:true});}
     finally{if(privateOperationIsCurrent(operation)&&request===state.productSignalRequest)setBusy(rows,false);}
   }
 
   async function loadOverview(){
-    if(!state.elevated)return;const operation=state.capturePrivateOperation();
+    if(!state.authorized)return;const operation=state.capturePrivateOperation();
     const button=el("refreshOverview");button.disabled=true;setSectionStatus("overviewStatus","Loading current account and service totals…");
     try{
-      const data=await client.overview();if(!privateOperationIsCurrent(operation)||!state.elevated)return;renderOverview(data);await loadProductSignals();if(!privateOperationIsCurrent(operation)||!state.elevated)return;
+      const data=await client.overview();if(!privateOperationIsCurrent(operation)||!state.authorized)return;renderOverview(data);await loadProductSignals();if(!privateOperationIsCurrent(operation)||!state.authorized)return;
       state.loaded.add("overview");setLastUpdated();setSectionStatus("overviewStatus","Overview is current.");
     }catch(error){if(privateOperationIsCurrent(operation)&&!handleAuthorizationFailure(error))setSectionStatus("overviewStatus",friendlyError(error),{error:true});}
     finally{if(privateOperationIsCurrent(operation))button.disabled=false;}
   }
 
   async function loadUsers(){
-    if(!state.elevated)return;const operation=state.capturePrivateOperation();
+    if(!state.authorized)return;const operation=state.capturePrivateOperation();
     const request=++state.users.request,params=new URLSearchParams({limit:String(USER_LIMIT),offset:String(state.users.offset)});if(state.users.query)params.set("q",state.users.query);
     setBusy(el("userResults"),true);setSectionStatus("usersStatus","Loading accounts…");el("userSearchButton").disabled=true;
     try{
-      const data=await client.users(params);if(!privateOperationIsCurrent(operation)||request!==state.users.request||!state.elevated)return;
+      const data=await client.users(params);if(!privateOperationIsCurrent(operation)||request!==state.users.request||!state.authorized)return;
       const items=Array.isArray(data.users)?data.users:Array.isArray(data.items)?data.items:[],total=numberValue(firstValue(data,["total","totalUsers","count"],items.length),items.length);
       state.users.items=items;state.users.total=Math.max(total,state.users.offset+items.length);renderUsers(items,state.users.total,openUserDialog);state.loaded.add("people");setLastUpdated();setSectionStatus("usersStatus",items.length?"Select an account to inspect it and open audited controls.":"");
     }catch(error){if(privateOperationIsCurrent(operation)&&request===state.users.request&&!handleAuthorizationFailure(error))setSectionStatus("usersStatus",friendlyError(error),{error:true});}
@@ -101,12 +87,12 @@
   }
 
   async function openUserDialog(user,trigger){
-    if(!state.elevated)return;const operation=state.capturePrivateOperation();
+    if(!state.authorized)return;const operation=state.capturePrivateOperation();
     state.userDialogTrigger=trigger;renderUserDetails(user,{actionsReady:false});el("userDetailStatus").textContent="Loading full account details…";el("userDetailStatus").classList.remove("error");
     const dialog=el("userDialog");setBusy(dialog,true);dialog.showModal();syncDialogLock();requestAnimationFrame(()=>el("userDialogTitle").focus?.({preventScroll:true}));
     const targetId=userId(user);
     try{
-      const result=await client.user(targetId);if(!privateOperationIsCurrent(operation)||!state.elevated||!dialog.open||userId(state.selectedUser)!==targetId)return;if(!result.user)throw new Error("Full account details were not returned.");
+      const result=await client.user(targetId);if(!privateOperationIsCurrent(operation)||!state.authorized||!dialog.open||userId(state.selectedUser)!==targetId)return;if(!result.user)throw new Error("Full account details were not returned.");
       renderUserDetails(result.user,{actionsReady:true});el("userDetailStatus").textContent="Account details are current.";el("userDetailStatus").classList.remove("error");
     }catch(error){
       if(privateOperationIsCurrent(operation)&&!handleAuthorizationFailure(error)&&dialog.open){setActionAvailability(state.selectedUser||user,{actionsReady:false});el("userDetailStatus").textContent=`Account actions remain locked. ${friendlyError(error)}`;el("userDetailStatus").classList.add("error");}
@@ -114,16 +100,13 @@
   }
 
   function openActionConfirmation(action,trigger){
-    renderer.openActionConfirmation(action,trigger,ACTION_DETAILS[action],expectedConfirmation(action,state.selectedUser));
+    renderer.openActionConfirmation(action,trigger,ACTION_DETAILS[action]);
   }
 
   async function submitUserAction(event){
     event.preventDefault();const user=state.selectedUser,action=state.pendingAction,details=ACTION_DETAILS[action];if(!user||!details)return;
-    if(!state.elevated)return;const operation=state.capturePrivateOperation();
-    const reason=el("actionReason").value.trim(),confirmation=el("actionConfirmation").value.trim(),expected=expectedConfirmation(action,user),message=el("confirmMessage");
-    if(reason.length<4){message.textContent="Enter a brief reason for the audit log.";message.className="dialog-message error";message.hidden=false;message.focus();return;}
-    if(confirmation!==expected){message.textContent=`Type ${expected} exactly to continue.`;message.className="dialog-message error";message.hidden=false;message.focus();return;}
-    const payload={action,reason,confirmation,expectedControlsRevision:Number(user.controlsRevision||0)};
+    if(!state.authorized)return;const operation=state.capturePrivateOperation(),message=el("confirmMessage");
+    const payload={action,expectedControlsRevision:Number(user.controlsRevision||0)};
     if(action==="grant-plus"){
       const unit=el("grantUnit").value,amount=Number(el("grantAmount").value),date=new Date(el("grantUntil").value);
       if(unit==="until"&&(!Number.isFinite(date.getTime())||date.getTime()<=Date.now())||!["until","indefinite"].includes(unit)&&(!Number.isSafeInteger(amount)||amount<1)){message.textContent="Choose a positive whole duration or a future expiry date.";message.hidden=false;message.focus();return;}
@@ -131,23 +114,23 @@
     }
     const button=el("submitAction");button.disabled=true;message.textContent="Applying the audited account action…";message.className="dialog-message";message.hidden=false;
     try{
-      const result=await client.userAction(userId(user),payload);if(!privateOperationIsCurrent(operation)||!state.elevated)return;closeDialog(el("confirmDialog"));closeDialog(el("userDialog"));showGlobal(cleanString(result.message,"The account action was completed and recorded."),{focus:true});
+      const result=await client.userAction(userId(user),payload);if(!privateOperationIsCurrent(operation)||!state.authorized)return;closeDialog(el("confirmDialog"));closeDialog(el("userDialog"));showGlobal(cleanString(result.message,"The account action was completed and recorded."),{focus:true});
       state.selectedUser=null;state.pendingAction=null;state.actionTrigger=null;state.loaded.delete("overview");state.loaded.delete("activity");await Promise.all([loadUsers(),loadOverview()]);
     }catch(error){
       if(privateOperationIsCurrent(operation)&&!handleAuthorizationFailure(error)){
-        try{const refreshed=await client.user(userId(user));if(privateOperationIsCurrent(operation)&&state.elevated&&refreshed.user)renderUserDetails(refreshed.user);}catch{/* Preserve the action error. */}
-        if(!privateOperationIsCurrent(operation)||!state.elevated)return;
+        try{const refreshed=await client.user(userId(user));if(privateOperationIsCurrent(operation)&&state.authorized&&refreshed.user)renderUserDetails(refreshed.user);}catch{/* Preserve the action error. */}
+        if(!privateOperationIsCurrent(operation)||!state.authorized)return;
         message.textContent=friendlyError(error)+(action==="delete-account"&&userSuspended(state.selectedUser)?" The account remains paused. Close this dialog to restore it or retry deletion.":"");message.className="dialog-message error";message.hidden=false;message.focus();
       }
     }finally{if(privateOperationIsCurrent(operation))button.disabled=false;}
   }
 
   async function loadSupport(){
-    if(!state.elevated)return;const operation=state.capturePrivateOperation();
+    if(!state.authorized)return;const operation=state.capturePrivateOperation();
     const request=++state.support.request,params=new URLSearchParams({limit:String(SUPPORT_LIMIT),offset:String(state.support.offset)});if(state.support.status)params.set("status",state.support.status);
     setBusy(el("supportResults"),true);setSectionStatus("supportStatus","Loading the help queue…");el("refreshSupport").disabled=true;
     try{
-      const data=await client.support(params);if(!privateOperationIsCurrent(operation)||request!==state.support.request||!state.elevated)return;
+      const data=await client.support(params);if(!privateOperationIsCurrent(operation)||request!==state.support.request||!state.authorized)return;
       const items=Array.isArray(data.tickets)?data.tickets:Array.isArray(data.items)?data.items:[],total=numberValue(firstValue(data,["total","totalTickets","count"],items.length),items.length);
       state.support.items=items;state.support.total=Math.max(total,state.support.offset+items.length);renderSupport(items,state.support.total,openSupportDialog);state.loaded.add("support");setLastUpdated();setSectionStatus("supportStatus",items.length?"Select a request to update its workflow.":"");
     }catch(error){if(privateOperationIsCurrent(operation)&&request===state.support.request&&!handleAuthorizationFailure(error))setSectionStatus("supportStatus",friendlyError(error),{error:true});}
@@ -158,24 +141,24 @@
 
   async function submitSupportUpdate(event){
     event.preventDefault();const ticket=state.selectedTicket;if(!ticket)return;
-    if(!state.elevated)return;const operation=state.capturePrivateOperation();
+    if(!state.authorized)return;const operation=state.capturePrivateOperation();
     const status=el("ticketStatus").value,note=el("ticketNote").value.trim(),response=el("ticketResponse").value.trim(),message=el("supportUpdateMessage");
     if(!SUPPORT_STATES.has(status)){message.textContent="Choose a valid request status.";message.className="dialog-message error";message.hidden=false;message.focus();return;}
     const existingNote=cleanString(firstValue(ticket,["note","adminNote","admin_note"],""),"");
     if(status===supportState(ticket,SUPPORT_STATES)&&note===existingNote&&!response){message.textContent="Change the status, edit the private note, or write an email response before saving.";message.className="dialog-message error";message.hidden=false;message.focus();return;}
     const button=el("saveSupportUpdate");button.disabled=true;message.textContent=response?"Saving the workflow and sending the response…":"Saving the help-request workflow…";message.className="dialog-message";message.hidden=false;
     try{
-      const expectedUpdatedAt=numberValue(firstValue(ticket,["updatedAt","updated_at"]),0),result=await client.updateSupport(supportId(ticket),{status,note,response,expectedUpdatedAt});if(!privateOperationIsCurrent(operation)||!state.elevated)return;
+      const expectedUpdatedAt=numberValue(firstValue(ticket,["updatedAt","updated_at"]),0),result=await client.updateSupport(supportId(ticket),{status,note,response,expectedUpdatedAt});if(!privateOperationIsCurrent(operation)||!state.authorized)return;
       closeDialog(el("supportDialog"));showGlobal(cleanString(result.message,response?"The update was saved and the response was sent.":"The help request was updated."),{focus:true});state.loaded.delete("overview");state.loaded.delete("activity");await Promise.all([loadSupport(),loadOverview()]);
     }catch(error){if(privateOperationIsCurrent(operation)&&!handleAuthorizationFailure(error)){message.textContent=friendlyError(error);message.className="dialog-message error";message.hidden=false;message.focus();}}
     finally{if(privateOperationIsCurrent(operation))button.disabled=false;}
   }
 
   async function loadAudit(){
-    if(!state.elevated)return;const operation=state.capturePrivateOperation();
+    if(!state.authorized)return;const operation=state.capturePrivateOperation();
     const button=el("refreshAudit");button.disabled=true;setBusy(el("auditResults"),true);setSectionStatus("auditStatus","Loading the audit trail…");
     try{
-      const data=await client.audit();if(!privateOperationIsCurrent(operation)||!state.elevated)return;const entries=Array.isArray(data.events)?data.events:Array.isArray(data.audit)?data.audit:Array.isArray(data.entries)?data.entries:Array.isArray(data.items)?data.items:[];
+      const data=await client.audit();if(!privateOperationIsCurrent(operation)||!state.authorized)return;const entries=Array.isArray(data.events)?data.events:Array.isArray(data.audit)?data.audit:Array.isArray(data.entries)?data.entries:Array.isArray(data.items)?data.items:[];
       renderAudit(entries);state.loaded.add("activity");setLastUpdated();setSectionStatus("auditStatus",entries.length?`Showing the ${entries.length} most recent recorded actions.`:"");
     }catch(error){if(privateOperationIsCurrent(operation)&&!handleAuthorizationFailure(error))setSectionStatus("auditStatus",friendlyError(error),{error:true});}
     finally{if(privateOperationIsCurrent(operation)){setBusy(el("auditResults"),false);button.disabled=false;}}
@@ -192,34 +175,10 @@
     if(replaceHash)history.replaceState({},"",`#${name}`);if(focus)requestAnimationFrame(()=>el(`${name}Title`)?.focus?.());void loadSection(name);
   }
 
-  function openDashboard(elevatedUntil=null,{focus=false}={}){
-    state.mfaPending=false;state.elevated=true;state.elevatedUntil=Number(elevatedUntil)||0;document.body.classList.add("admin-ready");el("accessPanel").hidden=true;el("elevationPanel").hidden=true;el("dashboard").hidden=false;el("adminMain").setAttribute("aria-busy","false");
-    if(elevatedUntil)el("lastUpdated").textContent=`Admin controls confirmed until ${StrataAdminLogic.formatDate(elevatedUntil)}.`;if(elevationTimer)clearTimeout(elevationTimer);
-    if(state.elevatedUntil>Date.now())elevationTimer=setTimeout(()=>{if(state.elevated&&state.elevatedUntil<=Date.now())showElevation("Administrator confirmation expired. Confirm your password again to continue.");},Math.min(2_147_000_000,Math.max(1,state.elevatedUntil-Date.now()+25)));
+  function openDashboard({focus=false}={}){
+    state.authorized=true;document.body.classList.add("admin-ready");el("accessPanel").hidden=true;el("dashboard").hidden=false;el("adminMain").setAttribute("aria-busy","false");
+    el("lastUpdated").textContent="Administrator access confirmed.";
     const requested=location.hash.slice(1),section=SECTION_NAMES.has(requested)?requested:"overview";activateSection(section,{replaceHash:!SECTION_NAMES.has(requested)});if(focus)requestAnimationFrame(()=>el(`${section}Tab`).focus({preventScroll:false}));
-  }
-
-  async function submitElevation(event){
-    event.preventDefault();const passwordInput=el("elevationPassword"),codeInput=el("elevationCode"),verifyingCode=state.mfaPending;
-    const payload=verifyingCode?{code:codeInput.value}:{password:passwordInput.value};if(verifyingCode)codeInput.value="";else passwordInput.value="";
-    const operation=state.capturePrivateOperation();
-    const button=el("elevationSubmit"),message=el("elevationMessage");button.disabled=true;message.textContent=verifyingCode?"Checking the short-lived email code…":"Confirming the administrator account…";message.className="dialog-message";message.hidden=false;
-    try{
-      const result=verifyingCode?await client.verifyElevation(payload):await client.elevate(payload);
-      if(!privateOperationIsCurrent(operation))return;
-      if(result.mfaRequired===true){
-        state.mfaPending=true;passwordInput.required=false;passwordInput.closest(".field").hidden=true;codeInput.required=true;el("elevationCodeField").hidden=false;el("elevationRestart").hidden=false;
-        el("elevationInstructions").textContent=`Enter the six-digit code sent to ${cleanString(result.maskedEmail,"your registered email")}. It expires in 10 minutes and works only in this browser session.`;button.textContent="Verify and unlock →";message.textContent="Password confirmed. Check the registered email for the newest STRATA Admin code.";message.className="dialog-message";message.hidden=false;requestAnimationFrame(()=>codeInput.focus());return;
-      }
-      state.csrfToken=cleanString(result.csrfToken,"");if(!state.csrfToken)throw Object.assign(new Error("The secure administrator session could not be refreshed."),{status:409,code:"ADMIN_SESSION_CHANGED"});
-      state.loaded.clear();message.hidden=true;message.textContent="";openDashboard(result.elevatedUntil,{focus:true});showGlobal("Administrator controls are unlocked for this session.");
-    }catch(error){
-      if(!privateOperationIsCurrent(operation))return;
-      const authCode=String(error?.code||"").toUpperCase();
-      if(error?.status===403){showAccess("This account is signed in, but it is not an approved STRATA administrator.",{focus:true});return;}
-      if(error?.status===401&&["AUTH_REQUIRED","SESSION_REQUIRED","INVALID_SESSION"].includes(authCode)){showAccess("Your private session ended. Sign in again to continue.",{signedOut:true,focus:true});return;}
-      message.textContent=error?.status===401&&!verifyingCode?"That password is incorrect. Enter the current password for this STRATA account.":friendlyError(error);message.className="dialog-message error";message.hidden=false;message.focus();
-    }finally{if(privateOperationIsCurrent(operation))button.disabled=false;}
   }
 
   async function initialize(){
@@ -227,18 +186,18 @@
     try{
       const result=await client.identity();if(!privateOperationIsCurrent(operation))return;if(!result.user){showAccess("Sign in with the verified administrator account to continue.",{signedOut:true});return;}
       if(result.user.isAdmin!==true&&result.user.admin!==true){showAccess("This account is signed in, but it is not an approved STRATA administrator.");return;}
-      state.admin=result.user;state.csrfToken=cleanString(result.csrfToken,"");el("adminIdentity").textContent=`${userName(result.user)} · ${userEmail(result.user)}`;el("elevationIdentity").textContent=userEmail(result.user);
-      const adminSession=await client.adminSession();if(!privateOperationIsCurrent(operation))return;if(adminSession.admin!==true){showAccess("This account is signed in, but it is not an approved STRATA administrator.");return;}if(adminSession.elevated!==true){showElevation();return;}openDashboard(adminSession.elevatedUntil);
+      state.admin=result.user;state.csrfToken=cleanString(result.csrfToken,"");setIdentity(result.user);
+      const adminSession=await client.adminSession();if(!privateOperationIsCurrent(operation))return;if(adminSession.admin!==true){showAccess("This account is signed in, but it is not an approved STRATA administrator.");return;}openDashboard();
     }catch(error){if(privateOperationIsCurrent(operation)&&!handleAuthorizationFailure(error)){el("accessTitle").textContent="ADMIN SERVICE UNAVAILABLE.";el("accessMessage").textContent=friendlyError(error);el("accessActions").hidden=false;el("adminMain").setAttribute("aria-busy","false");}}
   }
 
   const {handlePageShow,handleVisibilityChange}=StrataAdminSession.createSessionCoordinator({
-    client,state,document,location,userId,cleanString,lockPrivateView,setIdentity,showAccess,showElevation,openDashboard,handleAuthorizationFailure
+    client,state,document,location,userId,cleanString,lockPrivateView,setIdentity,showAccess,openDashboard,handleAuthorizationFailure
   });
 
   StrataAdminEvents.bindEvents({document,window,state,userLimit:USER_LIMIT,supportLimit:SUPPORT_LIMIT,handlers:{
     activateSection,closeDialog,handlePageShow,handleVisibilityChange,
-    loadAudit,loadOverview,loadProductSignals,loadSupport,loadUsers,openActionConfirmation,showElevation,submitElevation,submitSupportUpdate,submitUserAction,syncDialogLock,updateGrantFields,updateSupportSubmitLabel
+    loadAudit,loadOverview,loadProductSignals,loadSupport,loadUsers,openActionConfirmation,submitSupportUpdate,submitUserAction,syncDialogLock,updateGrantFields,updateSupportSubmitLabel
   }});
   void initialize();
 })();

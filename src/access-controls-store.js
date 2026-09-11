@@ -3,7 +3,7 @@ const {ACCESS_CONTROLS_SQL}=require("./access-controls-schema");
 function mutationArgs(userId,row,revision,token,audit){
   if(!audit||audit.targetUserId!==userId||!["grant-plus","revoke-plus","close-checkouts","enable-checkouts"].includes(audit.action))throw new TypeError("Access controls require a matching audit event.");
   if(!Number.isSafeInteger(revision)||revision<0)throw new TypeError("Access controls require a revision.");
-  return[row.grant_starts_at??null,row.grant_expires_at??null,row.grant_revoked_at??null,row.checkout_blocked_at??null,audit.createdAt,userId,audit.actorUserId,token,audit.createdAt,audit.createdAt,revision];
+  return[row.grant_starts_at??null,row.grant_expires_at??null,row.grant_revoked_at??null,row.checkout_blocked_at??null,audit.createdAt,userId,audit.actorUserId,token,audit.createdAt,revision];
 }
 function auditArgs(audit){return[audit.id,audit.actorUserId,audit.targetUserId,audit.action,audit.reason,audit.result,audit.createdAt];}
 function createLocalAccessControlMethods({db,statements,plainRow}){

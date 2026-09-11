@@ -435,13 +435,6 @@ test("admin ownership is claimed only by a verified matching account and invalid
     });
     assert.ok(await store.session("owner-after-claim",now+22),"a denied owner suspension must not revoke the owner session");
     assert.equal((await store.adminAudit(10)).some((event)=>event.id==="owner-suspension-must-not-exist"),false,"a denied owner suspension must not create a success audit");
-    assert.equal(await store.createAdminElevation("ordinary-session",now+30_000,now+21),null,"ordinary sessions cannot be elevated");
-    const elevated=await store.createAdminElevation("owner-after-claim",now+30_000,now+22);
-    assert.equal(elevated.session_token_hash,"owner-after-claim");
-    assert.ok(await store.adminElevation("owner-after-claim",now+23));
-    assert.equal(await store.adminElevation("owner-after-claim",now+30_000),null);
-    assert.equal(await store.deleteExpiredAdminElevations(now+30_000),1);
-
     const secondClaim=await store.claimAdminPrincipal(ordinary.id,ordinary.email,now+40);
     assert.equal(secondClaim.boundNow,false);
     assert.equal(secondClaim.principal.user_id,owner.id,"the primary slot must not be silently rebound");
@@ -698,7 +691,6 @@ test("direct admin deletion requires suspension, fails closed on billing, and co
     await store.insertUser(target);
     await store.claimAdminPrincipal(actor.id,actor.email,now+2);
     await store.insertSession(session("direct-delete-admin-session",actor.id,now+3,2));
-    await store.createAdminElevation("direct-delete-admin-session",now+60_000,now+4);
     await store.insertSession(session("direct-delete-session",target.id,now+2));
     await store.upsertPlan(target.id,JSON.stringify({days:["private"]}),now+3,0);
     await store.insertPendingPurchase(pendingPurchase("txn_direct_delete",target.id,now+4));

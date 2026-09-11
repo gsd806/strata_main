@@ -6,7 +6,7 @@
 })(typeof globalThis!=="undefined"?globalThis:this,function(){
   "use strict";
 
-  function createSessionCoordinator({client,state,document,location,userId,cleanString,lockPrivateView,setIdentity,showAccess,showElevation,openDashboard,handleAuthorizationFailure}){
+  function createSessionCoordinator({client,state,document,location,userId,cleanString,lockPrivateView,setIdentity,showAccess,openDashboard,handleAuthorizationFailure}){
     if(!client||!state||!document||!location||typeof lockPrivateView!=="function")throw new TypeError("Admin session coordination requires private-view dependencies.");
     const isCurrent=(operation)=>state.isCurrentPrivateOperation(operation);
     let revalidation=null;
@@ -37,8 +37,7 @@
           const adminSession=await client.adminSession();
           if(!isCurrent(operation))return;
           if(adminSession.admin!==true){showAccess("This account is signed in, but it is not an approved STRATA administrator.",{focus:true});return;}
-          if(adminSession.elevated!==true){showElevation("Administrator confirmation is required again before private data can be shown.");return;}
-          setIdentity(result.user);openDashboard(adminSession.elevatedUntil);
+          setIdentity(result.user);openDashboard();
         }catch(error){
           if(isCurrent(operation)&&!handleAuthorizationFailure(error))showAccess("STRATA could not revalidate this administrator session. Reload and try again before viewing private data.",{focus:true});
         }

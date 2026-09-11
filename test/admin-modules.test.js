@@ -14,7 +14,7 @@ test("admin modules expose the same focused interfaces in a browser context",()=
     vm.runInContext(readFileSync(join(SCRIPT_ROOT,file),"utf8"),context,{filename:file});
   }
   assert.equal(typeof context.StrataAdminState.createState,"function");
-  assert.equal(typeof context.StrataAdminLogic.expectedConfirmation,"function");
+  assert.equal(typeof context.StrataAdminLogic.expectedConfirmation,"undefined");
   assert.equal(typeof context.StrataAdminApi.createClient,"function");
   assert.equal(typeof context.StrataAdminRender.createRenderer,"function");
   assert.equal(typeof context.StrataAdminSession.createSessionCoordinator,"function");
@@ -39,23 +39,23 @@ test("admin private-operation epochs invalidate every in-flight callback togethe
   assert.notEqual(current,initial);
 });
 
-test("admin pure logic normalizes hostile labels and exact destructive confirmations",()=>{
+test("admin pure logic normalizes hostile labels and supplies one-click action labels",()=>{
   const logic=require("../public/scripts/admin-logic");
   const user={id:"user-one",email:"owner\u202e@example.test",status:"suspended",discovery:{active:true}};
   assert.equal(logic.userEmail(user),"owner@example.test");
   assert.equal(logic.userSuspended(user),true);assert.equal(logic.discoveryActive(user),true);
-  assert.equal(logic.expectedConfirmation("delete-account",user),"DELETE owner@example.test");
-  assert.equal(logic.expectedConfirmation("send-delete-link",user),"owner@example.test");
+  assert.equal(logic.ACTION_DETAILS["delete-account"].button,"Permanently delete account");
+  assert.equal(logic.ACTION_DETAILS.suspend.button,"Suspend account");
   assert.equal(logic.supportState({status:"waiting_on_user"}),"waiting");
-  assert.equal(logic.friendlyError({code:"ADMIN_MFA_INCORRECT"}),"That six-digit email code is incorrect. Check the newest STRATA Admin email and try again.");
+  assert.equal(logic.friendlyError({code:"INVALID_CSRF"}),"The security check expired. Refresh this page and try again.");
 });
 
 test("admin API reports network and structured server failures without losing error codes",async()=>{
   const {createClient}=require("../public/scripts/admin-api");
   const offline=createClient({fetchImpl:async()=>{throw new Error("offline");}});
   await assert.rejects(()=>offline.identity(),(error)=>error.code==="network");
-  const denied=createClient({fetchImpl:async()=>({ok:false,status:401,headers:{get:()=>"application/json"},json:async()=>({error:"Wrong code",code:"ADMIN_MFA_INCORRECT"})})});
-  await assert.rejects(()=>denied.verifyElevation({code:"000000"}),(error)=>error.status===401&&error.code==="ADMIN_MFA_INCORRECT"&&error.message==="Wrong code");
+  const denied=createClient({fetchImpl:async()=>({ok:false,status:403,headers:{get:()=>"application/json"},json:async()=>({error:"Security check failed",code:"INVALID_CSRF"})})});
+  await assert.rejects(()=>denied.userAction("member-one",{action:"suspend"}),(error)=>error.status===403&&error.code==="INVALID_CSRF"&&error.message==="Security check failed");
 });
 
 test("admin renderer purges hidden account, support, action, and status data",()=>{
@@ -70,11 +70,10 @@ test("admin renderer purges hidden account, support, action, and status data",()
   const sentinel="PRIVATE-SENTINEL@example.test";
   renderer.renderUserDetails({id:"private-user",name:sentinel,email:sentinel,createdAt:1,verifiedAt:1,discovery:{}},{actionsReady:false});
   renderer.openSupportDialog({id:"private-ticket",reference:"STR-PRIVATE",subject:sentinel,email:sentinel,message:sentinel,status:"new",createdAt:1,updatedAt:1},null);
-  renderer.openActionConfirmation("delete-account",null,logic.ACTION_DETAILS["delete-account"],`DELETE ${sentinel}`);
-  node("elevationIdentity").textContent=sentinel;node("elevationPassword").value=sentinel;node("elevationCode").value="123456";
+  renderer.openActionConfirmation("delete-account",null,logic.ACTION_DETAILS["delete-account"]);
   for(const id of ["usersStatus","supportStatus","auditStatus","overviewStatus","productSignalStatus","globalMessage"])node(id).textContent=sentinel;
   renderer.clearPrivateData();
-  for(const id of ["elevationIdentity","userDialogTitle","userDialogEmail","userDetailStatus","supportDialogTitle","supportDialogIdentity","ticketMessage","confirmTitle","confirmDescription","confirmationPhrase","confirmMessage","usersStatus","supportStatus","auditStatus","overviewStatus","productSignalStatus","globalMessage"])assert.equal(node(id).textContent,"",id);
-  for(const id of ["elevationPassword","elevationCode","userQuery","ticketNote","ticketResponse","actionReason","actionConfirmation"])assert.equal(node(id).value,"",id);
+  for(const id of ["userDialogTitle","userDialogEmail","userDetailStatus","supportDialogTitle","supportDialogIdentity","ticketMessage","confirmTitle","confirmDescription","confirmMessage","usersStatus","supportStatus","auditStatus","overviewStatus","productSignalStatus","globalMessage"])assert.equal(node(id).textContent,"",id);
+  for(const id of ["userQuery","ticketNote","ticketResponse"])assert.equal(node(id).value,"",id);
   for(const id of ["userResults","supportResults","auditResults","productSignalRows","userFacts","supportFacts"])assert.deepEqual(node(id).children,[],id);
 });

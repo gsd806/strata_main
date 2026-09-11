@@ -653,7 +653,7 @@ function localStore(root) {
       try {
         db.exec("BEGIN IMMEDIATE");
         transactionOpen=true;
-        const user=plainRow(statements.deleteUserByAdmin.get(userId,targetEmail,deletedAt,audit.actorUserId,actorSessionTokenHash,deletedAt,deletedAt));
+        const user=plainRow(statements.deleteUserByAdmin.get(userId,targetEmail,deletedAt,audit.actorUserId,actorSessionTokenHash,deletedAt));
         if (!user) {
           db.exec("ROLLBACK");
           transactionOpen=false;
@@ -1111,7 +1111,7 @@ async function tursoStore(url,authToken,tursoClientFactory) {
     async deleteUserByAdmin(userId,deletedAt,targetEmail,emailHash,actorSessionTokenHash,audit) {
       if(!audit||audit.targetUserId!==userId||audit.action!=="delete-account")throw new TypeError("Administrative account deletion requires a matching audit event.");
       const results=await client.batch([
-        {sql:SQL.deleteUserByAdmin,args:[userId,targetEmail,deletedAt,audit.actorUserId,actorSessionTokenHash,deletedAt,deletedAt]},
+        {sql:SQL.deleteUserByAdmin,args:[userId,targetEmail,deletedAt,audit.actorUserId,actorSessionTokenHash,deletedAt]},
         {sql:SQL.insertAdminAuditIfChanged,args:adminAuditArgs(audit)},
         {sql:SQL.deleteAdminControlsForDeletedUser,args:[userId,userId]},
         ...trainingDeletionBatch(userId),

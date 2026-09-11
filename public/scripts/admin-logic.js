@@ -7,17 +7,17 @@
   "use strict";
 
   const ACTION_DETAILS=Object.freeze({
-    "grant-plus":{title:"GIVE FREE STRATA+?",phrase:"GRANT",description:"Give this account complimentary access for the chosen period. This replaces its current grant, never charges the user, and does not cancel a paid subscription."},
-    "revoke-plus":{title:"REVOKE FREE STRATA+?",phrase:"REVOKE PLUS",description:"End the administrator's complimentary grant. Separate paid or trial access is unchanged."},
-    "close-checkouts":{title:"CLOSE PAYMENT SESSIONS?",phrase:"CLOSE CHECKOUTS",description:"Block new checkouts until you allow them again and ask Paddle to cancel eligible unfinished transactions. Drafts and payments already processing may remain open. Existing subscriptions and charges are unchanged."},
-    "enable-checkouts":{title:"ALLOW PAYMENT SESSIONS?",phrase:"ENABLE CHECKOUTS",description:"Allow this account to open new checkouts again. Previously canceled transactions stay canceled."},
-    "send-password-reset":{title:"SEND PASSWORD RESET?",phrase:"SEND RESET",description:"A single-use password-reset link will be emailed to the account’s registered address. The link itself will not be shown here."},
-    "send-delete-link":{title:"SEND DELETION LINK?",phrase:"",description:"A deletion-confirmation link will be emailed to the registered address. Opening the link alone does not delete the account."},
-    "cancel-deletion":{title:"CANCEL DELETION?",phrase:"CANCEL",description:"The pending deletion request will be revoked and its emailed link will stop working."},
-    "revoke-sessions":{title:"REVOKE ALL SESSIONS?",phrase:"REVOKE",description:"Every active session for this account will be signed out. The account owner can sign in again with the current password."},
-    suspend:{title:"SUSPEND ACCOUNT?",phrase:"SUSPEND",description:"The account will lose signed-in access until an administrator restores it. Existing payment records must remain intact."},
-    restore:{title:"RESTORE ACCOUNT?",phrase:"RESTORE",description:"Signed-in access will be restored. This does not create or change Strata+ payment entitlement."},
-    "delete-account":{title:"PERMANENTLY DELETE ACCOUNT?",phrase:"",description:"This pauses the account and signs out its devices, then checks payment state before deleting data permanently. If a live subscription or unresolved payment blocks deletion, the account stays paused and can be restored. Subscriptions and refunds are separate."}
+    "grant-plus":{title:"GIVE FREE STRATA+?",button:"Give free Strata+",description:"Give this account complimentary access for the chosen period. This replaces its current grant, never charges the user, and does not cancel a paid subscription."},
+    "revoke-plus":{title:"REVOKE FREE STRATA+?",button:"Revoke free Strata+",description:"End the administrator's complimentary grant. Separate paid or trial access is unchanged."},
+    "close-checkouts":{title:"CLOSE PAYMENT SESSIONS?",button:"Close payment sessions",description:"Block new checkouts until you allow them again and ask Paddle to cancel eligible unfinished transactions. Drafts and payments already processing may remain open. Existing subscriptions and charges are unchanged."},
+    "enable-checkouts":{title:"ALLOW PAYMENT SESSIONS?",button:"Allow payment sessions",description:"Allow this account to open new checkouts again. Previously canceled transactions stay canceled."},
+    "send-password-reset":{title:"SEND PASSWORD RESET?",button:"Send password reset",description:"A single-use password-reset link will be emailed to the account’s registered address. The link itself will not be shown here."},
+    "send-delete-link":{title:"SEND DELETION LINK?",button:"Send deletion link",description:"A deletion-confirmation link will be emailed to the registered address. Opening the link alone does not delete the account."},
+    "cancel-deletion":{title:"CANCEL DELETION?",button:"Cancel deletion request",description:"The pending deletion request will be revoked and its emailed link will stop working."},
+    "revoke-sessions":{title:"REVOKE ALL SESSIONS?",button:"Revoke all sessions",description:"Every active session for this account will be signed out. The account owner can sign in again with the current password."},
+    suspend:{title:"SUSPEND ACCOUNT?",button:"Suspend account",description:"The account will lose signed-in access until an administrator restores it. Existing payment records must remain intact."},
+    restore:{title:"RESTORE ACCOUNT?",button:"Restore account",description:"Signed-in access will be restored. This does not create or change Strata+ payment entitlement."},
+    "delete-account":{title:"PERMANENTLY DELETE ACCOUNT?",button:"Permanently delete account",description:"This pauses the account and signs out its devices, then checks payment state before deleting data permanently. If a live subscription or unresolved payment blocks deletion, the account stays paused and can be restored. Subscriptions and refunds are separate."}
   });
 
   function cleanString(value,fallback="—"){
@@ -50,10 +50,7 @@
   }
   function friendlyError(error){
     if(error?.code==="network")return "Could not reach STRATA. Check the connection and try again.";
-    if(error?.code==="ADMIN_ORIGIN_REQUIRED"||error?.code==="INVALID_CSRF")return "The security check expired. Refresh this page and confirm your password again.";
-    if(error?.code==="ADMIN_MFA_INCORRECT")return "That six-digit email code is incorrect. Check the newest STRATA Admin email and try again.";
-    if(error?.code==="ADMIN_MFA_EXPIRED")return "That email code expired. Use your password to request a new one.";
-    if(["ADMIN_MFA_UNAVAILABLE","ADMIN_MFA_DELIVERY_UNAVAILABLE","ADMIN_MFA_DELIVERY_FAILED"].includes(error?.code))return "STRATA could not send the administrator security code. Check account email delivery and try again.";
+    if(error?.code==="ADMIN_ORIGIN_REQUIRED"||error?.code==="INVALID_CSRF")return "The security check expired. Refresh this page and try again.";
     if(error?.status===401)return "Your session expired. Sign in again to continue.";
     if(error?.status===403)return "This verified account does not have administrator access.";
     if(error?.code==="ACCOUNT_MUST_BE_SUSPENDED")return "Pause this account first, then reopen it to permanently delete it.";
@@ -87,11 +84,5 @@
     return value==="waiting-on-user"?"waiting":supportStates.has(value)?value:"new";
   }
   const supportStateLabel=(value)=>({new:"New",open:"Open",waiting:"Waiting on user",resolved:"Resolved"})[value]||"New";
-  function expectedConfirmation(action,user){
-    if(action==="send-delete-link")return userEmail(user);
-    if(action==="delete-account")return `DELETE ${userEmail(user)}`;
-    return ACTION_DETAILS[action]?.phrase||"";
-  }
-
-  return{ACTION_DETAILS,booleanValue,cleanString,deletionPending,discoveryActive,expectedConfirmation,firstValue,formatCount,formatDate,friendlyError,normalizedOverview,numberValue,overviewNumber,planSummary,supportId,supportReference,supportState,supportStateLabel,userEmail,userId,userName,userSuspended,userVerified};
+  return{ACTION_DETAILS,booleanValue,cleanString,deletionPending,discoveryActive,firstValue,formatCount,formatDate,friendlyError,normalizedOverview,numberValue,overviewNumber,planSummary,supportId,supportReference,supportState,supportStateLabel,userEmail,userId,userName,userSuspended,userVerified};
 });

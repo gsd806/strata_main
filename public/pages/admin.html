@@ -10,10 +10,10 @@
     <title>Admin — STRATA</title>
     <link rel="icon" href="/icons/strata-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="/fonts.css?v=7.8.3" />
-    <link rel="stylesheet" href="/admin.css?v=7.8.3" />
-    <link rel="stylesheet" href="/experience.css?v=7.8.3" />
-    <script src="/motion.js?v=7.8.3"></script>
+    <link rel="stylesheet" href="/fonts.css?v=7.8.4" />
+    <link rel="stylesheet" href="/admin.css?v=7.8.4" />
+    <link rel="stylesheet" href="/experience.css?v=7.8.4" />
+    <script src="/motion.js?v=7.8.4"></script>
   </head>
   <body>
     <a class="skip-link" href="#adminMain">Skip to administration</a>
@@ -51,27 +51,6 @@
           <a class="button button-dark" href="/account.html?mode=login&amp;next=admin">Sign in <span aria-hidden="true">→</span></a>
           <a class="button button-light" href="/account.html">Open account</a>
         </div>
-      </section>
-
-      <section class="elevation-panel" id="elevationPanel" aria-labelledby="elevationTitle" hidden>
-        <div>
-          <p class="panel-index">Administrator step-up</p>
-          <h2 id="elevationTitle" tabindex="-1">CONFIRM IT’S YOU.</h2>
-          <p id="elevationInstructions">Enter the current STRATA password for <strong id="elevationIdentity">your administrator account</strong>. Production Admin then sends a short-lived code to the registered email. Both checks protect account and support controls if an unlocked device is left unattended.</p>
-        </div>
-        <form id="elevationForm" aria-describedby="elevationMessage">
-          <div class="field elevated-field">
-            <label for="elevationPassword">Current STRATA password</label>
-            <input id="elevationPassword" name="password" type="password" autocomplete="current-password" minlength="10" maxlength="128" required />
-          </div>
-          <div class="field elevated-field" id="elevationCodeField" hidden>
-            <label for="elevationCode">Six-digit email code</label>
-            <input id="elevationCode" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" />
-          </div>
-          <div class="dialog-message" id="elevationMessage" role="alert" tabindex="-1" hidden></div>
-          <button class="button button-accent" id="elevationSubmit" type="submit">Unlock admin controls <span aria-hidden="true">→</span></button>
-          <button class="button button-light" id="elevationRestart" type="button" hidden>Use password again</button>
-        </form>
       </section>
 
       <div class="dashboard" id="dashboard" hidden>
@@ -246,14 +225,6 @@
             <div class="field" id="grantUntilField" hidden><label for="grantUntil">Expiry in your local time</label><input id="grantUntil" type="datetime-local" /></div>
             <p id="grantHelp">The period starts when you confirm. Months and years use calendar dates. A new grant replaces the current grant; it does not add time to it. Existing paid subscriptions are unchanged.</p>
           </fieldset>
-          <div class="field">
-            <label for="actionReason">Reason for the audit log</label>
-            <textarea id="actionReason" minlength="4" maxlength="200" required placeholder="Briefly explain why this action is needed."></textarea>
-          </div>
-          <div class="field">
-            <label for="actionConfirmation">Type <strong id="confirmationPhrase">CONFIRM</strong> to continue</label>
-            <input id="actionConfirmation" maxlength="270" autocomplete="off" autocapitalize="characters" spellcheck="false" required />
-          </div>
           <div class="dialog-message" id="confirmMessage" role="alert" tabindex="-1" hidden></div>
           <div class="dialog-actions"><button class="button button-light" id="cancelAction" type="button">Cancel</button><button class="button danger-submit" id="submitAction" type="submit">Confirm action <span aria-hidden="true">→</span></button></div>
         </div>
@@ -289,14 +260,14 @@
       </div>
     </dialog>
 
-    <footer class="admin-footer">STRATA · Build 7.8.3 · Private administration · <a href="/contact">Contact</a> · <a href="/policies">Policies</a></footer>
+    <footer class="admin-footer">STRATA · Build 7.8.4 · Private administration · <a href="/contact">Contact</a> · <a href="/policies">Policies</a></footer>
     <noscript><p class="noscript-message">JavaScript is required for private administration. Your public STRATA pages still work normally.</p></noscript>
-    <script src="/admin-state.js?v=7.8.3"></script>
-    <script src="/admin-logic.js?v=7.8.3"></script>
-    <script src="/admin-api.js?v=7.8.3"></script>
-    <script src="/admin-render.js?v=7.8.3"></script>
-    <script src="/admin-session.js?v=7.8.3"></script>
-    <script src="/admin-events.js?v=7.8.3"></script>
-    <script src="/admin.js?v=7.8.3"></script>
+    <script src="/admin-state.js?v=7.8.4"></script>
+    <script src="/admin-logic.js?v=7.8.4"></script>
+    <script src="/admin-api.js?v=7.8.4"></script>
+    <script src="/admin-render.js?v=7.8.4"></script>
+    <script src="/admin-session.js?v=7.8.4"></script>
+    <script src="/admin-events.js?v=7.8.4"></script>
+    <script src="/admin.js?v=7.8.4"></script>
   </body>
 </html>
