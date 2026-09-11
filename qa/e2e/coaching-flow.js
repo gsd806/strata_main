@@ -74,12 +74,15 @@ test("a Strata+ member builds, tracks, reloads, and safely refreshes a coaching 
   context.setDefaultTimeout(WAIT_MS);
   const page=await context.newPage(),pageErrors=[];page.on("pageerror",(error)=>pageErrors.push(error.message));
   try{
+    await page.emulateMedia({reducedMotion:"reduce"});
     const user=await signup(context,"owner");await activatePlus(context);
     await page.goto("/discover.html",{waitUntil:"domcontentloaded"});
     await page.waitForFunction(()=>globalThis.document.querySelector("#userName")?.textContent==="Coaching owner");
     const destinations=page.locator(".destination-nav .destination-link");
     assert.equal(await destinations.count(),5);assert.match((await destinations.nth(4).textContent())||"",/Personal training/i);
+    await page.evaluate(async()=>{await globalThis.document.fonts.ready;});
     await destinations.nth(4).click();await page.locator("#coachingSetup").waitFor({state:"visible"});
+    await page.evaluate(()=>new Promise((resolveFrame)=>globalThis.requestAnimationFrame(()=>globalThis.requestAnimationFrame(resolveFrame))));
 
     for(const {width,height} of [{width:1440,height:1000},{width:768,height:844},{width:390,height:844},{width:320,height:844}]){
       await page.setViewportSize({width,height});
