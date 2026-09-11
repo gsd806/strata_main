@@ -13,7 +13,7 @@ test("account pure logic constrains redirects and derives access state",()=>{
   assert.equal(logic.safeNext("planner","flat-dumbbell-press"),"/planner.html?add=flat-dumbbell-press");
   assert.equal(logic.verificationLocation("/workout.html?day=Monday",{purpose:"login"}),"/verify-email.html?next=%2Fworkout.html%3Fday%3DMonday&purpose=login");
   assert.deepEqual(logic.accountAccessSummary({discovery:{active:false,accessType:null}},false),{
-    state:"Free",detail:"Rankings and Plan included",message:"The exercise index and weekly planner are free. Strata+ is available as a $0.99 USD monthly subscription."
+    state:"Free",detail:"Rankings and Plan included",message:"The exercise index and weekly planner are free. Strata+ is available as a $2.99 USD monthly subscription."
   });
   assert.equal(logic.safePortalUrl("https://customer-portal.paddle.com/cpl_123"),"https://customer-portal.paddle.com/cpl_123");
   assert.equal(logic.safePortalUrl("https://customer-portal.paddle.com.evil.test/cpl_123"),"");

@@ -17,7 +17,7 @@ function runtime({activeTrial=false,checkoutFailure=false,configFailure=false,us
   };
   let accountUser=userOverride||{id:"member",discovery:{active:activeTrial,accessType:activeTrial?"trial":"none",trial:{eligible:!activeTrial,active:activeTrial,expiresAt:Date.now()+7*86400000}}};
   let accountResponder=meResponse;
-  const config={enabled:true,environment:"live",clientToken:"live_fixture",productId:`pro_${"a".repeat(26)}`,priceId:`pri_${"b".repeat(26)}`,price:{amount:"0.99",currency:"USD",interval:"month",frequency:1}};
+  const config={enabled:true,environment:"live",clientToken:"live_fixture",productId:`pro_${"a".repeat(26)}`,priceId:`pri_${"b".repeat(26)}`,price:{amount:"2.99",currency:"USD",interval:"month",frequency:1}};
   const document={visibilityState:"visible",getElementById:node,addEventListener(type,fn){documentListeners[type]=fn;}};
   const context={document,location:{search:"",assign(){}},navigator:{onLine:true},URLSearchParams,requestAnimationFrame:fn=>fn(),setTimeout,
     window:{addEventListener:(type,fn)=>{listeners[type]=fn;}},Paddle:{Initialize(options){checkout.event=options.eventCallback;},Checkout:{open(){checkout.open=true;},close(){checkout.open=false;checkout.closeCalls=(checkout.closeCalls||0)+1;}}},

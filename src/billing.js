@@ -22,6 +22,7 @@ const {
   validateCheckoutTransactionForRetirement,
   validateCompletedTransaction,
   validateSubscription,
+  subscriptionCatalogTransition,
   createCustomerPortalSession,
   fullRevocationFromAdjustment
 }=require("./payments");
@@ -87,9 +88,18 @@ function createBillingService({
     return service;
   }
 
+  /** @param {unknown} priceId */
+  function legacyRecurringPrice(priceId) {
+    return paymentConfig.legacyRecurringPriceIds.includes(String(priceId||""));
+  }
+
+  function entitledRecurringPrices() {
+    return [paymentConfig.priceId,...paymentConfig.legacyRecurringPriceIds];
+  }
+
   /** @param {string} userId @param {number} [timestamp] */
   function hasCurrentPaidAccess(userId,timestamp=now()) {
-    return store.hasCurrentPaidDiscoveryAccess(userId,paymentConfig.priceId,paymentConfig.productId,timestamp);
+    return store.hasEntitledPaidDiscoveryAccess(userId,entitledRecurringPrices(),paymentConfig.productId,timestamp);
   }
 
   /** @param {string} userId @param {number} [timestamp] */
@@ -100,7 +110,7 @@ function createBillingService({
 
   /** @param {string} userId @param {number} [timestamp] */
   function accessSummaryForUser(userId,timestamp=now()) {
-    return store.currentDiscoveryAccessSummary(userId,paymentConfig.priceId,paymentConfig.productId,timestamp);
+    return store.entitledDiscoveryAccessSummary(userId,entitledRecurringPrices(),paymentConfig.productId,timestamp);
   }
 
   /** @param {import("./domain-types").SubscriptionRow|null} row @param {number} [timestamp] */
@@ -165,8 +175,8 @@ function createBillingService({
 
   /** @param {import("./domain-types").CheckoutClaimRow} claim @param {{retirement?:boolean}} [options] */
   async function transactionForCheckoutClaim(claim,{retirement=false}={}) {
-    const legacy=claim.price_id===DEFAULT_PRICE_ID,current=claim.price_id===paymentConfig.priceId;
-    if(!retirement&&!legacy&&!current)throw reconciliationError("STRATA could not safely validate an interrupted checkout catalog. Please contact support.","PURCHASE_RECONCILIATION_INVALID");
+    const legacy=claim.price_id===DEFAULT_PRICE_ID,current=claim.price_id===paymentConfig.priceId,legacyRecurring=legacyRecurringPrice(claim.price_id);
+    if(!retirement&&!legacy&&!current&&!legacyRecurring)throw reconciliationError("STRATA could not safely validate an interrupted checkout catalog. Please contact support.","PURCHASE_RECONCILIATION_INVALID");
     const validationOptions={userId:claim.user_id,checkoutId:claim.claim_id,priceId:claim.price_id,productId:legacy?DEFAULT_PRODUCT_ID:paymentConfig.productId,retiredOneTimeCancellation:legacy};
     /** @type {import("./domain-types").PaddleFetchedTransactionResult|null} */
     let remote;
@@ -178,9 +188,10 @@ function createBillingService({
     }
     if(!remote)return null;
     const remoteCatalog=checkoutCatalog(remote,claim.user_id,claim.claim_id);
+    const remotePriceId=cleanText(remote.data.items?.[0]?.price?.id,100);
     const retirementValidation=validateCheckoutTransactionForRetirement(remote.data,paymentConfig,{userId:claim.user_id,checkoutId:claim.claim_id,priceId:claim.price_id});
     const alreadyRetired=claim.transaction_id===remote.transactionId&&validateRetiredPaddleCheckoutTransaction(remote.data).ok;
-    const currentCatalogValid=Boolean(remoteCatalog)&&(!current||remoteCatalog==="current");
+    const currentCatalogValid=Boolean(remoteCatalog)&&(!current||remoteCatalog==="current")&&(!legacyRecurring||remoteCatalog==="current"||remoteCatalog==="legacy-recurring"&&remotePriceId===claim.price_id);
     if(retirement?!currentCatalogValid&&!retirementValidation.ok&&!alreadyRetired:!currentCatalogValid){
       throw reconciliationError("STRATA could not safely validate an interrupted Strata+ checkout. Please contact support.","PURCHASE_RECONCILIATION_INVALID");
     }
@@ -223,7 +234,7 @@ function createBillingService({
       const updatedAt=Math.max(createdAt,eventTime(remote.data.updated_at,now()));
       try{
         purchase=await store.insertPendingPurchase({
-          transactionId:remote.transactionId,userId:claim.user_id,priceId:remoteCatalog==="retired"?DEFAULT_PRICE_ID:paymentConfig.priceId,
+          transactionId:remote.transactionId,userId:claim.user_id,priceId:remoteCatalog==="retired"?DEFAULT_PRICE_ID:remoteCatalog==="legacy-recurring"?claim.price_id:paymentConfig.priceId,
           productId:remoteCatalog==="retired"?DEFAULT_PRODUCT_ID:paymentConfig.productId,
           paddleStatus:remote.status,createdAt,updatedAt
         });
@@ -235,14 +246,16 @@ function createBillingService({
     if(!purchase)return await store.activeAccountDeletion(claim.user_id,now())?{state:"deletion"}:{state:"blocked"};
     const sourceCatalog=purchaseCatalog(purchase);
     if(!sourceCatalog)throw reconciliationError("STRATA could not safely validate the interrupted checkout catalog. Please contact support.","PURCHASE_RECONCILIATION_INVALID");
-    if(remote.status==="draft"&&sourceCatalog==="retired")purchase=await migrateReusableDraft(remote,purchase);
-    else if(remote.status==="ready"&&sourceCatalog==="retired"&&remoteCatalog==="current")purchase=await migrateReusableDraft(remote,purchase);
+    if(remote.status==="draft"&&["retired","legacy-recurring"].includes(sourceCatalog))purchase=await migrateReusableDraft(remote,purchase);
+    else if(remote.status==="ready"&&(sourceCatalog==="legacy-recurring"||(sourceCatalog==="retired"&&remoteCatalog==="current")))purchase=await migrateReusableDraft(remote,purchase);
     else if(sourceCatalog!==remoteCatalog&&remote.status!=="completed")throw reconciliationError("STRATA could not safely match the interrupted checkout catalog. Please contact support.","PURCHASE_RECONCILIATION_INVALID");
     let entitled=false;
     if(remote.status==="completed"){
-      if(sourceCatalog==="retired"&&remoteCatalog==="current")purchase=await completeCatalogMigration(remote,purchase,eventTime(remote.data.updated_at,now()));
+      if(["retired","legacy-recurring"].includes(sourceCatalog)&&remoteCatalog==="current")purchase=await completeCatalogMigration(remote,purchase,eventTime(remote.data.updated_at,now()));
       const legacy=remoteCatalog==="retired";
-      const validation=legacy?validateRetiredCompletedTransaction(remote.data,paymentConfig,{userId:claim.user_id,checkoutId:claim.claim_id}):validateCompletedTransaction(remote.data,paymentConfig);
+      const validation=legacy
+        ?validateRetiredCompletedTransaction(remote.data,paymentConfig,{userId:claim.user_id,checkoutId:claim.claim_id})
+        :validateCompletedTransaction(remote.data,paymentConfig,{priceId:purchase.price_id,productId:paymentConfig.productId});
       if(!validation.ok)throw reconciliationError("STRATA could not safely validate a completed Strata+ checkout. Please contact support.","PURCHASE_RECONCILIATION_INVALID");
       const completedAt=eventTime(remote.data.updated_at,now());
       const subscriptionId=legacy?null:cleanText(remote.data.subscription_id,100);
@@ -315,13 +328,15 @@ function createBillingService({
     }
     if(remote.status==="completed"){
       if(purchase&&!sourceCatalog)throw reconciliationError("STRATA could not safely validate the completed checkout catalog. Please contact support.","PURCHASE_RECONCILIATION_INVALID");
-      if(purchase&&sourceCatalog==="retired"&&remoteCatalog==="current")await completeCatalogMigration(remote,purchase,eventTime(remote.data.updated_at,now()));
+      if(purchase&&["retired","legacy-recurring"].includes(sourceCatalog)&&remoteCatalog==="current")purchase=await completeCatalogMigration(remote,purchase,eventTime(remote.data.updated_at,now()));
       const legacy=remoteCatalog==="retired";
-      const validation=legacy?validateRetiredCompletedTransaction(remote.data,paymentConfig,{userId,checkoutId}):validateCompletedTransaction(remote.data,paymentConfig);
+      const validation=legacy
+        ?sourceCatalog&&sourceCatalog!=="retired"?{ok:false}:validateRetiredCompletedTransaction(remote.data,paymentConfig,{userId,checkoutId})
+        :validateCompletedTransaction(remote.data,paymentConfig,remoteCatalog==="legacy-recurring"?{priceId:purchase?.price_id||claim.price_id,productId:paymentConfig.productId}:undefined);
       if(!validation.ok)throw reconciliationError("STRATA could not safely validate a completed Strata+ checkout. Please contact support.","PURCHASE_RECONCILIATION_INVALID");
       if(!purchase){
         const stamp=now();
-        purchase=await store.recordClaimedPurchase({transactionId:remote.transactionId,userId,priceId:legacy?DEFAULT_PRICE_ID:paymentConfig.priceId,productId:legacy?DEFAULT_PRODUCT_ID:paymentConfig.productId,paddleStatus:remote.status,createdAt:eventTime(remote.data.created_at,Number(claim.created_at)),updatedAt:stamp},claim.claim_id)||await store.purchaseByTransaction(remote.transactionId);
+        purchase=await store.recordClaimedPurchase({transactionId:remote.transactionId,userId,priceId:legacy?DEFAULT_PRICE_ID:remoteCatalog==="legacy-recurring"?claim.price_id:paymentConfig.priceId,productId:legacy?DEFAULT_PRODUCT_ID:paymentConfig.productId,paddleStatus:remote.status,createdAt:eventTime(remote.data.created_at,Number(claim.created_at)),updatedAt:stamp},claim.claim_id)||await store.purchaseByTransaction(remote.transactionId);
         if(!purchase||purchase.user_id!==userId)throw reconciliationError("STRATA could not safely attach the completed checkout to its account.","PURCHASE_RECONCILIATION_INVALID");
       }
       const completedAt=eventTime(remote.data.updated_at,now());
@@ -357,8 +372,13 @@ function createBillingService({
       const checkoutId=cleanText(data.custom_data?.strata_checkout_id,100);
       const sourceCatalog=purchase?purchaseCatalog(purchase):"";
       const legacyValidation=sourceCatalog==="retired"?validateRetiredCompletedTransaction(data,paymentConfig,{userId:purchase?.user_id,checkoutId}):{ok:false,reason:"catalog"};
-      const validation=sourceCatalog==="current"?validateCompletedTransaction(data,paymentConfig):legacyValidation;
-      if(purchase&&sourceCatalog==="retired"&&validateCompletedTransaction(data,paymentConfig).ok&&claimedUser===purchase.user_id){
+      const recurringValidation=sourceCatalog==="current"
+        ?validateCompletedTransaction(data,paymentConfig)
+        :sourceCatalog==="legacy-recurring"
+          ?validateCompletedTransaction(data,paymentConfig,{priceId:purchase?.price_id,productId:paymentConfig.productId})
+          :legacyValidation;
+      const validation=recurringValidation;
+      if(purchase&&["retired","legacy-recurring"].includes(sourceCatalog)&&validateCompletedTransaction(data,paymentConfig).ok&&claimedUser===purchase.user_id){
         const remote={transactionId,status:"completed",data};
         const completed=await completeCatalogMigration(remote,purchase,occurredAt);
         outcome=completed.subscription_id===cleanText(data.subscription_id,100)?"subscription-payment-recorded":"rejected:subscription-link";
@@ -376,7 +396,8 @@ function createBillingService({
       const validation=validateSubscription(data,paymentConfig,{
         userId:purchase?.user_id,transactionId,requireTransaction:true
       });
-      if(purchase&&validation.ok){
+      const catalogMatches=purchase&&validation.ok&&purchase.price_id===validation.priceId&&purchase.product_id===validation.productId;
+      if(catalogMatches&&validation.ok){
         const saved=await store.createPaddleSubscription({
           subscriptionId:validation.subscriptionId,userId:purchase.user_id,transactionId,
           customerId:validation.customerId,status:validation.status,priceId:validation.priceId,
@@ -385,19 +406,32 @@ function createBillingService({
           eventOccurredAt:occurredAt,createdAt:occurredAt,updatedAt:timestamp
         });
         outcome=saved?(validation.entitled?"subscription-created":"subscription-catalog-changed"):"rejected:subscription-link";
-      }else outcome=purchase?`rejected:${validation.ok?"subscription-link":validation.reason}`:"ignored:unknown-transaction";
+      }else outcome=purchase?`rejected:${validation.ok?"catalog":validation.reason}`:"ignored:unknown-transaction";
     }else if(eventType==="subscription.updated"){
       const subscriptionId=cleanText(data.id,100);
       const existing=await store.subscriptionById(subscriptionId);
       const validation=validateSubscription(data,paymentConfig,{userId:existing?.user_id});
       if(existing&&validation.ok&&validation.customerId===existing.customer_id){
-        const saved=await store.updatePaddleSubscription({
+        const update={
           subscriptionId,userId:existing.user_id,customerId:validation.customerId,status:validation.status,
           priceId:validation.priceId,productId:validation.productId,
           scheduledChangeAction:validation.scheduledChangeAction,scheduledChangeAt:validation.scheduledChangeAt,
           currentPeriodEndsAt:validation.currentPeriodEndsAt,eventOccurredAt:occurredAt,updatedAt:timestamp
-        });
-        outcome=saved?(validation.entitled?"subscription-updated":"subscription-catalog-changed"):"subscription-stale";
+        };
+        const linkedPurchase=await store.purchaseByTransaction(existing.transaction_id),ownedPurchase=linkedPurchase?.user_id===existing.user_id&&linkedPurchase.subscription_id===existing.subscription_id?linkedPurchase:null;
+        const transition=subscriptionCatalogTransition(existing,ownedPurchase,validation,paymentConfig);
+        if(transition==="reject")outcome="rejected:catalog";
+        else{
+        const migratingPurchase=transition==="migrate"?ownedPurchase:null;
+        const saved=migratingPurchase
+          ?await store.updatePaddleSubscriptionCatalog(existing,migratingPurchase,update)
+          :await store.updatePaddleSubscription(update);
+        if(migratingPurchase&&!saved){
+          const [latest,latestPurchase]=await Promise.all([store.subscriptionById(subscriptionId),store.purchaseByTransaction(existing.transaction_id)]);
+          if(latest&&latestPurchase?.subscription_id===latest.subscription_id&&latestPurchase.price_id===latest.price_id&&latestPurchase.product_id===latest.product_id&&Number(latest.event_occurred_at)>=occurredAt)outcome="subscription-stale";
+          else throw Object.assign(new Error("Subscription catalog migration conflicted. Please retry."),{status:503,code:"SUBSCRIPTION_CATALOG_MIGRATION_PENDING"});
+        }else outcome=saved?(validation.entitled?"subscription-updated":"subscription-catalog-changed"):"subscription-stale";
+        }
       }else if(!existing){
         // Updates can arrive before subscription.created. A retry after the
         // creation link is stored is safer than acknowledging and losing the

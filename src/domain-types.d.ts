@@ -17,6 +17,7 @@ export interface PaymentConfig {
   readonly environment:"live"|"sandbox";
   readonly productId:string;
   readonly priceId:string;
+  readonly legacyRecurringPriceIds:readonly string[];
   readonly clientToken:string;
   readonly price:PaymentPrice;
   readonly requestedEnabled:boolean;
@@ -45,6 +46,7 @@ export interface PaddlePriceData {
   id?:unknown;
   product_id?:unknown;
   billing_cycle?:{interval?:unknown;frequency?:unknown}|null;
+  unit_price?:{amount?:unknown;currency_code?:unknown}|null;
 }
 
 export interface PaddleItemData {
@@ -343,8 +345,10 @@ export interface BillingStore {
   adminControls(userId:string):Promise<AdminControlsRow|null>;
   hasPaidDiscoveryAccess(userId:string,priceId?:string|null,now?:number):Promise<boolean>;
   hasCurrentPaidDiscoveryAccess(userId:string,priceId:string,productId:string,now?:number):Promise<boolean>;
+  hasEntitledPaidDiscoveryAccess(userId:string,priceIds:readonly string[],productId:string,now?:number):Promise<boolean>;
   discoveryTrial(userId:string):Promise<DiscoveryTrialRow|null>;
   currentDiscoveryAccessSummary(userId:string,priceId:string,productId:string,now?:number):Promise<DiscoveryAccessSummary>;
+  entitledDiscoveryAccessSummary(userId:string,priceIds:readonly string[],productId:string,now?:number):Promise<DiscoveryAccessSummary>;
   startDiscoveryTrial(userId:string,startedAt:number,expiresAt:number):Promise<DiscoveryTrialRow|null>;
   activeAccountDeletion(userId:string,now:number):Promise<JsonObject|null>;
   checkoutCreationForUser(userId:string):Promise<CheckoutClaimRow|null>;
@@ -364,6 +368,7 @@ export interface BillingStore {
   updatePurchaseStatus(transactionId:string,status:string,occurredAt:number):Promise<PurchaseRow|null>;
   createPaddleSubscription(subscription:SubscriptionCreate):Promise<SubscriptionRow|null>;
   updatePaddleSubscription(subscription:SubscriptionWrite):Promise<SubscriptionRow|null>;
+  updatePaddleSubscriptionCatalog(existing:SubscriptionRow,purchase:PurchaseRow,subscription:SubscriptionWrite):Promise<SubscriptionRow|null>;
   subscriptionById(subscriptionId:string):Promise<SubscriptionRow|null>;
   subscriptionForUser(userId:string):Promise<SubscriptionRow|null>;
   webhookEvent(eventId:string):Promise<JsonObject|null>;
@@ -725,11 +730,11 @@ export type BillingPreparedStatementName=
   |"insertPendingPurchase"|"recordClaimedPurchase"|"replacePendingPurchaseCatalog"|"completePurchaseCatalogMigration"|"checkoutCreationForUser"|"claimCheckoutCreation"
   |"recordCheckoutCreationTransaction"|"extendCheckoutCreation"|"releaseCheckoutCreation"
   |"purchaseByTransaction"|"pendingPurchaseForUser"|"completePurchase"|"updatePurchaseStatus"
-  |"bindPurchaseSubscription"|"createPaddleSubscription"|"updatePaddleSubscription"
+  |"bindPurchaseSubscription"|"createPaddleSubscription"|"updatePaddleSubscription"|"updatePaddleSubscriptionAfterCatalog"|"replaceSubscriptionPurchaseCatalog"
   |"subscriptionById"|"subscriptionForUser"|"upsertAdjustment"|"adjustmentById"
-  |"revokePurchase"|"hasDiscoveryAccess"|"hasCurrentDiscoveryAccess"|"activeDiscoveryTrial"
+  |"revokePurchase"|"hasDiscoveryAccess"|"hasCurrentDiscoveryAccess"|"hasEntitledDiscoveryAccess"|"activeDiscoveryTrial"
   |"activeAdminGrant"|"discoveryTrial"|"startDiscoveryTrial"|"discoveryAccessSummary"
-  |"currentDiscoveryAccessSummary"|"webhookEvent"|"recordWebhookEvent";
+  |"currentDiscoveryAccessSummary"|"entitledDiscoveryAccessSummary"|"webhookEvent"|"recordWebhookEvent";
 
 export interface LocalBillingStoreDependencies {
   db:{exec(sql:string):unknown};

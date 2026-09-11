@@ -30,7 +30,7 @@ test("explicit sandbox config selects isolated Paddle endpoint and exposes only 
   const transaction=await createPaddleTransaction(config,{userId:"member-1",checkoutId:"claim-1"},async(url,options)=>{
     requests.push({url,options});
     const body=JSON.parse(options.body);
-    return {ok:true,json:async()=>({data:{id:TRANSACTION,status:"ready",origin:"api",collection_mode:"automatic",custom_data:body.custom_data,items:[{quantity:1,price:{id:PRICE,product_id:PRODUCT,billing_cycle:{interval:"month",frequency:1}}}]}})};
+    return {ok:true,json:async()=>({data:{id:TRANSACTION,status:"ready",origin:"api",collection_mode:"automatic",custom_data:body.custom_data,items:[{quantity:1,price:{id:PRICE,product_id:PRODUCT,billing_cycle:{interval:"month",frequency:1},unit_price:{amount:"299",currency_code:"USD"}}}]}})};
   });
   assert.equal(transaction.transactionId,TRANSACTION);
   assert.equal(requests[0].url,`${SANDBOX_API_BASE}/transactions`);

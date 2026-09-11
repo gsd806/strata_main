@@ -106,7 +106,7 @@ async function handleProviderRequest(req,res){
       custom_data:body?.custom_data||null,
       items:[{
         quantity:Number(body?.items?.[0]?.quantity||0),
-        price:{id:body?.items?.[0]?.price_id||null,product_id:PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}
+        price:{id:body?.items?.[0]?.price_id||null,product_id:PRODUCT_ID,billing_cycle:{interval:"month",frequency:1},unit_price:{amount:"299",currency_code:"USD"}}
       }]
     };
     paddleTransactions.set(id,transaction);

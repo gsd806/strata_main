@@ -141,7 +141,7 @@
       else if(scheduled?.action==="cancel")el("accountBillingDetail").textContent=`Cancellation takes effect ${logic.billingDate(scheduled.effectiveAt)}. Access remains available until then, with no renewal afterward.`;
       else if(scheduled?.action==="pause")el("accountBillingDetail").textContent=`The subscription pauses ${logic.billingDate(scheduled.effectiveAt)}. Access remains available until then and stops when the pause takes effect.`;
       else if(status==="past_due")el("accountBillingDetail").textContent="Paddle could not collect the latest monthly payment. Update the payment method to avoid losing Strata+ access.";
-      else el("accountBillingDetail").textContent=`$0.99 USD per month. The next renewal is ${logic.billingDate(subscription.currentPeriodEndsAt)} unless you cancel.`;
+      else el("accountBillingDetail").textContent=`Your monthly subscription is active. The next renewal is ${logic.billingDate(subscription.currentPeriodEndsAt)} unless you cancel.`;
       update.hidden=status!=="past_due";cancel.hidden=status==="canceled"||scheduled?.action==="cancel";
     }
 

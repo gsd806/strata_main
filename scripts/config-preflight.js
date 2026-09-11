@@ -1,7 +1,7 @@
 "use strict";
 
 const {mailboxAddress,validEmailVerificationSecret,validResendApiKey}=require("../src/email");
-const {validPaddleApiKey,validPaddleClientToken,validPaddleEnvironment,validPaddlePriceId,validPaddleProductId,validPaddleWebhookSecret}=require("../src/payments");
+const {validPaddleApiKey,validPaddleClientToken,validPaddleEnvironment,validPaddleLegacyRecurringPriceIds,validPaddlePriceId,validPaddleProductId,validPaddleWebhookSecret}=require("../src/payments");
 
 const BOOLEAN_VALUES=new Set(["true","false"]);
 
@@ -58,6 +58,7 @@ function validateDeploymentEnvironment(environment=process.env,{requireEmail=fal
     addCheck(checks,"payments.environment",validPaddleEnvironment(paddleEnvironment,clean(environment.NODE_ENV)),"PADDLE_ENVIRONMENT must be live, or sandbox only outside production.");
     addCheck(checks,"payments.product",validPaddleProductId(environment.PADDLE_PRODUCT_ID,paddleSandbox),"PADDLE_PRODUCT_ID must identify the selected Paddle environment's product.");
     addCheck(checks,"payments.price",validPaddlePriceId(environment.PADDLE_PRICE_ID),"PADDLE_PRICE_ID must identify the recurring Paddle price.");
+    addCheck(checks,"payments.legacy-prices",validPaddleLegacyRecurringPriceIds(environment.PADDLE_LEGACY_RECURRING_PRICE_IDS,environment.PADDLE_PRICE_ID),"PADDLE_LEGACY_RECURRING_PRICE_IDS must contain only distinct earlier recurring price IDs.");
     addCheck(checks,"payments.client-token",validPaddleClientToken(environment.PADDLE_CLIENT_TOKEN,paddleSandbox),"PADDLE_CLIENT_TOKEN must match the selected Paddle environment.");
     addCheck(checks,"payments.api-key",validPaddleApiKey(environment.PADDLE_API_KEY,paddleSandbox),"PADDLE_API_KEY must match the selected Paddle environment.");
     addCheck(checks,"payments.webhook-secret",validPaddleWebhookSecret(environment.PADDLE_WEBHOOK_SECRET),"PADDLE_WEBHOOK_SECRET must be a non-placeholder signing secret.");

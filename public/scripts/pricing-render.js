@@ -49,7 +49,7 @@
       checkButton.disabled=state.busy;
       buyButton.classList.toggle("button-dark",true);
       buyButton.classList.toggle("button-light",false);
-      buyButton.textContent=trialAccess?"Subscribe now · $0.99 USD / month →":canceled?"Restart Strata+ · $0.99 USD / month →":"Subscribe · $0.99 USD / month →";
+      buyButton.textContent=trialAccess?"Subscribe now · $2.99 USD / month →":canceled?"Restart Strata+ · $2.99 USD / month →":"Subscribe · $2.99 USD / month →";
       panel.setAttribute("aria-busy",String(state.busy||state.awaitingAccess));
 
       if(state.busy&&state.awaitingAccess){setStatus("Your checkout completed. STRATA is securely confirming access…","warn");return;}
@@ -78,7 +78,7 @@
         else if(subscription?.scheduledChange?.action==="cancel")setStatus(`Your monthly subscription remains active until ${logic.billingDate(subscription.scheduledChange.effectiveAt)}, when its cancellation takes effect. It will not renew after that date.`,"warn");
         else if(subscription?.scheduledChange?.action==="pause")setStatus(`Your monthly subscription remains active until ${logic.billingDate(subscription.scheduledChange.effectiveAt)}, when its scheduled pause takes effect and paid access stops.`,"warn");
         else if(subscription?.pastDue||subscriptionStatus==="past_due")setStatus("Your monthly subscription is past due. Strata+ remains available for now; update your payment method from Account to avoid interruption.","warn");
-        else if(subscription)setStatus(`Your $0.99 USD monthly subscription is active and renews on ${logic.billingDate(subscription.currentPeriodEndsAt)} unless canceled.`,"good");
+        else if(subscription)setStatus(`Your monthly subscription is active and renews on ${logic.billingDate(subscription.currentPeriodEndsAt)} unless canceled.`,"good");
         else setStatus("Strata+ access is active on this account.","good");
         return;
       }
@@ -86,7 +86,7 @@
         const message=trialRequested
           ?"Sign in or create an account to start your one free 7-day Strata+ trial. No card is required."
           :pageReason==="access"||pageReason==="discovery-required"
-            ?"Sign in or create an account, then start the free trial or explicitly subscribe for $0.99 USD per month to continue."
+            ?"Sign in or create an account, then start the free trial or explicitly subscribe for $2.99 USD per month to continue."
             :"Create an account or sign in before starting the trial or subscribing, so access follows you across devices.";
         setStatus(message);return;
       }
@@ -97,8 +97,8 @@
       if(state.configError){setStatus(`${state.configError}${trial?.eligible?" You can still start your free 7-day trial; no card required.":""}`,"warn");return;}
       if(trial?.eligible){setStatus("Your account is eligible for one free 7-day Strata+ trial. No card required and no automatic charge.");return;}
       if(pageReason==="access-revoked"){setStatus("Strata+ access is no longer active, usually because a subscription ended or a charge was refunded or reversed. You may subscribe again or contact STRATA if this is unexpected.","warn");return;}
-      if(pageReason==="access"||pageReason==="discovery-required"){setStatus("Strata+ is $0.99 USD per month and renews monthly until canceled.");return;}
-      if(trial&&trial.eligible===false)setStatus("This account has already used its free trial. Subscribe for $0.99 USD per month; it renews monthly until canceled.");
+      if(pageReason==="access"||pageReason==="discovery-required"){setStatus("Strata+ is $2.99 USD per month and renews monthly until canceled.");return;}
+      if(trial&&trial.eligible===false)setStatus("This account has already used its free trial. Subscribe for $2.99 USD per month; it renews monthly until canceled.");
       else setStatus("Signed in and ready for secure Paddle checkout.");
     }
 

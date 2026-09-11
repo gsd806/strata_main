@@ -12,9 +12,13 @@ const {
   isPaddleWebhookAddress
 }=require("./paddle-webhooks");
 const {createPaddleCheckoutRetirement,validateRetiredPaddleCheckoutTransaction}=require("./paddle-checkout-retirement");
+const {
+  DEFAULT_PRODUCT_ID,DEFAULT_PRICE_ID,clean,
+  validPaddleEnvironment,validPaddleProductId,validPaddlePriceId,parseLegacyRecurringPriceIds,
+  validPaddleLegacyRecurringPriceIds,validPaddleClientToken,validPaddleApiKey,validPaddleWebhookSecret,
+  currentPublicPrice,exactCurrentCheckoutPrice,subscriptionCatalogTransition
+}=require("./paddle-catalog");
 
-const DEFAULT_PRODUCT_ID="pro_01m1ky8j916ybyacs836dxbz8x";
-const DEFAULT_PRICE_ID="pri_01m1kyc2zd313d7a3ssmg02424";
 const STRATA_PLUS_TRIAL_MS=7*24*60*60*1000;
 const LIVE_API_BASE="https://api.paddle.com";
 const SANDBOX_API_BASE="https://sandbox-api.paddle.com";
@@ -25,24 +29,6 @@ const CHECKOUT_RECOVERY_WINDOW_MS=5*60_000;
 /** @type {WeakMap<import("./domain-types").PaymentConfig,import("./domain-types").PaddleSecrets>} */
 const secretsByConfig=new WeakMap();
 
-/** @param {unknown} value */
-function clean(value) { return String(value||"").trim(); }
-/** @param {string} value @param {string} prefix */
-function validId(value,prefix) { return new RegExp(`^${prefix}_[a-z0-9]{20,}$`).test(value); }
-/** @param {unknown} value */
-function placeholderCredential(value) { return /replace[-_ ]?with|<[^>]+>|your[-_ ]?(?:private|secret|key)/i.test(String(value||"")); }
-/** @param {unknown} value @param {string|undefined} nodeEnv */
-function validPaddleEnvironment(value,nodeEnv) { const environment=clean(value).toLowerCase();return ["live","sandbox"].includes(environment)&&!(environment==="sandbox"&&nodeEnv==="production"); }
-/** @param {unknown} value @param {boolean} [sandbox] */
-function validPaddleProductId(value,sandbox=false) { const id=clean(value);return validId(id,"pro")&&(!sandbox||id!==DEFAULT_PRODUCT_ID); }
-/** @param {unknown} value */
-function validPaddlePriceId(value) { const id=clean(value);return validId(id,"pri")&&id!==DEFAULT_PRICE_ID; }
-/** @param {unknown} value @param {boolean} [sandbox] */
-function validPaddleClientToken(value,sandbox=false) { const token=clean(value);return token.startsWith(sandbox?"test_":"live_")&&token.length>=20&&(sandbox||!/sandbox|sdbx/i.test(token))&&!placeholderCredential(token); }
-/** @param {unknown} value @param {boolean} [sandbox] */
-function validPaddleApiKey(value,sandbox=false) { const key=clean(value);return key.startsWith(sandbox?"pdl_sdbx_apikey_":"pdl_live_apikey_")&&key.length>=40&&(sandbox||!/sandbox|sdbx/i.test(key))&&!placeholderCredential(key); }
-/** @param {unknown} value */
-function validPaddleWebhookSecret(value) { const secret=clean(value);return secret.startsWith("pdl_ntfset_")&&secret.length>=20&&!placeholderCredential(secret); }
 /** @param {number} milliseconds */
 function timeoutSignal(milliseconds) { return typeof globalThis.AbortSignal?.timeout==="function"?globalThis.AbortSignal.timeout(milliseconds):undefined; }
 /** @param {number} milliseconds @returns {Pick<RequestInit,"signal">} */
@@ -65,6 +51,7 @@ function getPaymentConfig(env=process.env) {
   // A recurring price has a different Paddle catalog ID from the retired
   // one-time price. Require the deployment to supply that ID explicitly.
   const priceId=clean(env.PADDLE_PRICE_ID);
+  const legacyRecurring=parseLegacyRecurringPriceIds(env.PADDLE_LEGACY_RECURRING_PRICE_IDS,priceId);
   const clientToken=clean(env.PADDLE_CLIENT_TOKEN);
   const apiKey=clean(env.PADDLE_API_KEY);
   const webhookSecret=clean(env.PADDLE_WEBHOOK_SECRET);
@@ -75,7 +62,7 @@ function getPaymentConfig(env=process.env) {
   // The previous live price is a one-time catalog item. It must never be
   // accepted for new recurring checkouts, even when supplied explicitly.
   const validCatalog=validPaddleProductId(productId,sandbox)&&validPaddlePriceId(priceId);
-  const configured=environmentAllowed&&validClientToken&&validApiKey&&validWebhookSecret&&validCatalog;
+  const configured=environmentAllowed&&validClientToken&&validApiKey&&validWebhookSecret&&validCatalog&&legacyRecurring.valid;
   /** @type {string[]} */
   const missing=[];
   if (!environmentAllowed) missing.push("supported payment environment (sandbox is non-production only)");
@@ -83,6 +70,7 @@ function getPaymentConfig(env=process.env) {
   if (!validApiKey) missing.push(`${environment} API key`);
   if (!validWebhookSecret) missing.push("webhook signing secret");
   if (!validCatalog) missing.push(`valid ${environment} catalog IDs`);
+  if (!legacyRecurring.valid) missing.push("valid legacy recurring price IDs");
 
   // Deliberately contains browser-safe fields only. Server credentials live in
   // a private WeakMap so they cannot be serialized into a response by mistake.
@@ -91,8 +79,9 @@ function getPaymentConfig(env=process.env) {
     environment,
     productId,
     priceId,
+    legacyRecurringPriceIds:Object.freeze([...legacyRecurring.ids]),
     clientToken:environmentAllowed&&validClientToken?clientToken:"",
-    price:{amount:"0.99",currency:"USD",interval:"month",frequency:1},
+    price:currentPublicPrice(),
     requestedEnabled,
     configured,
     enabled:requestedEnabled&&configured,
@@ -166,7 +155,7 @@ async function createPaddleTransaction(config,{userId,checkoutId}={},fetchImpl=g
   const transactionId=validTransactionId(payload?.data?.id);
   const status=clean(payload?.data?.status);
   const validation=validateCheckoutTransaction(payload?.data,config,{userId,checkoutId});
-  if (!transactionId||!CREATED_TRANSACTION_STATUSES.has(status)||!validation.ok) {
+  if (!transactionId||!CREATED_TRANSACTION_STATUSES.has(status)||!validation.ok||!exactCurrentCheckoutPrice(payload?.data)) {
     throw Object.assign(new Error("Checkout could not be prepared. Please try again."),{status:502,code:"PADDLE_INVALID_RESPONSE"});
   }
   return {transactionId,status};
@@ -336,7 +325,8 @@ async function findPaddleCheckoutTransaction(config,{userId,checkoutId,createdAt
       const transactionTime=Date.parse(clean(transaction?.created_at));
       const standard=validateCheckoutRecoveryTransaction(transaction,config,{userId,checkoutId,priceId,productId,retiredOneTimeCancellation});
       const validation=retirement&&!standard.ok?validateCheckoutTransactionForRetirement(transaction,config,{userId,checkoutId,priceId}):standard;
-      return Number.isFinite(transactionTime)&&transactionTime>=windowStart&&transactionTime<=windowEnd&&validation.ok;
+      const currentUnfinished=priceId===config.priceId&&productId===config.productId&&["draft","ready"].includes(clean(transaction?.status));
+      return Number.isFinite(transactionTime)&&transactionTime>=windowStart&&transactionTime<=windowEnd&&validation.ok&&(!currentUnfinished||exactCurrentCheckoutPrice(transaction));
     });
     if (match) return {transactionId:validTransactionId(match.id),status:clean(match.status),data:match};
     const pagination=payload?.meta?.pagination;
@@ -401,9 +391,12 @@ module.exports={
   validPaddleEnvironment,
   validPaddleProductId,
   validPaddlePriceId,
+  validPaddleLegacyRecurringPriceIds,
   validPaddleClientToken,
   validPaddleApiKey,
   validPaddleWebhookSecret,
+  exactCurrentCheckoutPrice,
+  subscriptionCatalogTransition,
   publicPaymentConfig,
   webhookSecretFor,
   verifyPaddleSignature,

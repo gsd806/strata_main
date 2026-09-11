@@ -28,9 +28,9 @@ test("homepage exposes pricing, contact, and the public policy directory without
   assert.equal((footer.match(/href="\/policies"/g)||[]).length,1,"homepage footer must expose one Policies destination");
   assert.doesNotMatch(footer,/href="\/(?:terms|privacy|refunds)"/,"the policy hub replaces redundant legal links in the homepage footer");
   assert.match(home,/mailto:stratafitness\.official@gmail\.com/i);
-  assert.match(text("index.html"),/\$0\.99 USD/i);
+  assert.match(text("index.html"),/\$2\.99 USD/i);
   assert.match(text("index.html"),/7 days/i);
-  assert.match(text("index.html"),/\$0\.99 USD per month/i);
+  assert.match(text("index.html"),/\$2\.99 USD per month/i);
   assert.match(text("index.html"),/never auto-converts/i);
   assert.match(text("index.html"),/renews monthly until canceled/i);
   assert.doesNotMatch(text("index.html"),/lifetime|one[- ]time|never a subscription/i);
@@ -87,10 +87,10 @@ test("core footers use the policy directory instead of repeating every legal pag
 });
 
 test("published Strata+ price and refund promise are exact and consistent",()=>{
-  assert.equal(BUILD,"7.8.7");
+  assert.equal(BUILD,"7.8.8");
   const pricingHtml=read("pricing.html"),pricing=text("pricing.html"),refunds=text("refunds.html"),terms=text("terms.html");
   assert.match(pricing,/Strata\+/);
-  assert.match(pricing,/\$0\.99 USD/i);
+  assert.match(pricing,/\$2\.99 USD/i);
   assert.match(pricing,/7-day trial/i);
   assert.match(pricing,/recurring monthly subscription/i);
   assert.match(pricing,/renews every month until canceled/i);
@@ -104,7 +104,7 @@ test("published Strata+ price and refund promise are exact and consistent",()=>{
   assert.match(pricing,/manual Plan is not taken away when access ends/i);
   assert.match(pricingHtml,/href="\/planner\.html">Open free planner/);
   assert.match(pricingHtml,/Create my free account/);
-  assert.match(pricingHtml,/free 7-day trial or explicitly subscribe for \$0\.99 USD per month/);
+  assert.match(pricingHtml,/free 7-day trial or explicitly subscribe for \$2\.99 USD per month/);
   assert.match(pricingHtml,/without an account; it stays in that browser[\s\S]*own synced Plan/);
   assert.match(pricingHtml,/href="\/refunds"/);
   assert.match(pricingHtml,/id="buyDiscovery"/);
@@ -116,10 +116,10 @@ test("published Strata+ price and refund promise are exact and consistent",()=>{
   assert.match(refunds,/original payment method/i);
   assert.match(refunds,/Cancellation does not automatically refund/i);
   assert.match(refunds,/Deleting a STRATA account is not cancellation and is not a refund/i);
-  assert.match(terms,/\$0\.99 USD/i);
+  assert.match(terms,/\$2\.99 USD/i);
   assert.match(terms,/runs for 7 consecutive days/i);
   assert.match(terms,/recurring subscription/i);
-  assert.match(terms,/renews monthly at \$0\.99 USD until canceled/i);
+  assert.match(terms,/renews monthly at \$2\.99 USD until canceled/i);
   assert.match(terms,/never converts into a subscription/i);
   assert.match(terms,/Paddle acts as merchant of record/i);
   assert.match(terms,/lifetime access purchased before this recurring offer remain grandfathered/i);
@@ -188,7 +188,7 @@ test("community-plan policies explain publication, privacy, replacement, and rem
 
 test("public copy describes recurring checkout, cancellation, and grandfathered access",()=>{
   const publicCopy=["pricing.html","terms.html","privacy.html","refunds.html"].map(text).join(" ");
-  assert.match(publicCopy,/\$0\.99 USD per month/i);
+  assert.match(publicCopy,/\$2\.99 USD per month/i);
   assert.match(publicCopy,/renews monthly/i);
   assert.match(publicCopy,/grandfathered/i);
   assert.doesNotMatch(publicCopy,/permanent access/i);

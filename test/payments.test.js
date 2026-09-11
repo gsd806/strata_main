@@ -18,6 +18,7 @@ const {
   replacePaddleTransactionItems,
   validateCheckoutTransaction,
   validateCheckoutRecoveryTransaction,
+  exactCurrentCheckoutPrice,
   findPaddleCheckoutTransaction,
   fetchPaddleIpv4Cidrs,
   isPaddleWebhookAddress,
@@ -26,11 +27,13 @@ const {
   createCustomerPortalSession,
   fullRevocationFromAdjustment
 }=require("../src/payments");
+const {createLegacyCheckoutPolicy}=require("../src/legacy-checkout");
 
 const API_KEY="pdl_live_apikey_01fixture0000000000000000_fixture_secret_123";
 const WEBHOOK_SECRET="pdl_ntfset_server_only_fixture";
 const CLIENT_TOKEN="live_client_side_fixture_123456";
 const RECURRING_PRICE_ID="pri_01monthlyfixture00000000000000";
+const LEGACY_RECURRING_PRICE_ID="pri_01legacymonthly0000000000000";
 const PREVIOUS_PRODUCT_ID="pro_01previousmonthly000000000000";
 const PREVIOUS_PRICE_ID="pri_01previousmonthly0000000000000";
 const SUBSCRIPTION_ID="sub_01m1ky8j916ybyacs836dxbz8x";
@@ -80,7 +83,7 @@ function completedTransaction(overrides={}) {
         billing_cycle:{interval:"month",frequency:1}
       }
     }],
-    details:{totals:{subtotal:"99",discount:"0",tax:"0",total:"99",grand_total:"99"}}
+    details:{totals:{subtotal:"299",discount:"0",tax:"0",total:"299",grand_total:"299"}}
   };
   return {...base,...overrides};
 }
@@ -97,7 +100,7 @@ function checkoutTransaction(overrides={}) {
     custom_data:{strata_user_id:"user-1",strata_checkout_id:"checkout-1",strata_version:1},
     items:[{
       quantity:1,
-      price:{id:RECURRING_PRICE_ID,product_id:DEFAULT_PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}
+      price:{id:RECURRING_PRICE_ID,product_id:DEFAULT_PRODUCT_ID,billing_cycle:{interval:"month",frequency:1},unit_price:{amount:"299",currency_code:"USD"}}
     }]
   };
   return {...base,...overrides};
@@ -176,7 +179,8 @@ test("live configuration is fail-closed and serializes browser-safe fields only"
   assert.equal(configured.clientToken,CLIENT_TOKEN);
   assert.equal(configured.productId,DEFAULT_PRODUCT_ID);
   assert.equal(configured.priceId,RECURRING_PRICE_ID);
-  assert.deepEqual(configured.price,{amount:"0.99",currency:"USD",interval:"month",frequency:1});
+  assert.deepEqual(configured.legacyRecurringPriceIds,[]);
+  assert.deepEqual(configured.price,{amount:"2.99",currency:"USD",interval:"month",frequency:1});
   assert.equal(STRATA_PLUS_TRIAL_MS,7*24*60*60*1000);
   assert.ok(Object.isFrozen(configured));
 
@@ -186,6 +190,23 @@ test("live configuration is fail-closed and serializes browser-safe fields only"
   assert.ok(!serialized.includes(WEBHOOK_SECRET),"The webhook secret must stay server-only");
   assert.doesNotMatch(serialized,/pdl_(?:live|sandbox|sdbx)_apikey_/i);
   assert.doesNotMatch(serialized,/pdl_ntfset_/i);
+
+  const grandfathered=getPaymentConfig(liveEnv({PADDLE_LEGACY_RECURRING_PRICE_IDS:LEGACY_RECURRING_PRICE_ID}));
+  assert.deepEqual(grandfathered.legacyRecurringPriceIds,[LEGACY_RECURRING_PRICE_ID]);
+  assert.equal(JSON.stringify(require("../src/payments").publicPaymentConfig(grandfathered)).includes(LEGACY_RECURRING_PRICE_ID),false,"legacy catalog IDs stay server-side");
+
+  for(const value of [
+    RECURRING_PRICE_ID,
+    DEFAULT_PRICE_ID,
+    "pri_invalid",
+    `${LEGACY_RECURRING_PRICE_ID},${LEGACY_RECURRING_PRICE_ID}`,
+    `${LEGACY_RECURRING_PRICE_ID},`
+  ]){
+    const invalidLegacy=getPaymentConfig(liveEnv({PADDLE_LEGACY_RECURRING_PRICE_IDS:value}));
+    assert.equal(invalidLegacy.configured,false,value);
+    assert.equal(invalidLegacy.enabled,false,value);
+    assert.deepEqual(invalidLegacy.legacyRecurringPriceIds,[],value);
+  }
 });
 
 test("Paddle signatures cover the exact raw body and accept any valid h1",()=>{
@@ -404,6 +425,30 @@ test("checkout transaction recovery searches Paddle pages and returns only an ex
   assert.equal(missing,null);
 });
 
+test("current checkout recovery requires the exact public amount and currency",async()=>{
+  const config=getPaymentConfig(liveEnv()),createdAt=Date.parse("2026-09-05T10:00:00.000Z");
+  const valid=checkoutTransaction();
+  assert.equal(exactCurrentCheckoutPrice(valid),true);
+  for(const unitPrice of [undefined,{amount:"99",currency_code:"USD"},{amount:"299",currency_code:"EUR"}]){
+    const transaction=checkoutTransaction({items:[{quantity:1,price:{id:RECURRING_PRICE_ID,product_id:DEFAULT_PRODUCT_ID,billing_cycle:{interval:"month",frequency:1},...(unitPrice?{unit_price:unitPrice}:{})}}]});
+    assert.equal(exactCurrentCheckoutPrice(transaction),false);
+    const recovered=await findPaddleCheckoutTransaction(config,{userId:"user-1",checkoutId:"checkout-1",createdAt},async()=>({ok:true,json:async()=>({data:[transaction],meta:{pagination:{has_more:false,next:null}}})}));
+    assert.equal(recovered,null,"a wrong or missing current price must not be returned to checkout");
+  }
+});
+
+test("legacy draft migration preserves the exact allowlisted price identity",async()=>{
+  const secondLegacyPrice="pri_01secondlegacyprice00000000000";
+  const config=getPaymentConfig(liveEnv({PADDLE_LEGACY_RECURRING_PRICE_IDS:`${LEGACY_RECURRING_PRICE_ID},${secondLegacyPrice}`}));
+  const policy=createLegacyCheckoutPolicy({
+    store:/** @type {any} */({}),paymentConfig:config,now:()=>1,
+    reconciliationError:(message,code)=>Object.assign(new Error(message),{status:503,code})
+  });
+  const remote={transactionId:"txn_01m1kz00000000000000000000",status:"draft",data:checkoutTransaction({status:"draft",items:[{quantity:1,price:{id:secondLegacyPrice,product_id:DEFAULT_PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}}]})};
+  const purchase={transaction_id:remote.transactionId,user_id:"user-1",price_id:LEGACY_RECURRING_PRICE_ID,product_id:DEFAULT_PRODUCT_ID,customer_id:null,subscription_id:null,paddle_status:"draft",completed_at:null,access_revoked_at:null,revocation_reason:null,created_at:1,updated_at:1};
+  await assert.rejects(policy.migrateReusableDraft(remote,purchase),(error)=>error.code==="PURCHASE_RECONCILIATION_INVALID");
+});
+
 test("checkout transaction recovery rejects malformed lists and unsafe pagination",async(t)=>{
   const config=getPaymentConfig(liveEnv());
   const reference={userId:"user-1",checkoutId:"checkout-1",createdAt:Date.now()};
@@ -569,7 +614,10 @@ test("transaction creation fails closed with sanitized errors",async(t)=>{
       ["wrong price",{items:[{quantity:1,price:{id:"pri_01wrong00000000000000000000",product_id:DEFAULT_PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}}]}],
       ["wrong product",{items:[{quantity:1,price:{id:RECURRING_PRICE_ID,product_id:"pro_01wrong00000000000000000000",billing_cycle:{interval:"month",frequency:1}}}]}],
       ["one-time price",{items:[{quantity:1,price:{id:RECURRING_PRICE_ID,product_id:DEFAULT_PRODUCT_ID,billing_cycle:null}}]}],
-      ["annual price",{items:[{quantity:1,price:{id:RECURRING_PRICE_ID,product_id:DEFAULT_PRODUCT_ID,billing_cycle:{interval:"year",frequency:1}}}]}]
+      ["annual price",{items:[{quantity:1,price:{id:RECURRING_PRICE_ID,product_id:DEFAULT_PRODUCT_ID,billing_cycle:{interval:"year",frequency:1}}}]}],
+      ["missing advertised amount",{items:[{quantity:1,price:{id:RECURRING_PRICE_ID,product_id:DEFAULT_PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}}]}],
+      ["wrong advertised amount",{items:[{quantity:1,price:{id:RECURRING_PRICE_ID,product_id:DEFAULT_PRODUCT_ID,billing_cycle:{interval:"month",frequency:1},unit_price:{amount:"99",currency_code:"USD"}}}]}],
+      ["wrong advertised currency",{items:[{quantity:1,price:{id:RECURRING_PRICE_ID,product_id:DEFAULT_PRODUCT_ID,billing_cycle:{interval:"month",frequency:1},unit_price:{amount:"299",currency_code:"EUR"}}}]}]
     ];
     for(const [label,overrides] of cases) {
       await t.test(label,async()=>{
@@ -713,9 +761,15 @@ test("completed initial subscription transactions validate against the recurring
 
   const promoted=completedTransaction({
     discount_id:"dsc_01m1ky8j916ybyacs836dxbz8x",
-    details:{totals:{subtotal:"99",discount:"99",tax:"0",total:"0",grand_total:"0"}}
+    details:{totals:{subtotal:"299",discount:"299",tax:"0",total:"0",grand_total:"0"}}
   });
   assert.deepEqual(validateCompletedTransaction(promoted,config),{ok:true});
+
+  const grandfathered=getPaymentConfig(liveEnv({PADDLE_LEGACY_RECURRING_PRICE_IDS:LEGACY_RECURRING_PRICE_ID}));
+  const legacy=completedTransaction({items:[{quantity:1,price:{id:LEGACY_RECURRING_PRICE_ID,product_id:DEFAULT_PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}}]});
+  assert.deepEqual(validateCompletedTransaction(legacy,grandfathered,{priceId:LEGACY_RECURRING_PRICE_ID,productId:DEFAULT_PRODUCT_ID}),{ok:true});
+  assert.deepEqual(validateCompletedTransaction({...legacy,items:[{quantity:1,price:{id:LEGACY_RECURRING_PRICE_ID,product_id:PREVIOUS_PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}}]},grandfathered,{priceId:LEGACY_RECURRING_PRICE_ID,productId:DEFAULT_PRODUCT_ID}),{ok:false,reason:"product"});
+  assert.deepEqual(validateCompletedTransaction({...legacy,items:[{quantity:1,price:{id:LEGACY_RECURRING_PRICE_ID,product_id:DEFAULT_PRODUCT_ID,billing_cycle:{interval:"year",frequency:1}}}]},grandfathered,{priceId:LEGACY_RECURRING_PRICE_ID,productId:DEFAULT_PRODUCT_ID}),{ok:false,reason:"billing_cycle"});
 });
 
 test("subscription snapshots enforce ownership, monthly cadence, catalog, and lifecycle",async(t)=>{
@@ -740,6 +794,12 @@ test("subscription snapshots enforce ownership, monthly cadence, catalog, and li
     priceId:"pri_01anothermonthly000000000000",productId:DEFAULT_PRODUCT_ID,
     scheduledChangeAction:null,scheduledChangeAt:null,currentPeriodEndsAt:Date.parse("2026-10-01T00:00:00Z")
   });
+  const grandfathered=getPaymentConfig(liveEnv({PADDLE_LEGACY_RECURRING_PRICE_IDS:LEGACY_RECURRING_PRICE_ID}));
+  const legacySubscription=subscription({items:[{quantity:1,recurring:true,price:{id:LEGACY_RECURRING_PRICE_ID,product_id:DEFAULT_PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}}]});
+  assert.equal(validateSubscription(legacySubscription,grandfathered,identity).entitled,true,"an explicitly allowlisted monthly price on the configured product remains entitled");
+  const legacyWrongProduct=subscription({items:[{quantity:1,recurring:true,price:{id:LEGACY_RECURRING_PRICE_ID,product_id:PREVIOUS_PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}}]});
+  assert.equal(validateSubscription(legacyWrongProduct,grandfathered,identity).entitled,false,"the legacy price allowlist cannot broaden the product boundary");
+  assert.equal(validateSubscription(changedCatalog,grandfathered,identity).entitled,false,"an unlisted monthly price remains unentitled");
   const cases=[
     ["wrong account",subscription({custom_data:{strata_user_id:"user-2",strata_version:1}}),"account"],
     ["wrong transaction",subscription({transaction_id:"txn_01other00000000000000000000"}),"transaction"],

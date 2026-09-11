@@ -34,7 +34,7 @@ Use a dedicated non-production deployment, isolated database, disposable test ac
 
 Before starting:
 
-- Create a sandbox product and a quantity-one, automatically collected **$0.99 USD monthly** price.
+- Create a sandbox product and a quantity-one, automatically collected **$2.99 USD monthly** price. Confirm the create-transaction response returns `unit_price.amount` as `299` and `unit_price.currency_code` as `USD`; STRATA rejects a newly prepared checkout when either value differs or is absent.
 - Configure the sandbox client token, API key, notification secret, product ID, and price ID on the isolated deployment. Keep `PADDLE_CHECKOUT_ENABLED=false` until the values and webhook URL are reviewed.
 - Register the deployment's exact `/api/paddle/webhook` HTTPS URL for transaction, subscription, and adjustment events.
 - Leave IP allowlisting off until the staging proxy is proven to preserve Paddle's source address. Signatures remain mandatory either way.

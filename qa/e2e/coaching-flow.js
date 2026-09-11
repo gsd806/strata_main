@@ -1,4 +1,5 @@
 "use strict";
+/* global document, getComputedStyle */
 
 const assert=require("node:assert/strict");
 const {spawn}=require("node:child_process");
@@ -7,6 +8,7 @@ const http=require("node:http");
 const {tmpdir}=require("node:os");
 const {join,resolve}=require("node:path");
 const test=require("node:test");
+const {AxeBuilder}=require("@axe-core/playwright");
 const {chromium}=require("playwright");
 
 const ROOT=join(__dirname,"..","..");
@@ -79,10 +81,26 @@ test("a Strata+ member builds, tracks, reloads, and safely refreshes a coaching 
     assert.equal(await destinations.count(),5);assert.match((await destinations.nth(4).textContent())||"",/Personal training/i);
     await destinations.nth(4).click();await page.locator("#coachingSetup").waitFor({state:"visible"});
 
+    for(const {width,height} of [{width:1440,height:1000},{width:768,height:844},{width:390,height:844},{width:320,height:844}]){
+      await page.setViewportSize({width,height});
+      const setupLayout=await page.evaluate(()=>({overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,firstSectionTop:document.querySelector("#coachingBodyInputs")?.getBoundingClientRect().top||Infinity}));
+      assert.ok(setupLayout.overflow<=1,`coaching setup overflows ${width}px by ${setupLayout.overflow}px`);
+      assert.ok(setupLayout.firstSectionTop<=height,`the first coaching inputs should begin in the initial ${width}px viewport`);
+    }
+    for(const width of [768,320]){
+      await page.setViewportSize({width,height:844});await page.evaluate(()=>{document.documentElement.style.fontSize="200%";});
+      const reflow=await page.evaluate(()=>{const workspace=document.querySelector("#coachingWorkspace");return{overflow:workspace.scrollWidth-workspace.clientWidth,titleOverflow:document.querySelector("#coachingSetupTitle").scrollWidth-document.querySelector("#coachingSetupTitle").clientWidth,mapOverflow:[...document.querySelectorAll(".coaching-setup-map a")].some((node)=>node.scrollWidth>node.clientWidth+1)};});
+      assert.ok(reflow.overflow<=1,`coaching setup overflows ${width}px at 200% text`);assert.ok(reflow.titleOverflow<=1,`coaching title clips at ${width}px and 200% text`);assert.equal(reflow.mapOverflow,false,`coaching step labels clip at ${width}px and 200% text`);
+    }
+    await page.evaluate(()=>{document.documentElement.style.fontSize="";});
+    await page.setViewportSize({width:1280,height:900});
+    const accessibility=await new AxeBuilder({page}).include("#coachingSetup").analyze();assert.deepEqual(accessibility.violations.map(({id})=>id),[],`coaching setup accessibility violations: ${accessibility.violations.map(({id})=>id).join(", ")}`);
+
     await page.fill("#coachingAge","31");await page.fill("#coachingHeight","178");await page.fill("#coachingWeight","82");await page.fill("#coachingBodyFat","18.5");
     await page.selectOption("#coachingDailyActivity","moderate");await page.selectOption("#coachingGoal","deficit");await page.selectOption("#coachingGoalPace","gentle");await page.selectOption("#coachingExperience","intermediate");await page.fill("#coachingFrequency","3");await page.locator("#coachingFrequency").dispatchEvent("change");await page.selectOption("#coachingDuration","60");
     assert.deepEqual(await page.locator('input[name="trainingDays"]:checked').evaluateAll((nodes)=>nodes.map((node)=>node.value)),["Monday","Wednesday","Friday"]);
     await page.click("#coachingAddCapability");const capability=page.locator("#coachingCapabilityRows .coaching-capability-row").first();
+    await page.setViewportSize({width:390,height:844});assert.deepEqual(await capability.locator("label > span").allTextContents(),["Exercise","Sets","Reps","Weight","Unit"]);assert.equal(await capability.locator("label > span").evaluateAll((nodes)=>nodes.every((node)=>getComputedStyle(node).display!=="none")),true,"capability field labels must be visible on mobile");await page.setViewportSize({width:1280,height:900});
     await capability.locator("[data-capability-exercise]").fill("Flat Dumbbell Press");await capability.locator("[data-capability-sets]").fill("4");await capability.locator("[data-capability-reps]").fill("10");await capability.locator("[data-capability-weight]").fill("32");await capability.locator("[data-capability-unit]").selectOption("kg");
     await page.check('input[name="caloriePattern"][value="training_day"]');await page.check("#coachingMacrosEnabled");
 

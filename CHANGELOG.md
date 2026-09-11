@@ -1,5 +1,15 @@
 # Changelog
 
+## 7.8.8 — Guided coaching setup and $2.99 monthly pricing
+
+- Redesign the Personal training and calorie counting profile as a clear four-step setup with separate cards, compact mobile orientation, persistent known-exercise labels, a useful empty state, stronger contrast, and 200% text reflow coverage.
+- Change the current Strata+ offer from $0.99 to $2.99 USD per month across product, legal, account, runtime, configuration, documentation, and test surfaces while keeping the seven-day no-card trial unchanged.
+- Require Paddle's new-transaction response to confirm the exact 299-minor-unit USD base price in addition to the trusted product, price, quantity, collection mode, monthly cycle, and account metadata.
+- Add the server-only `PADDLE_LEGACY_RECURRING_PRICE_IDS` transition allowlist so explicitly named earlier monthly subscriptions keep entitlement without becoming valid for new checkout.
+- Keep wrong-product, annual, malformed, duplicate, current, and retired one-time catalog values fail-closed, and migrate recoverable unfinished recurring checkouts only to the current configured price.
+
+Deployment order, verification, and rollback guidance are in the [7.8.8 release guide](docs/release-7.8.8.md).
+
 ## 7.8.7 — Personal training and calorie planning
 
 - Expand the exercise catalog from 200 to 320 movements, including 71 bodyweight options, while preserving unique IDs and complete scoring, instruction, caution, and guide metadata.

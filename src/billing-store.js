@@ -1,7 +1,6 @@
 // @ts-check
 "use strict";
 const {ACCESS_CONTROLS_SQL}=require("./access-controls-schema");
-
 const {BILLING_SQL}=require("./billing-schema");
 
 /** @param {import("./domain-types").JsonObject|null} row @returns {import("./domain-types").DiscoveryAccessSummary} */
@@ -48,6 +47,14 @@ function subscriptionUpdateArgs(subscription){
     subscription.userId,subscription.eventOccurredAt,subscription.eventOccurredAt,subscription.status
   ];
 }
+/** @param {readonly string[]} priceIds */
+function serializedPriceIds(priceIds){return JSON.stringify([...new Set(priceIds)]);}
+/** @param {import("./domain-types").SubscriptionRow} existing @param {import("./domain-types").PurchaseRow} purchase @param {import("./domain-types").SubscriptionWrite} subscription */
+function subscriptionPurchaseCatalogArgs(existing,purchase,subscription){
+  return [subscription.priceId,subscription.productId,subscription.updatedAt,purchase.transaction_id,purchase.user_id,existing.subscription_id,purchase.price_id,purchase.product_id,subscription.eventOccurredAt,subscription.eventOccurredAt,subscription.status];
+}
+/** @param {import("./domain-types").SubscriptionWrite} subscription */
+function subscriptionUpdateAfterCatalogArgs(subscription){return [...subscriptionUpdateArgs(subscription),subscription.priceId,subscription.productId];}
 
 /**
  * @param {import("./domain-types").LocalBillingStoreDependencies} dependencies
@@ -105,6 +112,16 @@ function createLocalBillingMethods({db,statements,plainRow}){
       }
     },
     async updatePaddleSubscription(subscription){return subscriptionRow(statements.updatePaddleSubscription.get(...subscriptionUpdateArgs(subscription)));},
+    async updatePaddleSubscriptionCatalog(existing,purchase,subscription){
+      let transactionOpen=false;
+      try{
+        db.exec("BEGIN IMMEDIATE");transactionOpen=true;
+        const migrated=purchaseRow(statements.replaceSubscriptionPurchaseCatalog.get(...subscriptionPurchaseCatalogArgs(existing,purchase,subscription)));
+        const saved=migrated&&subscriptionRow(statements.updatePaddleSubscriptionAfterCatalog.get(...subscriptionUpdateAfterCatalogArgs(subscription)));
+        if(!saved){db.exec("ROLLBACK");transactionOpen=false;return null;}
+        db.exec("COMMIT");transactionOpen=false;return saved;
+      }catch(error){if(transactionOpen)try{db.exec("ROLLBACK");}catch{/* Preserve the catalog write error. */}throw error;}
+    },
     async subscriptionById(subscriptionId){return subscriptionRow(statements.subscriptionById.get(subscriptionId));},
     async subscriptionForUser(userId){return subscriptionRow(statements.subscriptionForUser.get(userId));},
     async upsertAdjustment(adjustment){return Boolean(plainRow(statements.upsertAdjustment.get(adjustment.adjustmentId,adjustment.transactionId,adjustment.action,adjustment.type||null,adjustment.status,adjustment.occurredAt,adjustment.updatedAt)));},
@@ -115,11 +132,13 @@ function createLocalBillingMethods({db,statements,plainRow}){
     },
     async hasPaidDiscoveryAccess(userId,priceId=null,now=Date.now()){return Boolean(statements.hasDiscoveryAccess.get(now,userId,priceId,priceId));},
     async hasCurrentPaidDiscoveryAccess(userId,priceId,productId,now=Date.now()){return Boolean(statements.hasCurrentDiscoveryAccess.get(now,userId,priceId,productId));},
+    async hasEntitledPaidDiscoveryAccess(userId,priceIds,productId,now=Date.now()){return Boolean(statements.hasEntitledDiscoveryAccess.get(now,userId,serializedPriceIds(priceIds),productId));},
     async hasDiscoveryAccess(userId,priceId=null,now=Date.now()){return Boolean(statements.hasDiscoveryAccess.get(now,userId,priceId,priceId)||statements.activeDiscoveryTrial.get(userId,now)||statements.activeAdminGrant.get(userId,now,now));},
     async discoveryTrial(userId){return trialRow(statements.discoveryTrial.get(userId));},
     async startDiscoveryTrial(userId,startedAt,expiresAt){return trialRow(statements.startDiscoveryTrial.get(startedAt,expiresAt,userId));},
     async discoveryAccessSummary(userId,priceId=null,now=Date.now()){return accessSummary(plainRow(statements.discoveryAccessSummary.get(now,userId,priceId,priceId)));},
     async currentDiscoveryAccessSummary(userId,priceId,productId,now=Date.now()){return accessSummary(plainRow(statements.currentDiscoveryAccessSummary.get(now,priceId,productId,priceId,productId,userId)));},
+    async entitledDiscoveryAccessSummary(userId,priceIds,productId,now=Date.now()){const prices=serializedPriceIds(priceIds);return accessSummary(plainRow(statements.entitledDiscoveryAccessSummary.get(now,prices,productId,prices,productId,userId)));},
     async webhookEvent(eventId){return plainRow(statements.webhookEvent.get(eventId));},
     async recordWebhookEvent(event){return Boolean(plainRow(statements.recordWebhookEvent.get(event.eventId,event.notificationId||null,event.eventType,event.occurredAt,event.processedAt)));}
   };
@@ -186,6 +205,15 @@ function createTursoBillingMethods({client,first,run,all,plainRow}){
       return saved;
     },
     updatePaddleSubscription:(subscription)=>returnedSubscription(BILLING_SQL.updatePaddleSubscription,subscriptionUpdateArgs(subscription)),
+    async updatePaddleSubscriptionCatalog(existing,purchase,subscription){
+      const results=await client.batch([
+        {sql:BILLING_SQL.replaceSubscriptionPurchaseCatalog,args:subscriptionPurchaseCatalogArgs(existing,purchase,subscription)},
+        {sql:BILLING_SQL.updatePaddleSubscriptionAfterCatalog,args:subscriptionUpdateAfterCatalogArgs(subscription)}
+      ],"write");
+      const migrated=plainRow(results[0]?.rows?.[0],results[0]?.columns);
+      const saved=/** @type {import("./domain-types").SubscriptionRow|null} */(plainRow(results[1]?.rows?.[0],results[1]?.columns));
+      return migrated&&saved?saved:null;
+    },
     subscriptionById:(subscriptionId)=>firstSubscription(BILLING_SQL.subscriptionById,[subscriptionId]),
     subscriptionForUser:(userId)=>firstSubscription(BILLING_SQL.subscriptionForUser,[userId]),
     async upsertAdjustment(adjustment){return Boolean(await returned(BILLING_SQL.upsertAdjustment,[adjustment.adjustmentId,adjustment.transactionId,adjustment.action,adjustment.type||null,adjustment.status,adjustment.occurredAt,adjustment.updatedAt]));},
@@ -193,6 +221,7 @@ function createTursoBillingMethods({client,first,run,all,plainRow}){
     async revokePurchase(transactionId,reason,revokedAt,updatedAt){await run(BILLING_SQL.revokePurchase,[revokedAt,reason,updatedAt,transactionId]);return firstPurchase(BILLING_SQL.purchaseByTransaction,[transactionId]);},
     async hasPaidDiscoveryAccess(userId,priceId=null,now=Date.now()){return Boolean(await first(BILLING_SQL.hasDiscoveryAccess,[now,userId,priceId,priceId]));},
     async hasCurrentPaidDiscoveryAccess(userId,priceId,productId,now=Date.now()){return Boolean(await first(BILLING_SQL.hasCurrentDiscoveryAccess,[now,userId,priceId,productId]));},
+    async hasEntitledPaidDiscoveryAccess(userId,priceIds,productId,now=Date.now()){return Boolean(await first(BILLING_SQL.hasEntitledDiscoveryAccess,[now,userId,serializedPriceIds(priceIds),productId]));},
     async hasDiscoveryAccess(userId,priceId=null,now=Date.now()){
       const [paid,trial,grant]=await Promise.all([first(BILLING_SQL.hasDiscoveryAccess,[now,userId,priceId,priceId]),first(BILLING_SQL.activeDiscoveryTrial,[userId,now]),first(ACCESS_CONTROLS_SQL.activeAdminGrant,[userId,now,now])]);
       return Boolean(paid||trial||grant);
@@ -201,6 +230,7 @@ function createTursoBillingMethods({client,first,run,all,plainRow}){
     startDiscoveryTrial:(userId,startedAt,expiresAt)=>returnedTrial(BILLING_SQL.startDiscoveryTrial,[startedAt,expiresAt,userId]),
     async discoveryAccessSummary(userId,priceId=null,now=Date.now()){return accessSummary(await first(BILLING_SQL.discoveryAccessSummary,[now,userId,priceId,priceId]));},
     async currentDiscoveryAccessSummary(userId,priceId,productId,now=Date.now()){return accessSummary(await first(BILLING_SQL.currentDiscoveryAccessSummary,[now,priceId,productId,priceId,productId,userId]));},
+    async entitledDiscoveryAccessSummary(userId,priceIds,productId,now=Date.now()){const prices=serializedPriceIds(priceIds);return accessSummary(await first(BILLING_SQL.entitledDiscoveryAccessSummary,[now,prices,productId,prices,productId,userId]));},
     webhookEvent:(eventId)=>first(BILLING_SQL.webhookEvent,[eventId]),
     async recordWebhookEvent(event){return Boolean(await returned(BILLING_SQL.recordWebhookEvent,[event.eventId,event.notificationId||null,event.eventType,event.occurredAt,event.processedAt]));}
   };

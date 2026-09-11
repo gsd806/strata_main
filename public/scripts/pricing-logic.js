@@ -48,7 +48,7 @@
       if(!/^pro_[a-z0-9]{20,}$/.test(config.productId))throw new Error("The configured Strata+ product is invalid.");
       if(!/^pri_[a-z0-9]{20,}$/.test(config.priceId)||config.priceId===RETIRED_ONE_TIME_PRICE_ID)throw new Error("The configured Strata+ price is not the current recurring price.");
     }
-    if(config.price.amount!=="0.99"||config.price.currency!=="USD"||config.price.interval!=="month"||config.price.frequency!==1)throw new Error("Checkout pricing does not match $0.99 USD per month.");
+    if(config.price.amount!=="2.99"||config.price.currency!=="USD"||config.price.interval!=="month"||config.price.frequency!==1)throw new Error("Checkout pricing does not match $2.99 USD per month.");
     return config;
   }
 

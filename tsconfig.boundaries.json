@@ -27,6 +27,7 @@
     "src/coaching.js",
     "src/http.js",
     "src/legacy-checkout.js",
+    "src/paddle-catalog.js",
     "src/paddle-subscriptions.js",
     "src/paddle-webhooks.js",
     "src/payments.js",

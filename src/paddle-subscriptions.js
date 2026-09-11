@@ -31,9 +31,10 @@ function providerError(message,code){return Object.assign(new Error(message),{st
  * subscription. Ownership is checked separately against the local purchase.
  * @param {import("./domain-types").PaddleTransactionData|null|undefined} data
  * @param {import("./domain-types").PaymentConfig} config
+ * @param {{priceId?:unknown,productId?:unknown}} [identity]
  * @returns {import("./domain-types").ValidationResult}
  */
-function validateCompletedTransaction(data,config){
+function validateCompletedTransaction(data,config,{priceId=config?.priceId,productId=config?.productId}={}){
   if(!data||data.status!=="completed")return {ok:false,reason:"status"};
   if(!validTransactionId(data.id))return {ok:false,reason:"transaction"};
   if(data.origin!=="api")return {ok:false,reason:"origin"};
@@ -44,8 +45,8 @@ function validateCompletedTransaction(data,config){
   if(!Array.isArray(data.items)||data.items.length!==1)return {ok:false,reason:"items"};
   const item=/** @type {import("./domain-types").PaddleItemData} */(data.items[0]||{}),price=item.price||{};
   if(Number(item.quantity)!==1)return {ok:false,reason:"quantity"};
-  if(price.id!==config.priceId)return {ok:false,reason:"price"};
-  if(price.product_id!==config.productId)return {ok:false,reason:"product"};
+  if(price.id!==priceId)return {ok:false,reason:"price"};
+  if(price.product_id!==productId)return {ok:false,reason:"product"};
   if(!monthlyCycle(price.billing_cycle))return {ok:false,reason:"billing_cycle"};
   return {ok:true};
 }
@@ -81,7 +82,7 @@ function validateSubscription(data,config,{userId,transactionId,requireTransacti
   const periodEnd=data.current_billing_period?.ends_at;
   if(["active","trialing","past_due"].includes(status)&&!Number.isFinite(Date.parse(clean(periodEnd))))return {ok:false,reason:"billing_period"};
   return {
-    ok:true,entitled:price.id===config.priceId&&price.product_id===config.productId,
+    ok:true,entitled:price.product_id===config.productId&&[config.priceId,...(config.legacyRecurringPriceIds||[])].includes(clean(price.id)),
     subscriptionId:clean(data.id),customerId:clean(data.customer_id),
     status:/** @type {import("./domain-types").SubscriptionStatus} */(status),
     priceId:clean(price.id),productId:clean(price.product_id),

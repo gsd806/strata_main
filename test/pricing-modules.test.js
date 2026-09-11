@@ -9,7 +9,7 @@ const Render=require("../public/scripts/pricing-render");
 const Events=require("../public/scripts/pricing-events");
 
 test("pricing pure logic validates only the configured recurring catalog boundary",()=>{
-  const valid={enabled:true,environment:"live",clientToken:"live_fixture",productId:`pro_${"a".repeat(26)}`,priceId:`pri_${"b".repeat(26)}`,price:{amount:"0.99",currency:"USD",interval:"month",frequency:1}};
+  const valid={enabled:true,environment:"live",clientToken:"live_fixture",productId:`pro_${"a".repeat(26)}`,priceId:`pri_${"b".repeat(26)}`,price:{amount:"2.99",currency:"USD",interval:"month",frequency:1}};
   assert.equal(Logic.validateConfig(valid),valid);
   for(const patch of [
     {environment:"other"},{clientToken:"test_fixture"},{productId:"pro_invalid"},

@@ -179,15 +179,15 @@
       if(status==="paused")return{state:"Paused",detail:"Paid access inactive",message:"Your monthly subscription is paused and Strata+ paid access is inactive. Manage it in Paddle to review the available next steps."};
       if(status==="canceled")return{state:"Canceled",detail:"No future renewals",message:"Your monthly subscription is canceled and will not renew. Your free Rankings and weekly Plan remain available."};
       if(subscription.active!==true)return{state:"Inactive",detail:"Paid access inactive",message:"The last verified billing period or scheduled access window has ended. Open Paddle to review the subscription state."};
-      if(subscription.scheduledChange?.action==="cancel")return{state:"Canceling",detail:`Access through ${billingDate(subscription.scheduledChange.effectiveAt)}`,message:`Your $0.99 USD monthly subscription is scheduled to cancel on ${billingDate(subscription.scheduledChange.effectiveAt)}. Access remains active until then and will not renew afterward.`};
-      if(subscription.scheduledChange?.action==="pause")return{state:"Pausing",detail:`Access through ${billingDate(subscription.scheduledChange.effectiveAt)}`,message:`Your $0.99 USD monthly subscription is scheduled to pause on ${billingDate(subscription.scheduledChange.effectiveAt)}. Access remains active until then and stops when the pause takes effect.`};
+      if(subscription.scheduledChange?.action==="cancel")return{state:"Canceling",detail:`Access through ${billingDate(subscription.scheduledChange.effectiveAt)}`,message:`Your monthly subscription is scheduled to cancel on ${billingDate(subscription.scheduledChange.effectiveAt)}. Access remains active until then and will not renew afterward.`};
+      if(subscription.scheduledChange?.action==="pause")return{state:"Pausing",detail:`Access through ${billingDate(subscription.scheduledChange.effectiveAt)}`,message:`Your monthly subscription is scheduled to pause on ${billingDate(subscription.scheduledChange.effectiveAt)}. Access remains active until then and stops when the pause takes effect.`};
       if(subscription.pastDue===true||status==="past_due")return{state:"Past due",detail:"Update payment method",message:"Your monthly payment is past due. Strata+ remains available for now; update payment in Paddle to avoid interruption."};
-      if(subscription.active===true)return{state:"Active",detail:`$0.99/month · renews ${billingDate(subscription.currentPeriodEndsAt)}`,message:`Your $0.99 USD monthly subscription is active and renews on ${billingDate(subscription.currentPeriodEndsAt)} unless canceled.`};
+      if(subscription.active===true)return{state:"Active",detail:`Monthly · renews ${billingDate(subscription.currentPeriodEndsAt)}`,message:`Your monthly subscription is active and renews on ${billingDate(subscription.currentPeriodEndsAt)} unless canceled.`};
       return{state:"Inactive",detail:"Review billing status",message:"Your monthly subscription is not providing paid access. Open Paddle to review its current state."};
     }
     if(grandfatheredAccess(user))return{state:"Lifetime",detail:"Grandfathered · no renewal",message:"Your prior lifetime Strata+ purchase is grandfathered. It stays active without a monthly subscription or recurring charge."};
     if(pending)return{state:"Pending",detail:"Checkout needs attention",message:"A Strata+ subscription checkout is pending. Open Pricing to finish checkout or check confirmation."};
-    return{state:"Free",detail:"Rankings and Plan included",message:"The exercise index and weekly planner are free. Strata+ is available as a $0.99 USD monthly subscription."};
+    return{state:"Free",detail:"Rankings and Plan included",message:"The exercise index and weekly planner are free. Strata+ is available as a $2.99 USD monthly subscription."};
   }
 
   function accountBoundaryChanged(error){return error?.status===401||error?.status===403||error?.code==="account-changed";}

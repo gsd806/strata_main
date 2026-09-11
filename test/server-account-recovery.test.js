@@ -32,6 +32,7 @@ let requestAddressOctet=10;
 let malformedCancellationResponses=0;
 let failedItemReplacementResponses=0;
 let malformedItemReplacementResponses=0;
+let invalidItemReplacementPrices=[];
 let readyItemReplacementResponses=0;
 let transactionListHook=null;
 let transactionListResults=[];
@@ -100,7 +101,8 @@ async function startPaddle(){
       }
       if(transaction?.status==="draft"&&Array.isArray(body?.items)&&body.items.length===1&&body.items[0]?.price_id===PRICE_ID&&body.items[0]?.quantity===1){
         if(failedItemReplacementResponses>0){failedItemReplacementResponses-=1;res.writeHead(502,{"Content-Type":"application/json"});res.end(JSON.stringify({error:{detail:"temporary failure"}}));return;}
-        transaction.items=[{quantity:1,price:{id:PRICE_ID,product_id:PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}}];
+        const invalidPrice=invalidItemReplacementPrices.shift();
+        transaction.items=[{quantity:1,price:{id:PRICE_ID,product_id:PRODUCT_ID,billing_cycle:{interval:"month",frequency:1},...(invalidPrice==="missing"?{}:{unit_price:{amount:invalidPrice==="wrong"?"99":"299",currency_code:"USD"}})}}];
         if(readyItemReplacementResponses>0){readyItemReplacementResponses-=1;transaction.status="ready";}
         transaction.updated_at=new Date().toISOString();
         if(malformedItemReplacementResponses>0){malformedItemReplacementResponses-=1;res.writeHead(200,{"Content-Type":"application/json"});res.end(JSON.stringify({data:{...transaction,status:"paid"}}));return;}
@@ -295,7 +297,7 @@ function completedEvent(transactionId,userId,label="complete"){
       subscription_id:subscriptionId(transactionId),collection_mode:"automatic",origin:"api",updated_at:occurredAt,
       custom_data:{strata_user_id:userId,strata_checkout_id:paddleTransactions.get(transactionId)?.custom_data?.strata_checkout_id,strata_version:1},
       items:[{quantity:1,price:{id:PRICE_ID,product_id:PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}}],
-      details:{totals:{subtotal:"99",discount:"0",tax:"0",total:"99"}}
+      details:{totals:{subtotal:"299",discount:"0",tax:"0",total:"299"}}
     }
   };
 }
@@ -361,7 +363,7 @@ function paddleTransactionFixture({id,userId,checkoutId,status="ready",priceId=P
     id,status,customer_id:null,subscription_id:null,
     collection_mode:"automatic",origin:"api",created_at:now,updated_at:now,
     custom_data:{strata_user_id:userId,strata_checkout_id:checkoutId,strata_version:1},
-    items:[{quantity:Number(quantity),price:{id:priceId,product_id:productId,billing_cycle:billingCycle}}]
+    items:[{quantity:Number(quantity),price:{id:priceId,product_id:productId,billing_cycle:billingCycle,unit_price:{amount:"299",currency_code:"USD"}}}]
   };
 }
 
@@ -603,6 +605,25 @@ test("legacy checkout migration rejects unknown catalogs and recovers lost provi
   {
     const db=database({readOnly:true}),row=db.prepare("SELECT price_id,product_id,paddle_status FROM paddle_purchases WHERE transaction_id=?").get(retryTransactionId);db.close();
     assert.deepEqual({...row},{price_id:PRICE_ID,product_id:PRODUCT_ID,paddle_status:"draft"});
+  }
+});
+
+test("legacy checkout migration never exposes a wrong or missing current price",async()=>{
+  for(const invalidPrice of ["wrong","missing"]){
+    const account=await verifiedSignup({name:`Invalid Price ${invalidPrice}`,email:`invalid-price-${invalidPrice}@example.test`,password:"invalid-price-migration-password-123"});
+    const transactionId=`txn_${(invalidPrice==="wrong"?"w":"n").repeat(26)}`,old=Date.now()-31*60*1000;
+    paddleTransactions.set(transactionId,paddleTransactionFixture({id:transactionId,userId:account.user.id,checkoutId:`invalid_price_${invalidPrice}`,status:"draft",priceId:LEGACY_PRICE_ID,billingCycle:null}));
+    {
+      const db=database();
+      db.prepare(`INSERT INTO paddle_purchases (transaction_id,user_id,price_id,product_id,customer_id,subscription_id,paddle_status,completed_at,access_revoked_at,revocation_reason,created_at,updated_at) VALUES(?,?,?,?,NULL,NULL,'draft',NULL,NULL,NULL,?,?)`)
+        .run(transactionId,account.user.id,LEGACY_PRICE_ID,PRODUCT_ID,old,old);db.close();
+    }
+    invalidItemReplacementPrices.push(invalidPrice);
+    const result=await checkout(account);
+    assert.equal(result.response.status,503,`${invalidPrice} provider price must fail closed`);
+    assert.equal(result.data.code,"PURCHASE_RECONCILIATION_INVALID");
+    const db=database({readOnly:true}),purchase=db.prepare("SELECT price_id,paddle_status FROM paddle_purchases WHERE transaction_id=?").get(transactionId);db.close();
+    assert.deepEqual({...purchase},{price_id:LEGACY_PRICE_ID,paddle_status:"draft"},"the local catalog stays retryable after an invalid provider response");
   }
 });
 

@@ -35,6 +35,22 @@ test("Strata+ progressively enhances five primary destinations and focused suppo
   assert.doesNotMatch(html,/<details class="(?:explore-advanced-tools|plan-tool-disclosure)"[^>]*\bopen\b/,"secondary tools should start collapsed");
 });
 
+test("coaching profile setup presents four navigable cards and labels every capability input",()=>{
+  const html=read("pages","discover.html"),script=read("scripts","discover-coaching.js"),css=read("styles","discover.css");
+  const setup=html.match(/<section class="coaching-onboarding"[\s\S]*?<section class="coaching-dashboard"/)?.[0]||"";
+  assert.match(setup,/class="coaching-setup-map" aria-label="Coaching profile sections"/);
+  for(const [id,label] of [["coachingBodyInputs","Body and energy inputs"],["coachingTrainingInputs","Training experience and week"],["coachingCapabilityInputs","Workouts you know"],["coachingNutritionInputs","Calorie pattern and optional macros"]]){
+    assert.match(setup,new RegExp(`href="#${id}"`),`${label} needs a setup-map link`);
+    assert.match(setup,new RegExp(`id="${id}"`),`${label} needs a stable section target`);
+  }
+  assert.equal((setup.match(/class="coaching-form-section/g)||[]).length,4);
+  assert.match(setup,/class="coaching-capability-empty"/);
+  for(const label of ["Exercise","Sets","Reps","Weight","Unit"])assert.match(script,new RegExp(`<span>${label}<\\/span>`),`${label} must remain visible beside generated capability inputs`);
+  assert.match(css,/\.coaching-form-section > legend \{ float:left; width:100%/);
+  assert.match(css,/\.coaching-capability-row > label > span \{ display:none/);
+  assert.match(css,/@media\(max-width:800px\)[\s\S]*\.coaching-capability-row > label > span \{ display:block/);
+});
+
 test("Strata+ keeps the weekly Plan primary and explains secondary planning tools literally",()=>{
   const html=read("pages","discover.html");
   const plan=html.match(/<section class="plan-workspace feature-panel"[\s\S]*?<section class="progress-workspace feature-panel"/)?.[0]||"";

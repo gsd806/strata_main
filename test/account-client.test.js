@@ -358,7 +358,7 @@ test("signed-in dashboard distinguishes access and plan states with a useful nex
     {
       name:"active monthly account with a populated week",planCount:6,workoutDays:3,
       discovery:{active:true,accessType:"subscription",pendingPurchaseCount:0,subscription:subscription("active")},
-      access:"Active",detail:/\$0\.99\/month · renews/i,primary:"Open next workout",href:/^\/workout\.html\?day=/,discoveryAction:"Open Strata+ studio →",billing:/next renewal/i,badge:"Active",cancel:true
+      access:"Active",detail:/Monthly · renews/i,primary:"Open next workout",href:/^\/workout\.html\?day=/,discoveryAction:"Open Strata+ studio →",billing:/next renewal/i,badge:"Active",cancel:true
     },
     {
       name:"active monthly account with a complimentary grant",planCount:0,workoutDays:0,

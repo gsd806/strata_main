@@ -1,6 +1,6 @@
 # STRATA — Founder plan
 
-**Product decision:** build the most straightforward way for a recreational lifter to know the next workout and remember the last one. Keep Strata+ at **$0.99 USD per month**, and make repeated use the reason to subscribe.
+**Product decision:** build the most straightforward way for a recreational lifter to know the next workout and remember the last one. Keep Strata+ at **$2.99 USD per month**, and make repeated use the reason to subscribe.
 
 This plan is grounded in the supplied 7.5.1 source and the changes delivered in 7.6.0. It is a product hypothesis to validate with customers, not a forecast of demand or revenue.
 
@@ -20,7 +20,7 @@ Do not describe Strata as an AI coach, a medically personalized program, or a cl
 | --- | --- |
 | New trials last seven consecutive days | Enough time to train, return, and experience saved history. No card and no automatic subscription. |
 | Three working starter-week buttons | Get an editable week from a familiar equipment setup. |
-| Benefit-led homepage and pricing | Understand what $0.99 buys, including a clearly labeled Training Memory example. |
+| Benefit-led homepage and pricing | Understand what $2.99 buys, including a clearly labeled Training Memory example. |
 | A free-versus-Plus comparison | See the boundary before signup and understand that the manual weekly plan remains free. |
 | Actual completed-day progress in Today | A fully planned week no longer appears as completed training. |
 | A next-session link after workout completion | Return to the plan and reinforce the value of keeping a log. |
@@ -39,7 +39,7 @@ Make the useful sequence obvious:
 2. Save a plan and explicitly begin the no-card trial when ready to train.
 3. Log one real workout.
 4. Return for another workout and find previous comparable values ready to use.
-5. Decide whether that convenience is worth $0.99 each month.
+5. Decide whether that convenience is worth $2.99 each month.
 
 The seven-day trial creates room for that sequence. It does not guarantee it: different exercises on different days may mean that a comparable movement does not repeat during the trial. Ask testers whether they actually encountered Training Memory before deciding whether to subscribe. If they consistently do not, revisit the trial length using evidence.
 
@@ -53,7 +53,7 @@ These are proposed founder actions, not outreach already sent or automations alr
 | --- | --- | --- |
 | Days 1–7 | Recruit 20 willing testers who already train regularly. Watch five people start without explaining the interface. | Where they hesitate; whether they can preview, save, and start a workout; signup/email delivery problems. |
 | Days 8–14 | Have testers use Strata during normal training. Ask what they expected to see on their second visit. | Second completed workout; whether previous sets were useful; friction while logging between sets. |
-| Days 15–21 | Offer the actual $0.99 subscription and ask one neutral question of those who decline: “What made you decide not to continue?” | Real payments versus polite praise; trial timing; cancellation reasons. |
+| Days 15–21 | Offer the actual $2.99 subscription and ask one neutral question of those who decline: “What made you decide not to continue?” | Real payments versus polite praise; trial timing; cancellation reasons. |
 | Days 22–30 | Fix the most repeated problem. Show the actual workflow through three short demonstrations and one detailed use case in communities that allow it. | Qualified people trying the app, returning to train, and choosing to pay. |
 
 Use a small, consented pilot roster for research and keep it separate from anonymous product signals. Obtain feedback without asking testers to expose sensitive training or health details publicly.
@@ -74,17 +74,17 @@ If people do not finish a first workout, fix activation. If they finish once but
 
 The existing product-signals feature does **not** measure unique people or customer cohorts. Dividing its trial, workout, or checkout counts does not yield a reliable conversion rate. Browser `upgrade_activated` events are not a revenue ledger. Do not present them as paying-customer counts or MRR.
 
-## Make $0.99 sustainable
+## Make $2.99 sustainable
 
 Paddle currently advertises a headline transaction fee of 5% plus $0.50 and directs sellers with products under $10 to request custom pricing. Confirm the actual terms for Strata before live launch. [Paddle pricing](https://www.paddle.com/pricing), checked 9 September 2026.
 
-For illustration only, applying that headline fee to a $0.99 charge leaves **$0.4405**: $0.99 − ($0.99 × 5% + $0.50). That is before hosting, email, support, refunds, and any tax or currency treatment. It is not a confirmed payout or profit estimate. At 1,000 monthly charges, the same simplified scenario is $990 charged and $440.50 after the illustrated processing fee.
+For illustration only, applying that headline fee to a $2.99 charge leaves **$2.3405**: $2.99 − ($2.99 × 5% + $0.50). That is before hosting, email, support, refunds, and any tax or currency treatment. It is not a confirmed payout or profit estimate. At 1,000 monthly charges, the same simplified scenario is $2,990 charged and $2,340.50 after the illustrated processing fee.
 
-Retain the $0.99 monthly offer, confirm low-price processing terms, and keep service costs low. The present deterministic engine avoids an inference bill for every recommendation. Founder-led support is useful for learning, but track the time it takes; it must become manageable through a reliable product and clear self-service help.
+Retain the $2.99 monthly offer, confirm low-price processing terms, and keep service costs low. The present deterministic engine avoids an inference bill for every recommendation. Founder-led support is useful for learning, but track the time it takes; it must become manageable through a reliable product and clear self-service help.
 
 ## What to prove before inviting paying customers
 
-Use the existing Node/Turso/Resend/Paddle deployment path. Verify signup email delivery, sign-in on a second device, trial start and expiry, paid checkout, signed webhook processing, entitlement, renewal, cancellation, and the customer portal in the intended provider environments. Confirm the real $0.99 USD monthly catalog item and the actual operator details. Complete browser and mobile checks on the deployed configuration.
+Use the existing Node/Turso/Resend/Paddle deployment path. Verify signup email delivery, sign-in on a second device, trial start and expiry, paid checkout, signed webhook processing, entitlement, renewal, cancellation, and the customer portal in the intended provider environments. Confirm the real $2.99 USD monthly catalog item and the actual operator details. Complete browser and mobile checks on the deployed configuration.
 
 This delivery is a tested source release. Production deployment, live email delivery, actual merchant fees, live purchases, and customer willingness to pay were not verified in this session. Source tests with provider fixtures cannot establish those outcomes.
 

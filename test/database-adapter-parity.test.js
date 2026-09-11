@@ -185,6 +185,13 @@ async function parityScenario(store) {
   const completionDraft=await store.insertPendingPurchase({transactionId:"txn_parity_catalog_complete",userId:"parity-catalog-complete",priceId:"pri_parity_legacy",productId:"pro_parity",paddleStatus:"draft",createdAt:2_032,updatedAt:2_032});
   const completedCatalogMigration=await store.completePurchaseCatalogMigration(completionDraft,{priceId:"pri_parity_monthly",productId:"pro_parity",customerId:"ctm_parity_catalog",subscriptionId:"sub_parity_catalog",completedAt:2_040,updatedAt:2_040});
   const replayedCompletedCatalogMigration=await store.completePurchaseCatalogMigration(completionDraft,{priceId:"pri_parity_monthly",productId:"pro_parity",customerId:"ctm_parity_other",subscriptionId:"sub_parity_other",completedAt:2_050,updatedAt:2_050});
+  await store.insertUser({id:"parity-subscription",name:"Subscription Parity",email:"subscription-parity@example.test",passwordHash:"subscription-parity-hash",passwordSalt:"subscription-parity-salt",createdAt:2_051,emailVerifiedAt:2_051});
+  const subscriptionPurchase=await store.insertPendingPurchase({transactionId:"txn_parity_subscription",userId:"parity-subscription",priceId:"pri_parity_earlier",productId:"pro_parity",paddleStatus:"ready",createdAt:2_052,updatedAt:2_052});
+  await store.completePurchase(subscriptionPurchase.transaction_id,{customerId:"ctm_parity_subscription",subscriptionId:"sub_parity_subscription",completedAt:2_053,updatedAt:2_053});
+  const earlierSubscription=await store.createPaddleSubscription({subscriptionId:"sub_parity_subscription",userId:"parity-subscription",transactionId:"txn_parity_subscription",customerId:"ctm_parity_subscription",status:"active",priceId:"pri_parity_earlier",productId:"pro_parity",scheduledChangeAction:null,scheduledChangeAt:null,currentPeriodEndsAt:9_000,eventOccurredAt:2_054,createdAt:2_054,updatedAt:2_054});
+  const migratedSubscription=await store.updatePaddleSubscriptionCatalog(earlierSubscription,await store.purchaseByTransaction("txn_parity_subscription"),{subscriptionId:"sub_parity_subscription",userId:"parity-subscription",customerId:"ctm_parity_subscription",status:"active",priceId:"pri_parity_monthly",productId:"pro_parity",scheduledChangeAction:null,scheduledChangeAt:null,currentPeriodEndsAt:10_000,eventOccurredAt:2_055,updatedAt:2_055});
+  const entitledCatalogAccess=await store.hasEntitledPaidDiscoveryAccess("parity-subscription",["pri_parity_monthly","pri_parity_earlier"],"pro_parity",9_999);
+  const entitledCatalogSummary=await store.entitledDiscoveryAccessSummary("parity-subscription",["pri_parity_monthly","pri_parity_earlier"],"pro_parity",9_999);
 
   const revoked=await store.revokeUserSessions(user.id);
   const staleSessionAccepted=await store.insertSession({
@@ -284,6 +291,10 @@ async function parityScenario(store) {
     replayedDraftMigration,
     completedCatalogMigration,
     replayedCompletedCatalogMigration,
+    migratedSubscription,
+    migratedSubscriptionPurchase:await store.purchaseByTransaction("txn_parity_subscription"),
+    entitledCatalogAccess,
+    entitledCatalogSummary,
     paidAccess:await store.hasPaidDiscoveryAccess(user.id),
     revoked,
     staleSessionAccepted,
@@ -334,6 +345,10 @@ test("SQLite and Turso adapters expose matching values, mutation results, and se
     assert.equal(localResult.replayedDraftMigration,null,"catalog migration must compare the exact prior draft snapshot");
     assert.equal(localResult.completedCatalogMigration.subscription_id,"sub_parity_catalog");
     assert.equal(localResult.replayedCompletedCatalogMigration,null,"completed catalog migration must compare the exact prior ledger snapshot");
+    assert.equal(localResult.migratedSubscription.price_id,"pri_parity_monthly");
+    assert.equal(localResult.migratedSubscriptionPurchase.price_id,"pri_parity_monthly");
+    assert.equal(localResult.entitledCatalogAccess,true);
+    assert.equal(localResult.entitledCatalogSummary.activePurchaseCount,1);
     assert.equal(localResult.activeSession.expires_at,10_000);
     assert.equal(localResult.sessionAtExpiry,null,"sessions must expire at the exact stored boundary");
     assert.deepEqual(localResult.accountSessions.map(({token_hash,created_at,expires_at})=>({token_hash,created_at,expires_at})),[

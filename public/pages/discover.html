@@ -13,11 +13,11 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icons/strata-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="/fonts.css?v=7.8.7" />
-    <link rel="stylesheet" href="/experience.css?v=7.8.7" />
-    <link rel="stylesheet" href="discover.css?v=7.8.7" />
-    <link rel="stylesheet" href="/product-signals.css?v=7.8.7" />
-    <script src="/motion.js?v=7.8.7"></script>
+    <link rel="stylesheet" href="/fonts.css?v=7.8.8" />
+    <link rel="stylesheet" href="/experience.css?v=7.8.8" />
+    <link rel="stylesheet" href="discover.css?v=7.8.8" />
+    <link rel="stylesheet" href="/product-signals.css?v=7.8.8" />
+    <script src="/motion.js?v=7.8.8"></script>
   </head>
   <body class="plus-studio">
     <a class="skip-link" id="activeWorkspaceSkip" href="#todayTitle">Skip to active Strata+ workspace</a>
@@ -216,12 +216,17 @@
 
           <section class="coaching-onboarding" id="coachingSetup" aria-labelledby="coachingSetupTitle" hidden>
             <header class="coaching-setup-intro">
-              <span>01</span>
-              <div><p class="kicker">One-time coaching profile</p><h3 id="coachingSetupTitle" tabindex="-1">TELL STRATA WHAT THE NUMBERS MEAN.</h3><p>Every estimate will show its method and assumptions. You can change this profile at any time; a change creates a fresh plan for the current week.</p></div>
+              <div class="coaching-setup-copy"><p class="kicker">One-time coaching profile</p><h3 id="coachingSetupTitle" tabindex="-1">TELL STRATA WHAT<br /><em>THE NUMBERS MEAN.</em></h3><p>Every estimate shows its method and assumptions. Finish these four short steps now, then change your profile whenever your training changes.</p></div>
+              <nav class="coaching-setup-map" aria-label="Coaching profile sections">
+                <a href="#coachingBodyInputs"><span>01</span><strong>Body</strong><small>Energy inputs</small></a>
+                <a href="#coachingTrainingInputs"><span>02</span><strong>Training</strong><small>Your real week</small></a>
+                <a href="#coachingCapabilityInputs"><span>03</span><strong>Experience</strong><small>Known exercises</small></a>
+                <a href="#coachingNutritionInputs"><span>04</span><strong>Nutrition</strong><small>Calorie pattern</small></a>
+              </nav>
             </header>
             <form id="coachingProfileForm" class="coaching-profile-form" novalidate>
-              <fieldset class="coaching-form-section">
-                <legend><span>01</span> Body and energy inputs</legend>
+              <fieldset class="coaching-form-section" id="coachingBodyInputs">
+                <legend><span>01</span><b>Body and energy inputs</b></legend>
                 <p class="coaching-field-intro">These inputs estimate resting energy and total daily energy use. They are not a diagnosis or a metabolic test.</p>
                 <div class="coaching-fields coaching-fields-four">
                   <label for="coachingAge"><span>Age</span><input id="coachingAge" name="age" type="number" min="18" max="80" step="1" inputmode="numeric" autocomplete="bday-year" required /><small>18–80 years</small></label>
@@ -235,8 +240,8 @@
                 </div>
               </fieldset>
 
-              <fieldset class="coaching-form-section">
-                <legend><span>02</span> Training experience and week</legend>
+              <fieldset class="coaching-form-section" id="coachingTrainingInputs">
+                <legend><span>02</span><b>Training experience and week</b></legend>
                 <p class="coaching-field-intro">Choose the days you can consistently protect. STRATA rotates movement variations each week without changing the purpose of the plan.</p>
                 <div class="coaching-fields coaching-fields-three">
                   <label for="coachingExperience"><span>Training experience</span><select id="coachingExperience" name="experience" required><option value="beginner">Beginner</option><option value="intermediate">Intermediate</option><option value="advanced">Advanced</option></select></label>
@@ -253,17 +258,18 @@
                 <div class="coaching-equipment-note"><span>Available equipment</span><p id="coachingEquipmentSummary">Your saved Strata+ equipment preferences will shape every exercise choice.</p><a href="#profile" data-feature-target="profile">Review equipment <span aria-hidden="true">→</span></a></div>
               </fieldset>
 
-              <fieldset class="coaching-form-section coaching-capability-section">
-                <legend><span>03</span> Workouts you know</legend>
+              <fieldset class="coaching-form-section coaching-capability-section" id="coachingCapabilityInputs">
+                <legend><span>03</span><b>Workouts you know</b></legend>
                 <p class="coaching-field-intro">Optional, but useful. Add exercises you regularly perform or have performed, then enter the strongest set scheme you can complete with sound form. This is treated as a capability—not a tested one-rep max.</p>
                 <div class="coaching-capability-labels" aria-hidden="true"><span>Exercise</span><span>Sets</span><span>Reps</span><span>Weight</span><span>Unit</span><span></span></div>
                 <div class="coaching-capability-rows" id="coachingCapabilityRows"></div>
+                <div class="coaching-capability-empty"><span aria-hidden="true">+</span><div><strong>No known exercises added</strong><p>You can build a plan without these, or add a few familiar movements for more specific starting guidance.</p></div></div>
                 <button class="small-button coaching-add-capability" id="coachingAddCapability" type="button">Add known exercise <span aria-hidden="true">+</span></button>
                 <datalist id="coachingExerciseOptions"></datalist>
               </fieldset>
 
-              <fieldset class="coaching-form-section">
-                <legend><span>04</span> Calorie pattern and optional macros</legend>
+              <fieldset class="coaching-form-section" id="coachingNutritionInputs">
+                <legend><span>04</span><b>Calorie pattern and optional macros</b></legend>
                 <p class="coaching-field-intro">Every pattern keeps approximately the same weekly energy target. Only the distribution changes.</p>
                 <div class="coaching-pattern-grid" role="radiogroup" aria-label="Calorie schedule pattern">
                   <label><input type="radio" name="caloriePattern" value="steady" /><span><strong>Steady</strong><small>Nearly the same target every day.</small></span></label>
@@ -529,7 +535,7 @@
 
     </main>
 
-    <footer class="build-footer">STRATA · Build 7.8.7 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
+    <footer class="build-footer">STRATA · Build 7.8.8 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
 
     <aside class="compare-tray" id="compareTray" hidden aria-label="Exercise comparison tray">
       <div><span>EXERCISE BATTLE</span><p id="compareNames">Choose 2–4 exercises</p></div>
@@ -562,26 +568,26 @@
     </dialog>
     <noscript><div class="no-script-note" role="status"><strong>Strata+ needs JavaScript for personalized tools.</strong> The page content remains available, but saving, filtering, comparing, and plan building require JavaScript.</div></noscript>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=7.8.7"></script>
-    <script src="/product-signals.js?v=7.8.7"></script>
-    <script src="session-selection-core.js?v=7.8.7"></script>
-    <script src="discovery-core.js?v=7.8.7"></script>
-    <script src="monthly-plan-core.js?v=7.8.7"></script>
-    <script src="training-block-core.js?v=7.8.7"></script>
-    <script src="personal-training-ui-core.js?v=7.8.7"></script>
-    <script src="discover-state.js?v=7.8.7"></script>
-    <script src="discover-api.js?v=7.8.7"></script>
-    <script src="discover-navigation.js?v=7.8.7"></script>
-    <script src="discover-progress.js?v=7.8.7"></script>
-    <script src="discover-render.js?v=7.8.7"></script>
-    <script src="discover-coaching-render.js?v=7.8.7"></script>
-    <script src="discover-catalog.js?v=7.8.7"></script>
-    <script src="discover-detail.js?v=7.8.7"></script>
-    <script src="discover-community.js?v=7.8.7"></script>
-    <script src="discover-session.js?v=7.8.7"></script>
-    <script src="discover-sharing.js?v=7.8.7"></script>
-    <script src="discover-events.js?v=7.8.7"></script>
-    <script src="discover-coaching.js?v=7.8.7"></script>
-    <script src="discover.js?v=7.8.7"></script>
+    <script src="/pwa.js?v=7.8.8"></script>
+    <script src="/product-signals.js?v=7.8.8"></script>
+    <script src="session-selection-core.js?v=7.8.8"></script>
+    <script src="discovery-core.js?v=7.8.8"></script>
+    <script src="monthly-plan-core.js?v=7.8.8"></script>
+    <script src="training-block-core.js?v=7.8.8"></script>
+    <script src="personal-training-ui-core.js?v=7.8.8"></script>
+    <script src="discover-state.js?v=7.8.8"></script>
+    <script src="discover-api.js?v=7.8.8"></script>
+    <script src="discover-navigation.js?v=7.8.8"></script>
+    <script src="discover-progress.js?v=7.8.8"></script>
+    <script src="discover-render.js?v=7.8.8"></script>
+    <script src="discover-coaching-render.js?v=7.8.8"></script>
+    <script src="discover-catalog.js?v=7.8.8"></script>
+    <script src="discover-detail.js?v=7.8.8"></script>
+    <script src="discover-community.js?v=7.8.8"></script>
+    <script src="discover-session.js?v=7.8.8"></script>
+    <script src="discover-sharing.js?v=7.8.8"></script>
+    <script src="discover-events.js?v=7.8.8"></script>
+    <script src="discover-coaching.js?v=7.8.8"></script>
+    <script src="discover.js?v=7.8.8"></script>
   </body>
 </html>

@@ -189,7 +189,7 @@ test("pricing and homepage pure boundaries normalize legacy-shaped input safely"
   assert.equal(PricingLogic.checkoutTransactionId({id:"txn_legacy"}),"txn_legacy");
   const normalized=PricingLogic.normalizedConfig({billing:{
     configured:true,mode:"SANDBOX",client_token:"test_fixture",product:`pro_${"a".repeat(24)}`,
-    price_id:`pri_${"b".repeat(24)}`,price:{amount:"0.99",currency:"usd",interval:"MONTH",frequency:"1"}
+    price_id:`pri_${"b".repeat(24)}`,price:{amount:"2.99",currency:"usd",interval:"MONTH",frequency:"1"}
   }});
   assert.equal(normalized.environment,"sandbox");
   assert.equal(PricingLogic.validateConfig(normalized),normalized);
