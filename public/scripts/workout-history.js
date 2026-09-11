@@ -48,17 +48,19 @@
       const completed=state.history.filter((item)=>item.status==="completed"),sets=completed.reduce((total,item)=>total+item.completedSets,0),active=state.history.filter((item)=>item.status==="active").length;
       const recoveryIds=new Set(state.recoveries.filter((record)=>record.dirty).map((record)=>record.workout.id));
       const visibleHistory=state.history.filter((item)=>item.status!=="active"||!recoveryIds.has(item.id));
+      $("historyStats").hidden=!completed.length;
       $("historyStats").innerHTML=`<div><strong>${completed.length}</strong><span>Completed · loaded history</span></div><div><strong>${sets}</strong><span>Sets in completed sessions</span></div><div><strong>${active}</strong><span>Open · loaded history</span></div>`;
-      $("historyList").innerHTML=visibleHistory.length?visibleHistory.map((item)=>`<article class="history-row"><div><span class="status-chip${item.status==="active"?" active":""}">${item.status==="active"?"In progress":"Completed"}</span><h4>${esc(item.title)}</h4><p>${esc(item.date)} · ${item.completedSets}/${item.totalSets} sets · ${W.duration(item.elapsedSeconds)}</p></div><button type="button" class="button secondary compact" data-history="${esc(item.id)}">${item.status==="active"?"Resume":"View"}</button></article>`).join(""):recoveryIds.size?"<div class='empty-state'><strong>Review your device draft above.</strong>The saved session stays separate until you choose which work to keep.</div>":"<div class='empty-state'><strong>Your story starts with one session.</strong>Start from your plan and your completed work will appear here.</div>";
+      $("historyList").innerHTML=visibleHistory.length?visibleHistory.map((item)=>`<article class="history-row"><div><span class="status-chip${item.status==="active"?" active":""}">${item.status==="active"?"In progress":"Completed"}</span><h4>${esc(item.title)}</h4><p>${esc(item.date)} · ${item.completedSets}/${item.totalSets} sets · ${W.duration(item.elapsedSeconds)}</p></div><button type="button" class="button secondary compact" data-history="${esc(item.id)}">${item.status==="active"?"Resume":"View"}</button></article>`).join(""):recoveryIds.size?"<div class='empty-state'><strong>Review your device draft above.</strong>The saved session stays separate until you choose which work to keep.</div>":state.historyLoadError?"<div class='empty-state'><strong>Workout history is unavailable.</strong>Retry before starting another workout.</div>":!state.historyLoaded?"<div class='empty-state'><strong>Loading workout history…</strong>Checking saved workouts before you start.</div>":"<div class='empty-state'><strong>Your story starts with one workout.</strong>Your progress appears after your first completed workout.</div>";
       $("loadMore").hidden=!state.hasMore;$("loadMore").disabled=state.historyBusy;renderChartControls();
     }
 
     async function load({more=false}={}){
       if(state.historyBusy||state.blocked)return;
-      state.historyBusy=true;$("refreshHistory").disabled=true;$("loadMore").disabled=true;$("historyError").hidden=true;
+      state.historyBusy=true;state.historyLoadError="";renderPlan();render();$("refreshHistory").disabled=true;$("loadMore").disabled=true;$("historyError").hidden=true;
       try{
         const result=await accountRead(`/api/workouts?limit=20&offset=${more?state.offset:0}&memory=1`);
         if(!Array.isArray(result.workouts)||typeof result.hasMore!=="boolean")throw new Error("Workout history returned an incomplete response. Try again.");
+        state.historyLoaded=true;
         state.offset=(more?state.offset:0)+result.workouts.length;
         const combined=more?[...state.history,...result.workouts]:result.workouts;
         state.history=[...new Map(combined.map((item)=>[item.id,item])).values()].sort((a,b)=>b.startedAt-a.startedAt);
@@ -67,8 +69,9 @@
         if(state.workout){state.memoryReady=memoryReadyFor(state.workout);renderSession();if(!state.memoryReady)void loadWorkoutMemory(state.workout.id);}
       }catch(error){
         if(error.status===401)blockSession();
-        $("historyError").hidden=false;$("historyError").textContent=saveError(error);
-      }finally{state.historyBusy=false;$("refreshHistory").disabled=false;$("loadMore").disabled=false;}
+        state.historyLoadError=error.code==="NETWORK_ERROR"?"Check your connection and retry loading workout history.":saveError(error);
+        $("historyError").hidden=false;$("historyError").textContent=state.historyLoadError;render();
+      }finally{state.historyBusy=false;$("refreshHistory").disabled=false;$("loadMore").disabled=false;renderPlan();}
     }
 
     async function openDetail(id){

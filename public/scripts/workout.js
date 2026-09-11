@@ -5,6 +5,7 @@
   const S=globalThis.StrataWorkoutState;
   const A=globalThis.StrataWorkoutApi;
   const R=globalThis.StrataWorkoutRender;
+  const T=globalThis.StrataWorkoutContext;
   const E=globalThis.StrataWorkoutEvents;
   const C=globalThis.StrataWorkoutCalendar;
   const H=globalThis.StrataWorkoutHistory;
@@ -140,35 +141,7 @@
     }catch(error){toast(saveError(error));}
     finally{buttons.forEach((button)=>button.disabled=false);}
   }
-  function renderPlan(){
-    $("planDay").innerHTML=W.DAYS.map((day)=>`<option value="${day}"${day===state.day?" selected":""}>${day}${day===W.today()?" · today":""}</option>`).join("");
-    const items=state.plan?.days?.[state.day]||[];
-    const currentIndex=Math.max(0,W.DAYS.indexOf(state.day));
-    const upcomingDays=[...W.DAYS.slice(currentIndex+1),...W.DAYS.slice(0,currentIndex)];
-    const scheduledDay=upcomingDays.find((day)=>(state.plan?.days?.[day]||[]).length);
-    const startButton=$("startWorkout"),chooseButton=$("chooseScheduledDay"),plannerLink=$("openPlannerFromEmpty"),brief=$("planBrief"),previewDetails=document.querySelector(".plan-preview-details"),summary=W.planDaySummary(state.plan,state.day);
-    const activeWorkout=state.workout?.status==="active"?state.workout:state.history.find((item)=>item.status==="active")||state.recoveries.find((record)=>record.workout.status==="active")?.workout;
-    const activeHint=activeWorkout?`${activeWorkout.title} is already in progress. Resume it from Training history below before starting another session.`:"";
-    $("todayLabel").textContent=`${W.localDate()} · ${state.day} plan`;
-    $("startTitle").textContent=`${state.day} is ready.`;
-    startButton.innerHTML=`Start ${esc(state.day)} workout <span aria-hidden="true">↗</span>`;
-    startButton.hidden=!items.length||!!activeWorkout;startButton.disabled=!state.plan||state.blocked;
-    chooseButton.hidden=!!activeWorkout||!!items.length||!scheduledDay;plannerLink.hidden=!!activeWorkout||!!items.length||!!scheduledDay;
-    if(!items.length){
-      previewDetails.hidden=true;previewDetails.open=false;
-      brief.hidden=true;brief.innerHTML="";
-      const recovery=(state.plan?.restDays||[state.plan?.restDay]).includes(state.day);
-      $("planPreview").innerHTML=`<div class="empty-state"><strong>${recovery?"Recovery is part of the plan.":"Nothing is scheduled for this day yet."}</strong>${scheduledDay?`${esc(scheduledDay)} has a workout ready. Choose it below, or edit your week in Plan.`:"Add exercises to your week in Plan, then return here to train."}</div>`;
-      if(scheduledDay){chooseButton.dataset.day=scheduledDay;chooseButton.innerHTML=`Choose ${esc(scheduledDay)} workout <span aria-hidden="true">→</span>`;}
-      else delete chooseButton.dataset.day;
-      $("startHint").textContent=activeHint||(scheduledDay?`Your next scheduled session is ${scheduledDay}.`:"Build a session in Plan, then return here to train.");return;
-    }
-    previewDetails.hidden=false;
-    brief.hidden=false;
-    brief.innerHTML=`<div><span>Movements</span><strong>${summary.movements}</strong></div><div><span>Working sets</span><strong>${summary.workingSets}</strong></div><div><span>Plan day</span><strong>${esc(summary.day)}</strong></div>`;
-    $("planPreview").innerHTML=view.planPreview(items);
-    $("startHint").textContent=activeHint||"Review the summary, then start when you are ready.";
-  }
+  function renderPlan(){contextView.render();}
   function memoryReadyFor(workout){return !workout||state.memoryExhausted||workout.entries.every((entry)=>memoryFor(entry));}
   function mergeMemory(items){state.memoryHistory=[...new Map([...state.memoryHistory,...items].map((item)=>[item.id,item])).values()].sort((a,b)=>b.startedAt-a.startedAt);}
   async function loadWorkoutMemory(workoutId){
@@ -369,7 +342,7 @@
     $("calendarLink").href=event.href;$("calendarLink").download=event.filename;
   }
   function returnToPlan(){
-    progression.reset();state.workout=null;state.draftKey="";state.pausedSeconds=null;guidance.reset();$("calendarNext").hidden=true;$("celebration").hidden=true;$("sessionPanel").hidden=true;$("startPanel").hidden=false;scanDrafts();($("startWorkout").hidden?$("planDay"):$("startWorkout")).focus();
+    progression.reset();state.workout=null;state.draftKey="";state.pausedSeconds=null;guidance.reset();$("calendarNext").hidden=true;$("celebration").hidden=true;$("sessionPanel").hidden=true;$("startPanel").hidden=false;scanDrafts();contextView.focusPrimary();
   }
   function exportDraft(){
     if(!state.workout)return;
@@ -391,6 +364,7 @@
   const progression=P.create({state,workout:W,memoryFor,accountRead,renderSession:()=>view.refreshTargets($("sessionEntries"))});
   const guidance=Q.create({$,state,accountRead,api,assertIdentity,saveError,exercise,esc,number,renderPlan});
   const historyView=H.create({$,state,workout:W,view,esc,number,exercise,formatLabel,accountRead,saveError,blockSession,renderPlan,mergeMemory,memoryReadyFor,renderSession,loadWorkoutMemory,fetchWorkout,selectWorkout,toast,recover,resetProgression:progression.reset,locationLike:location,historyLike:history});
+  const contextView=T.create({$,state,workout:W,view,esc,openDetail:historyView.openDetail,recover});
   async function initialize(){
     if(state.loading)return;
     if(state.blocked){location.reload();return;}
@@ -417,7 +391,7 @@
       $("modeNotice").textContent="The workout room could not load. Your saved sessions and device drafts have been kept.";
     }finally{state.loading=false;}
   }
-  E.bind({$,state,workout:W,number,signal,actions:{initialize,renderPlan,toast,selectWorkout,markDirty,errorMessage,entryFor,hasActuals,exercise,openSwap,toggleSuperset,applyRemembered,renderSession,startRest,tick,rememberPreferences,focusNextSet,flushSave,persistDraft,returnToPlan,exportDraft,resolveAdaptation:guidance.resolve,recover,removeDraft,scanDrafts,showCompleted,upsertHistory:historyView.upsert,openDetail:historyView.openDetail,loadHistory:historyView.load,renderMetricOptions:historyView.renderMetricOptions,renderChart:historyView.renderChart,closeSwap,renderSwapComparison,applyWorkoutSwap,reviewPlanSwap,approvePlanSwap,assertIdentity,status,saveError,saveCheckIn:guidance.save}});
+  E.bind({$,state,workout:W,number,signal,actions:{initialize,renderPlan,resumeWorkout:contextView.resume,toast,selectWorkout,markDirty,errorMessage,entryFor,hasActuals,exercise,openSwap,toggleSuperset,applyRemembered,renderSession,startRest,tick,rememberPreferences,focusNextSet,flushSave,persistDraft,returnToPlan,exportDraft,resolveAdaptation:guidance.resolve,recover,removeDraft,scanDrafts,showCompleted,upsertHistory:historyView.upsert,openDetail:historyView.openDetail,loadHistory:historyView.load,renderMetricOptions:historyView.renderMetricOptions,renderChart:historyView.renderChart,closeSwap,renderSwapComparison,applyWorkoutSwap,reviewPlanSwap,approvePlanSwap,assertIdentity,status,saveError,saveCheckIn:guidance.save}});
   setInterval(tick,1000);
   void initialize();
 })();

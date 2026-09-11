@@ -10,7 +10,7 @@ const PROJECT_ROOT=path.join(__dirname,"..");
 const read=(name)=>fs.readFileSync(path.join(PROJECT_ROOT,name),"utf8");
 const homeClient=()=>["home-logic.js","home-state.js","home-api.js","home-render.js","home-events.js","app.js"].map(name=>read(`public/scripts/${name}`)).join("\n");
 const discoverClient=()=>["discover-api.js","discover-navigation.js","discover-progress.js","discover-render.js","discover-catalog.js","discover-detail.js","discover-community.js","discover-session.js","discover-sharing.js","discover-events.js","discover.js"].map(name=>read(`public/scripts/${name}`)).join("\n");
-const workoutClient=()=>["workout-state.js","workout-api.js","workout-calendar.js","workout-render.js","workout-guidance.js","workout-history.js","workout-events.js","workout.js"].map(name=>read(`public/scripts/${name}`)).join("\n");
+const workoutClient=()=>["workout-state.js","workout-api.js","workout-calendar.js","workout-render.js","workout-context.js","workout-guidance.js","workout-history.js","workout-events.js","workout.js"].map(name=>read(`public/scripts/${name}`)).join("\n");
 
 test("homepage styles keep live comparison UI and omit retired modal families",()=>{
   const css=read("public/styles/styles.css");
@@ -109,9 +109,12 @@ test("planner and workout share clear Plan and Train navigation at mobile widths
 
 test("workout empty days and planner mobile hand-offs expose useful 44px actions",()=>{
   const plannerHtml=read("public/pages/planner.html"),plannerCss=read("public/styles/planner.css");
-  const workoutHtml=read("public/pages/workout.html"),workout=workoutClient(),workoutCss=read("public/styles/workout.css");
+  const workoutHtml=read("public/pages/workout.html"),workout=workoutClient(),context=read("public/scripts/workout-context.js"),workoutCss=read("public/styles/workout.css");
   assert.match(workoutHtml,/id="chooseScheduledDay" hidden/);assert.match(workoutHtml,/id="openPlannerFromEmpty"[^>]*hidden/);
-  assert.match(workout,/startButton\.hidden=!items\.length/);assert.match(workout,/You already have a workout in progress/);
+  assert.match(context,/You have not built a weekly plan yet/);assert.match(context,/Nothing is scheduled for this day/);assert.match(context,/Scheduled in your weekly plan/);
+  assert.match(context,/start\.hidden=true;resume\.hidden=!active;choose\.hidden=true;build\.hidden=true;\$\("differentWorkout"\)\.hidden=true/);
+  assert.match(context,/if\(active\)[\s\S]*return;/);assert.match(context,/if\(!hasWeek\)[\s\S]*build\.hidden=false;return;/);assert.match(context,/if\(!items\.length\)[\s\S]*choose\.hidden=false/);
+  assert.match(workoutCss,/\.button\{[^}]*min-height:48px/);
   assert.match(workout,/record\?\.dirty\)items\.push/);assert.match(workout,/status!=="active"\|\|!recoveryIds\.has/);assert.match(workout,/recoveryIndex>=0/);
   assert.match(workoutCss,/\.mode-notice a,\.text-link,footer a\{[^}]*min-width:44px;min-height:44px/);
   assert.match(workoutHtml,/id="anotherSession">Choose another workout<\/button>/);
@@ -127,7 +130,9 @@ test("workout empty days and planner mobile hand-offs expose useful 44px actions
   assert.match(workoutHtml,/id="historyError"[^>]*role="alert"/);
   assert.match(workoutHtml,/href="\/pricing">Review Strata\+ access<\/a>/);
   assert.match(workoutHtml,/href="\/planner\.html">Return to free Plan<\/a>/);
-  assert.match(workoutHtml,/id="openPlannerFromEmpty"[^>]*>Add exercises to my week/);
+  assert.match(workoutHtml,/id="openPlannerFromEmpty"[^>]*>Build your first week/);
+  assert.match(workoutHtml,/id="editWorkoutWeek"[^>]*>Edit weekly plan/);
+  assert.match(workoutHtml,/id="chooseScheduledDay"[^>]*>Choose another day/);
   assert.match(workoutHtml,/id="checkInForm"[^>]*aria-labelledby="checkInTitle"/);
   for(const id of ["checkInDifficulty","checkInEnergy","checkInComfort","checkInEnjoyment"])assert.match(workoutHtml,new RegExp(`id="${id}" required`));
   assert.match(workoutHtml,/STRATA does not detect recovery, fatigue, pain, or injury/);

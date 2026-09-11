@@ -24,7 +24,7 @@
       mode:"",user:null,ownerId:"",contextId:workout.id(),csrfToken:"",catalog:[],plan:null,planUpdatedAt:0,
       day:deepLinkedDay(locationLike,workout),workout:null,dirty:false,sequence:0,saving:null,saveTimer:null,
       blocked:false,conflict:null,pausedSeconds:null,timerAnnounced:false,draftKey:"",recoveries:[],history:[],
-      offset:0,hasMore:false,historyBusy:false,memoryHistory:[],memoryExhausted:false,memoryBusy:false,
+      offset:0,hasMore:false,historyBusy:false,historyLoaded:false,historyLoadError:"",memoryHistory:[],memoryExhausted:false,memoryBusy:false,
       memoryReady:false,memoryError:"",detailBusy:false,loading:false,toastTimer:null,checkInBusy:false,
       adaptation:null,swapEntryId:"",swapCandidateId:"",swapProposal:null,swapBusy:false,swapTrigger:null,
       offlineAccessUntil:0

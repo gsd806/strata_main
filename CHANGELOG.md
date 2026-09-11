@@ -1,5 +1,16 @@
 # Changelog
 
+## 7.8.3 — Restored identity and clearer Strata+ states
+
+- Restore the 7.8.1 visual and information-architecture baseline across the homepage, photography, global navigation, four-tab Strata+ workspace, Plan, Train, Account, and Pricing while retaining the functional improvements from 7.8.2.
+- Make the saved weekly plan the primary Plan surface and place Workout Builder, Plan Ahead, and Reuse a Week behind clear, progressively disclosed explanations and actions.
+- Give Today truthful no-plan, next-scheduled-workout, and active-workout states; give Train distinct no-plan, empty-selected-day, scheduled-workout, and active-workout states so Start, Resume, and editing actions only appear when they apply.
+- Distinguish Progress loading, error, retry, empty-history, and populated-history states; add one compact score guide for FitScore, Match, and Community score.
+- Add an enforced focused Train context module and state/browser regressions for responsive layout, keyboard focus, reduced motion, the 31-day flow, and the repaired state matrix.
+- Keep authentication, billing, storage, API contracts, payment configuration, and the 7.8.2 progression model unchanged.
+
+Validation is recorded in the [7.8.3 release guide](docs/release-7.8.3.md).
+
 ## 7.8.2 — Weight progression in Train
 
 - Show specific per-set next targets after completion, with optional effort and check-in feedback.

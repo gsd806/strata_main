@@ -2,7 +2,7 @@
 
 const assert=require("node:assert/strict");
 const {spawn}=require("node:child_process");
-const {mkdtempSync,readFileSync,rmSync}=require("node:fs");
+const {mkdirSync,mkdtempSync,readFileSync,rmSync}=require("node:fs");
 const http=require("node:http");
 const {tmpdir}=require("node:os");
 const {join,resolve}=require("node:path");
@@ -10,6 +10,7 @@ const test=require("node:test");
 const {chromium}=require("playwright");
 
 const ROOT=join(__dirname,"..","..");
+const CAPTURE_DIR=process.env.STRATA_TRAIN_SCREENSHOT_DIR?resolve(process.env.STRATA_TRAIN_SCREENSHOT_DIR):null;
 const WAIT_MS=10_000;
 const PASSWORD="synthetic-training-e2e-123";
 const CATALOG=JSON.parse(readFileSync(join(ROOT,"public/data/exercises.json"),"utf8"));
@@ -55,6 +56,7 @@ async function newPage(options={}){
   return {context,page};
 }
 async function goto(page,path){await page.goto(path,{waitUntil:"domcontentloaded"});}
+async function capture(page,name){if(!CAPTURE_DIR)return;mkdirSync(CAPTURE_DIR,{recursive:true});await page.screenshot({path:join(CAPTURE_DIR,name),fullPage:true});}
 async function plannerReady(page){await page.waitForFunction(()=>globalThis.document.querySelector("#saveStatus")?.textContent==="Saved");}
 async function guestPlan(page){return page.evaluate(()=>JSON.parse(localStorage.getItem("strata_guest_plan_v1")));}
 async function signup(context,label){
@@ -270,11 +272,21 @@ test("training journeys use real browser controls and isolated local fixtures",{
     const seed=await context.request.put("/api/plan",{headers:{Origin:baseUrl,"X-CSRF-Token":current.csrfToken,"X-Strata-User":user.id},data:{plan:fixtureWeek(),expectedPlanUpdatedAt:current.planUpdatedAt}});assert.equal(seed.status(),200);
     await goto(page,"/workout.html?day=Sunday");
     await page.locator("#trainingRoom").waitFor({state:"visible"});
+    assert.equal(await page.locator("#startTitle").textContent(),"Nothing scheduled.");
+    assert.equal(await page.locator("#planStatus").textContent(),"Nothing is scheduled for this day.");
     assert.equal(await page.locator("#startWorkout").isHidden(),true,"An empty recovery day must not leave a dead Start button");
-    assert.equal(await page.locator("#chooseScheduledDay").isVisible(),true);assert.match(await page.locator("#chooseScheduledDay").textContent(),/Monday workout/);
+    assert.equal(await page.locator("#resumeWorkout").isHidden(),true);
+    assert.equal(await page.locator("#chooseScheduledDay").isVisible(),true);assert.match(await page.locator("#chooseScheduledDay").textContent(),/Choose another day/);
+    assert.equal(await page.locator("#editWorkoutWeek").isVisible(),true);assert.match(await page.locator("#editWorkoutWeek").textContent(),/Edit weekly plan/);
     assert.equal(await page.locator("#openPlannerFromEmpty").isHidden(),true);
+    assert.equal(await page.locator("#differentWorkout").isHidden(),true,"An empty day must not offer an alternative workout before one exists");
+    await capture(page,"train-empty-day-mobile.png");
     await page.click("#chooseScheduledDay");assert.equal(await page.locator("#planDay").inputValue(),"Monday");
-    assert.match(await page.locator("#startWorkout").textContent(),/Start Monday workout/);
+    assert.equal(await page.locator("#planStatus").textContent(),"Scheduled in your weekly plan.");
+    assert.match(await page.locator("#startWorkout").textContent(),/Start workout/);
+    assert.equal(await page.locator("#differentWorkout").isVisible(),true);assert.match(await page.locator("#differentWorkout").textContent(),/Create a different workout/);
+    assert.equal(new URL(await page.locator("#differentWorkout a").getAttribute("href"),baseUrl).hash,"#sessionBuilder");
+    await capture(page,"train-scheduled-mobile.png");
     const startLayout=await page.evaluate(()=>{const start=globalThis.document.querySelector("#startWorkout").getBoundingClientRect(),hero=globalThis.getComputedStyle(globalThis.document.querySelector(".hero"));return{bottom:start.bottom,viewport:globalThis.innerHeight,heroDisplay:hero.display,overflow:globalThis.document.documentElement.scrollWidth-globalThis.document.documentElement.clientWidth};});
     assert.equal(startLayout.heroDisplay,"none","The entitled mobile workout summary should lead instead of a second marketing hero");assert.ok(startLayout.bottom<=startLayout.viewport-56,`Start action must fit above mobile navigation (${startLayout.bottom}/${startLayout.viewport})`);assert.ok(startLayout.overflow<=1);
     const creating=page.waitForResponse(response=>new URL(response.url()).pathname==="/api/workouts"&&response.request().method()==="POST");
@@ -294,11 +306,13 @@ test("training journeys use real browser controls and isolated local fixtures",{
     await page.click("#accountPrimaryAction");await page.locator("#sessionPanel").waitFor({state:"visible"});
     assert.equal(await page.locator("#sessionTitle").evaluate(node=>globalThis.document.activeElement===node),true,"Account’s next action should resume the active session directly");
     let duplicateStarts=0;page.on("request",request=>{if(new URL(request.url()).pathname==="/api/workouts"&&request.method()==="POST")duplicateStarts++;});
-    await goto(page,"/workout.html?day=Monday");const resume=page.locator('#historyList [data-history]').first();await resume.waitFor({state:"visible"});
+    await goto(page,"/workout.html?day=Monday");const historyResume=page.locator('#historyList [data-history]').first();await historyResume.waitFor({state:"visible"});
     assert.equal(await page.locator('#recoveryList [data-recover]').count(),0,"A clean saved active session must not also appear as recovery");
-    assert.equal(await page.getByRole("button",{name:"Resume",exact:true}).count(),1,"A clean active session has exactly one Resume surface");
+    assert.equal(await page.locator("#resumeWorkout").isVisible(),true,"The active workout owns the primary Resume action");
     assert.equal(await page.locator("#startWorkout").isHidden(),true,"An active session must not expose a redundant Start action");
-    await resume.click();assert.equal(duplicateStarts,0,"Resuming must not create or orphan another account session");
+    assert.equal(await page.locator("#chooseScheduledDay").isHidden(),true);assert.equal(await page.locator("#openPlannerFromEmpty").isHidden(),true);assert.equal(await page.locator("#differentWorkout").isHidden(),true);
+    await capture(page,"train-active-mobile.png");
+    await page.locator("#resumeWorkout").click();assert.equal(duplicateStarts,0,"Resuming must not create or orphan another account session");
     await page.locator("#sessionPanel").waitFor({state:"visible"});
     assert.equal(await entry.locator('[data-actual="weight"]').inputValue(),"40");assert.equal(await entry.locator('[data-actual="reps"]').inputValue(),"8");
     assert.equal(await entry.locator('[data-complete="0"]').getAttribute("aria-pressed"),"true");
@@ -388,10 +402,15 @@ test("training journeys use real browser controls and isolated local fixtures",{
     await goto(page,"/workout.html?guest=1");assert.match(page.url(),/account.html/);
     await signup(context,"setup");
     await goto(page,"/onboarding.html");assert.match(page.url(),/pricing/);
-    await activatePlus(context);await goto(page,"/discover.html");
-    const firstWeekAction=page.getByRole('link',{name:'Build my first week',exact:true});
-    await firstWeekAction.waitFor({state:"visible"});assert.equal(new URL(await firstWeekAction.getAttribute('href'),baseUrl).pathname,'/onboarding.html');
-    await firstWeekAction.click();
+    await activatePlus(context);
+    await goto(page,"/workout.html");await page.locator("#trainingRoom").waitFor({state:"visible"});await page.waitForFunction(()=>globalThis.document.querySelector("#planStatus")?.textContent==="You have not built a weekly plan yet.");
+    assert.equal(await page.locator("#openPlannerFromEmpty").isVisible(),true);assert.match(await page.locator("#openPlannerFromEmpty").textContent(),/Build your first week/);
+    for(const selector of ["#resumeWorkout","#chooseScheduledDay","#startWorkout","#differentWorkout","#editWorkoutWeek"])assert.equal(await page.locator(selector).isHidden(),true,`${selector} must stay hidden before a weekly plan exists`);
+    assert.equal(await page.locator("#planDayField").isHidden(),true);assert.equal(await page.locator("#historyStats").isHidden(),true);assert.match(await page.locator("#historyList").textContent(),/progress appears after your first completed workout/i);
+    await goto(page,"/discover.html");
+    const firstWeekAction=page.getByRole('link',{name:'Build your first week',exact:true});
+    await firstWeekAction.waitFor({state:"visible"});assert.equal(new URL(await firstWeekAction.getAttribute('href'),baseUrl).pathname,'/planner.html');
+    await goto(page,"/onboarding.html");
     await page.waitForFunction(()=>globalThis.document.querySelector('#setupFields')?.disabled===false);
     await page.locator('#starterPath').waitFor({state:'visible'});await page.click('[data-equipment-preset="bodyweight"]');
     assert.deepEqual(await page.locator('input[name="equipment"]:checked').evaluateAll(nodes=>nodes.map(node=>node.value)),['Bodyweight']);

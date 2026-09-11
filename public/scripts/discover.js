@@ -58,6 +58,7 @@ const featureNavigation=NavigationCore.createFeatureNavigation({
   config:FEATURE_CONFIG,defaultFeature:FEATURE_DEFAULT,state,document,window,
   onDestinationChange:hideToast,
   onActivate:(name)=>{
+    const scoreGuide=el("scoreGuide"),showScoreGuide=["explore","recommendations","library","battle"].includes(name);if(scoreGuide)scoreGuide.hidden=!showScoreGuide;if(!showScoreGuide&&el("scoreGuideDetails"))el("scoreGuideDetails").open=false;
     if(state.user&&["recommendations","library","battle"].includes(name))void refreshCommunityRatings().catch(()=>{});
     if(state.user&&name==="community"&&!state.communityLoaded&&!state.communityLoading)void loadCommunityPlans({reset:true});
   }
@@ -166,40 +167,46 @@ function renderPreviousComparable(items){
 }
 function renderPlanOverview(pulse){
   if(!el("planWorkspaceDays"))return;
-  el("planWorkspaceDays").textContent=String(pulse.scheduledDays);
-  el("planWorkspaceMovements").textContent=String(weeklyPlanCount(state.weeklyPlan));
-  el("planWorkspaceSets").textContent=String(Monthly.DAYS.flatMap((day)=>state.weeklyPlan?.days?.[day]||[]).reduce((total,item)=>total+Math.max(0,Number(item?.sets)||0),0));
-  el("planWorkspaceSummary").textContent=pulse.scheduledDays?`${pulse.scheduledDays} planned training day${pulse.scheduledDays===1?"":"s"}. Open the weekly plan to change exercises, sets, or recovery days.`:"No training days are scheduled. Build a repeatable week before starting a training block.";
+  const days=pulse.scheduledDays,exercises=weeklyPlanCount(state.weeklyPlan),sets=Monthly.DAYS.flatMap((day)=>state.weeklyPlan?.days?.[day]||[]).reduce((total,item)=>total+Math.max(0,Number(item?.sets)||0),0),hasWeek=days>0;
+  el("planWorkspaceDays").textContent=String(days);el("planWorkspaceMovements").textContent=String(exercises);el("planWorkspaceSets").textContent=String(sets);
+  el("planWorkspaceSummary").textContent=hasWeek?`${days} training day${days===1?"":"s"}, ${exercises} exercise${exercises===1?"":"s"}, and ${sets} working set${sets===1?"":"s"} are assigned in your saved week.`:"You have not built a weekly plan yet.";
+  const action=el("planWorkspaceAction");if(action){action.href="/planner.html";action.innerHTML=hasWeek?'Edit weekly plan <span aria-hidden="true">→</span>':'Build your first week <span aria-hidden="true">→</span>';}
 }
+function workoutHistoryStatus(){const status=["loading","ready","error"].includes(state.workoutHistoryStatus)?state.workoutHistoryStatus:(state.workoutHistoryAvailable?"ready":"error");return status==="ready"&&!state.workoutHistoryAvailable?"error":status;}
+function showTodayAlternative(show){const panel=el("todayAlternativeWorkout"),action=el("todayAlternativeAction");if(panel)panel.hidden=!show;if(action){action.innerHTML='Create a different workout <span aria-hidden="true">→</span>';action.href="#sessionBuilder";}}
 function renderWeeklyPulse(){
   const pulseNodes=["weeklyPulse","weeklyPulseEyebrow","weeklyPulseTitle","weeklyPulseDetail","weeklyPulseBar","weeklyPulseAction","weeklyPulseMovements","weeklyPulseDays","todayDurationLabel","todayDuration","todayEquipment","todayPreviousLabel","todayPreviousValue","todayPreviousDetail","todayIntro"].map(el),pulseRoot=pulseNodes[0];
   if(pulseNodes.some((node)=>!node)||!state.preferences)return;
   const pulse=Core.weeklyPulse(state.weeklyPlan,{profileDays:state.preferences.days});
-  const active=state.workoutHistoryAvailable?state.workouts.find((workout)=>workout.status==="active"):null,week=weekContext(),next=nextPlannedDay(week),items=next?.items||[],start=el("plusStartWorkout");
-  const planned=scheduledDays(),done=new Set(completedThisWeek(week).map(workout=>workout.planDay).filter(day=>planned.includes(day)));
-  const progress=state.workoutHistoryAvailable&&planned.length?Math.round(done.size/planned.length*100):0;
-  el("weeklyPulseBar").setAttribute("style",`width:${progress}%`);
-  el("weeklyPulseBar").parentElement.hidden=!state.workoutHistoryAvailable;
-  el("weeklyPulseDays").textContent=state.workoutHistoryAvailable?`${state.workoutHistoryHasMore?"At least ":""}${done.size} / ${planned.length}`:"History unavailable ·";renderPlanOverview(pulse);
+  const historyStatus=workoutHistoryStatus(),historyReady=historyStatus==="ready",active=historyReady?state.workouts.find((workout)=>workout.status==="active"):null,week=weekContext(),next=nextPlannedDay(week),items=next?.items||[],start=el("plusStartWorkout");
+  const planned=scheduledDays(),hasWeek=planned.length>0,done=new Set(historyReady?completedThisWeek(week).map(workout=>workout.planDay).filter(day=>planned.includes(day)):[]),progress=historyReady&&planned.length?Math.round(done.size/planned.length*100):0;
+  const metrics=el("weeklyPulseMovements")?.closest("dl"),previous=el("todayPrevious"),footer=el("weeklyPulseFooter"),planAction=el("weeklyPulseAction");
+  el("weeklyPulseBar").setAttribute("style",`width:${progress}%`);el("weeklyPulseBar").parentElement.hidden=!historyReady||!hasWeek;
+  el("weeklyPulseDays").textContent=historyReady?`${state.workoutHistoryHasMore?"At least ":""}${done.size} / ${planned.length}`:historyStatus==="loading"?"Checking history ·":"History unavailable ·";renderPlanOverview(pulse);
+  if(planAction){planAction.hidden=!hasWeek;planAction.href="#planWorkspace";planAction.innerHTML='Review plan <span aria-hidden="true">→</span>';}
+  if(footer)footer.hidden=!hasWeek;if(metrics)metrics.hidden=false;if(previous)previous.hidden=false;start.hidden=false;showTodayAlternative(false);
   if(active){
     el("weeklyPulseEyebrow").textContent="Workout in progress";el("weeklyPulseTitle").textContent=String(active.title||"Open workout").toUpperCase();
     el("weeklyPulseDetail").textContent=`${Math.max(0,Number(active.completedSets)||0)} of ${Math.max(0,Number(active.totalSets)||0)} sets completed. Continue where you left off.`;
-    el("weeklyPulseMovements").textContent=String(Math.max(0,Number(active.exerciseCount)||0));el("todayDurationLabel").textContent="Elapsed";el("todayDuration").textContent=formatDuration(active.elapsedSeconds);
-    el("todayEquipment").textContent=equipmentSummary(active.exerciseSummaries.map((item)=>exerciseById(item.exerciseId)?.equipment))||"See workout";renderPreviousComparable(active.exerciseSummaries);
+    const summaries=Array.isArray(active.exerciseSummaries)?active.exerciseSummaries:[];el("weeklyPulseMovements").textContent=String(Math.max(0,Number(active.exerciseCount)||summaries.length));el("todayDurationLabel").textContent="Elapsed";el("todayDuration").textContent=formatDuration(active.elapsedSeconds);
+    el("todayEquipment").textContent=equipmentSummary(summaries.map((item)=>exerciseById(item.exerciseId)?.equipment))||"See workout";renderPreviousComparable(summaries);
     start.href=`/workout.html#resume=${encodeURIComponent(active.id)}`;start.innerHTML='Resume workout <span aria-hidden="true">↗</span>';el("todayIntro").textContent="Your open workout is the only action that matters right now.";pulseRoot.dataset.sessionDay=active.planDay||"active";
+  }else if(!hasWeek){
+    el("weeklyPulseEyebrow").textContent="Start with your week";el("weeklyPulseTitle").textContent="BUILD YOUR FIRST WEEK.";el("weeklyPulseDetail").textContent="You have not built a weekly plan yet.";el("weeklyPulseMovements").textContent="0";el("todayDurationLabel").textContent="Estimated time";el("todayDuration").textContent="—";el("todayEquipment").textContent="—";el("todayPreviousLabel").textContent="Previous comparable performance";el("todayPreviousValue").textContent="";el("todayPreviousDetail").textContent="";start.href="/planner.html";start.innerHTML='Build your first week <span aria-hidden="true">→</span>';el("todayIntro").textContent="You have not built a weekly plan yet.";pulseRoot.dataset.sessionDay="empty";if(metrics)metrics.hidden=true;if(previous)previous.hidden=true;if(footer)footer.hidden=true;if(planAction)planAction.hidden=true;
+  }else if(historyStatus==="loading"){
+    el("weeklyPulseEyebrow").textContent="Checking your training week";el("weeklyPulseTitle").textContent="FINDING YOUR NEXT ACTION.";el("weeklyPulseDetail").textContent="Checking for an active workout before showing what comes next.";el("todayIntro").textContent="Your saved week is ready. Strata+ is checking your workout history.";start.hidden=true;if(metrics)metrics.hidden=true;if(previous)previous.hidden=true;pulseRoot.dataset.sessionDay="loading";
+  }else if(historyStatus==="error"){
+    el("weeklyPulseEyebrow").textContent="Workout status unavailable";el("weeklyPulseTitle").textContent="YOUR PLAN IS STILL SAFE.";el("weeklyPulseDetail").textContent=state.workoutHistoryError||"We couldn't verify workout history, so no start action is shown yet.";el("todayIntro").textContent="Review your weekly plan while workout history reconnects.";start.hidden=true;if(metrics)metrics.hidden=true;if(previous)previous.hidden=true;pulseRoot.dataset.sessionDay="unavailable";
   }else if(next){
     const when=next.offset===0?"Today":next.offset===1?"Tomorrow":next.offset>=7?`Next ${next.day}`:next.day,equipment=[...new Set(items.map((item)=>exerciseById(item.exerciseId)?.equipment).filter(Boolean))];
     el("weeklyPulseEyebrow").textContent=`${when} in your week`;el("weeklyPulseTitle").textContent=`${next.day.toUpperCase()} WORKOUT`;
     el("weeklyPulseDetail").textContent=`${items.length} planned movement${items.length===1?"":"s"}. Review the session, then record only what you complete.`;
     el("weeklyPulseMovements").textContent=String(items.length);el("todayDurationLabel").textContent="Estimated time";el("todayDuration").textContent=`~${estimatedSessionMinutes(items)} min`;el("todayEquipment").textContent=equipmentSummary(equipment)||(items.length?"No equipment":"—");renderPreviousComparable(items);
-    start.href=`/workout.html?day=${encodeURIComponent(next.day)}`;start.innerHTML='Start working out <span aria-hidden="true">↗</span>';el("todayIntro").textContent=`Your next planned action is ${next.day}'s workout. The time is an estimate based on movements and working sets.`;pulseRoot.dataset.sessionDay=next.day;
-  }else{
-    el("weeklyPulseEyebrow").textContent="Start with your week";el("weeklyPulseTitle").textContent="NO WORKOUT PLANNED";el("weeklyPulseDetail").textContent="Choose your training days and movements before tracking progress.";el("weeklyPulseMovements").textContent="0";el("todayDurationLabel").textContent="Estimated time";el("todayDuration").textContent="—";el("todayEquipment").textContent="—";el("todayPreviousLabel").textContent="Previous comparable performance";el("todayPreviousValue").textContent="No baseline yet";el("todayPreviousDetail").textContent="A completed workout will create your first comparison.";start.href="/onboarding.html";start.innerHTML='Build my first week <span aria-hidden="true">→</span>';el("todayIntro").textContent="A simple, repeatable weekly plan comes before progression.";pulseRoot.dataset.sessionDay="empty";
+    start.href=`/workout.html?day=${encodeURIComponent(next.day)}`;start.innerHTML='Start workout <span aria-hidden="true">↗</span>';el("todayIntro").textContent=`Your next planned action is ${next.day}'s workout. The time is an estimate based on movements and working sets.`;pulseRoot.dataset.sessionDay=next.day;showTodayAlternative(true);
   }
-  el("weeklyPulseAction").href="#planWorkspace";el("weeklyPulseAction").innerHTML='Review plan <span aria-hidden="true">→</span>';
 }
 const progressRenderer=RenderCore.createProgressRenderer({element:el,escapeHtml,exerciseName,readableDate,days:Monthly.DAYS});
-function renderProgress(){return progressRenderer.render({workouts:state.workouts,weeklyPlan:state.weeklyPlan,historyAvailable:state.workoutHistoryAvailable,hasMore:state.workoutHistoryHasMore});}
+function renderProgress(){return progressRenderer.render({workouts:state.workouts,weeklyPlan:state.weeklyPlan,historyAvailable:state.workoutHistoryAvailable,historyStatus:state.workoutHistoryStatus,historyError:state.workoutHistoryError,hasMore:state.workoutHistoryHasMore});}
 function normalizeTrainingBlock(data){
   const raw=data?.trainingBlock||data?.block||null;if(!raw||typeof raw!=="object")return null;
   const weeks=Math.round(Number(raw.weeks??raw.durationWeeks));if(weeks<4||weeks>8)return null;
@@ -239,7 +246,7 @@ function renderTrainingBlockReview(){
   else el("trainingBlockReviewStatus").textContent="Nothing changes until you review and confirm an action.";
 }
 function renderTrainingBlock(){
-  const block=state.trainingBlock,status=el("trainingBlockStatus");if(!status)return;
+  const block=state.trainingBlock,status=el("trainingBlockStatus"),planAhead=el("planAheadDetails");if(planAhead)planAhead.open=Boolean(block);if(!status)return;
   el("trainingBlockCurrentWeek").disabled=true;el("trainingBlockState").disabled=true;
   if(!block){el("trainingBlockWeeks").value="6";el("trainingBlockStartDate").value=localIsoDate();el("trainingBlockState").value="active";renderTrainingBlockWeekOptions(1,"");status.textContent="Review the suggested start date. Nothing changes until you save.";renderTrainingBlockReview();return;}
   const timeline=BlockCore.deriveWeek(block);el("trainingBlockWeeks").value=String(block.weeks);el("trainingBlockStartDate").value=block.startDate;el("trainingBlockState").value=block.status;renderTrainingBlockWeekOptions(timeline.week,block.lightWeek);
@@ -283,7 +290,7 @@ function renderProgression(){
 function clearPrivateWorkspace(){
   workspaceGeneration+=1;workspaceReady=false;
   state.exercises=[];state.methodology=null;state.sources=[];state.limited=new Set();state.preferences=null;state.user=null;state.csrfToken="";state.aggregate=new Map();state.userRatings=new Map();state.ratingsRefreshedAt=0;state.ratingsRefreshPromise=null;state.ratingSaving=new Set();state.compare=[];state.shortlist=[];state.collection="all";state.query="";state.group="all";state.equipment="all";state.pattern="all";state.level="all";state.sort="personal";state.recommendations=[];state.activeExercise=null;state.explorerLimit=EXPLORER_DESKTOP_PAGE_SIZE;
-  state.weeklyPlan=null;state.weeklyPlanUpdatedAt=0;state.workouts=[];state.workoutHistoryAvailable=false;state.workoutHistoryHasMore=false;state.trainingBlock=null;state.trainingBlockRevision=0;state.trainingBlockAction=null;state.progressionSuggestion=null;state.session=null;state.sessionSaving=false;state.sessionDayInitialized=false;state.monthlyPlan=null;state.monthlyPlanUpdatedAt=0;state.monthlySchedule=null;state.monthlySource="muscle-schedule";state.communityPlans=[];state.communityLoaded=false;state.communityLoading=false;state.communityError="";state.communityNextOffset=0;state.communityQuery="";state.communityPendingId=null;state.communityAppliedId=null;state.communityAppliedUpdatedAt=0;
+  state.weeklyPlan=null;state.weeklyPlanUpdatedAt=0;state.workouts=[];state.workoutHistoryAvailable=false;state.workoutHistoryHasMore=false;state.workoutHistoryStatus="loading";state.workoutHistoryError="";state.trainingBlock=null;state.trainingBlockRevision=0;state.trainingBlockAction=null;state.progressionSuggestion=null;state.session=null;state.sessionSaving=false;state.sessionDayInitialized=false;state.monthlyPlan=null;state.monthlyPlanUpdatedAt=0;state.monthlySchedule=null;state.monthlySource="muscle-schedule";state.communityPlans=[];state.communityLoaded=false;state.communityLoading=false;state.communityError="";state.communityNextOffset=0;state.communityQuery="";state.communityPendingId=null;state.communityAppliedId=null;state.communityAppliedUpdatedAt=0;
   const main=document.querySelector("main");if(main){main.hidden=true;main.inert=true;main.setAttribute("aria-busy","true");}
   el("userName").textContent="Checking account…";el("compareTray").hidden=true;el("compareNames").textContent="Choose 2–4 exercises";el("toast").textContent="";el("featureStatus").textContent="";
   el("progressionCard").hidden=true;el("trainingBlockReview").hidden=true;el("battleResults").hidden=true;el("battleResults").innerHTML="";el("communityPlanGrid").innerHTML="";el("sessionResults").innerHTML="";
@@ -295,7 +302,7 @@ function revealPrivateWorkspace(){
   workspaceReady=true;
 }
 function dashboardUnavailable(message="Workout history could not be loaded. Your plan is still ready."){
-  state.workouts=[];state.workoutHistoryAvailable=false;state.workoutHistoryHasMore=false;renderWeeklyPulse();renderProgress();renderTrainingBlockReview();
+  state.workouts=[];state.workoutHistoryAvailable=false;state.workoutHistoryHasMore=false;state.workoutHistoryStatus="error";state.workoutHistoryError=message;renderWeeklyPulse();renderProgress();renderTrainingBlockReview();
   if(el("todayPreviousValue"))el("todayPreviousValue").textContent="History unavailable";
   if(el("todayPreviousDetail"))el("todayPreviousDetail").textContent=message;
 }
@@ -333,25 +340,30 @@ async function reconcileAdaptationError(error,{accepting=false}={}){
   el("progressionStatus").textContent=cannotAccept?`${error.message} Dismiss this old suggestion to keep the current plan.`:`${error.message} The latest suggestion is loaded.`;
   return true;
 }
+let memberDashboardLoadingGeneration=null;
 async function loadMemberDashboard(generation=workspaceGeneration){
-  const [historyResult,trainingResult]=await Promise.allSettled([api("/api/workouts?limit=100&offset=0"),api("/api/training")]);
-  if(generation!==workspaceGeneration)return;
-  let identity;
-  try{identity=await api("/api/me");}
-  catch(error){if(!error?.redirecting)dashboardUnavailable();return;}
-  if(generation!==workspaceGeneration)return;
-  const sameUser=String(identity.user?.id||"")===String(state.user?.id||""),identityCsrf=String(identity.csrfToken||"");
-  const history=historyResult.status==="fulfilled"?historyResult.value:null,historyCsrf=String(history?.csrfToken||"");
-  const training=trainingResult.status==="fulfilled"?trainingResult.value:null,trainingCsrf=String(training?.csrfToken||"");
-  if(!sameUser||(history&&(!historyCsrf||historyCsrf!==identityCsrf))||(training&&(!trainingCsrf||trainingCsrf!==identityCsrf))){dashboardAccountChanged();return;}
-  state.csrfToken=identityCsrf||state.csrfToken;
-  if(history&&Array.isArray(history.workouts)&&typeof history.hasMore==="boolean"){
-    state.workouts=safeWorkoutList(history.workouts);state.workoutHistoryAvailable=true;state.workoutHistoryHasMore=history.hasMore===true;renderWeeklyPulse();renderProgress();renderTrainingBlockReview();
-  }else dashboardUnavailable();
-  state.progressionSuggestion=normalizeProgression(training,completedWorkouts()[0]?.id||"");renderProgression();
-  if(training){
-    state.trainingBlock=normalizeTrainingBlock(training);state.trainingBlockRevision=state.trainingBlock?.revision||0;renderTrainingBlock();
-  }
+  if(memberDashboardLoadingGeneration===generation)return;
+  memberDashboardLoadingGeneration=generation;state.workoutHistoryStatus="loading";state.workoutHistoryError="";state.workoutHistoryAvailable=false;renderWeeklyPulse();renderProgress();
+  try{
+    const [historyResult,trainingResult]=await Promise.allSettled([api("/api/workouts?limit=100&offset=0"),api("/api/training")]);
+    if(generation!==workspaceGeneration)return;
+    let identity;
+    try{identity=await api("/api/me");}
+    catch(error){if(!error?.redirecting)dashboardUnavailable();return;}
+    if(generation!==workspaceGeneration)return;
+    const sameUser=String(identity.user?.id||"")===String(state.user?.id||""),identityCsrf=String(identity.csrfToken||"");
+    const history=historyResult.status==="fulfilled"?historyResult.value:null,historyCsrf=String(history?.csrfToken||"");
+    const training=trainingResult.status==="fulfilled"?trainingResult.value:null,trainingCsrf=String(training?.csrfToken||"");
+    if(!sameUser||(history&&(!historyCsrf||historyCsrf!==identityCsrf))||(training&&(!trainingCsrf||trainingCsrf!==identityCsrf))){dashboardAccountChanged();return;}
+    state.csrfToken=identityCsrf||state.csrfToken;
+    if(history&&Array.isArray(history.workouts)&&typeof history.hasMore==="boolean"){
+      state.workouts=safeWorkoutList(history.workouts);state.workoutHistoryAvailable=true;state.workoutHistoryHasMore=history.hasMore===true;state.workoutHistoryStatus="ready";state.workoutHistoryError="";renderWeeklyPulse();renderProgress();renderTrainingBlockReview();
+    }else dashboardUnavailable();
+    state.progressionSuggestion=normalizeProgression(training,completedWorkouts()[0]?.id||"");renderProgression();
+    if(training){
+      state.trainingBlock=normalizeTrainingBlock(training);state.trainingBlockRevision=state.trainingBlock?.revision||0;renderTrainingBlock();
+    }
+  }finally{if(memberDashboardLoadingGeneration===generation){memberDashboardLoadingGeneration=null;const retry=el("progressRetry");if(retry)retry.disabled=false;}}
 }
 async function persistTrainingBlock(blockInput){
   const expectedUserId=String(state.user?.id||""),expectedCsrf=state.csrfToken;
@@ -659,6 +671,7 @@ function initialLoadMessage(error){
 }
 function showInitialLoadProgress(){
   el("discoveryLoadError").hidden=true;el("discoveryRetry").disabled=true;
+  state.workoutHistoryStatus="loading";state.workoutHistoryError="";state.workoutHistoryAvailable=false;if(el("plusStartWorkout"))el("plusStartWorkout").hidden=true;showTodayAlternative(false);renderProgress();
   el("profileStatus").textContent="Loading profile…";el("battleStatus").textContent="Loading exercises…";el("monthlyPlanStatus").textContent="Loading planner…";el("communityPlanStatus").textContent="Loading shared plans…";if(el("sessionStatus"))el("sessionStatus").textContent="Loading your profile and weekly plan…";
   el("recommendationGrid").innerHTML='<div class="loading-card">Building your ranking…</div>';
   if(el("rankingLensItems"))el("rankingLensItems").innerHTML="<li>Loading preferences…</li>";
@@ -696,4 +709,5 @@ EventsCore.bind({
   actions:{api,activateFeature,closeDialog,explorerPageSize,featureName,hideToast,init,openComparison,openDetail,readBattleBuilder,renderCompareTray,renderExplorer,renderMovementBoard,renderRecommendations,resetExplorerWindow,resetFilters,restoreDialogFocus,revalidateMemberWorkspaceWhenVisible,saveMovementBoard,setCollectionState,shareCard,showToast,syncDialogState,toggleCompare,toggleMovementBoard}
 });
 initializeFeatureNavigation();
+el("progressRetry")?.addEventListener("click",()=>void loadMemberDashboard(workspaceGeneration));
 init();

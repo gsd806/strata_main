@@ -7,8 +7,10 @@
 })(typeof globalThis!=="undefined"?globalThis:this,function(){
   "use strict";
   function bind({$,state,workout:W,number,signal,actions,windowLike=globalThis.window,documentLike=globalThis.document,locationLike=globalThis.location,historyLike=globalThis.history,confirmImpl=globalThis.confirm}){
-    const {initialize,renderPlan,toast,selectWorkout,markDirty,errorMessage,entryFor,hasActuals,exercise,openSwap,toggleSuperset,applyRemembered,renderSession,startRest,tick,rememberPreferences,focusNextSet,flushSave,persistDraft,returnToPlan,exportDraft,resolveAdaptation,recover,removeDraft,scanDrafts,showCompleted,upsertHistory,openDetail,loadHistory,renderMetricOptions,renderChart,closeSwap,renderSwapComparison,applyWorkoutSwap,reviewPlanSwap,approvePlanSwap,assertIdentity,status,saveError}=actions;
+    const {initialize,renderPlan,resumeWorkout,toast,selectWorkout,markDirty,errorMessage,entryFor,hasActuals,exercise,openSwap,toggleSuperset,applyRemembered,renderSession,startRest,tick,rememberPreferences,focusNextSet,flushSave,persistDraft,returnToPlan,exportDraft,resolveAdaptation,recover,removeDraft,scanDrafts,showCompleted,upsertHistory,openDetail,loadHistory,renderMetricOptions,renderChart,closeSwap,renderSwapComparison,applyWorkoutSwap,reviewPlanSwap,approvePlanSwap,assertIdentity,status,saveError}=actions;
     $("retryLoad").addEventListener("click",()=>void initialize());
+    $("resumeWorkout").addEventListener("click",()=>void resumeWorkout());
+    $("retryWorkoutHistory").addEventListener("click",()=>void loadHistory());
     $("planDay").addEventListener("change",()=>{
       state.day=$("planDay").value;
       const url=new URL(locationLike.href);url.searchParams.set("day",state.day);historyLike.replaceState(null,"",url);
@@ -21,8 +23,9 @@
     });
     $("startWorkout").addEventListener("click",()=>{
       if(state.workout?.status==="active"||state.blocked)return;
-      if(state.historyBusy){toast("Checking your saved sessions. Try again in a moment.");return;}
-      const active=state.history.find((item)=>item.status==="active");
+      if(state.historyBusy||!state.historyLoaded){toast("Checking your saved workouts. Try again in a moment.");return;}
+      if(state.historyLoadError){toast("Retry workout history before starting another workout.");return;}
+      const active=state.recoveries.find((record)=>record.dirty&&record.workout.status==="active")?.workout||state.history.find((item)=>item.status==="active");
       if(active){
         toast("You already have a workout in progress. Resume it before starting another.");
         const recoveryIndex=state.recoveries.findIndex((record)=>record.dirty&&record.workout.id===active.id);

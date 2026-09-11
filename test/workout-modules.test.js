@@ -9,6 +9,7 @@ const State=require("../public/scripts/workout-state");
 const Api=require("../public/scripts/workout-api");
 const Calendar=require("../public/scripts/workout-calendar");
 const Render=require("../public/scripts/workout-render");
+const Context=require("../public/scripts/workout-context");
 const Guidance=require("../public/scripts/workout-guidance");
 const History=require("../public/scripts/workout-history");
 const Events=require("../public/scripts/workout-events");
@@ -71,13 +72,41 @@ test("training guidance keeps labels and explicit targets predictable",()=>{
   assert.equal(typeof Guidance.create,"function");assert.equal(typeof History.create,"function");
 });
 
+test("workout context exposes exactly one truthful action for each plan state",()=>{
+  const node=()=>({hidden:false,disabled:false,open:false,dataset:{},innerHTML:"",textContent:"",focus(){this.focused=true;}});
+  const render=(overrides={})=>{
+    const nodes=Object.fromEntries(["startWorkout","resumeWorkout","chooseScheduledDay","openPlannerFromEmpty","editWorkoutWeek","differentWorkout","planBrief","planPreviewDetails","planDay","planDayField","todayLabel","startTitle","planStatus","planPreview","startHint","trainHistoryNotice","trainHistoryMessage"].map((id)=>[id,node()]));
+    const state={plan:emptyWeek(),day:"Sunday",workout:null,recoveries:[],history:[],historyBusy:false,historyLoaded:true,historyLoadError:"",blocked:false,detailBusy:false,catalog:[],...overrides};
+    Context.create({$:id=>nodes[id],state,workout:W,view:{planPreview:()=>"preview"},esc:String,openDetail:async()=>{},recover:async()=>{}}).render();
+    return nodes;
+  };
+
+  const noPlan=render();
+  assert.equal(noPlan.planStatus.textContent,"You have not built a weekly plan yet.");
+  assert.equal(noPlan.openPlannerFromEmpty.hidden,false);assert.equal(noPlan.startWorkout.hidden,true);assert.equal(noPlan.resumeWorkout.hidden,true);assert.equal(noPlan.chooseScheduledDay.hidden,true);assert.equal(noPlan.differentWorkout.hidden,true);
+
+  const plan=emptyWeek();plan.days.Monday=[{exerciseId:"press",sets:3,reps:"8–12"}];
+  const emptyDay=render({plan});
+  assert.equal(emptyDay.startTitle.textContent,"Nothing scheduled.");
+  assert.equal(emptyDay.planStatus.textContent,"Nothing is scheduled for this day.");
+  assert.equal(emptyDay.editWorkoutWeek.hidden,false);assert.equal(emptyDay.chooseScheduledDay.hidden,false);assert.equal(emptyDay.chooseScheduledDay.dataset.day,"Monday");assert.equal(emptyDay.startWorkout.hidden,true);assert.equal(emptyDay.differentWorkout.hidden,true);
+
+  const scheduled=render({plan,day:"Monday"});
+  assert.equal(scheduled.planStatus.textContent,"Scheduled in your weekly plan.");
+  assert.equal(scheduled.startWorkout.hidden,false);assert.match(scheduled.startWorkout.innerHTML,/Start workout/);assert.equal(scheduled.differentWorkout.hidden,false);assert.equal(scheduled.resumeWorkout.hidden,true);
+
+  const active={id:"active-1",title:"Monday workout",date:"2026-09-11",status:"active",entries:[]};
+  const resumed=render({plan,day:"Monday",workout:active});
+  assert.equal(resumed.resumeWorkout.hidden,false);assert.equal(resumed.startWorkout.hidden,true);assert.equal(resumed.chooseScheduledDay.hidden,true);assert.equal(resumed.openPlannerFromEmpty.hidden,true);assert.equal(resumed.differentWorkout.hidden,true);
+});
+
 test("workout entry point is a bounded coordinator over dedicated modules",()=>{
   const main=readFileSync(join(ROOT,"public/scripts/workout.js"),"utf8"),html=readFileSync(join(ROOT,"public/pages/workout.html"),"utf8");
-  const ordered=["workout-state.js","workout-api.js","workout-calendar.js","workout-render.js","workout-guidance.js","workout-history.js","workout-events.js","workout.js"];
+  const ordered=["workout-state.js","workout-api.js","workout-calendar.js","workout-render.js","workout-context.js","workout-guidance.js","workout-history.js","workout-events.js","workout.js"];
   assert.ok(main.trimEnd().split("\n").length<=430,`workout.js coordinator is still too large: ${main.trimEnd().split("\n").length} lines`);
-  for(const [file,globalName] of [["workout-state.js","StrataWorkoutState"],["workout-api.js","StrataWorkoutApi"],["workout-calendar.js","StrataWorkoutCalendar"],["workout-render.js","StrataWorkoutRender"],["workout-guidance.js","StrataWorkoutGuidance"],["workout-history.js","StrataWorkoutHistory"],["workout-events.js","StrataWorkoutEvents"]]){
+  for(const [file,globalName] of [["workout-state.js","StrataWorkoutState"],["workout-api.js","StrataWorkoutApi"],["workout-calendar.js","StrataWorkoutCalendar"],["workout-render.js","StrataWorkoutRender"],["workout-context.js","StrataWorkoutContext"],["workout-guidance.js","StrataWorkoutGuidance"],["workout-history.js","StrataWorkoutHistory"],["workout-events.js","StrataWorkoutEvents"]]){
     const source=readFileSync(join(ROOT,"public/scripts",file),"utf8");assert.ok(Buffer.byteLength(source)<18_000,`${file} should remain focused`);assert.match(source,new RegExp(globalName));
   }
   for(let index=1;index<ordered.length;index++)assert.ok(html.indexOf(`/${ordered[index-1]}`)<html.indexOf(`/${ordered[index]}`),`${ordered[index-1]} must load before ${ordered[index]}`);
-  assert.match(main,/S\.create\(W,location\)/);assert.match(main,/A\.create\(/);assert.match(main,/R\.create\(/);assert.match(main,/Q\.create\(/);assert.match(main,/H\.create\(/);assert.match(main,/E\.bind\(/);assert.equal(typeof Events.bind,"function");
+  assert.match(main,/S\.create\(W,location\)/);assert.match(main,/A\.create\(/);assert.match(main,/R\.create\(/);assert.match(main,/T\.create\(/);assert.match(main,/Q\.create\(/);assert.match(main,/H\.create\(/);assert.match(main,/E\.bind\(/);assert.equal(typeof Context.create,"function");assert.equal(typeof Events.bind,"function");
 });

@@ -40,6 +40,7 @@
       compare:[],shortlist:[],collection:"all",query:"",group:"all",equipment:"all",pattern:"all",level:"all",sort:"personal",
       recommendations:[],activeExercise:null,activeFeature:null,explorerLimit:LIMITS.explorerDesktopPageSize,explorerSearchTimer:null,
       weeklyPlan:null,weeklyPlanUpdatedAt:0,workouts:[],workoutHistoryAvailable:false,workoutHistoryHasMore:false,
+      workoutHistoryStatus:"loading",workoutHistoryError:"",
       trainingBlock:null,trainingBlockRevision:0,trainingBlockAction:null,progressionSuggestion:null,
       session:null,sessionSaving:false,sessionDayInitialized:false,
       monthlyPlan:null,monthlyPlanUpdatedAt:0,monthlySchedule:null,monthlySource:"muscle-schedule",

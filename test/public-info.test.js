@@ -12,6 +12,10 @@ const BUILD=RELEASE.strataBuild||RELEASE.version;
 const read=(name)=>fs.readFileSync(path.join(PUBLIC_ROOT,"pages",name),"utf8");
 const visibleText=(html)=>html.replace(/<script[\s\S]*?<\/script>/gi," ").replace(/<style[\s\S]*?<\/style>/gi," ").replace(/<wbr\s*\/?>/gi,"").replace(/<[^>]+>/g," ").replace(/&nbsp;/g," ").replace(/\s+/g," ").trim();
 const text=(name)=>visibleText(read(name));
+const navLabels=(html,className)=>{
+  const nav=html.match(new RegExp(`<nav class="[^"]*${className}[^"]*"[\\s\\S]*?<\\/nav>`))?.[0]||"";
+  return[...nav.matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/g)].map((match)=>visibleText(match[1]));
+};
 
 test("homepage exposes pricing, contact, and the public policy directory without JavaScript",()=>{
   const home=read("index.html"),policies=read("policies.html");
@@ -30,6 +34,29 @@ test("homepage exposes pricing, contact, and the public policy directory without
   assert.match(text("index.html"),/never auto-converts/i);
   assert.match(text("index.html"),/renews monthly until canceled/i);
   assert.doesNotMatch(text("index.html"),/lifetime|one[- ]time|never a subscription/i);
+});
+
+test("the 7.8.1 editorial homepage and four-destination product identity remain canonical",()=>{
+  const home=read("index.html"),discover=read("discover.html"),planner=read("planner.html"),workout=read("workout.html");
+  assert.match(home,/<section class="hero"[^>]*aria-labelledby="hero-title"/);
+  assert.match(home,/<div class="hero-media" role="img" aria-label="Athlete performing a pull-up in a gym">/);
+  assert.match(home,/<h1 id="hero-title">YOUR NEXT<br \/>WORKOUT\.<br \/><em>READY\.<\/em><\/h1>/);
+  assert.ok(home.indexOf('class="hero"')<home.indexOf('id="rankings"'),"The editorial hero must lead instead of opening on the exercise catalog");
+  assert.match(home,/src="\/images\/strata-layers\.jpg"/);
+  assert.match(home,/src="\/images\/training-story\.jpg"/);
+  assert.match(home,/<section class="editorial-section">/);
+  assert.doesNotMatch(home,/<title>Exercises\b/i,"The rejected Exercises-first shell must not replace the STRATA homepage");
+
+  const expected=["Rankings","Strata+","Plan","Train"];
+  assert.deepEqual(navLabels(home,"desktop-nav"),expected);
+  assert.deepEqual(navLabels(discover,"studio-nav-desktop"),expected);
+  assert.deepEqual(navLabels(planner,"planner-primary-nav-desktop"),expected);
+  assert.deepEqual(navLabels(workout,"workout-nav-desktop"),expected);
+  for(const labels of [navLabels(home,"desktop-nav"),navLabels(discover,"studio-nav-desktop"),navLabels(planner,"planner-primary-nav-desktop"),navLabels(workout,"workout-nav-desktop")]){
+    assert.equal(labels.includes("Exercises"),false,"Exercises must not replace Rankings or Strata+ as a global destination");
+    assert.equal(labels.includes("Progress"),false,"Progress belongs inside Strata+, not global navigation");
+    assert.equal(labels.includes("Account"),false,"Account remains a utility action, not a primary product destination");
+  }
 });
 
 test("the public policies page publishes the founder story without cluttering the homepage",()=>{
@@ -60,7 +87,7 @@ test("core footers use the policy directory instead of repeating every legal pag
 });
 
 test("published Strata+ price and refund promise are exact and consistent",()=>{
-  assert.equal(BUILD,"7.8.2");
+  assert.equal(BUILD,"7.8.3");
   const pricingHtml=read("pricing.html"),pricing=text("pricing.html"),refunds=text("refunds.html"),terms=text("terms.html");
   assert.match(pricing,/Strata\+/);
   assert.match(pricing,/\$0\.99 USD/i);
