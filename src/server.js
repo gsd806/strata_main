@@ -12,6 +12,7 @@ const { createAuthService,configuredAdminEmail } = require("./auth");
 const { createAdminService } = require("./admin");
 const { createWorkoutService } = require("./workouts");
 const { createTrainingService } = require("./training");
+const { createCoachingService } = require("./coaching");
 const { createSetupService } = require("./setup");
 const { createSupportService } = require("./support");
 const { createProductSignalsService } = require("./product-signals");
@@ -145,17 +146,20 @@ const STATIC_FILES = new Map([
   ["discovery-core.js","scripts/discovery-core.js"],
   ["preview-core.js","scripts/preview-core.js"],
   ["monthly-plan-core.js","scripts/monthly-plan-core.js"],
+  ["personal-training-ui-core.js","scripts/personal-training-ui-core.js"],
   ["discover-state.js","scripts/discover-state.js"],
   ["discover-api.js","scripts/discover-api.js"],
   ["discover-navigation.js","scripts/discover-navigation.js"],
   ["discover-progress.js","scripts/discover-progress.js"],
   ["discover-render.js","scripts/discover-render.js"],
+  ["discover-coaching-render.js","scripts/discover-coaching-render.js"],
   ["discover-catalog.js","scripts/discover-catalog.js"],
   ["discover-detail.js","scripts/discover-detail.js"],
   ["discover-community.js","scripts/discover-community.js"],
   ["discover-session.js","scripts/discover-session.js"],
   ["discover-sharing.js","scripts/discover-sharing.js"],
   ["discover-events.js","scripts/discover-events.js"],
+  ["discover-coaching.js","scripts/discover-coaching.js"],
   ["discover.js","scripts/discover.js"],
   ["install.js","scripts/install.js"],
   ["offline.js","scripts/offline.js"],
@@ -223,6 +227,7 @@ let admin;
 let support;
 let workouts;
 let training;
+let coaching;
 let setup;
 let productSignals;
 let billing;
@@ -405,6 +410,7 @@ async function handleApi(req,res,url) {
   if (await auth.handleApi(req,res,url)) return;
   if (await admin.handleApi(req,res,url)) return;
   if (await training.handleApi(req,res,url)) return;
+  if (await coaching.handleApi(req,res,url)) return;
   if (await workouts.handleApi(req,res,url)) return;
   if (await setup.handleApi(req,res,url)) return;
   if (await billing.handleApi(req,res,url)) return;
@@ -731,6 +737,7 @@ async function start() {
   productSignals=createProductSignalsService({store,admin,trustedOrigin:trustedAuthOrigin,requestAddress,rateKeyAllowed,http:{json,bodyJson}});
   workouts=createWorkoutService({store,auth,requireAccess:requireDiscoveryAccess,rateAllowed,http:{json,bodyJson}});
   training=createTrainingService({store,auth,requireAccess:requireDiscoveryAccess,trustedOrigin:trustedAuthOrigin,rateAllowed,http:{json,bodyJson}});
+  coaching=createCoachingService({store,auth,requireAccess:requireDiscoveryAccess,trustedOrigin:trustedAuthOrigin,rateAllowed,http:{json,bodyJson}});
   setup=createSetupService({
     store,auth,requireAccess:requireDiscoveryAccess,trustedOrigin:trustedAuthOrigin,
     getPlanSnapshot:planSnapshotFor,getPreferencesSnapshot:preferencesSnapshotFor,getUserPayload:userPayload,

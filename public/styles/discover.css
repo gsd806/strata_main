@@ -942,7 +942,7 @@ html{overflow-x:clip}:where(a,button,input,select){touch-action:manipulation}.st
   .plus-studio .small-button { border-radius:7px; padding:10px 14px; }
   .plus-studio :focus-visible { outline:3px solid var(--accent); outline-offset:4px; }
   .plus-studio .feature-panel :focus-visible { outline-color:var(--accent); }
-  .plus-studio :where(.profile-section,.recommendation-section,.explorer-section,.monthly-section) :focus-visible { outline-color:#657a22; }
+  .plus-studio :where(.profile-section,.recommendation-section,.explorer-section,.monthly-section,.progress-workspace,.coaching-profile-form,.coaching-nutrition-section) :focus-visible { outline-color:#485617; }
   .plus-studio .build-footer { color:var(--studio-muted); font-size:.75rem; }
   @media(max-width:1100px) {
     .plus-studio .feature-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
@@ -994,9 +994,9 @@ html{overflow-x:clip}:where(a,button,input,select){touch-action:manipulation}.st
   .plus-studio .no-script-note { bottom:calc(68px + env(safe-area-inset-bottom)); }
 }
 
-/* Strata+ workspace: Today / Plan / Progress / Explore */
+/* Strata+ workspace: Today / Plan / Progress / Explore / Coaching */
 .workspace-switcher { position:relative; z-index:10; padding:14px 0; color:var(--studio-text,#f2f3eb); background:#10110f; border-bottom:1px solid var(--studio-line,#393d32); }
-.destination-nav { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+.destination-nav { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; }
 .destination-link { position:relative; min-width:0; min-height:68px; display:flex; flex-direction:column; justify-content:center; gap:4px; padding:10px 16px 10px 20px; overflow:hidden; border:1px solid #393d32; border-radius:10px; color:#f2f3eb; background:#181a16; text-decoration:none; transition:border-color .18s ease,background-color .18s ease,transform .18s var(--ease-out); }
 .destination-link::before { content:""; position:absolute; top:12px; bottom:12px; left:0; width:3px; background:transparent; }
 .destination-link span { font:700 15px/1.2 var(--body); }
@@ -1247,4 +1247,236 @@ html{overflow-x:clip}:where(a,button,input,select){touch-action:manipulation}.st
   .destination-link:hover,.destination-link:focus-visible { transform:none; }
   .plan-tool-disclosure > summary > b,.explore-advanced-tools > summary > b,.score-guide summary > b { transition:none; }
   .progress-loading .progress-state-mark { animation:none; }
+}
+
+.progress-calorie-setup,.progress-calorie-card { margin:24px 0; padding:clamp(22px,4vw,34px); border:1px solid var(--line); border-radius:14px; color:var(--ink); background:#fff; }
+.progress-calorie-setup,.progress-calorie-head { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; }
+.progress-calorie-setup h3,.progress-calorie-head h3 { margin:6px 0 8px; font:700 clamp(1.45rem,3vw,2.2rem)/1.05 var(--body); letter-spacing:-.04em; }
+.progress-calorie-setup p:not(.kicker),.progress-calorie-head p:not(.kicker) { max-width:680px; margin:0; color:var(--muted); line-height:1.55; }
+.progress-calorie-setup .small-button,.progress-calorie-head .small-button { flex:none; }
+.progress-calorie-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); margin-top:22px; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+.progress-calorie-summary .coaching-progress-stat { border-color:var(--line); }
+.progress-calorie-summary .coaching-progress-stat span,.progress-calorie-summary .coaching-progress-stat small { color:var(--muted); }
+.progress-calorie-summary .coaching-progress-stat strong { color:var(--ink); }
+.progress-calorie-form { display:grid; grid-template-columns:1.15fr repeat(4,minmax(100px,.75fr)) auto; align-items:end; gap:9px; margin-top:12px; padding:18px; border-radius:10px; background:#f0efe9; }
+.progress-calorie-form > label { min-width:0; display:grid; gap:8px; }
+.progress-calorie-form label > span { font-weight:700; font-size:.75rem; }
+.progress-calorie-form input,.progress-calorie-form select { min-width:0; width:100%; min-height:50px; padding:10px 12px; border:1px solid #b9bbb0; border-radius:6px; color:var(--ink); background:#fff; }
+.progress-calorie-form .button { min-height:50px; }
+.progress-calorie-form > p { grid-column:1/-1; min-height:20px; margin:3px 0 0; color:var(--muted); font-size:.75rem; }
+
+/* Personal training and calorie counting */
+.coaching-workspace { min-height:720px; padding:clamp(68px,8vw,106px) 0; color:var(--studio-text); background:radial-gradient(circle at 92% 3%,rgba(212,245,120,.11),transparent 24%),linear-gradient(180deg,#10110f 0%,#151712 55%,#10110f 100%); }
+.coaching-workspace [hidden] { display:none!important; }
+.coaching-heading { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(300px,.7fr); align-items:end; gap:clamp(36px,6vw,86px); padding-bottom:clamp(42px,6vw,70px); border-bottom:1px solid var(--studio-line); }
+.coaching-heading .kicker,.coaching-dashboard .kicker { color:var(--accent); }
+.coaching-heading h2 { max-width:900px; margin:0; font:700 clamp(3rem,6vw,5.7rem)/.94 var(--body); letter-spacing:-.06em; text-transform:uppercase; text-wrap:balance; }
+.coaching-heading h2 em { color:var(--accent); font-style:normal; }
+.coaching-heading > p { max-width:470px; margin:0; color:var(--studio-muted); font-size:1rem; line-height:1.7; }
+.coaching-state { min-height:126px; display:flex; align-items:center; gap:18px; margin-top:30px; padding:25px; border:1px solid var(--studio-line); border-radius:14px; background:#181a16; }
+.coaching-state > span { flex:0 0 auto; width:44px; height:44px; display:grid; place-items:center; border:1px solid #59634b; border-radius:50%; color:var(--accent); font:500 1rem var(--mono); }
+.coaching-loading > span { animation:loading-spin 1.15s linear infinite; }
+.coaching-state > div { min-width:0; }
+.coaching-state strong { display:block; font-size:1rem; }
+.coaching-state p { margin:6px 0 0; color:var(--studio-muted); font-size:.875rem; line-height:1.55; }
+.coaching-error { border-color:#864131; background:#211713; }
+.coaching-error > span { border-color:#d75a42; color:#ff8068; }
+.coaching-error .small-button { flex:none; margin-left:auto; color:#ffd4cc; border-color:#d75a42; }
+.coaching-onboarding,.coaching-dashboard { margin-top:30px; }
+.coaching-setup-intro { display:grid; grid-template-columns:auto minmax(0,1fr); gap:24px; padding:clamp(24px,4vw,42px); border:1px solid var(--studio-line); border-bottom:0; border-radius:16px 16px 0 0; background:linear-gradient(135deg,#1d2119,#171915); }
+.coaching-setup-intro > span { width:48px; height:48px; display:grid; place-items:center; border:1px solid #667153; border-radius:50%; color:var(--accent); font:500 .75rem var(--mono); }
+.coaching-setup-intro h3,.coaching-dashboard-head h3 { margin:6px 0 12px; font:700 clamp(1.9rem,4vw,3.6rem)/1 var(--body); letter-spacing:-.05em; text-wrap:balance; }
+.coaching-setup-intro p:not(.kicker),.coaching-dashboard-head p:not(.kicker) { max-width:760px; margin:0; color:var(--studio-muted); line-height:1.65; }
+.coaching-profile-form { overflow:hidden; border:1px solid var(--studio-line); border-radius:0 0 16px 16px; background:#f0efe9; color:var(--ink); }
+.coaching-form-section { min-width:0; margin:0; padding:clamp(24px,4vw,40px); border:0; border-bottom:1px solid #c8c9bf; }
+.coaching-form-section > legend { display:flex; align-items:center; gap:12px; padding:0; font:700 clamp(1.25rem,2.6vw,1.7rem)/1.2 var(--body); letter-spacing:-.03em; }
+.coaching-form-section > legend > span { width:31px; height:31px; display:grid; place-items:center; border:1px solid #94988b; border-radius:50%; color:#485617; font:700 .625rem var(--mono); }
+.coaching-field-intro { max-width:800px; margin:12px 0 24px; color:var(--muted); font-size:.875rem; line-height:1.65; }
+.coaching-fields { display:grid; gap:12px; }
+.coaching-fields-four { grid-template-columns:repeat(4,minmax(0,1fr)); }
+.coaching-fields-three { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.coaching-fields-two { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.coaching-fields > label,.coaching-log-form > label { min-width:0; display:grid; align-content:start; gap:8px; }
+.coaching-fields label > span:first-child,.coaching-log-form label > span:first-child { min-height:21px; font-weight:700; font-size:.8125rem; }
+.coaching-fields label > span small { margin-left:5px; color:var(--muted); font-weight:400; }
+.coaching-fields input,.coaching-fields select,.coaching-capability-row input,.coaching-capability-row select,.coaching-log-form input,.coaching-log-form select { min-width:0; width:100%; min-height:50px; padding:10px 12px; border:1px solid #b9bbb0; color:var(--ink); background:#faf9f5; }
+.coaching-fields input:disabled,.coaching-fields select:disabled { color:#777a72; background:#e2e1db; cursor:not-allowed; }
+.coaching-fields label > small { color:var(--muted); font-size:.6875rem; line-height:1.45; }
+.coaching-unit-input { min-width:0; display:grid; grid-template-columns:minmax(0,1fr) 72px; }
+.coaching-unit-input input { border-radius:6px 0 0 6px!important; }
+.coaching-unit-input select { border-left:0; border-radius:0 6px 6px 0!important; }
+.coaching-suffix-input { position:relative; display:block; }
+.coaching-suffix-input input { padding-right:36px; }
+.coaching-suffix-input b { position:absolute; top:50%; right:14px; color:var(--muted); transform:translateY(-50%); }
+.coaching-day-fieldset { margin:24px 0 0; padding:0; border:0; }
+.coaching-day-fieldset > legend { font-weight:700; font-size:.8125rem; }
+.coaching-day-fieldset > p { margin:7px 0 12px; color:var(--muted); font-size:.75rem; }
+.coaching-day-choices { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:7px; }
+.coaching-day-choices label { position:relative; min-width:0; }
+.coaching-day-choices input { position:absolute; width:1px; height:1px; opacity:0; }
+.coaching-day-choices span { min-height:48px; display:grid; place-items:center; border:1px solid #aeb1a5; border-radius:8px; background:#faf9f5; font:600 .75rem var(--mono); }
+.coaching-day-choices input:checked + span { color:var(--ink); background:var(--accent); border-color:var(--ink); box-shadow:inset 0 -3px var(--orange); }
+.coaching-day-choices input:focus-visible + span { outline:3px solid #657a22; outline-offset:2px; }
+.coaching-equipment-note { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:16px; margin-top:18px; padding:17px; border-left:3px solid #657a22; background:#e5e5dc; }
+.coaching-equipment-note > span { font-weight:700; }
+.coaching-equipment-note p { margin:0; color:var(--muted); font-size:.8125rem; line-height:1.5; }
+.coaching-equipment-note a { min-height:44px; display:inline-flex; align-items:center; gap:8px; color:#4d5e16; font-weight:700; font-size:.75rem; }
+.coaching-capability-labels,.coaching-capability-row { display:grid; grid-template-columns:minmax(190px,2fr) repeat(2,minmax(64px,.45fr)) minmax(90px,.65fr) minmax(70px,.45fr) 44px; gap:8px; align-items:center; }
+.coaching-capability-labels { padding:0 4px 8px; color:var(--muted); font:500 .625rem var(--mono); text-transform:uppercase; }
+.coaching-capability-rows { display:grid; gap:8px; }
+.coaching-capability-row { padding:10px; border:1px solid #c6c8be; border-radius:10px; background:#e9e8e1; }
+.coaching-capability-row button { width:44px; height:44px; border:1px solid #a9aca0; border-radius:6px; color:#8c2d1c; background:#faf9f5; font-size:1.1rem; }
+.coaching-add-capability { margin-top:12px; }
+.coaching-pattern-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.coaching-pattern-grid label { position:relative; min-width:0; }
+.coaching-pattern-grid input { position:absolute; width:1px; height:1px; opacity:0; }
+.coaching-pattern-grid label > span { min-height:124px; display:flex; flex-direction:column; gap:8px; padding:19px; border:1px solid #b9bbb0; border-radius:10px; background:#faf9f5; }
+.coaching-pattern-grid strong { font-size:1rem; }
+.coaching-pattern-grid small { color:var(--muted); line-height:1.55; }
+.coaching-pattern-grid input:checked + span { border-color:var(--ink); background:#e6f4be; box-shadow:inset 0 -4px var(--accent); }
+.coaching-pattern-grid input:focus-visible + span { outline:3px solid #657a22; outline-offset:2px; }
+.coaching-pattern-options { align-items:end; margin-top:14px; }
+.coaching-switch { min-height:72px; grid-template-columns:auto minmax(0,1fr); align-items:center!important; gap:12px!important; padding:12px 15px; border:1px solid #b9bbb0; border-radius:8px; background:#faf9f5; }
+.coaching-switch input { width:22px!important; min-height:22px!important; }
+.coaching-switch > span { min-height:0!important; display:grid; gap:3px; }
+.coaching-switch small { color:var(--muted); font-weight:400; }
+.coaching-validation { margin:20px clamp(24px,4vw,40px) 0; padding:15px 17px; border-left:4px solid var(--orange); color:#7e2616; background:#fff0eb; line-height:1.5; }
+.coaching-profile-actions { display:flex; align-items:center; gap:18px; padding:24px clamp(24px,4vw,40px); color:var(--studio-text); background:#181a16; }
+.coaching-profile-actions > span { color:var(--studio-muted); font-size:.8125rem; line-height:1.5; }
+.coaching-dashboard { overflow:hidden; border:1px solid var(--studio-line); border-radius:18px; background:#141612; }
+.coaching-dashboard-head { display:flex; align-items:end; justify-content:space-between; gap:30px; padding:clamp(26px,5vw,54px); background:radial-gradient(circle at 90% 0,rgba(212,245,120,.12),transparent 34%),#171a15; }
+.coaching-dashboard-head > div { min-width:0; }
+.coaching-dashboard-head .small-button { flex:none; color:var(--accent); border-color:#5a654b; }
+.coaching-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border-top:1px solid var(--studio-line); border-left:1px solid var(--studio-line); }
+.coaching-metrics article { min-width:0; min-height:154px; display:flex; flex-direction:column; padding:22px; border-right:1px solid var(--studio-line); border-bottom:1px solid var(--studio-line); }
+.coaching-metrics span { color:var(--studio-muted); font:500 .625rem var(--mono); letter-spacing:.06em; text-transform:uppercase; }
+.coaching-metrics strong { margin:auto 0 8px; color:var(--studio-text); font:700 clamp(1.65rem,3vw,2.5rem)/1 var(--body); letter-spacing:-.04em; overflow-wrap:anywhere; }
+.coaching-metrics small { color:var(--studio-muted); font-size:.6875rem; line-height:1.45; }
+.coaching-metric-accent { background:var(--accent); }
+.coaching-metric-accent :where(span,strong,small) { color:var(--ink)!important; }
+.coaching-goal-comparison { display:grid; grid-template-columns:minmax(210px,.55fr) minmax(0,1.45fr); align-items:center; gap:24px; padding:22px clamp(28px,5vw,50px); border-bottom:1px solid var(--studio-line); background:#1a1d18; }
+.coaching-goal-comparison h4 { margin:6px 0 0; font:700 clamp(1.3rem,2.7vw,2rem)/1 var(--body); letter-spacing:-.04em; }
+.coaching-goal-comparison > div:last-child { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); border:1px solid #42473d; border-radius:10px; overflow:hidden; }
+.coaching-goal-option { min-width:0; display:grid; gap:6px; padding:15px; border-right:1px solid #42473d; }
+.coaching-goal-option:last-child { border-right:0; }
+.coaching-goal-option span { color:var(--studio-muted); font:500 .625rem var(--mono); text-transform:uppercase; }
+.coaching-goal-option strong { color:var(--studio-text); font-size:1.25rem; overflow-wrap:anywhere; }
+.coaching-goal-option small { color:var(--studio-muted); font-size:.6875rem; line-height:1.4; }
+.coaching-goal-option.is-selected { background:var(--accent); }
+.coaching-goal-option.is-selected :where(span,strong,small) { color:var(--ink); }
+.coaching-week-section,.coaching-nutrition-section,.coaching-progress-section { padding:clamp(28px,5vw,50px); border-bottom:1px solid var(--studio-line); }
+.coaching-section-head { display:flex; align-items:end; justify-content:space-between; gap:30px; margin-bottom:24px; }
+.coaching-section-head h4 { margin:7px 0 0; font:700 clamp(1.7rem,3.8vw,3rem)/1 var(--body); letter-spacing:-.045em; }
+.coaching-section-head > div:last-child { display:grid; justify-items:end; gap:6px; color:var(--accent); font:500 .6875rem var(--mono); text-transform:uppercase; }
+.coaching-section-head > p { max-width:430px; margin:0; color:var(--studio-muted); font-size:.875rem; line-height:1.6; }
+.coaching-week-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:8px; }
+.coaching-day-card { min-width:0; min-height:285px; display:flex; flex-direction:column; padding:16px; border:1px solid #363b31; border-radius:11px; background:#191c17; }
+.coaching-day-card.is-training { border-top:4px solid var(--accent); }
+.coaching-day-card.is-rest { color:var(--studio-muted); background:#11130f; }
+.coaching-day-card header { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; padding-bottom:12px; border-bottom:1px solid #34382f; }
+.coaching-day-card header span { color:var(--accent); font:500 .625rem var(--mono); text-transform:uppercase; }
+.coaching-day-card header time { color:var(--studio-muted); font:400 .5625rem var(--mono); }
+.coaching-day-card h5 { margin:13px 0 6px; font-size:.9375rem; line-height:1.25; }
+.coaching-day-card > p { margin:0; color:var(--studio-muted); font-size:.6875rem; line-height:1.45; }
+.coaching-day-card ol { display:grid; gap:9px; margin:15px 0 0; padding:0; list-style:none; }
+.coaching-day-card li { display:grid; gap:3px; padding-top:8px; border-top:1px solid #30342d; }
+.coaching-day-card li strong { font-size:.75rem; line-height:1.35; overflow-wrap:anywhere; }
+.coaching-day-card li span { color:var(--studio-muted); font:400 .625rem/1.4 var(--mono); }
+.coaching-method-note { margin:18px 0 0; padding:14px 16px; border-left:3px solid var(--accent); color:var(--studio-muted); background:#1b1f18; font-size:.75rem; line-height:1.6; }
+.coaching-nutrition-section { color:var(--ink); background:#f0efe9; }
+.coaching-nutrition-section .kicker { color:#485617; }
+.coaching-nutrition-section .coaching-section-head > p { color:var(--muted); }
+.coaching-calorie-week { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:8px; }
+.coaching-calorie-card { min-width:0; min-height:150px; display:flex; flex-direction:column; padding:15px; border:1px solid #c3c5bb; border-radius:10px; background:#faf9f5; }
+.coaching-calorie-card.is-today { border-color:var(--ink); box-shadow:inset 0 -4px var(--accent); }
+.coaching-calorie-card.is-flexible { background:#eaf5c9; }
+.coaching-calorie-card span { color:var(--muted); font:500 .625rem var(--mono); text-transform:uppercase; }
+.coaching-calorie-card strong { margin:auto 0 5px; font:700 clamp(1.35rem,2.3vw,1.8rem)/1 var(--body); letter-spacing:-.035em; }
+.coaching-calorie-card small { color:var(--muted); font-size:.6875rem; line-height:1.4; }
+.coaching-calorie-card dl { display:grid; gap:3px; margin:10px 0 0; padding-top:9px; border-top:1px solid #d6d7cf; font:400 .5625rem var(--mono); }
+.coaching-calorie-card dl div { display:flex; justify-content:space-between; gap:6px; }
+.coaching-calorie-card dt { color:var(--muted); }
+.coaching-calorie-card dd { margin:0; font-weight:500; }
+.coaching-projection-layout { display:grid; grid-template-columns:minmax(0,1.4fr) minmax(280px,.6fr); gap:12px; margin-top:28px; }
+.coaching-projection,.coaching-method-card { min-width:0; padding:24px; border:1px solid #c5c7bd; border-radius:12px; background:#faf9f5; }
+.coaching-projection h5,.coaching-method-card h5 { margin:6px 0 18px; font:700 1.25rem/1.2 var(--body); letter-spacing:-.025em; }
+.coaching-projection-chart { min-height:180px; }
+.coaching-projection-chart svg { width:100%; height:auto; display:block; overflow:visible; }
+.coaching-projection-chart text { fill:#62655e; font:10px var(--mono); }
+.coaching-projection-chart .projection-line { fill:none; stroke:#657a22; stroke-width:3; }
+.coaching-projection-chart .projection-range { fill:rgba(212,245,120,.38); }
+.coaching-projection-chart .projection-grid { stroke:#d1d2ca; stroke-width:1; }
+.coaching-projection-data { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:14px 0 0; }
+.coaching-projection-data div { min-width:0; padding:10px; border:1px solid #d1d2ca; border-radius:8px; }
+.coaching-projection-data dt { color:var(--muted); font:500 .625rem var(--mono); text-transform:uppercase; }
+.coaching-projection-data dd { display:grid; gap:3px; margin:6px 0 0; }
+.coaching-projection-data strong { font-size:.875rem; }
+.coaching-projection-data span { color:var(--muted); font-size:.625rem; line-height:1.4; }
+.coaching-projection > p:last-child,.coaching-method-card > p { margin:14px 0 0; color:var(--muted); font-size:.75rem; line-height:1.6; }
+.coaching-method-card ul { display:grid; gap:9px; margin:0; padding-left:18px; color:#484b45; font-size:.8125rem; line-height:1.5; }
+.coaching-progress-section { border-bottom:0; }
+.coaching-progress-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); margin-bottom:14px; border:1px solid #3a3f34; border-radius:12px; overflow:hidden; }
+.coaching-progress-stat { min-width:0; display:grid; gap:7px; padding:20px; border-right:1px solid #3a3f34; }
+.coaching-progress-stat:last-child { border-right:0; }
+.coaching-progress-stat span { color:var(--studio-muted); font:500 .625rem var(--mono); text-transform:uppercase; }
+.coaching-progress-stat strong { color:var(--accent); font:700 clamp(1.4rem,3vw,2rem)/1 var(--body); overflow-wrap:anywhere; }
+.coaching-progress-stat small { color:var(--studio-muted); font-size:.6875rem; line-height:1.4; }
+.coaching-log-form { display:grid; grid-template-columns:1.1fr repeat(4,minmax(110px,.75fr)) auto; align-items:end; gap:9px; padding:20px; border:1px solid #3a3f34; border-radius:12px; background:#191c17; }
+.coaching-log-form label > span { color:var(--studio-muted); }
+.coaching-log-form .button { min-height:50px; }
+.coaching-log-form > p { grid-column:1/-1; min-height:20px; margin:3px 0 0; color:var(--studio-muted); font-size:.75rem; }
+
+@media(max-width:1180px) {
+  .coaching-fields-four { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .coaching-week-grid,.coaching-calorie-week { grid-template-columns:repeat(4,minmax(0,1fr)); }
+  .coaching-day-card:last-child,.coaching-calorie-card:last-child { grid-column:2 / span 2; }
+  .coaching-log-form { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .coaching-log-form .button { width:100%; }
+  .progress-calorie-form { grid-template-columns:repeat(3,minmax(0,1fr)); }
+}
+@media(max-width:800px) {
+  .destination-nav { grid-template-columns:none; grid-auto-flow:column; grid-auto-columns:minmax(142px,1fr); overflow-x:auto; padding-bottom:3px; scrollbar-width:thin; scroll-snap-type:x proximity; }
+  .destination-link { scroll-snap-align:start; }
+  .coaching-heading,.coaching-projection-layout { grid-template-columns:minmax(0,1fr); }
+  .coaching-heading { align-items:start; }
+  .coaching-fields-three,.coaching-pattern-grid { grid-template-columns:minmax(0,1fr); }
+  .coaching-capability-labels { display:none; }
+  .coaching-capability-row { grid-template-columns:repeat(4,minmax(0,1fr)) 44px; }
+  .coaching-capability-row [data-capability-exercise] { grid-column:1/-1; }
+  .coaching-capability-row [data-remove-capability] { grid-column:5; grid-row:2; }
+  .coaching-week-grid,.coaching-calorie-week { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .coaching-day-card:last-child,.coaching-calorie-card:last-child { grid-column:1/-1; }
+  .coaching-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .coaching-dashboard-head,.coaching-section-head { align-items:flex-start; flex-direction:column; }
+  .coaching-dashboard-head .small-button { width:100%; }
+  .coaching-goal-comparison { grid-template-columns:minmax(0,1fr); }
+  .progress-calorie-head,.progress-calorie-setup { align-items:stretch; flex-direction:column; }
+  .progress-calorie-head .small-button,.progress-calorie-setup .small-button { width:100%; text-align:center; }
+}
+@media(max-width:560px) {
+  .coaching-heading h2 { font-size:clamp(2.45rem,14vw,4rem); overflow-wrap:normal; word-break:normal; }
+  .coaching-setup-intro { grid-template-columns:minmax(0,1fr); }
+  .coaching-fields-four,.coaching-fields-two,.coaching-metrics,.coaching-progress-summary,.coaching-log-form,.progress-calorie-summary,.progress-calorie-form,.coaching-goal-comparison > div:last-child { grid-template-columns:minmax(0,1fr); }
+  .coaching-state { display:grid; grid-template-columns:44px minmax(0,1fr); align-items:start; }
+  .coaching-error .small-button { grid-column:1/-1; width:100%; margin-left:0; text-align:center; }
+  .coaching-day-choices { grid-template-columns:repeat(4,minmax(0,1fr)); }
+  .coaching-equipment-note { grid-template-columns:minmax(0,1fr); }
+  .coaching-capability-row { grid-template-columns:repeat(2,minmax(0,1fr)) 44px; }
+  .coaching-capability-row [data-capability-exercise] { grid-column:1/-1; }
+  .coaching-capability-row [data-capability-weight] { grid-column:1; }
+  .coaching-capability-row [data-capability-unit] { grid-column:2; }
+  .coaching-capability-row [data-remove-capability] { grid-column:3; grid-row:3; }
+  .coaching-profile-actions { align-items:stretch; flex-direction:column; }
+  .coaching-profile-actions .button { width:100%; }
+  .coaching-week-grid,.coaching-calorie-week { grid-template-columns:minmax(0,1fr); }
+  .coaching-day-card:last-child,.coaching-calorie-card:last-child { grid-column:auto; }
+  .coaching-progress-stat { border-right:0; border-bottom:1px solid #3a3f34; }
+  .coaching-progress-stat:last-child { border-bottom:0; }
+  .coaching-goal-option { border-right:0; border-bottom:1px solid #42473d; }
+  .coaching-goal-option:last-child { border-bottom:0; }
+  .coaching-projection-chart svg { display:none; }
+  .coaching-projection-data { grid-template-columns:minmax(0,1fr); }
+}
+@media(prefers-reduced-motion:reduce) {
+  .coaching-loading > span { animation:none; }
 }

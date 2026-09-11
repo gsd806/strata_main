@@ -15,6 +15,7 @@
     plan:Object.freeze({panelId:"planWorkspace",headingId:"planWorkspaceTitle",label:"Plan"}),
     progress:Object.freeze({panelId:"progressWorkspace",headingId:"progressWorkspaceTitle",label:"Progress"}),
     explore:Object.freeze({panelId:"exploreWorkspace",headingId:"exploreWorkspaceTitle",label:"Explore"}),
+    coaching:Object.freeze({panelId:"coachingWorkspace",headingId:"coachingWorkspaceTitle",label:"Personal training and calorie counting"}),
     recommendations:Object.freeze({panelId:"recommendations",headingId:"recommendationTitle",label:"Best exercises for you"}),
     library:Object.freeze({panelId:"exerciseExplorer",headingId:"explorerTitle",label:"Exercise library"}),
     battle:Object.freeze({panelId:"battle",headingId:"battleTitle",label:"Compare exercises"}),

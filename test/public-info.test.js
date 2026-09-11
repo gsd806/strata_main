@@ -87,7 +87,7 @@ test("core footers use the policy directory instead of repeating every legal pag
 });
 
 test("published Strata+ price and refund promise are exact and consistent",()=>{
-  assert.equal(BUILD,"7.8.6");
+  assert.equal(BUILD,"7.8.7");
   const pricingHtml=read("pricing.html"),pricing=text("pricing.html"),refunds=text("refunds.html"),terms=text("terms.html");
   assert.match(pricing,/Strata\+/);
   assert.match(pricing,/\$0\.99 USD/i);
@@ -168,7 +168,9 @@ test("public policies distinguish self-service from guarded administrator deleti
     assert.match(copy,/paused non-owner account|non-owner account after pausing it/i);
     assert.match(copy,/does not cancel a live Paddle subscription|not subscription cancellation and is not a refund/i);
   }
-  assert.match(terms,/exact account email and an audit reason/i);
+  assert.match(terms,/one explicit review/i);
+  assert.match(terms,/server-generated action-specific audit reason/i);
+  assert.doesNotMatch(terms,/exact account email and an audit reason/i);
   assert.match(privacy,/re-checks Paddle and database blockers/i);
   assert.match(privacy,/cannot delete the primary owner/i);
 });

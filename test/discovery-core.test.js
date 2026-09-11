@@ -125,7 +125,7 @@ test("session builder is deterministic, time-bounded, and varied across every fo
 
 test("session builder honors equipment and movement constraints before ranking",()=>{
   const constrained={goal:"balanced",level:"Beginner",days:3,equipment:["Dumbbells","Machine","Cables"],preferences:["stable","simple-setup"],limitations:["no-overhead","no-floor","no-unilateral"]};
-  for(const focus of Object.keys(Core.SESSION_FOCUSES).filter((value)=>value!=="core")){
+  for(const focus of Object.keys(Core.SESSION_FOCUSES)){
     const session=Core.buildSession({exercises,preferences:constrained,focus,minutes:35});
     for(const item of session.items){
       assert.ok(constrained.equipment.includes(item.exercise.equipment),`${item.exerciseId} equipment`);
@@ -133,11 +133,10 @@ test("session builder honors equipment and movement constraints before ranking",
       assert.equal(Core.personalResult(item.exercise,constrained).eligible,true,item.exerciseId);
     }
   }
-  assert.throws(()=>Core.buildSession({exercises,preferences:constrained,focus:"core",minutes:35}),{code:"SESSION_ROLE_UNAVAILABLE",message:/deep-core control/i});
   assert.throws(()=>Core.buildSession({exercises,preferences:constrained,focus:"unknown",minutes:35}),{code:"INVALID_SESSION_FOCUS"});
   assert.throws(()=>Core.buildSession({exercises,preferences:constrained,focus:"full",minutes:45}),{code:"INVALID_SESSION_LENGTH"});
   assert.throws(()=>Core.buildSession({exercises,preferences:{...constrained,equipment:[]},focus:"core",minutes:20}),{code:"SESSION_POOL_TOO_SMALL"});
-  assert.throws(()=>Core.buildSession({exercises,preferences:{...preferences,equipment:["Barbell / Smith"],limitations:["no-unsupported-hinge"]},focus:"full",minutes:20}),{code:"SESSION_ROLE_UNAVAILABLE",message:/upper-body pull/i});
+  assert.throws(()=>Core.buildSession({exercises:exercises.filter((exercise)=>exercise.group!=="back"),preferences:{...preferences,equipment:[...equipment]},focus:"full",minutes:20}),{code:"SESSION_ROLE_UNAVAILABLE",message:/upper-body pull/i});
 });
 
 test("session builder rotates strong choices around exercises already in the saved week",()=>{
@@ -263,7 +262,7 @@ test("search, collections, filters, and sorts return the expected library slices
   assert.ok(beginnerResults.every((exercise)=>exercise.level==="Beginner"));
 
   const bodyweightResults=Core.filterExercises(exercises,{...base,collection:"bodyweight"},preferences,aggregateFor);
-  assert.equal(bodyweightResults.length,50);
+  assert.equal(bodyweightResults.length,exercises.filter((exercise)=>exercise.equipment==="Bodyweight").length);
   assert.ok(bodyweightResults.every((exercise)=>exercise.equipment==="Bodyweight"));
 
   assert.deepEqual(Core.filterExercises(exercises,{...base,collection:"community",sort:"community"},preferences,aggregateFor).map((exercise)=>exercise.id),["flat-dumbbell-press"]);
@@ -282,12 +281,12 @@ test("decision board normalization is bounded, unique, and limited to real catal
 });
 
 test("all exercises retain complete YouTube, scoring, and instruction data",()=>{
-  assert.equal(exercises.length,200);
+  assert.equal(exercises.length,320);
   assert.equal(new Set(exercises.map((exercise)=>exercise.id)).size,exercises.length,"Exercise IDs must be unique");
   assert.equal(new Set(exercises.map((exercise)=>exercise.name.toLowerCase())).size,exercises.length,"Exercise names must be unique");
-  assert.deepEqual(Object.fromEntries(Object.keys(groups).map((group)=>[group,exercises.filter((exercise)=>exercise.group===group).length])),Object.fromEntries(Object.keys(groups).map((group)=>[group,25])));
-  assert.deepEqual(Object.fromEntries(Object.keys(groups).map((group)=>[group,exercises.filter((exercise)=>exercise.group===group&&exercise.equipment==="Bodyweight").length])),{chest:6,back:6,shoulders:6,arms:6,legs:7,glutes:6,calves:7,core:6});
-  assert.equal(exercises.filter((exercise)=>exercise.equipment==="Bodyweight").length,50);
+  assert.deepEqual(Object.fromEntries(Object.keys(groups).map((group)=>[group,exercises.filter((exercise)=>exercise.group===group).length])),{chest:41,back:42,shoulders:41,arms:41,legs:41,glutes:41,calves:32,core:41});
+  assert.deepEqual(Object.fromEntries(Object.keys(groups).map((group)=>[group,exercises.filter((exercise)=>exercise.group===group&&exercise.equipment==="Bodyweight").length])),{chest:8,back:7,shoulders:7,arms:6,legs:10,glutes:10,calves:10,core:13});
+  assert.equal(exercises.filter((exercise)=>exercise.equipment==="Bodyweight").length,71);
   for(const [group,targets] of Object.entries(groups))for(const target of targets)assert.ok(exercises.filter((exercise)=>exercise.group===group&&exercise.sub===target).length>=3,`${group} / ${target} needs at least three choices`);
   for(const exercise of exercises){
     assert.deepEqual(Object.keys(exercise),fields,`${exercise.id} field order`);

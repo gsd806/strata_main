@@ -157,7 +157,7 @@ test("My preferences learns same-muscle choices from saved, highly rated and rep
 test("conflicting preference evidence never invents a shortage of alternatives",()=>{
   const preferred="chinup",workouts=Array.from({length:10},(_,index)=>workout(`repeat-${index}`,"2026-09-10",[[preferred,3]]));
   const session=Core.buildSession({...options,selectionMode:"preferences",muscleGroup:"arms",muscleTarget:"Biceps",shortlist:[preferred],userRatings:new Map([[preferred,{overall:1,enjoyment:1}]]),workouts,workoutHistoryAvailable:true});
-  assert.equal(exercises.filter((exercise)=>exercise.sub==="Biceps").length,7);
+  assert.ok(exercises.filter((exercise)=>exercise.sub==="Biceps").length>=7);
   assert.equal(session.items[0].exerciseId,preferred);
   const reason=session.items[0].reasons.join(" ");
   assert.match(reason,/rating is 1\/5.*saved to your shortlist.*completed in 10/);

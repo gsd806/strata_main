@@ -422,7 +422,7 @@ test("training journeys use real browser controls and isolated local fixtures",{
     const {context,page}=await newPage({viewport:{width:390,height:844},reducedMotion:"reduce"});
     await goto(page,"/workout.html?guest=1");assert.match(page.url(),/account.html/);
     await signup(context,"setup");
-    await goto(page,"/");await page.waitForFunction(()=>globalThis.document.querySelector("#catalogTotal")?.textContent==="200"&&globalThis.document.querySelector("#accountButton")?.textContent?.includes("profile"));
+    await goto(page,"/");await page.waitForFunction(()=>globalThis.document.querySelector("#catalogTotal")?.textContent==="320"&&globalThis.document.querySelector("#accountButton")?.textContent?.includes("profile"));
     assert.equal(await page.locator("[data-compare]").count(),0,"A signed-in free account must not receive homepage comparison controls");
     await goto(page,"/onboarding.html");assert.match(page.url(),/pricing/);
     await activatePlus(context);

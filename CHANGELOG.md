@@ -1,5 +1,17 @@
 # Changelog
 
+## 7.8.7 — Personal training and calorie planning
+
+- Expand the exercise catalog from 200 to 320 movements, including 71 bodyweight options, while preserving unique IDs and complete scoring, instruction, caution, and guide metadata.
+- Add Personal training and calorie counting as the fifth Strata+ destination, with a metric or imperial profile for schedule, experience, activity, goals, optional body fat, equipment, movement limitations, and known exercise capabilities.
+- Generate a deterministic, reviewable training week that remains stable through the member's current week, rotates on Monday in the saved time zone, and regenerates after a profile change.
+- Show resting-energy method, maintenance range, deficit, maintenance, and building estimates; distribute the selected seven-day budget as steady, training-day zigzag, or one flexible day with conservative floors and disclosed fallbacks.
+- Add optional daily macro targets, calorie and macro logging in both Coaching and Progress, remaining or over-target feedback, and explicitly uncertain 4-, 8-, and 12-week weight scenarios.
+- Keep coaching data private to an authenticated active Strata+ account with trusted-origin, CSRF, account-identity, rate, current-week, and optimistic-revision checks.
+- Add SQLite/Turso parity, account export and deletion coverage, focused formula and constraint tests, and a real Chromium signup-to-persistence-and-conflict journey.
+
+Behavior, evidence, deployment, and rollback notes are in the [7.8.7 release guide](docs/release-7.8.7.md). Formula sources and safety limits are documented in the [coaching methodology](docs/coaching-methodology.md).
+
 ## 7.8.6 — Clear plans and protected comparisons
 
 - Keep Plan evidence collapsed by default so the editable week remains the visual priority.

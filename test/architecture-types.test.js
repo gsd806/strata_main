@@ -16,7 +16,7 @@ test("strict checkJs covers provider, transport, storage, and service compositio
   assert.equal(config.compilerOptions.exactOptionalPropertyTypes,true);
   assert.equal(config.compilerOptions.noUncheckedIndexedAccess,true);
   for(const file of [
-    "src/domain-types.d.ts","src/http.js","src/legacy-checkout.js","src/payments.js","src/plans.d.ts","src/product-signals.js","src/store-contract.js",
+    "src/domain-types.d.ts","src/http.js","src/legacy-checkout.js","src/payments.js","src/plans.d.ts","src/product-signals.js","src/store-contract.js","src/coaching-core.js","src/coaching-schema.js","src/coaching-store.js","src/coaching.js",
     "src/service-composition.js","src/setup.js","src/training-loop-schema.js","src/training-loop-store.js","src/training.js","src/workouts.d.ts"
   ])assert.ok(config.include.includes(file),`${file} must remain in the strict boundary program`);
 });
@@ -40,7 +40,8 @@ test("service factories publish declared dependency and return contracts",()=>{
     ["support.js","SupportServiceDependencies","SupportService"],
     ["setup.js","SetupServiceDependencies","SetupService"],
     ["product-signals.js","ProductSignalsServiceDependencies","ProductSignalsService"],
-    ["training.js","TrainingServiceDependencies","TrainingService"]
+    ["training.js","TrainingServiceDependencies","TrainingService"],
+    ["coaching.js","CoachingServiceDependencies","CoachingService"]
   ]){
     const source=readFileSync(join(ROOT,"src",file),"utf8");
     assert.match(source,new RegExp(`@param \\{import\\("\\./domain-types"\\)\\.${dependencyType}\\} dependencies`));

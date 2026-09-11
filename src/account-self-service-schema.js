@@ -13,6 +13,9 @@ const ACCOUNT_EXPORT_QUERIES=Object.freeze({
   checkIns:"SELECT workout_id,difficulty,energy,comfort,enjoyment,created_at,updated_at FROM workout_check_ins WHERE user_id=? ORDER BY created_at,workout_id",
   trainingBlock:"SELECT block_json,revision,updated_at FROM training_blocks WHERE user_id=?",
   trainingAdaptations:"SELECT id,workout_id,adaptation_json,plan_updated_at,status,created_at,resolved_at FROM training_adaptations WHERE user_id=? ORDER BY created_at,id",
+  coachingProfile:"SELECT profile_json,revision,updated_at FROM coaching_profiles WHERE user_id=?",
+  coachingWeeks:"SELECT week_start,plan_key,profile_revision,snapshot_json,generated_at FROM coaching_weeks WHERE user_id=? ORDER BY week_start",
+  coachingLogs:"SELECT log_date,calories,protein_g,carbs_g,fat_g,revision,updated_at FROM coaching_daily_logs WHERE user_id=? ORDER BY log_date",
   communityPlans:"SELECT id,title,description,plan_json,is_published,created_at,updated_at FROM community_weekly_plans WHERE user_id=? ORDER BY created_at,id",
   grants:"SELECT grant_starts_at,grant_expires_at,grant_revoked_at,checkout_blocked_at FROM admin_account_controls WHERE user_id=?",
   trials:"SELECT started_at,expires_at FROM discovery_trials WHERE user_id=? ORDER BY started_at",
@@ -21,7 +24,7 @@ const ACCOUNT_EXPORT_QUERIES=Object.freeze({
   adjustments:"SELECT a.adjustment_id,a.transaction_id,a.action,a.type,a.status,a.occurred_at,a.updated_at FROM paddle_adjustments a JOIN paddle_purchases p ON p.transaction_id=a.transaction_id WHERE p.user_id=? ORDER BY a.occurred_at,a.adjustment_id",
   supportTickets:"SELECT id,reference,name,email,category,subject,reference_id,message,status,last_response_at,created_at,updated_at FROM support_tickets WHERE user_id=? ORDER BY created_at,id"
 });
-const ACCOUNT_EXPORT_SINGLE_ROWS=new Set(["profile","weeklyPlan","monthlyPlan","preferences","trainingBlock"]);
+const ACCOUNT_EXPORT_SINGLE_ROWS=new Set(["profile","weeklyPlan","monthlyPlan","preferences","trainingBlock","coachingProfile"]);
 const ACCOUNT_EXPORT_WORKOUTS_QUERY="SELECT id,workout_json,summary_json,started_at,revision,updated_at FROM workouts WHERE user_id=? AND (started_at>? OR (started_at=? AND id>?)) ORDER BY started_at,id LIMIT ?";
 const ACCOUNT_SELF_SERVICE_SQL=Object.freeze({
   accountSessions:"SELECT s.token_hash,s.created_at,s.expires_at FROM sessions s JOIN users u ON u.id=s.user_id AND u.auth_version=s.auth_version AND u.suspended_at IS NULL WHERE s.user_id=? AND s.expires_at>? ORDER BY CASE WHEN s.token_hash=? THEN 0 ELSE 1 END,s.created_at DESC,s.token_hash",

@@ -402,9 +402,9 @@ function clickSelectDay(day){
   assert.equal(result.expandedCards,64,"One desktop Load more action should render 64 cards total");
   assert.equal(result.uniqueExpandedCards,64,"Load more must not duplicate library cards");
   assert.equal(result.firstPagePreserved,true,"Load more should preserve the original first page order");
-  assert.equal(result.loadMoreStillAvailable,true,"A 200-item library should have more results after 64 cards");
+  assert.equal(result.loadMoreStillAvailable,true,"A 320-item library should have more results after 64 cards");
   assert.equal(result.focusedFirstNewCard,true,"Focus should move to the first newly revealed card");
-  assert.match(result.resultStatus,/Showing 64 of 200 matching movements\./);
+  assert.match(result.resultStatus,/Showing 64 of 320 matching movements\./);
   const preservedPlan=vm.runInContext("copyPlan(state.plan)",context);
   vm.runInContext("state.plan=emptyPlan(); state.plan.days.Monday=Array.from({length:30},(_,i)=>({instanceId:'limit-'+i,exerciseId:state.exercises[0].id,sets:3,reps:'8-12'}));state.plan.days.Tuesday=[{instanceId:'move-limit',exerciseId:state.exercises[1].id,sets:3,reps:'8-12'}];",context);
   assert.equal(vm.runInContext("addExercise(state.exercises[0].id,'Monday')",context),false,"31st daily item must be rejected before mutation");

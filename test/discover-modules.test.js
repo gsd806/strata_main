@@ -45,6 +45,14 @@ test("Discover navigation owns one visible destination and dismisses transient s
   assert.equal([...panels.values()].filter(panel=>!panel.hidden).length,1);
 });
 
+test("Discover navigation reveals an active destination inside the mobile rail",()=>{
+  const panels=new Map(Object.values(State.FEATURE_CONFIG).map(({panelId})=>[panelId,element(panelId)])),nav={clientWidth:300,scrollWidth:720,scrollLeft:0,scrollTo(options){this.scrollLeft=options.left;this.behavior=options.behavior;}},state=State.createState();
+  const links=["today","plan","progress","explore","coaching"].map((target,index)=>{const link=element(target);link.dataset.featureTarget=target;link.classList.add("destination-link");link.parentElement=nav;link.offsetLeft=index*145;link.offsetWidth=140;return link;});
+  const document={body:element("body"),getElementById:id=>panels.get(id)||null,querySelectorAll:()=>links};
+  const navigation=Navigation.createFeatureNavigation({config:State.FEATURE_CONFIG,defaultFeature:State.FEATURE_DEFAULT,state,document,window:{matchMedia:()=>({matches:true})}});
+  assert.equal(navigation.activate("coaching",{smooth:true}),true);assert.equal(nav.scrollLeft,420);assert.equal(nav.behavior,"auto");
+});
+
 test("Discover toast can be cleared immediately when a destination changes",()=>{
   const toast=element("toast");toast.textContent="";let queued;
   const controller=Navigation.createToastController(toast,{setTimer:callback=>{queued=callback;return 1;},clearTimer:()=>{}});

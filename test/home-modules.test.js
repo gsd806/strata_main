@@ -25,7 +25,7 @@ test("homepage modules expose one-way boundaries and keep the composition root s
 
 test("homepage logic validates, filters, and ranks a catalog without DOM state",()=>{
   const exercises=Logic.normalizeCatalog(catalog);
-  assert.equal(exercises.length,200);
+  assert.equal(exercises.length,catalog.length);
   const chest=Logic.filterExercises(exercises,{group:"chest",sub:"all",equipment:"Dumbbells",level:"all",query:"press",sort:"score"});
   assert.ok(chest.length>0);
   assert.ok(chest.every(exercise=>exercise.group==="chest"&&exercise.equipment==="Dumbbells"&&`${exercise.name} ${exercise.pattern}`.toLowerCase().includes("press")));
@@ -37,7 +37,7 @@ test("homepage state owns catalog, filter, and account transitions",()=>{
   const state=State.createState();
   State.setCatalog(state,catalog);
   assert.equal(state.catalogStatus,"ready");
-  assert.equal(state.exercises.length,200);
+  assert.equal(state.exercises.length,catalog.length);
   assert.equal(State.selectGroup(state,"legs"),true);
   assert.equal(state.group,"legs");
   assert.equal(State.selectSubfilter(state,"Quadriceps"),true);

@@ -458,7 +458,7 @@ export interface ProductSignalsStore {
 export type AuthStore=StoreCapabilities<AuthStoreMethod>;
 export type AdminStore={readonly kind:string}&StoreCapabilities<AdminStoreMethod>;
 export type SupportStore=StoreCapabilities<SupportStoreMethod>;
-export type ApplicationStore={readonly kind:string}&AuthStore&AdminStore&SupportStore&SetupStore&ProductSignalsStore&TrainingStore&BillingStore;
+export type ApplicationStore={readonly kind:string}&AuthStore&AdminStore&SupportStore&SetupStore&ProductSignalsStore&TrainingStore&BillingStore&CoachingStore;
 
 export interface AccountIdentityRow extends JsonObject {
   id:string;
@@ -510,6 +510,9 @@ export interface AccountExportStoreRows {
   checkIns:JsonObject[];
   trainingBlock:JsonObject|null;
   trainingAdaptations:JsonObject[];
+  coachingProfile:JsonObject|null;
+  coachingWeeks:JsonObject[];
+  coachingLogs:JsonObject[];
   communityPlans:JsonObject[];
   grants:JsonObject[];
   trials:JsonObject[];
@@ -786,6 +789,48 @@ export interface TrainingServiceDependencies {
 export interface TrainingService {
   handleApi(request:HttpRequest,response:HttpResponse,url:URL):Promise<boolean>;
 }
+
+export type CoachingGoal="fat_loss"|"maintenance"|"muscle_gain";
+export type CoachingExperience="beginner"|"intermediate"|"advanced";
+export interface CoachingCapability {exerciseId:string;maxSets:number;maxReps:number;maxWeightKg:number|null;}
+export interface CoachingProfile extends JsonObject {
+  version:1;measurementSystem:"metric"|"imperial";preferredLoadUnit:"kg"|"lb";
+  age:number;heightCm:number;weightKg:number;bodyFatPercent:number|null;sexForEquation:"female"|"male"|null;
+  goal:CoachingGoal;goalPace:"gentle"|"moderate";experience:CoachingExperience;lifestyleActivity:string;
+  workoutDays:string[];sessionsPerWeek:number;sessionMinutes:30|45|60|75|90;usualExercises:CoachingCapability[];
+  availableEquipment:string[];movementLimitations:string[];caloriePattern:"steady"|"zigzag"|"flexible_day";
+  flexibleDay:string|null;macroPreference:"balanced"|"higher_protein"|null;timeZone:string;
+}
+export interface CoachingProfilePayload extends CoachingProfile {revision:number;updatedAt:number;}
+export interface CoachingWeekRecord {userId:string;weekStart:string;planKey:string;profileRevision:number;snapshotJson:string;generatedAt:number;}
+export interface CoachingDailyLogRecord {userId:string;logDate:string;calories:number;proteinG:number|null;carbsG:number|null;fatG:number|null;updatedAt:number;}
+export interface CoachingStore {
+  coachingProfile(userId:string):Promise<JsonObject|null>;
+  upsertCoachingProfile(userId:string,profileJson:string,updatedAt:number,expectedRevision:number):Promise<JsonObject|null>;
+  coachingWeek(userId:string,weekStart:string):Promise<JsonObject|null>;
+  upsertCoachingWeek(record:CoachingWeekRecord):Promise<JsonObject|null>;
+  coachingDailyLog(userId:string,logDate:string):Promise<JsonObject|null>;
+  coachingDailyLogs(userId:string,startDate:string,endDate:string):Promise<JsonObject[]>;
+  upsertCoachingDailyLog(record:CoachingDailyLogRecord,expectedRevision:number):Promise<JsonObject|null>;
+}
+export interface LocalCoachingStoreDependencies {
+  statements:Record<string,PreparedStatementLike>;
+  plainRow:(row:unknown,columns?:string[])=>any;
+}
+export interface TursoCoachingStoreDependencies {
+  first(sql:string,args?:any[]):Promise<any>;
+  all(sql:string,args?:any[]):Promise<any[]>;
+}
+export interface CoachingServiceDependencies {
+  store:CoachingStore;
+  auth:Pick<AuthService,"validCsrf">;
+  requireAccess:(request:HttpRequest,response:HttpResponse)=>Promise<SessionRow|null>;
+  trustedOrigin:(request:HttpRequest)=>boolean;
+  rateAllowed:(request:HttpRequest,key:string,limit:number,windowMs?:number)=>boolean;
+  http:JsonHttpHelpers;
+  now?:()=>number;
+}
+export interface CoachingService {handleApi(request:HttpRequest,response:HttpResponse,url:URL):Promise<boolean>;}
 
 export interface ProductSignalsServiceDependencies {
   store:ProductSignalsStore;

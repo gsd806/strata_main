@@ -8,6 +8,7 @@ const {createLocalTrainingMethods,createTursoTrainingMethods,deleteLocalTraining
 const {createLocalAccountSelfServiceMethods,createTursoAccountSelfServiceMethods}=require("./account-self-service-store");
 const {createLocalBillingMethods,createTursoBillingMethods}=require("./billing-store");
 const {createLocalAccessControlMethods,createTursoAccessControlMethods}=require("./access-controls-store");
+const {coachingDeletionBatch,createLocalCoachingMethods,createTursoCoachingMethods,deleteLocalCoachingData}=require("./coaching-store");
 const {migrateLocalSchema,migrateTursoSchema}=require("./migrations");
 function plainValue(value) {
   return typeof value === "bigint" ? Number(value) : value;
@@ -163,7 +164,9 @@ function localStore(root) {
   const trainingMethods=createLocalTrainingMethods({db,statements,plainRow});
   const accountSelfServiceMethods=createLocalAccountSelfServiceMethods({db,statements,plainRow});
   const billingMethods=createLocalBillingMethods({db,statements,plainRow});
+  const coachingMethods=createLocalCoachingMethods({statements,plainRow});
   return defineStore("local",{
+    ...coachingMethods,
     ...createLocalAccessControlMethods({db,statements,plainRow}),
     async ping() { return probeConnection(() => statements.ping.get()); },
     async userByEmail(email) { return plainRow(statements.userByEmail.get(email)); },
@@ -411,6 +414,7 @@ function localStore(root) {
         // its per-session foreign-key PRAGMA state.
         statements.deleteAdminControlsForDeletedUser.run(user.id,user.id);
         deleteLocalTrainingData(statements,user.id);
+        deleteLocalCoachingData(statements,user.id);
         statements.deleteCommunityPlanForDeletedUser.get(user.id,user.id);
         statements.deleteWorkoutsForDeletedUser.run(user.id,user.id);
         statements.deleteCheckoutClaimsForDeletedUser.all(user.id,user.id);
@@ -662,6 +666,7 @@ function localStore(root) {
         if (!plainRow(statements.insertAdminAuditIfChanged.get(...adminAuditArgs(audit)))) throw new Error("Administrative account-deletion audit could not be recorded atomically.");
         statements.deleteAdminControlsForDeletedUser.run(user.id,user.id);
         deleteLocalTrainingData(statements,user.id);
+        deleteLocalCoachingData(statements,user.id);
         statements.deleteCommunityPlanForDeletedUser.get(user.id,user.id);
         statements.deleteWorkoutsForDeletedUser.run(user.id,user.id);
         statements.deleteCheckoutClaimsForDeletedUser.all(user.id,user.id);
@@ -764,8 +769,10 @@ async function tursoStore(url,authToken,tursoClientFactory) {
   const trainingMethods=createTursoTrainingMethods({client,first,run,plainRow});
   const accountSelfServiceMethods=createTursoAccountSelfServiceMethods({client,first,run,all,plainRow});
   const billingMethods=createTursoBillingMethods({client,first,run,all,plainRow});
+  const coachingMethods=createTursoCoachingMethods({first,all});
 
   return defineStore("turso",{
+    ...coachingMethods,
     ...createTursoAccessControlMethods({client,first,plainRow,SQL}),
     // A successful query is the health signal. Some Turso-compatible row
     // implementations expose selected values only by numeric index, so the
@@ -940,6 +947,7 @@ async function tursoStore(url,authToken,tursoClientFactory) {
         // on ON DELETE CASCADE surviving a renewed serverless session.
         {sql:SQL.deleteAdminControlsForDeletedUser,args:[action.user_id,action.user_id]},
         ...trainingDeletionBatch(action.user_id),
+        ...coachingDeletionBatch(action.user_id),
         {sql:SQL.deleteCommunityPlanForDeletedUser,args:[action.user_id,action.user_id]},
         {sql:SQL.deleteWorkoutsForDeletedUser,args:[action.user_id,action.user_id]},
         {sql:SQL.deleteCheckoutClaimsForDeletedUser,args:[action.user_id,action.user_id]},
@@ -1115,6 +1123,7 @@ async function tursoStore(url,authToken,tursoClientFactory) {
         {sql:SQL.insertAdminAuditIfChanged,args:adminAuditArgs(audit)},
         {sql:SQL.deleteAdminControlsForDeletedUser,args:[userId,userId]},
         ...trainingDeletionBatch(userId),
+        ...coachingDeletionBatch(userId),
         {sql:SQL.deleteCommunityPlanForDeletedUser,args:[userId,userId]},
         {sql:SQL.deleteWorkoutsForDeletedUser,args:[userId,userId]},
         {sql:SQL.deleteCheckoutClaimsForDeletedUser,args:[userId,userId]},

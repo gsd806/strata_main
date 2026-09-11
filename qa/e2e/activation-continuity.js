@@ -41,8 +41,9 @@ test("activation continuity uses explicit, revision-safe account choices",{timeo
     await t.test("a homepage week survives account and verification pages, then is claimed explicitly",async()=>{
       const context=await newContext({viewport:{width:390,height:844},reducedMotion:"reduce"}),page=await context.newPage();
       await page.goto("/",{waitUntil:"domcontentloaded"});await page.locator("#quickPreviewEquipment").waitFor({state:"visible"});await page.waitForFunction(()=>!globalThis.document.querySelector("#quickPreviewEquipment").disabled);
-      assert.equal(await page.locator('#quickPreviewEquipment option[value="Resistance band"]').count(),0,"homepage must not offer equipment that cannot produce the complete week");
-      await page.selectOption("#quickPreviewGroup","back");assert.equal(await page.locator('#quickPreviewEquipment option[value="Bench"]').count(),0,"every visible equipment choice must support a complete week");await page.selectOption("#quickPreviewGroup","chest");
+      await page.selectOption("#quickPreviewDays","4");
+      assert.equal(await page.locator('#quickPreviewEquipment option[value="Resistance band"]').count(),0,"homepage must not offer equipment that cannot produce the complete four-day week");
+      await page.selectOption("#quickPreviewGroup","back");assert.equal(await page.locator('#quickPreviewEquipment option[value="Bench"]').count(),0,"every visible equipment choice must support a complete four-day week");await page.selectOption("#quickPreviewGroup","chest");
       await page.selectOption("#quickPreviewGoal","hypertrophy");await page.selectOption("#quickPreviewDays","4");await page.selectOption("#quickPreviewMinutes","20");await page.click("#quickPreviewSubmit");await page.locator("#quickWeekPreview").waitFor({state:"visible"});
       const intent=await page.evaluate(()=>JSON.parse(localStorage.getItem("strata_activation_intent_v1")));
       assert.equal(intent.profile.availability.length,4);assert.equal(intent.profile.minutes,20);assert.ok(Object.values(intent.plan.days).flat().length>0);

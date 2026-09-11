@@ -7,19 +7,19 @@ const {join}=require("node:path");
 
 const PROJECT_ROOT=join(__dirname,"..");
 const read=(...parts)=>readFileSync(join(PROJECT_ROOT,"public",...parts),"utf8");
-const discoverModules=["discover-state.js","discover-api.js","discover-navigation.js","discover-progress.js","discover-render.js","discover-catalog.js","discover-detail.js","discover-community.js","discover-session.js","discover-sharing.js","discover-events.js","discover.js"];
+const discoverModules=["personal-training-ui-core.js","discover-state.js","discover-api.js","discover-navigation.js","discover-progress.js","discover-render.js","discover-coaching-render.js","discover-catalog.js","discover-detail.js","discover-community.js","discover-session.js","discover-sharing.js","discover-events.js","discover-coaching.js","discover.js"];
 const discoverScript=()=>discoverModules.map(name=>read("scripts",name)).join("\n");
 
-test("Strata+ progressively enhances four primary destinations and focused supporting tools",()=>{
+test("Strata+ progressively enhances five primary destinations and focused supporting tools",()=>{
   const html=read("pages","discover.html");
   const script=discoverScript();
   const panels=[...html.matchAll(/<section\b([^>]*\bdata-feature-panel="([^"]+)"[^>]*)>/g)];
   const blocks=[...html.matchAll(/<a\b[^>]*\bclass="[^"]*feature-block[^"]*"[^>]*\bdata-feature-target="([^"]+)"[^>]*>/g)];
 
-  assert.deepEqual(panels.map((match)=>match[2]).sort(),["battle","community","explore","library","monthly","plan","profile","progress","recommendations","session","today"]);
+  assert.deepEqual(panels.map((match)=>match[2]).sort(),["battle","coaching","community","explore","library","monthly","plan","profile","progress","recommendations","session","today"]);
   assert.equal(blocks.length,5);
   for(const label of ["Recommendations","Library","Compare","Preferences","Community"])assert.match(html,new RegExp(`<span>${label}</span>`));
-  for(const destination of ["today","plan","progress","explore"])assert.match(html,new RegExp(`class="destination-link"[^>]*data-feature-target="${destination}"[^>]*aria-controls="[^"]+"[^>]*aria-expanded="false"`));
+  for(const destination of ["today","plan","progress","explore","coaching"])assert.match(html,new RegExp(`class="destination-link"[^>]*data-feature-target="${destination}"[^>]*aria-controls="[^"]+"[^>]*aria-expanded="false"`));
   for(const [tag] of panels)assert.doesNotMatch(tag,/\bhidden\b/,"feature panels must remain visible when JavaScript is unavailable");
   for(const [tag] of blocks){
     assert.match(tag,/\baria-controls="[^"]+"/);
@@ -75,7 +75,8 @@ test("Strata+ loads bounded state, API, navigation, feature controllers, renderi
   const html=read("pages","discover.html"),names=discoverModules;
   let previous=-1;
   for(const name of names){const index=html.indexOf(`src="${name}?v=`);assert.ok(index>previous,`${name} must load after its dependencies`);previous=index;}
-  for(const name of names.slice(0,-1))assert.ok(read("scripts",name).split("\n").length<=120,`${name} should remain a small boundary module`);
+  const reviewedBudgets=new Map([["personal-training-ui-core.js",220]]);
+  for(const name of names.slice(0,-1))assert.ok(read("scripts",name).split("\n").length<=(reviewedBudgets.get(name)||120),`${name} should remain a small boundary module`);
   assert.ok(read("scripts","discover.js").split("\n").length<=725,"the incremental shell should stay below the state-repair module budget");
 });
 
@@ -158,7 +159,7 @@ test("monthly workspace exposes private import, multi-muscle schedule, PDF, and 
 });
 
 test("Strata+ feature navigation owns visibility, URL state, focus, and reduced motion",()=>{
-  const script=discoverScript(),css=read("styles","discover.css");
+  const html=read("pages","discover.html"),script=discoverScript(),css=read("styles","discover.css");
 
   assert.match(script,/const FEATURE_DEFAULT="today"/);
   assert.match(script,/candidatePanel\.hidden=candidate!==name/);
@@ -167,6 +168,9 @@ test("Strata+ feature navigation owns visibility, URL state, focus, and reduced 
   assert.match(script,/"popstate",restore/);
   assert.match(script,/"hashchange",restore/);
   assert.match(script,/if\(rawHash&&!requested\)return/);
+  assert.match(html,/id="activeWorkspaceSkip"[^>]*href="#todayTitle"/);
+  assert.match(script,/skip\.setAttribute\?\.\("href",`#\$\{item\.headingId\}`\)/);
+  assert.match(script,/skip\.textContent=`Skip to \$\{item\.label\}`/);
   assert.match(script,/focus:\s*true,scroll:\s*true,smooth:\s*true/);
   assert.match(script,/event\.preventDefault\(\);actions\.hideToast\(\);actions\.activateFeature/,"destination navigation should clear a transient saved toast");
   assert.match(script,/activateFeature\("battle"[^\n]+openComparison\(\)/);

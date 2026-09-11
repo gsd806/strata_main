@@ -21,6 +21,9 @@ const DetailCore=globalThis.StrataDiscoverDetail;if(!DetailCore)throw new Error(
 const CommunityCore=globalThis.StrataDiscoverCommunity;if(!CommunityCore)throw new Error("The Strata+ community module did not load.");
 const SessionCore=globalThis.StrataDiscoverSession;if(!SessionCore)throw new Error("The Strata+ session module did not load.");
 const SharingCore=globalThis.StrataDiscoverSharing;if(!SharingCore)throw new Error("The Strata+ sharing module did not load.");
+const CoachingUi=globalThis.StrataPersonalTrainingUi;if(!CoachingUi)throw new Error("The Strata+ personal-training input module did not load.");
+const CoachingRender=globalThis.StrataDiscoverCoachingRender;if(!CoachingRender)throw new Error("The Strata+ coaching renderer did not load.");
+const CoachingCore=globalThis.StrataDiscoverCoaching;if(!CoachingCore)throw new Error("The Strata+ coaching controller did not load.");
 const {FEATURE_CONFIG,FEATURE_DEFAULT,GROUP_LABELS,LIMITATION_OPTIONS,MOVEMENT_BOARD_STORAGE_PREFIX,PREFERENCE_OPTIONS}=StateCore;
 const EXPLORER_DESKTOP_PAGE_SIZE=StateCore.LIMITS.explorerDesktopPageSize;
 const EXPLORER_MOBILE_PAGE_SIZE=StateCore.LIMITS.explorerMobilePageSize;
@@ -34,8 +37,8 @@ const el=(id)=>document.getElementById(id);
 const api=ApiCore.createClient({fetchImpl:fetch,getCsrfToken:()=>state.csrfToken,getGeneration:()=>workspaceGeneration,redirect:(path)=>window.location.replace(path)});
 const saveRetryMessage=ApiCore.saveRetryMessage;
 function redirectedOrChangedAccount(error){
-  if(error?.redirecting)return true;
-  if(["ACCOUNT_CHANGED","TRAINING_ACCOUNT_CHANGED"].includes(error?.code)){dashboardAccountChanged();return true;}
+  if(error?.redirecting){clearPrivateWorkspace();return true;}
+  if(["ACCOUNT_CHANGED","TRAINING_ACCOUNT_CHANGED","COACHING_ACCOUNT_CHANGED"].includes(error?.code)){dashboardAccountChanged();return true;}
   return false;
 }
 
@@ -54,6 +57,7 @@ function saveMovementBoard(){
 const toastController=NavigationCore.createToastController(el("toast"));
 function showToast(message){toastController.show(message);}
 function hideToast(){toastController.hide();}
+const coaching=CoachingCore.createController({document,element:el,api,state,ui:CoachingUi,renderFactory:CoachingRender.createRenderer,saveRetryMessage,showToast,onAccountError:redirectedOrChangedAccount});
 const featureNavigation=NavigationCore.createFeatureNavigation({
   config:FEATURE_CONFIG,defaultFeature:FEATURE_DEFAULT,state,document,window,
   onDestinationChange:hideToast,
@@ -61,6 +65,7 @@ const featureNavigation=NavigationCore.createFeatureNavigation({
     const scoreGuide=el("scoreGuide"),showScoreGuide=["explore","recommendations","library","battle"].includes(name);if(scoreGuide)scoreGuide.hidden=!showScoreGuide;if(!showScoreGuide&&el("scoreGuideDetails"))el("scoreGuideDetails").open=false;
     if(state.user&&["recommendations","library","battle"].includes(name))void refreshCommunityRatings().catch(()=>{});
     if(state.user&&name==="community"&&!state.communityLoaded&&!state.communityLoading)void loadCommunityPlans({reset:true});
+    if(state.user&&["coaching","progress"].includes(name))void coaching.ensureLoaded();
   }
 });
 function featureName(value){return featureNavigation.featureName(value);}
@@ -288,7 +293,7 @@ function renderProgression(){
   el("progressionAccept").disabled=suggestion.applied;el("progressionAccept").textContent=suggestion.applied?"Change accepted":"Accept change";el("progressionDismiss").hidden=suggestion.applied;el("progressionStatus").textContent=suggestion.applied?"Saved. Your weekly Plan was updated; this edit remains until you change Plan again.":"Nothing changes unless you accept.";
 }
 function clearPrivateWorkspace(){
-  workspaceGeneration+=1;workspaceReady=false;
+  workspaceGeneration+=1;workspaceReady=false;coaching.reset();
   state.exercises=[];state.methodology=null;state.sources=[];state.limited=new Set();state.preferences=null;state.user=null;state.csrfToken="";state.aggregate=new Map();state.userRatings=new Map();state.ratingsRefreshedAt=0;state.ratingsRefreshPromise=null;state.ratingSaving=new Set();state.compare=[];state.shortlist=[];state.collection="all";state.query="";state.group="all";state.equipment="all";state.pattern="all";state.level="all";state.sort="personal";state.recommendations=[];state.activeExercise=null;state.explorerLimit=EXPLORER_DESKTOP_PAGE_SIZE;
   state.weeklyPlan=null;state.weeklyPlanUpdatedAt=0;state.workouts=[];state.workoutHistoryAvailable=false;state.workoutHistoryHasMore=false;state.workoutHistoryStatus="loading";state.workoutHistoryError="";state.trainingBlock=null;state.trainingBlockRevision=0;state.trainingBlockAction=null;state.progressionSuggestion=null;state.session=null;state.sessionSaving=false;state.sessionDayInitialized=false;state.monthlyPlan=null;state.monthlyPlanUpdatedAt=0;state.monthlySchedule=null;state.monthlySource="muscle-schedule";state.communityPlans=[];state.communityLoaded=false;state.communityLoading=false;state.communityError="";state.communityNextOffset=0;state.communityQuery="";state.communityPendingId=null;state.communityAppliedId=null;state.communityAppliedUpdatedAt=0;
   const main=document.querySelector("main");if(main){main.hidden=true;main.inert=true;main.setAttribute("aria-busy","true");}
