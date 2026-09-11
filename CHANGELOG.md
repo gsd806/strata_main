@@ -1,5 +1,19 @@
 # Changelog
 
+## 7.10.0 — Trend-informed energy planning
+
+- Add coaching profile schema version 3 for the sex-specific 2023 adult Dietary Reference Intake EER primary maintenance estimate; retain Mifflin–St Jeor and the optional Cunningham body-composition estimate as visible resting-energy cross-checks.
+- Preserve every stored version-1/version-2 profile's exact prior resting-energy × legacy activity-factor calculation until the member explicitly reviews and saves it as version 3. Calibration evidence does not adjust legacy targets, so deployment cannot silently reinterpret an existing activity answer or change its target.
+- Treat activity as a whole-day category only in version 3 and do not add workout calories twice; show approximate targets, a conservative planning range, the calculation method, and limitations instead of false precision.
+- Add optional morning-weight evidence and an explicit complete-day marker to both daily intake surfaces while preserving incomplete and legacy entries as non-calibrating diary data.
+- Add Starting estimate, Calibrating, and Trend-informed states. A correction requires 18 complete intake days, 12 morning weights, and at least 14 days between the first and last usable weight inside the prior 21 days; it uses a robust trend with heavy shrinkage and is rounded and capped at 150 kcal. Every threshold remains a disclosed, non-clinical STRATA heuristic.
+- Reject sparse, future, incomplete, implausible, and contradictory evidence, and keep the current weekly snapshot stable so targets do not chase daily scale noise.
+- Restore the optional balanced versus higher-protein macro preference, improve activity/body-fat/input explanations, and keep the evidence panel accessible and responsive.
+- Add nullable calibration fields through idempotent SQLite/Turso migration `005`, extend strict storage and account-export boundaries, and preserve deletion behavior without adding an unnecessary index.
+- Separate energy estimation and calibration from workout generation, identify the new implementation as `energy-planning-v2` independently of profile schema version 3, version its evidence identity, and add focused equation, evidence, API, migration, parity, export, runtime, and browser tests.
+
+Evidence, privacy, deployment, and rollback details are in the [7.10.0 release guide](docs/release-7.10.0.md). Calculation order and limitations are in the [coaching methodology](docs/coaching-methodology.md).
+
 ## 7.9.0 — Constraint-aware daily food options
 
 - Extend the private coaching profile with an explicit allergy state, supported allergens, an other-or-uncertain-allergy note, dietary pattern and requirements, favorite-food categories, a preferred 1–6 meals per day, and an optional whole-cent daily USD budget.

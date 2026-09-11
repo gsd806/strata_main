@@ -16,7 +16,7 @@ test("strict checkJs covers provider, transport, storage, and service compositio
   assert.equal(config.compilerOptions.exactOptionalPropertyTypes,true);
   assert.equal(config.compilerOptions.noUncheckedIndexedAccess,true);
   for(const file of [
-    "src/domain-types.d.ts","src/http.js","src/legacy-checkout.js","src/paddle-catalog.js","src/payments.js","src/plans.d.ts","src/product-signals.js","src/store-contract.js","src/coaching-core.js","src/meal-planning-core.js","src/coaching-schema.js","src/coaching-store.js","src/coaching.js",
+    "src/domain-types.d.ts","src/http.js","src/legacy-checkout.js","src/paddle-catalog.js","src/payments.js","src/plans.d.ts","src/product-signals.js","src/store-contract.js","src/coaching-core.js","src/energy-planning-core.js","src/meal-planning-core.js","src/coaching-schema.js","src/coaching-store.js","src/coaching.js",
     "src/service-composition.js","src/setup.js","src/training-loop-schema.js","src/training-loop-store.js","src/training.js","src/workouts.d.ts"
   ])assert.ok(config.include.includes(file),`${file} must remain in the strict boundary program`);
 });

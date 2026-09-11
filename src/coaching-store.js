@@ -14,7 +14,7 @@ function createLocalCoachingMethods({statements,plainRow}){
     async upsertCoachingWeek(record){return plainRow(statement("upsertCoachingWeek").get(record.weekStart,record.planKey,record.profileRevision,record.snapshotJson,record.generatedAt,record.profileRevision,record.userId));},
     async coachingDailyLog(userId,logDate){return plainRow(statement("coachingDailyLog").get(userId,logDate));},
     async coachingDailyLogs(userId,startDate,endDate){return statement("coachingDailyLogs").all(userId,startDate,endDate).map((row)=>plainRow(row));},
-    async upsertCoachingDailyLog(record,expectedRevision){return plainRow(statement("upsertCoachingDailyLog").get(record.logDate,record.calories,record.proteinG,record.carbsG,record.fatG,record.updatedAt,record.userId,expectedRevision,record.logDate,expectedRevision,expectedRevision));}
+    async upsertCoachingDailyLog(record,expectedRevision){return plainRow(statement("upsertCoachingDailyLog").get(record.logDate,record.calories,record.proteinG,record.carbsG,record.fatG,record.morningWeightKg??null,record.complete==null?null:Number(record.complete),record.updatedAt,record.userId,expectedRevision,record.logDate,expectedRevision,expectedRevision));}
   };
 }
 
@@ -27,7 +27,7 @@ function createTursoCoachingMethods({first,all}){
     upsertCoachingWeek:(record)=>first(COACHING_SQL.upsertCoachingWeek,[record.weekStart,record.planKey,record.profileRevision,record.snapshotJson,record.generatedAt,record.profileRevision,record.userId]),
     coachingDailyLog:(userId,logDate)=>first(COACHING_SQL.coachingDailyLog,[userId,logDate]),
     coachingDailyLogs:(userId,startDate,endDate)=>all(COACHING_SQL.coachingDailyLogs,[userId,startDate,endDate]),
-    upsertCoachingDailyLog:(record,expectedRevision)=>first(COACHING_SQL.upsertCoachingDailyLog,[record.logDate,record.calories,record.proteinG,record.carbsG,record.fatG,record.updatedAt,record.userId,expectedRevision,record.logDate,expectedRevision,expectedRevision])
+    upsertCoachingDailyLog:(record,expectedRevision)=>first(COACHING_SQL.upsertCoachingDailyLog,[record.logDate,record.calories,record.proteinG,record.carbsG,record.fatG,record.morningWeightKg??null,record.complete==null?null:Number(record.complete),record.updatedAt,record.userId,expectedRevision,record.logDate,expectedRevision,expectedRevision])
   };
 }
 

@@ -36,7 +36,7 @@ test("Strata+ progressively enhances five primary destinations and focused suppo
 });
 
 test("coaching profile setup presents four navigable cards and labels every capability input",()=>{
-  const html=read("pages","discover.html"),script=read("scripts","discover-coaching.js"),css=read("styles","discover.css");
+  const html=read("pages","discover.html"),script=read("scripts","discover-coaching.js"),render=read("scripts","discover-coaching-render.js"),css=read("styles","discover.css");
   const setup=html.match(/<section class="coaching-onboarding"[\s\S]*?<section class="coaching-dashboard"/)?.[0]||"";
   assert.match(setup,/class="coaching-setup-map" aria-label="Coaching profile sections"/);
   for(const [id,label] of [["coachingBodyInputs","Body and energy inputs"],["coachingTrainingInputs","Training experience and week"],["coachingCapabilityInputs","Workouts you know"],["coachingNutritionInputs","Calorie pattern and optional macros"]]){
@@ -46,6 +46,9 @@ test("coaching profile setup presents four navigable cards and labels every capa
   assert.equal((setup.match(/class="coaching-form-section/g)||[]).length,4);
   assert.match(setup,/class="coaching-capability-empty"/);
   for(const label of ["Exercise","Sets","Reps","Weight","Unit"])assert.match(script,new RegExp(`<span>${label}<\\/span>`),`${label} must remain visible beside generated capability inputs`);
+  assert.match(html,/id="coachingDailyActivity"[^>]*>[\s\S]*?<option value="">Review and choose<\/option>/,"whole-day activity must offer an explicit review choice");
+  assert.match(script,/profile&&Number\(profile\.version\)<3\?"":activityFromApi/,"legacy profiles must not silently reuse their old multiplier answer as a whole-day EER category");
+  assert.match(render,/previous activity-multiplier answer is retained until you review and save the current whole-day activity category/,"the dashboard must visibly disclose preserved legacy semantics");
   assert.match(css,/\.coaching-form-section > legend \{ float:left; width:100%/);
   assert.match(css,/\.coaching-capability-row > label > span \{ display:none/);
   assert.match(css,/@media\(max-width:800px\)[\s\S]*\.coaching-capability-row > label > span \{ display:block/);

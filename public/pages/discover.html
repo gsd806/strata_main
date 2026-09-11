@@ -13,12 +13,12 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icons/strata-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="/fonts.css?v=7.9.0" />
-    <link rel="stylesheet" href="/experience.css?v=7.9.0" />
-    <link rel="stylesheet" href="discover.css?v=7.9.0" />
-    <link rel="stylesheet" href="discover-coaching-meals.css?v=7.9.0" />
-    <link rel="stylesheet" href="/product-signals.css?v=7.9.0" />
-    <script src="/motion.js?v=7.9.0"></script>
+    <link rel="stylesheet" href="/fonts.css?v=7.10.0" />
+    <link rel="stylesheet" href="/experience.css?v=7.10.0" />
+    <link rel="stylesheet" href="discover.css?v=7.10.0" />
+    <link rel="stylesheet" href="discover-coaching-meals.css?v=7.10.0" />
+    <link rel="stylesheet" href="/product-signals.css?v=7.10.0" />
+    <script src="/motion.js?v=7.10.0"></script>
   </head>
   <body class="plus-studio">
     <a class="skip-link" id="activeWorkspaceSkip" href="#todayTitle">Skip to active Strata+ workspace</a>
@@ -158,14 +158,16 @@
           <section class="progress-state progress-error" id="progressLoadError" role="alert" hidden><span class="progress-state-mark" aria-hidden="true">!</span><div><strong>Progress couldn’t load</strong><p id="progressLoadErrorMessage">Check your connection, then try again.</p></div><button class="small-button" id="progressRetry" type="button">Try again <span aria-hidden="true">↻</span></button></section>
           <section class="progress-calorie-setup" id="progressCalorieSetup" aria-labelledby="progressCalorieSetupTitle" hidden><div><p class="kicker">Daily calorie progress</p><h3 id="progressCalorieSetupTitle">SET YOUR TARGETS FIRST.</h3><p>Complete Personal training and calorie counting once to create your seven-day targets.</p></div><a class="small-button" href="#coachingWorkspace" data-feature-target="coaching">Set up calorie targets <span aria-hidden="true">→</span></a></section>
           <section class="progress-calorie-card" id="progressCalorieCard" aria-labelledby="progressCalorieTitle" hidden>
-            <div class="progress-calorie-head"><div><p class="kicker">Daily calorie progress</p><h3 id="progressCalorieTitle">LOG A DAY’S TOTAL.</h3><p>Use the target for each specific day. Optional macros appear only when enabled in your coaching profile.</p></div><a class="small-button" href="#coachingWorkspace" data-feature-target="coaching">Open full coaching week <span aria-hidden="true">→</span></a></div>
+            <div class="progress-calorie-head"><div><p class="kicker">Daily calorie progress</p><h3 id="progressCalorieTitle">LOG A DAY’S TOTAL.</h3><p>Enter the cumulative total for the whole selected day—not only the latest meal. Optional macros appear only when enabled in your coaching profile.</p></div><a class="small-button" href="#coachingWorkspace" data-feature-target="coaching">Open full coaching week <span aria-hidden="true">→</span></a></div>
             <div class="progress-calorie-summary" id="progressCoachingSummary" role="status" aria-live="polite"></div>
               <form class="progress-calorie-form" id="progressCoachingLogForm" novalidate>
-              <label for="progressCoachingLogDate"><span>Day</span><select id="progressCoachingLogDate" name="date"></select></label>
-              <label for="progressCoachingCaloriesEaten"><span>Calories eaten</span><input id="progressCoachingCaloriesEaten" name="calories" type="number" min="0" max="20000" step="1" inputmode="numeric" required /></label>
+              <label class="coaching-log-date" for="progressCoachingLogDate"><span>Day</span><select id="progressCoachingLogDate" name="date"></select></label>
+              <label class="coaching-log-calories" for="progressCoachingCaloriesEaten"><span>Cumulative daily calories</span><input id="progressCoachingCaloriesEaten" name="calories" type="number" min="0" max="20000" step="1" inputmode="numeric" aria-describedby="progressCoachingCaloriesHelp" required /><small id="progressCoachingCaloriesHelp">Replace this number as the day progresses; do not enter only the latest meal.</small></label>
+              <label class="coaching-log-weight" for="progressCoachingMorningWeight"><span>Morning body weight <small>Optional</small></span><span class="coaching-log-weight-input"><input id="progressCoachingMorningWeight" name="morningWeight" type="number" min="35" max="300" step="0.1" inputmode="decimal" aria-describedby="progressCoachingWeightHelp" /><b id="progressCoachingMorningWeightUnit" aria-hidden="true">kg</b></span><small id="progressCoachingWeightHelp">After waking, before food or drink, when available.</small></label>
               <label class="progress-coaching-macro" for="progressCoachingProteinEaten"><span>Protein (g)</span><input id="progressCoachingProteinEaten" name="proteinGrams" type="number" min="0" max="2000" step="1" inputmode="numeric" /></label>
               <label class="progress-coaching-macro" for="progressCoachingCarbsEaten"><span>Carbs (g)</span><input id="progressCoachingCarbsEaten" name="carbGrams" type="number" min="0" max="3000" step="1" inputmode="numeric" /></label>
               <label class="progress-coaching-macro" for="progressCoachingFatEaten"><span>Fat (g)</span><input id="progressCoachingFatEaten" name="fatGrams" type="number" min="0" max="1000" step="1" inputmode="numeric" /></label>
+              <label class="coaching-log-complete" for="progressCoachingDayComplete"><input id="progressCoachingDayComplete" name="complete" type="checkbox" /><span><strong>Day total is complete</strong><small>Use this day in the next weekly calibration.</small></span></label>
               <button class="button button-dark" id="progressCoachingSaveLog" type="submit">Save intake <span aria-hidden="true">→</span></button>
                 <p id="progressCoachingLogStatus" role="status" aria-live="polite">Choose a day and enter its current total.</p>
               </form>
@@ -224,7 +226,7 @@
 
           <section class="coaching-onboarding" id="coachingSetup" aria-labelledby="coachingSetupTitle" hidden>
             <header class="coaching-setup-intro">
-              <div class="coaching-setup-copy"><p class="kicker">One-time coaching profile</p><h3 id="coachingSetupTitle" tabindex="-1">TELL STRATA WHAT<br /><em>THE NUMBERS MEAN.</em></h3><p>Every estimate shows its method and assumptions. Finish these four short steps now, then change your profile whenever your training changes.</p></div>
+              <div class="coaching-setup-copy"><p class="kicker">Starting coaching profile</p><h3 id="coachingSetupTitle" tabindex="-1">TELL STRATA WHAT<br /><em>THE NUMBERS MEAN.</em></h3><p>Begin with a transparent planning estimate. Complete daily intake totals and comparable morning weights help STRATA refine it over time.</p></div>
               <nav class="coaching-setup-map" aria-label="Coaching profile sections">
                 <a href="#coachingBodyInputs"><span>01</span><strong>Body</strong><small>Energy inputs</small></a>
                 <a href="#coachingTrainingInputs"><span>02</span><strong>Training</strong><small>Your real week</small></a>
@@ -235,16 +237,16 @@
             <form id="coachingProfileForm" class="coaching-profile-form" novalidate>
               <fieldset class="coaching-form-section" id="coachingBodyInputs">
                 <legend><span>01</span><b>Body and energy inputs</b></legend>
-                <p class="coaching-field-intro">These inputs estimate resting energy and total daily energy use. They are not a diagnosis or a metabolic test.</p>
+                <p class="coaching-field-intro">These inputs estimate resting energy and total daily energy use. They are not a diagnosis or a metabolic test. STRATA cannot screen pregnancy, breastfeeding, eating disorders, medical conditions, medications, growth, or a clinician’s restrictions; do not use its deficit planner when any apply.</p>
                 <div class="coaching-fields coaching-fields-four">
-                  <label for="coachingAge"><span>Age</span><input id="coachingAge" name="age" type="number" min="18" max="80" step="1" inputmode="numeric" autocomplete="bday-year" required /><small>18–80 years</small></label>
+                  <label for="coachingAge"><span>Age</span><input id="coachingAge" name="age" type="number" min="19" max="80" step="1" inputmode="numeric" autocomplete="bday-year" required /><small>19–80 years</small></label>
                   <label for="coachingHeight"><span>Height</span><span class="coaching-unit-input"><input id="coachingHeight" name="height" type="number" min="120" max="230" step="0.1" inputmode="decimal" required /><select id="coachingHeightUnit" name="heightUnit" aria-label="Height unit"><option value="cm">cm</option><option value="in">in</option></select></span></label>
                   <label for="coachingWeight"><span>Weight</span><span class="coaching-unit-input"><input id="coachingWeight" name="weight" type="number" min="35" max="300" step="0.1" inputmode="decimal" required /><select id="coachingWeightUnit" name="weightUnit" aria-label="Weight unit"><option value="kg">kg</option><option value="lb">lb</option></select></span></label>
-                  <label for="coachingBodyFat"><span>Body fat <small>Optional</small></span><span class="coaching-suffix-input"><input id="coachingBodyFat" name="bodyFatPercent" type="number" min="3" max="65" step="0.1" inputmode="decimal" /><b aria-hidden="true">%</b></span></label>
-                  <label for="coachingSex" id="coachingSexLabel"><span>Sex used by equation</span><select id="coachingSex" name="sexForEquation"><option value="">Choose one</option><option value="female">Female coefficient</option><option value="male">Male coefficient</option></select><small>Used only when body fat is blank; this is not a gender-identity field.</small></label>
-                  <label for="coachingDailyActivity"><span>Typical total activity</span><select id="coachingDailyActivity" name="activityLevel" required><option value="sedentary">Mostly seated · little exercise</option><option value="light">Lightly active · 1–3 days</option><option value="moderate">Moderately active · 3–5 days</option><option value="high">Very active · 6–7 days / physical work</option></select><small>Include planned workouts in this overall estimate.</small></label>
+                  <label for="coachingBodyFat"><span>Body-fat estimate <small>Optional Cunningham cross-check</small></span><span class="coaching-suffix-input"><input id="coachingBodyFat" name="bodyFatPercent" type="number" min="3" max="65" step="0.1" inputmode="decimal" aria-describedby="coachingBodyFatHelp" /><b aria-hidden="true">%</b></span><small id="coachingBodyFatHelp">Home scales and visual estimates can be noisy. STRATA never treats this as a precise measurement.</small></label>
+                  <label for="coachingSex" id="coachingSexLabel"><span>Energy-equation coefficient</span><select id="coachingSex" name="sexForEquation" aria-describedby="coachingSexHelp" required><option value="">Choose one</option><option value="female">Female coefficient</option><option value="male">Male coefficient</option></select><small id="coachingSexHelp">Required by the primary energy equation; this is a calculation input, not a gender-identity field.</small></label>
+                  <label for="coachingDailyActivity"><span>Typical whole-day activity</span><select id="coachingDailyActivity" name="activityLevel" aria-describedby="coachingActivityHelp" required><option value="">Review and choose</option><option value="sedentary" selected>Inactive · activities of daily living</option><option value="lightly_active">Low active · daily living + 60–80 min brisk walking</option><option value="moderately_active">Active · daily living + about 2 hr mixed moderate activity</option><option value="very_active">Very active · daily living + about 2 hr mixed moderate/vigorous activity</option></select><small id="coachingActivityHelp"><a href="https://www.canada.ca/en/health-canada/services/food-nutrition/healthy-eating/dietary-reference-intakes/tables/equations-estimate-energy-requirement.html" target="_blank" rel="noreferrer">Published adult DRI activity categories <span aria-hidden="true">↗</span></a>. Count work, walking, transport, chores, and training once. Choose Inactive when unsure; STRATA does not add workout calories again.</small></label>
                   <label for="coachingGoal"><span>Calorie goal</span><select id="coachingGoal" name="goal" required><option value="deficit">Fat-loss deficit</option><option value="maintenance">Maintain weight</option><option value="surplus">Muscle-gain surplus</option></select></label>
-                  <label for="coachingGoalPace"><span>Target pace</span><select id="coachingGoalPace" name="goalPace" required><option value="gentle">Gentle</option><option value="moderate">Moderate</option></select><small>Conservative targets only</small></label>
+                  <label for="coachingGoalPace"><span>Target pace</span><select id="coachingGoalPace" name="goalPace" required><option value="gentle">Gentle</option><option value="moderate">Moderate</option></select><small>Non-clinical product guardrails; not proof of suitability</small></label>
                 </div>
               </fieldset>
 
@@ -286,7 +288,10 @@
                 </div>
                 <div class="coaching-fields coaching-fields-two coaching-pattern-options">
                   <label for="coachingFlexibleDay"><span>Flexible day</span><select id="coachingFlexibleDay" name="flexibleDay" disabled><option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option selected>Friday</option><option>Saturday</option><option>Sunday</option></select></label>
-                  <label class="coaching-switch"><input id="coachingMacrosEnabled" name="macrosEnabled" type="checkbox" /><span><strong>Show optional macros</strong><small>Add protein, fat, and carbohydrate targets and tracking.</small></span></label>
+                  <div class="coaching-macro-controls">
+                    <label class="coaching-switch" for="coachingMacrosEnabled"><input id="coachingMacrosEnabled" name="macrosEnabled" type="checkbox" aria-controls="coachingMacroPreferenceWrap" /><span><strong>Show optional macros</strong><small>Add protein, fat, and carbohydrate planning ranges and tracking.</small></span></label>
+                    <label class="coaching-macro-preference" id="coachingMacroPreferenceWrap" for="coachingMacroPreference" hidden><span>Protein emphasis</span><select id="coachingMacroPreference" name="macroPreference"><option value="balanced">Balanced · goal-adjusted protein</option><option value="higher_protein">Higher protein · requests 2 g/kg</option></select><small>Protein is capped at 30% of energy, so the generated grams can be lower than the requested g/kg rate.</small></label>
+                  </div>
                 </div>
                 <section class="coaching-meal-preferences" aria-labelledby="coachingMealPreferencesTitle">
                   <div class="coaching-meal-preferences-head"><div><p class="kicker">Optional meal suggestions</p><h3 id="coachingMealPreferencesTitle">FOOD THAT FITS YOUR DAY.</h3></div><p>Choose only what applies. Allergies are exclusions; favorites only influence the order of otherwise suitable ideas.</p></div>
@@ -331,10 +336,20 @@
             </header>
 
             <section class="coaching-metrics" aria-label="Energy estimates">
-              <article><span>Resting estimate</span><strong id="coachingBmr">—</strong><small id="coachingBmrMethod">BMR method</small></article>
-              <article><span>Maintenance estimate</span><strong id="coachingTdee">—</strong><small>Estimated daily range</small></article>
+              <article><span>Resting estimate</span><strong id="coachingBmr">—</strong><small id="coachingBmrMethod">Formula starting point</small></article>
+              <article><span>Estimated maintenance</span><strong id="coachingTdee">—</strong><small id="coachingTdeeDetail">Planning range, not a metabolic measurement</small></article>
               <article class="coaching-metric-accent"><span id="coachingGoalLabel">Selected target</span><strong id="coachingTarget">—</strong><small id="coachingTargetDetail">Daily range</small></article>
               <article><span>Weekly target</span><strong id="coachingWeeklyCalories">—</strong><small>Distributed across seven days</small></article>
+            </section>
+            <section class="coaching-calibration" id="coachingCalibration" aria-labelledby="coachingCalibrationTitle">
+              <header class="coaching-calibration-head"><div><p class="kicker kicker-light">Calorie estimate</p><h4 id="coachingCalibrationTitle">STARTING ESTIMATE.</h4></div><span id="coachingCalibrationState">Formula estimate</span></header>
+              <p id="coachingCalibrationExplanation">This is a formula-based planning estimate. Complete intake totals and comparable morning weights can make future weekly targets more personal.</p>
+              <div class="coaching-calibration-progress" aria-label="Calibration readiness">
+                <article><span>Complete intake days</span><strong id="coachingCalibrationIntake">0 / 18</strong><small>Within the latest 21-day window</small></article>
+                <article><span>Morning weights</span><strong id="coachingCalibrationWeights">0 / 12</strong><small>12 observations spanning at least 14 days</small></article>
+                <article><span>Observed maintenance</span><strong id="coachingCalibrationObserved">Not ready</strong><small id="coachingCalibrationCutoff">No calibration cutoff yet</small></article>
+              </div>
+              <div class="coaching-calibration-decision"><span>Adjustment</span><strong id="coachingCalibrationAdjustment">No trend adjustment yet</strong><p id="coachingCalibrationLimitations">Day-to-day scale changes reflect water, glycogen, digestion, and measurement conditions as well as tissue change.</p></div>
             </section>
             <section class="coaching-goal-comparison" aria-labelledby="coachingGoalComparisonTitle"><div><p class="kicker kicker-light">All three planning estimates</p><h4 id="coachingGoalComparisonTitle">DEFICIT. MAINTAIN. BUILD.</h4></div><div id="coachingGoalComparison"></div></section>
 
@@ -348,20 +363,22 @@
               <div class="coaching-section-head"><div><p class="kicker">Calorie counting · seven-day view</p><h4 id="coachingNutritionTitle">FUEL THE WHOLE WEEK.</h4></div><p id="coachingPatternExplanation">Each day is part of one weekly target.</p></div>
               <div class="coaching-calorie-week" id="coachingCalorieWeek"></div>
               <div class="coaching-projection-layout">
-                <section class="coaching-projection" aria-labelledby="coachingProjectionTitle"><p class="kicker">Trend, not a promise</p><h5 id="coachingProjectionTitle">ESTIMATED WEIGHT PATH</h5><div id="coachingProjectionChart" class="coaching-projection-chart"></div><p id="coachingProjectionNote">Real weight change is not linear and can differ substantially from this energy-balance estimate.</p></section>
+                <section class="coaching-projection" aria-labelledby="coachingProjectionTitle"><p class="kicker">Scenario, not a promise</p><h5 id="coachingProjectionTitle">ESTIMATED WEIGHT PATH</h5><div id="coachingProjectionChart" class="coaching-projection-chart"></div><p id="coachingProjectionNote">The display band is an unvalidated STRATA heuristic, not a confidence interval or clinical safety boundary. Real weight change can differ substantially.</p></section>
                 <aside class="coaching-method-card"><p class="kicker">How this was calculated</p><h5>METHOD &amp; LIMITS</h5><ul id="coachingMethodList"><li>Loading calculation details…</li></ul><p>This tool is for adults and general education. It is not suitable for pregnancy, eating-disorder treatment, or medical nutrition therapy. Speak with a qualified clinician or dietitian when those apply.</p></aside>
               </div>
             </section>
 
             <section class="coaching-progress-section" aria-labelledby="coachingProgressTitle">
-              <div class="coaching-section-head"><div><p class="kicker kicker-light">Daily intake log</p><h4 id="coachingProgressTitle">WHAT’S LEFT FOR THE DAY.</h4></div><p>Enter what you have eaten. STRATA shows what remains against that day’s specific target; it never labels food as good or bad.</p></div>
+              <div class="coaching-section-head"><div><p class="kicker kicker-light">Daily intake log</p><h4 id="coachingProgressTitle">WHAT’S LEFT FOR THE DAY.</h4></div><p>Enter the cumulative total for the whole day. Mark it complete only when it is final; STRATA never labels food as good or bad.</p></div>
               <div class="coaching-progress-summary" id="coachingProgressSummary" role="status" aria-live="polite"></div>
               <form class="coaching-log-form" id="coachingLogForm" novalidate>
-                <label for="coachingLogDate"><span>Day</span><select id="coachingLogDate" name="date"></select></label>
-                <label for="coachingCaloriesEaten"><span>Calories eaten</span><input id="coachingCaloriesEaten" name="calories" type="number" min="0" max="20000" step="1" inputmode="numeric" required /></label>
+                <label class="coaching-log-date" for="coachingLogDate"><span>Day</span><select id="coachingLogDate" name="date"></select></label>
+                <label class="coaching-log-calories" for="coachingCaloriesEaten"><span>Cumulative daily calories</span><input id="coachingCaloriesEaten" name="calories" type="number" min="0" max="20000" step="1" inputmode="numeric" aria-describedby="coachingCaloriesHelp" required /><small id="coachingCaloriesHelp">Replace this number as the day progresses; do not enter only the latest meal.</small></label>
+                <label class="coaching-log-weight" for="coachingMorningWeight"><span>Morning body weight <small>Optional</small></span><span class="coaching-log-weight-input"><input id="coachingMorningWeight" name="morningWeight" type="number" min="35" max="300" step="0.1" inputmode="decimal" aria-describedby="coachingWeightHelp" /><b id="coachingMorningWeightUnit" aria-hidden="true">kg</b></span><small id="coachingWeightHelp">After waking, before food or drink, when available.</small></label>
                 <label class="coaching-macro-log" for="coachingProteinEaten"><span>Protein (g)</span><input id="coachingProteinEaten" name="proteinGrams" type="number" min="0" max="2000" step="1" inputmode="numeric" /></label>
                 <label class="coaching-macro-log" for="coachingCarbsEaten"><span>Carbs (g)</span><input id="coachingCarbsEaten" name="carbGrams" type="number" min="0" max="3000" step="1" inputmode="numeric" /></label>
                 <label class="coaching-macro-log" for="coachingFatEaten"><span>Fat (g)</span><input id="coachingFatEaten" name="fatGrams" type="number" min="0" max="1000" step="1" inputmode="numeric" /></label>
+                <label class="coaching-log-complete" for="coachingDayComplete"><input id="coachingDayComplete" name="complete" type="checkbox" /><span><strong>Day total is complete</strong><small>Use this day in the next weekly calibration.</small></span></label>
                 <button class="button button-accent" id="coachingSaveLog" type="submit">Save intake <span aria-hidden="true">→</span></button>
                 <p id="coachingLogStatus" role="status" aria-live="polite">Choose a day and enter its current total.</p>
               </form>
@@ -579,7 +596,7 @@
 
     </main>
 
-    <footer class="build-footer">STRATA · Build 7.9.0 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
+    <footer class="build-footer">STRATA · Build 7.10.0 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
 
     <aside class="compare-tray" id="compareTray" hidden aria-label="Exercise comparison tray">
       <div><span>EXERCISE BATTLE</span><p id="compareNames">Choose 2–4 exercises</p></div>
@@ -612,28 +629,28 @@
     </dialog>
     <noscript><div class="no-script-note" role="status"><strong>Strata+ needs JavaScript for personalized tools.</strong> The page content remains available, but saving, filtering, comparing, and plan building require JavaScript.</div></noscript>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=7.9.0"></script>
-    <script src="/product-signals.js?v=7.9.0"></script>
-    <script src="session-selection-core.js?v=7.9.0"></script>
-    <script src="discovery-core.js?v=7.9.0"></script>
-    <script src="monthly-plan-core.js?v=7.9.0"></script>
-    <script src="training-block-core.js?v=7.9.0"></script>
-    <script src="personal-training-ui-core.js?v=7.9.0"></script>
-    <script src="personal-training-meals-ui-core.js?v=7.9.0"></script>
-    <script src="discover-state.js?v=7.9.0"></script>
-    <script src="discover-api.js?v=7.9.0"></script>
-    <script src="discover-navigation.js?v=7.9.0"></script>
-    <script src="discover-progress.js?v=7.9.0"></script>
-    <script src="discover-render.js?v=7.9.0"></script>
-    <script src="discover-coaching-render.js?v=7.9.0"></script>
-    <script src="discover-catalog.js?v=7.9.0"></script>
-    <script src="discover-detail.js?v=7.9.0"></script>
-    <script src="discover-community.js?v=7.9.0"></script>
-    <script src="discover-session.js?v=7.9.0"></script>
-    <script src="discover-sharing.js?v=7.9.0"></script>
-    <script src="discover-events.js?v=7.9.0"></script>
-    <script src="discover-coaching-meals.js?v=7.9.0"></script>
-    <script src="discover-coaching.js?v=7.9.0"></script>
-    <script src="discover.js?v=7.9.0"></script>
+    <script src="/pwa.js?v=7.10.0"></script>
+    <script src="/product-signals.js?v=7.10.0"></script>
+    <script src="session-selection-core.js?v=7.10.0"></script>
+    <script src="discovery-core.js?v=7.10.0"></script>
+    <script src="monthly-plan-core.js?v=7.10.0"></script>
+    <script src="training-block-core.js?v=7.10.0"></script>
+    <script src="personal-training-ui-core.js?v=7.10.0"></script>
+    <script src="personal-training-meals-ui-core.js?v=7.10.0"></script>
+    <script src="discover-state.js?v=7.10.0"></script>
+    <script src="discover-api.js?v=7.10.0"></script>
+    <script src="discover-navigation.js?v=7.10.0"></script>
+    <script src="discover-progress.js?v=7.10.0"></script>
+    <script src="discover-render.js?v=7.10.0"></script>
+    <script src="discover-coaching-render.js?v=7.10.0"></script>
+    <script src="discover-catalog.js?v=7.10.0"></script>
+    <script src="discover-detail.js?v=7.10.0"></script>
+    <script src="discover-community.js?v=7.10.0"></script>
+    <script src="discover-session.js?v=7.10.0"></script>
+    <script src="discover-sharing.js?v=7.10.0"></script>
+    <script src="discover-events.js?v=7.10.0"></script>
+    <script src="discover-coaching-meals.js?v=7.10.0"></script>
+    <script src="discover-coaching.js?v=7.10.0"></script>
+    <script src="discover.js?v=7.10.0"></script>
   </body>
 </html>

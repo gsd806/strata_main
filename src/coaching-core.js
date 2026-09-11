@@ -2,27 +2,28 @@
 "use strict";
 
 const {createHash}=require("node:crypto");
+const {ENERGY_SEMANTICS,LEGACY_ACTIVITY_FACTORS,MODEL_VERSION:ENERGY_MODEL_VERSION,nutritionFor}=require("./energy-planning-core");
 const {CATALOG_FINGERPRINT:MEAL_CATALOG_FINGERPRINT,sanitizeMealPreferences}=require("./meal-planning-core");
 const {DAYS,EXERCISES}=require("./plans");
 
-const GENERATION_VERSION="coaching-week-v2";
+const GENERATION_VERSION="coaching-week-v3";
 const EQUIPMENT=[...new Set(EXERCISES.map((exercise)=>String(exercise.equipment)))].sort();
 const EXERCISE_BY_ID=new Map(EXERCISES.map((exercise)=>[String(exercise.id),exercise]));
 const CATALOG_FINGERPRINT=createHash("sha256").update(EXERCISES.map((exercise)=>String(exercise.id)).sort().join("\n")).digest("hex").slice(0,16);
-const ACTIVITY_FACTORS=Object.freeze({sedentary:1.2,lightly_active:1.375,moderately_active:1.55,very_active:1.725,extremely_active:1.9});
+const ACTIVITY_FACTORS=LEGACY_ACTIVITY_FACTORS;
 const MOVEMENT_LIMITATIONS=Object.freeze(["no-overhead","no-deep-knee","no-unsupported-hinge","no-floor","no-unilateral"]);
 const SESSION_COUNTS=Object.freeze({30:4,45:5,60:6,75:6,90:7});
 
 /** @param {string} message @param {string} [code] @param {number} [status] */
 function coachingError(message,code="INVALID_COACHING_PROFILE",status=400){return Object.assign(new Error(message),{code,status});}
-/** @param {unknown} value @param {string} label @returns {Record<string,any>} */
-function object(value,label){if(!value||typeof value!=="object"||Array.isArray(value))throw coachingError(`${label} must be an object.`);return value;}
-/** @param {Record<string,any>} value @param {string[]} allowed @param {string} label */
-function exactKeys(value,allowed,label){const extra=Object.keys(value).filter((key)=>!allowed.includes(key));if(extra.length)throw coachingError(`${label} contains unsupported fields: ${extra.join(", ")}.`);}
-/** @param {unknown} value @param {number} min @param {number} max @param {string} label */
-function integer(value,min,max,label){if(typeof value!=="number"||!Number.isSafeInteger(value)||value<min||value>max)throw coachingError(`${label} must be a whole number from ${min} to ${max}.`);return value;}
-/** @param {unknown} value @param {number} min @param {number} max @param {string} label */
-function decimal(value,min,max,label){if(typeof value!=="number"||!Number.isFinite(value)||value<min||value>max)throw coachingError(`${label} must be from ${min} to ${max}.`);return Math.round(value*10)/10;}
+/** @param {unknown} value @param {string} label @param {string} [code] @returns {Record<string,any>} */
+function object(value,label,code){if(!value||typeof value!=="object"||Array.isArray(value))throw coachingError(`${label} must be an object.`,code);return value;}
+/** @param {Record<string,any>} value @param {string[]} allowed @param {string} label @param {string} [code] */
+function exactKeys(value,allowed,label,code){const extra=Object.keys(value).filter((key)=>!allowed.includes(key));if(extra.length)throw coachingError(`${label} contains unsupported fields: ${extra.join(", ")}.`,code);}
+/** @param {unknown} value @param {number} min @param {number} max @param {string} label @param {string} [code] */
+function integer(value,min,max,label,code){if(typeof value!=="number"||!Number.isSafeInteger(value)||value<min||value>max)throw coachingError(`${label} must be a whole number from ${min} to ${max}.`,code);return value;}
+/** @param {unknown} value @param {number} min @param {number} max @param {string} label @param {string} [code] */
+function decimal(value,min,max,label,code){if(typeof value!=="number"||!Number.isFinite(value)||value<min||value>max)throw coachingError(`${label} must be from ${min} to ${max}.`,code);return Math.round(value*10)/10;}
 /** @template {string} T @param {unknown} value @param {readonly T[]} allowed @param {string} label @returns {T} */
 function choice(value,allowed,label){if(typeof value!=="string"||!allowed.includes(/** @type {T} */(value)))throw coachingError(`${label} is invalid.`);return /** @type {T} */(value);}
 /** @template {number} T @param {unknown} value @param {readonly T[]} allowed @param {string} label @returns {T} */
@@ -35,22 +36,26 @@ function timezone(value){
   return name;
 }
 
-/** @param {unknown} value */
-function sanitizeCoachingProfile(value){
+/** @param {unknown} value @param {{allowLegacyProfile?:boolean}} [options] */
+function sanitizeCoachingProfile(value,{allowLegacyProfile=false}={}){
   const input=object(value,"Coaching profile");
   exactKeys(input,["version","measurementSystem","preferredLoadUnit","age","heightCm","weightKg","bodyFatPercent","sexForEquation","goal","goalPace","experience","lifestyleActivity","workoutDays","sessionMinutes","usualExercises","availableEquipment","movementLimitations","caloriePattern","flexibleDay","macroPreference","timeZone","mealPreferences"],"Coaching profile");
-  if(input.version!==undefined&&input.version!==1&&input.version!==2)throw coachingError("Coaching profile version is unsupported.");
-  if(input.version===1&&input.mealPreferences!=null)throw coachingError("Meal preferences require coaching profile version 2.");
-  if(input.version===2&&input.mealPreferences==null)throw coachingError("Coaching profile version 2 requires meal preferences.");
+  const version=input.version==null&&allowLegacyProfile?(input.mealPreferences==null?1:2):input.version;
+  if(version!==1&&version!==2&&version!==3)throw coachingError("Coaching profile version is unsupported.");
+  if(!allowLegacyProfile&&version!==3)throw coachingError("Review and save the whole-day activity category before updating this coaching profile.","COACHING_ACTIVITY_REVIEW_REQUIRED",409);
+  if(version===1&&input.mealPreferences!=null)throw coachingError("Meal preferences require coaching profile version 2 or 3.");
+  if(version===2&&input.mealPreferences==null)throw coachingError("Coaching profile version 2 requires meal preferences.");
+  const legacyProfile=version<3;
   const measurementSystem=choice(input.measurementSystem,["metric","imperial"],"Measurement system");
   const preferredLoadUnit=choice(input.preferredLoadUnit,["kg","lb"],"Preferred load unit");
-  const age=integer(input.age,18,80,"Age"),heightCm=decimal(input.heightCm,120,230,"Height"),weightKg=decimal(input.weightKg,35,300,"Weight");
+  const age=integer(input.age,legacyProfile&&allowLegacyProfile?18:19,80,"Age"),heightCm=decimal(input.heightCm,120,230,"Height"),weightKg=decimal(input.weightKg,35,300,"Weight");
   const bodyFatPercent=input.bodyFatPercent==null?null:decimal(input.bodyFatPercent,3,65,"Body-fat percentage");
-  const sexForEquation=bodyFatPercent==null?choice(input.sexForEquation,["female","male"],"Sex used by the energy equation"):input.sexForEquation==null?null:choice(input.sexForEquation,["female","male"],"Sex used by the energy equation");
+  if(input.sexForEquation==null&&!(legacyProfile&&allowLegacyProfile&&bodyFatPercent!=null))throw coachingError("Sex used by the energy equation is required for a new or updated coaching profile.");
+  const sexForEquation=input.sexForEquation==null?null:choice(input.sexForEquation,["female","male"],"Sex used by the energy equation");
   const goal=choice(input.goal,["fat_loss","maintenance","muscle_gain"],"Nutrition goal");
   const goalPace=choice(input.goalPace??"moderate",["gentle","moderate"],"Goal pace");
   const experience=choice(input.experience,["beginner","intermediate","advanced"],"Training experience");
-  const lifestyleActivity=/** @type {keyof typeof ACTIVITY_FACTORS} */(choice(input.lifestyleActivity,Object.keys(ACTIVITY_FACTORS),"Lifestyle activity"));
+  const activityValues=legacyProfile?Object.keys(ACTIVITY_FACTORS):Object.keys(ACTIVITY_FACTORS).filter((value)=>value!=="extremely_active"),lifestyleActivity=/** @type {keyof typeof ACTIVITY_FACTORS} */(choice(input.lifestyleActivity,activityValues,"Lifestyle activity"));
   if(!Array.isArray(input.workoutDays)||input.workoutDays.length<1||input.workoutDays.length>6)throw coachingError("Choose between 1 and 6 workout days.");
   const workoutDays=DAYS.filter((day)=>input.workoutDays.includes(day));
   if(workoutDays.length!==input.workoutDays.length||new Set(input.workoutDays).size!==input.workoutDays.length)throw coachingError("Workout days must be valid and unique.");
@@ -75,7 +80,7 @@ function sanitizeCoachingProfile(value){
   const flexibleDay=caloriePattern==="flexible_day"?choice(input.flexibleDay,DAYS,"Flexible day"):null;
   const macroPreference=input.macroPreference==null?null:choice(input.macroPreference,["balanced","higher_protein"],"Macro preference");
   const mealPreferences=input.mealPreferences==null?null:sanitizeMealPreferences(input.mealPreferences);
-  return {version:mealPreferences?2:1,measurementSystem,preferredLoadUnit,age,heightCm,weightKg,bodyFatPercent,sexForEquation,goal,goalPace,experience,lifestyleActivity,workoutDays,sessionsPerWeek:workoutDays.length,sessionMinutes,usualExercises,availableEquipment,movementLimitations,caloriePattern,flexibleDay,macroPreference,timeZone:timezone(input.timeZone),mealPreferences};
+  return {version,measurementSystem,preferredLoadUnit,age,heightCm,weightKg,bodyFatPercent,sexForEquation,goal,goalPace,experience,lifestyleActivity,workoutDays,sessionsPerWeek:workoutDays.length,sessionMinutes,usualExercises,availableEquipment,movementLimitations,caloriePattern,flexibleDay,macroPreference,timeZone:timezone(input.timeZone),mealPreferences};
 }
 
 /** @param {unknown} value */
@@ -87,10 +92,11 @@ function validDate(value){
 }
 /** @param {unknown} value */
 function sanitizeDailyLog(value){
-  const input=object(value,"Calorie log");exactKeys(input,["calories","proteinG","carbsG","fatG"],"Calorie log");
+  const code="INVALID_COACHING_LOG",input=object(value,"Calorie log",code);exactKeys(input,["calories","proteinG","carbsG","fatG","morningWeightKg","complete"],"Calorie log",code);
   const values=[input.proteinG,input.carbsG,input.fatG],provided=values.filter((item)=>item!=null).length;
   if(provided!==0&&provided!==3)throw coachingError("Enter protein, carbohydrates, and fat together, or leave all macros blank.","INVALID_COACHING_LOG");
-  return {calories:integer(input.calories,0,20000,"Calories"),proteinG:provided?integer(input.proteinG,0,2000,"Protein"):null,carbsG:provided?integer(input.carbsG,0,3000,"Carbohydrates"):null,fatG:provided?integer(input.fatG,0,1000,"Fat"):null};
+  if(input.complete!=null&&typeof input.complete!=="boolean")throw coachingError("Intake completeness must be true, false, or left blank.","INVALID_COACHING_LOG");
+  return {calories:integer(input.calories,0,20000,"Calories",code),proteinG:provided?integer(input.proteinG,0,2000,"Protein",code):null,carbsG:provided?integer(input.carbsG,0,3000,"Carbohydrates",code):null,fatG:provided?integer(input.fatG,0,1000,"Fat",code):null,morningWeightKg:input.morningWeightKg==null?null:decimal(input.morningWeightKg,35,300,"Morning weight",code),complete:input.complete==null?null:input.complete};
 }
 
 /** @param {number} timestamp @param {string} timeZone */
@@ -106,53 +112,6 @@ function weekStartForDate(date){const valid=validDate(date),stamp=Date.parse(`${
 function currentWeekStart(timestamp,timeZone){return weekStartForDate(localDate(timestamp,timeZone));}
 /** @param {string} date @param {number} offset */
 function addDays(date,offset){return new Date(Date.parse(`${date}T00:00:00.000Z`)+offset*86400000).toISOString().slice(0,10);}
-/** @param {number} value @param {number} step */
-function rounded(value,step=1){return Math.round(value/step)*step;}
-
-/** Preserve an exact weekly calorie budget while distributing daily weights. @param {number} target @param {number[]} weights */
-function distribute(target,weights){
-  const total=rounded(target)*7,sum=weights.reduce((value,weight)=>value+weight,0),raw=weights.map((weight)=>total*weight/sum),days=raw.map(Math.floor);
-  for(let remaining=total-days.reduce((a,b)=>a+b,0),index=0;remaining>0;remaining-=1,index=(index+1)%7)days[index]=(days[index]??0)+1;
-  return days;
-}
-/** @param {number} calories @param {number} weightKg @param {string|null} preference @param {string} goal */
-function macroTarget(calories,weightKg,preference,goal){
-  if(!preference)return null;
-  const requestedRate=preference==="higher_protein"?2:goal==="fat_loss"?1.8:1.6,protein=rounded(Math.min(weightKg*requestedRate,calories*.3/4));
-  const fat=rounded(calories*.25/9),carbs=Math.max(0,rounded((calories-protein*4-fat*9)/4));
-  return {proteinG:protein,carbsG:carbs,fatG:fat,proteinBasis:`${requestedRate} g/kg, capped at 30% of energy`,fatBasis:"approximately 25% of energy",carbohydrateBasis:"remaining energy (at least approximately 45%)"};
-}
-/** @param {number} weightKg @param {number} dailyCalorieDelta @param {number} weeks */
-function weightScenario(weightKg,dailyCalorieDelta,weeks){
-  const days=weeks*7,changeLb=dailyCalorieDelta/10*(1-Math.exp(-Math.log(2)*days/365)),changeKg=changeLb*.45359237,center=Math.max(0,weightKg+changeKg),uncertainty=Math.max(.5,Math.abs(changeKg)*.4);
-  return {center,uncertainty};
-}
-/** @param {number} weightKg @param {number} dailyCalorieDelta */
-function weightScenarios(weightKg,dailyCalorieDelta){return [4,8,12].map((weeks)=>{const {center,uncertainty}=weightScenario(weightKg,dailyCalorieDelta,weeks);return {weeks,weightKg:Math.round(center*10)/10,rangeKg:[Math.round(Math.max(0,center-uncertainty)*10)/10,Math.round((center+uncertainty)*10)/10]};});}
-
-/** @param {ReturnType<typeof sanitizeCoachingProfile>} profile @param {string} weekStart */
-function nutritionFor(profile,weekStart){
-  const leanMass=profile.bodyFatPercent==null?null:profile.weightKg*(1-profile.bodyFatPercent/100);
-  const equation=leanMass==null?"mifflin_st_jeor":"katch_mcardle";
-  const rmr=leanMass==null?10*profile.weightKg+6.25*profile.heightCm-5*profile.age+(profile.sexForEquation==="male"?5:-161):370+21.6*leanMass;
-  const activityFactor=ACTIVITY_FACTORS[profile.lifestyleActivity],maintenance=rounded(rmr*activityFactor,25),maintenanceLow=rounded(maintenance*.95,25),maintenanceHigh=rounded(maintenance*1.05,25);
-  const heightM=profile.heightCm/100,rawBmi=profile.weightKg/heightM**2,bmi=Math.round(rawBmi*10)/10,deficitRate=profile.goalPace==="gentle"?.1:.15,surplusRate=profile.goalPace==="gentle"?.05:.075;
-  const deficitDelta=Math.min(500,rounded(maintenance*deficitRate,25)),surplusDelta=Math.min(250,Math.max(100,rounded(maintenance*surplusRate,25)));
-  const candidateDeficit=Math.max(1200,maintenance-deficitDelta),minimumSafeWeight=18.5*heightM**2,candidateDelta=candidateDeficit-maintenance;
-  const deficitAllowed=rawBmi>=18.5&&maintenance>1200&&[4,8,12].every((weeks)=>{const {center,uncertainty}=weightScenario(profile.weightKg,candidateDelta,weeks),lower=Math.max(0,center-uncertainty),displayedLower=Math.round(lower*10)/10;return lower>=minimumSafeWeight&&displayedLower>=minimumSafeWeight;}),deficit=deficitAllowed?candidateDeficit:null,bulk=maintenance+surplusDelta;
-  const selected=profile.goal==="fat_loss"?deficit:profile.goal==="muscle_gain"?bulk:maintenance;
-  if(selected==null)throw coachingError("A calorie deficit cannot be generated within the reviewed BMI and calorie-floor limits. Choose maintenance and speak with a qualified clinician.","DEFICIT_REQUIRES_REVIEW",422);
-  if(selected<1200)throw coachingError("An automated calorie target cannot be generated above the conservative 1,200 kcal review floor. Speak with a qualified clinician.","CALORIE_TARGET_REQUIRES_REVIEW",422);
-  let weights=Array(7).fill(1),effectivePattern=profile.caloriePattern,patternFallback=null;
-  if(profile.caloriePattern==="zigzag")weights=DAYS.map((day)=>profile.workoutDays.includes(day)?1.075:.925);
-  if(profile.caloriePattern==="flexible_day")weights=DAYS.map((day)=>day===profile.flexibleDay?1.15:0.975);
-  let calories=distribute(selected,weights);
-  if(Math.min(...calories)<1200){calories=distribute(selected,Array(7).fill(1));effectivePattern="steady";patternFallback="The requested variation would create a day below the conservative 1,200 kcal floor, so this week uses steady targets.";}
-  const dailyTargets=DAYS.map((day,index)=>{const dailyCalories=calories[index]??selected;return {day,date:addDays(weekStart,index),calories:dailyCalories,macros:macroTarget(dailyCalories,profile.weightKg,profile.macroPreference,profile.goal),kind:effectivePattern==="zigzag"?(profile.workoutDays.includes(day)?"higher_training_day":"lower_rest_day"):effectivePattern==="flexible_day"&&day===profile.flexibleDay?"flexible_day":"standard"};});
-  const projections=weightScenarios(profile.weightKg,selected-maintenance);
-  return {bmi,equation,rmrKcal:rounded(rmr),activityFactor,activityFactorBasis:"reported typical total activity, including planned training",maintenance:{targetKcal:maintenance,estimateRangeKcal:[maintenanceLow,maintenanceHigh]},deficit:{targetKcal:deficit,policy:`${Math.round(deficitRate*100)}% below estimated maintenance, capped at 500 kcal/day and never below 1,200 kcal/day`},bulk:{targetKcal:bulk,policy:`About ${surplusRate*100}% above estimated maintenance, bounded to 100–250 kcal/day`},selectedGoal:profile.goal,goalPace:profile.goalPace,requestedPattern:profile.caloriePattern,effectivePattern,patternFallback,weeklyTargetKcal:calories.reduce((a,b)=>a+b,0),dailyTargets,weightScenarios:projections};
-}
-
 const SPLITS=Object.freeze({
   1:[{label:"Full body",targets:["legs","chest","back","shoulders","core"]}],
   2:[{label:"Full body A",targets:["legs","chest","back","shoulders","core"]},{label:"Full body B",targets:["glutes","back","chest","arms","core"]}],
@@ -204,11 +163,12 @@ function trainingFor(profile,weekStart){
   });
 }
 
-/** @param {ReturnType<typeof sanitizeCoachingProfile>} profile @param {number} profileRevision @param {string} weekStart @param {number} generatedAt */
-function generateCoachingWeek(profile,profileRevision,weekStart,generatedAt){
+/** @param {ReturnType<typeof sanitizeCoachingProfile>} profile @param {number} profileRevision @param {string} weekStart @param {number} generatedAt @param {unknown} [calibrationEvidence] */
+function generateCoachingWeek(profile,profileRevision,weekStart,generatedAt,calibrationEvidence=null){
   validDate(weekStart);integer(profileRevision,1,Number.MAX_SAFE_INTEGER,"Profile revision");integer(generatedAt,1,Number.MAX_SAFE_INTEGER,"Generation timestamp");
-  const canonical=JSON.stringify(profile),planKey=createHash("sha256").update(`${GENERATION_VERSION}\0${CATALOG_FINGERPRINT}\0${MEAL_CATALOG_FINGERPRINT}\0${weekStart}\0${profileRevision}\0${canonical}`).digest("hex");
-  return {schemaVersion:2,generationVersion:GENERATION_VERSION,catalogFingerprint:CATALOG_FINGERPRINT,mealCatalogFingerprint:MEAL_CATALOG_FINGERPRINT,weekStart,weekEnd:addDays(weekStart,6),nextWeekStart:addDays(weekStart,7),planKey,profileRevision,generatedAt,inputs:profile,training:{sessions:trainingFor(profile,weekStart),progression:"Use reps first. When every set reaches the top of the range with clean, comfortable form in two consecutive sessions, add about 2–5% for upper-body or 5–10% for lower-body work.",frequencyCaveat:profile.sessionsPerWeek<2?"General adult guidance recommends strengthening every major muscle group on at least two days each week; this plan reflects the single day selected.":null},nutrition:nutritionFor(profile,weekStart),methodology:{formulaSources:["Mifflin–St Jeor (1990) when body-fat percentage is absent","Katch–McArdle when body-fat percentage is supplied","Hall dynamic weight-change approximation for scenarios"],references:[{label:"Mifflin–St Jeor resting-energy study",url:"https://pubmed.ncbi.nlm.nih.gov/2305711/"},{label:"Lean-mass resting-energy synthesis",url:"https://pubmed.ncbi.nlm.nih.gov/1957828/"},{label:"Hall dynamic weight-change approximation",url:"https://pmc.ncbi.nlm.nih.gov/articles/PMC3880593/"},{label:"US Physical Activity Guidelines",url:"https://odphp.health.gov/our-work/nutrition-physical-activity/physical-activity-guidelines/current-guidelines"},{label:"ACSM progression position stand",url:"https://pubmed.ncbi.nlm.nih.gov/19204579/"},{label:"ISSN protein position stand",url:"https://pubmed.ncbi.nlm.nih.gov/28642676/"},{label:"USDA FoodData Central",url:"https://fdc.nal.usda.gov/"},{label:"FDA food-allergy guidance",url:"https://www.fda.gov/food/nutrition-food-labeling-and-critical-foods/food-allergies"}],assumptions:["Energy equations estimate resting needs; the activity multiplier represents reported typical total activity and is not a measurement.","Entered exercise capabilities are context, not verified one-repetition maximums.","The seven daily calorie targets preserve the selected weekly energy budget.","Food nutrition and USD cost figures are rounded planning estimates, not live product or store data."],cautions:["Adults 18–80 only. Not for pregnancy, eating-disorder care, or medical/injury-specific prescription.","Weight figures are broad scenario bands using an average-overweight-adult approximation, not predictions or confidence intervals. It is especially uncertain for lean users and muscle gain; adjust from a multi-week observed trend.","Food suggestions cannot guarantee allergen safety; verify every label and cross-contact risk.","Stop or modify movements that cause pain and seek qualified care when appropriate."]}};
+  const nutrition=nutritionFor(profile,weekStart,calibrationEvidence),canonical=JSON.stringify(profile),calibrationFingerprint=nutrition.maintenance.calibration.evidenceFingerprint,planKey=createHash("sha256").update(`${GENERATION_VERSION}\0${ENERGY_MODEL_VERSION}\0${CATALOG_FINGERPRINT}\0${MEAL_CATALOG_FINGERPRINT}\0${calibrationFingerprint}\0${weekStart}\0${profileRevision}\0${canonical}`).digest("hex"),energySource=nutrition.energySemantics===ENERGY_SEMANTICS.WHOLE_DAY_EER?"2023 National Academies / Health Canada adult EER equations for ages 19–80":nutrition.primaryEquation==="legacy_cunningham_activity_fallback"?"Preserved legacy Cunningham resting-energy estimate × original activity multiplier":"Preserved legacy Mifflin–St Jeor resting-energy estimate × original activity multiplier";
+  const formulaSources=[energySource];if(nutrition.energySemantics===ENERGY_SEMANTICS.WHOLE_DAY_EER)formulaSources.push("Mifflin–St Jeor resting-energy cross-check when the published sex coefficient is supplied");if(nutrition.bodyFatCrossCheck?.role==="secondary_cross_check")formulaSources.push("Cunningham resting-energy cross-check when body-fat percentage is supplied");formulaSources.push("Bounded 21-day intake-and-weight trend correction after whole-day activity review and when evidence is sufficient","Hall dynamic weight-change approximation for scenarios");
+  return {schemaVersion:3,generationVersion:GENERATION_VERSION,energyModelVersion:ENERGY_MODEL_VERSION,catalogFingerprint:CATALOG_FINGERPRINT,mealCatalogFingerprint:MEAL_CATALOG_FINGERPRINT,weekStart,weekEnd:addDays(weekStart,6),nextWeekStart:addDays(weekStart,7),planKey,profileRevision,generatedAt,inputs:profile,training:{sessions:trainingFor(profile,weekStart),progression:"Use reps first. When every set reaches the top of the range with clean, comfortable form in two consecutive sessions, add about 2–5% for upper-body or 5–10% for lower-body work.",frequencyCaveat:profile.sessionsPerWeek<2?"General adult guidance recommends strengthening every major muscle group on at least two days each week; this plan reflects the single day selected.":null},nutrition,methodology:{formulaSources,references:[{label:"2023 Dietary Reference Intakes for Energy",url:"https://www.ncbi.nlm.nih.gov/books/NBK591034/"},{label:"Mifflin–St Jeor resting-energy study",url:"https://pubmed.ncbi.nlm.nih.gov/2305711/"},{label:"Cunningham 1991 lean-mass resting-energy synthesis",url:"https://pubmed.ncbi.nlm.nih.gov/1957828/"},{label:"Repeated-weight energy-intake model validation",url:"https://pubmed.ncbi.nlm.nih.gov/26040640/"},{label:"Self-reported energy-intake validity review",url:"https://pubmed.ncbi.nlm.nih.gov/31920966/"},{label:"Hall dynamic weight-change approximation",url:"https://pmc.ncbi.nlm.nih.gov/articles/PMC3880593/"},{label:"US Physical Activity Guidelines",url:"https://odphp.health.gov/our-work/nutrition-physical-activity/physical-activity-guidelines/current-guidelines"},{label:"ACSM progression position stand",url:"https://pubmed.ncbi.nlm.nih.gov/19204579/"},{label:"ISSN protein position stand",url:"https://pubmed.ncbi.nlm.nih.gov/28642676/"},{label:"USDA FoodData Central",url:"https://fdc.nal.usda.gov/"},{label:"FDA food-allergy guidance",url:"https://www.fda.gov/food/nutrition-food-labeling-and-critical-foods/food-allergies"}],assumptions:["Energy equations and trend calibration are estimates; the displayed range is a conservative planning band, not a confidence interval or measurement.","Profile versions 1–2 preserve their original resting-energy × activity-multiplier meaning until the whole-day category is reviewed and saved as profile version 3.","A trend correction uses only explicitly complete self-reported intake and morning weights from the 21 days before the week.","STRATA's 21-day inversion and evidence thresholds are product heuristics; the repeated-weight study does not validate this exact implementation.","Entered exercise capabilities are context, not verified one-repetition maximums.","The seven daily calorie targets preserve the selected weekly energy budget.","Food nutrition and USD cost figures are rounded planning estimates, not live product or store data."],cautions:["New estimates are for adults ages 19–80. Age-18 stored profiles use a labeled legacy fallback; not for pregnancy, eating-disorder care, or medical/injury-specific prescription.","Self-reported intake and scale trends can be wrong or distorted; weekly corrections are deliberately shrunk and capped.","Weight figures are broad scenario bands using an average-overweight-adult approximation, not predictions or confidence intervals. It is especially uncertain for lean users and muscle gain.","Food suggestions cannot guarantee allergen safety; verify every label and cross-contact risk.","Stop or modify movements that cause pain and seek qualified care when appropriate."]}};
 }
 
-module.exports={ACTIVITY_FACTORS,CATALOG_FINGERPRINT,EQUIPMENT,GENERATION_VERSION,MEAL_CATALOG_FINGERPRINT,MOVEMENT_LIMITATIONS,SESSION_COUNTS,addDays,currentWeekStart,generateCoachingWeek,sanitizeCoachingProfile,sanitizeDailyLog,validDate,weekStartForDate};
+module.exports={ACTIVITY_FACTORS,CATALOG_FINGERPRINT,ENERGY_MODEL_VERSION,EQUIPMENT,GENERATION_VERSION,MEAL_CATALOG_FINGERPRINT,MOVEMENT_LIMITATIONS,SESSION_COUNTS,addDays,currentWeekStart,generateCoachingWeek,sanitizeCoachingProfile,sanitizeDailyLog,validDate,weekStartForDate};

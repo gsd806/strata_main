@@ -45,10 +45,18 @@
       ]
     },
     "src/coaching-core.js": {
-      "role": "Validated energy estimates and deterministic weekly training generation",
+      "role": "Validated coaching inputs and deterministic weekly training composition",
       "maxLines": 300,
       "allowedDependencies": [
+        "src/energy-planning-core.js",
         "src/meal-planning-core.js",
+        "src/plans.js"
+      ]
+    },
+    "src/energy-planning-core.js": {
+      "role": "Adult EER estimation, bounded trend calibration, and nutrition planning",
+      "maxLines": 190,
+      "allowedDependencies": [
         "src/plans.js"
       ]
     },

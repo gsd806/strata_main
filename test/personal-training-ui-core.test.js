@@ -9,7 +9,7 @@ const Ui=require("../public/scripts/personal-training-ui-core");
 
 function validDraft(overrides={}){
   return{
-    unitSystem:"metric",age:"31",heightCm:"178",weightKg:"82.4",bodyFatPercent:"18.5",sexForEquation:"",
+    unitSystem:"metric",age:"31",heightCm:"178",weightKg:"82.4",bodyFatPercent:"18.5",sexForEquation:"male",
     activityLevel:"moderate",goal:"deficit",goalPace:"gentle",experience:"intermediate",trainingDaysPerWeek:"3",sessionMinutes:"45",
     availableDays:["Monday","Wednesday","Friday"],equipment:["Dumbbells","Cables"],knownExerciseIds:["flat-dumbbell-press"],
     performanceMaxes:[{exerciseId:"flat-dumbbell-press",maxSets:"4",maxReps:"10",maxWeight:"32.5"}],
@@ -31,7 +31,7 @@ test("metric and imperial profile drafts serialize to the same canonical units",
   assert.equal(metric.payload.goal,"fat_loss");assert.equal(metric.payload.goalPace,"gentle");assert.equal(metric.payload.lifestyleActivity,"moderately_active");
   assert.deepEqual(metric.payload.workoutDays,["Monday","Wednesday","Friday"]);assert.equal(metric.payload.sessionMinutes,45);
   assert.equal(Object.hasOwn(metric.payload,"revision"),false);
-  assert.equal(metric.payload.sexForEquation,null,"sex is unnecessary when body fat supplies lean-mass input");
+  assert.equal(metric.payload.sexForEquation,"male","the primary equation coefficient remains explicit when body fat supplies a noisy cross-check");
   const imperial=Ui.profileDraftToMetric(validDraft({
     unitSystem:"imperial",heightCm:"",heightFeet:"5",heightInches:"10.1",weightKg:"",weightLb:"181.66",
     performanceMaxes:[{exerciseId:"flat-dumbbell-press",maxSets:"4",maxReps:"10",maxWeight:"71.65"}]
@@ -42,18 +42,19 @@ test("metric and imperial profile drafts serialize to the same canonical units",
   assert.ok(Math.abs(imperial.payload.usualExercises[0].maxWeightKg-32.5)<0.1);
 });
 
-test("Mifflin equation input is required only when body fat is omitted",()=>{
-  const missing=Ui.profileDraftToMetric(validDraft({bodyFatPercent:"",sexForEquation:""}));
+test("primary equation coefficient is required even when optional body fat is supplied",()=>{
+  const missing=Ui.profileDraftToMetric(validDraft({sexForEquation:""}));
   assert.equal(missing.ok,false);
   assert.ok(missing.errors.some(({field})=>field==="sexForEquation"));
-  const supplied=Ui.profileDraftToMetric(validDraft({bodyFatPercent:"",sexForEquation:"female"}));
+  const supplied=Ui.profileDraftToMetric(validDraft({bodyFatPercent:"18.5",sexForEquation:"female"}));
   assert.equal(supplied.ok,true);
   assert.equal(supplied.payload.sexForEquation,"female");
+  assert.equal(Ui.profileDraftToMetric(validDraft({bodyFatPercent:"",sexForEquation:"male"})).ok,true);
 });
 
 test("profile validation gives field-specific adult, measurement, schedule, and flexible-day errors",()=>{
   const result=Ui.profileDraftToMetric(validDraft({
-    age:"17",heightCm:"99",weightKg:"900",bodyFatPercent:"80",activityLevel:"unknown",goal:"cut",experience:"expert",
+    age:"18",heightCm:"99",weightKg:"900",bodyFatPercent:"80",activityLevel:"unknown",goal:"cut",experience:"expert",
     trainingDaysPerWeek:"4",availableDays:["Monday","Monday","Funday"],caloriePattern:"flexible-day",flexibleDay:""
   }));
   assert.equal(result.ok,false);
@@ -79,6 +80,7 @@ test("usual exercise rows are normalized without duplicates or incomplete maxima
 test("saved metric profiles round-trip through imperial form values",()=>{
   const source=Ui.profileDraftToMetric(validDraft()).payload,form=Ui.profileMetricToDraft(source,"imperial"),roundTrip=Ui.profileDraftToMetric(form);
   assert.equal(roundTrip.ok,true);
+  assert.equal(form.activityLevel,"moderately_active","stored activity should map to the current form option rather than a retired alias");
   assert.ok(Math.abs(roundTrip.payload.heightCm-source.heightCm)<0.2);
   assert.ok(Math.abs(roundTrip.payload.weightKg-source.weightKg)<0.1);
   assert.ok(Math.abs(roundTrip.payload.usualExercises[0].maxWeightKg-source.usualExercises[0].maxWeightKg)<0.1);
@@ -86,6 +88,8 @@ test("saved metric profiles round-trip through imperial form values",()=>{
   form.trainingDays=["Tuesday","Thursday"];form.frequency=2;form.performanceMaxes[0].reps=8;form.macrosEnabled=false;
   const edited=Ui.profileDraftToMetric(form);
   assert.deepEqual(edited.payload.workoutDays,["Tuesday","Thursday"]);assert.equal(edited.payload.usualExercises[0].maxReps,8);assert.equal(edited.payload.macroPreference,null);
+  const higher=Ui.profileMetricToDraft({...source,macroPreference:"higher_protein"},"metric");
+  assert.equal(higher.macroPreference,"higher_protein");assert.equal(Ui.profileDraftToMetric(higher).payload.macroPreference,"higher_protein");
 });
 
 test("discover form aliases map to the strict coaching API contract",()=>{
@@ -98,7 +102,7 @@ test("discover form aliases map to the strict coaching API contract",()=>{
   });
   assert.equal(result.ok,true);
   assert.deepEqual(result.payload,{
-    version:1,measurementSystem:"imperial",preferredLoadUnit:"lb",age:28,heightCm:177.8,weightKg:81.6,bodyFatPercent:null,sexForEquation:"male",
+    version:3,measurementSystem:"imperial",preferredLoadUnit:"lb",age:28,heightCm:177.8,weightKg:81.6,bodyFatPercent:null,sexForEquation:"male",
     goal:"muscle_gain",goalPace:"moderate",experience:"advanced",lifestyleActivity:"very_active",workoutDays:["Tuesday","Saturday"],sessionMinutes:60,
     usualExercises:[{exerciseId:"incline-curl",maxSets:3,maxReps:10,maxWeightKg:13.6}],availableEquipment:["Dumbbells"],movementLimitations:["no-overhead"],
     caloriePattern:"flexible_day",flexibleDay:"Saturday",macroPreference:"balanced",timeZone:"Asia/Dubai"
@@ -123,6 +127,25 @@ test("optional macro progress and seven-day totals remain transparent",()=>{
   assert.equal(Ui.macroProgress({proteinG:150,fatG:70,carbsG:250},{proteinG:90,fatG:72,carbsG:100}).carbs.remainingGrams,150);
   const week=Ui.weeklyCalorieProgress(Ui.DAYS.map((day,index)=>({day,targetCalories:index===5?2600:2100,consumedCalories:2000})));
   assert.equal(week.complete,true);assert.equal(week.targetCalories,15_200);assert.equal(week.consumedCalories,14_000);assert.equal(week.remainingCalories,1_200);
+});
+
+test("daily morning weights round-trip between display and canonical kilograms",()=>{
+  assert.equal(Ui.dailyWeightToKilograms("82.4","metric"),82.4);
+  assert.ok(Math.abs(Ui.dailyWeightToKilograms("181.7","imperial")-82.42)<.02);
+  assert.equal(Ui.dailyWeightFromKilograms(82.4,"metric"),82.4);
+  assert.ok(Math.abs(Ui.dailyWeightFromKilograms(82.4,"imperial")-181.7)<.1);
+  assert.equal(Ui.dailyWeightToKilograms("","imperial"),null);
+  assert.equal(Ui.dailyWeightFromKilograms(null,"metric"),null);
+});
+
+test("calibration display distinguishes readiness without inventing certainty",()=>{
+  const starting=Ui.calibrationDisplay(null);
+  assert.deepEqual({status:starting.status,completeDays:starting.completeDays,requiredCompleteDays:starting.requiredCompleteDays,weightDays:starting.weightDays,requiredWeightDays:starting.requiredWeightDays,weightSpanDays:starting.weightSpanDays,requiredWeightSpanDays:starting.requiredWeightSpanDays,windowDays:starting.windowDays},{status:"starting",completeDays:0,requiredCompleteDays:18,weightDays:0,requiredWeightDays:12,weightSpanDays:0,requiredWeightSpanDays:14,windowDays:21});
+  assert.match(starting.explanation,/formula-based planning estimate/i);
+  const informed=Ui.calibrationDisplay({status:"trend_informed",evidence:{completeCalorieDays:19,requiredCompleteCalorieDays:18,morningWeightDays:14,requiredMorningWeightDays:12,weightObservationSpanDays:16,requiredWeightObservationSpanDays:14},windowStart:"2026-09-07",windowEnd:"2026-09-27",observedMaintenanceKcal:2437,averageCompleteCaloriesKcal:2260,appliedAdjustmentKcal:-100,explanation:"Recent records support a restrained cross-check.",limitations:["Not a metabolic measurement."]});
+  assert.equal(informed.title,"TREND-INFORMED ESTIMATE.");assert.equal(informed.completeDays,19);assert.equal(informed.weightDays,14);assert.equal(informed.weightSpanDays,16);assert.equal(informed.requiredWeightSpanDays,14);assert.equal(informed.observedMaintenanceKcal,2437);assert.equal(informed.averageCompleteCaloriesKcal,2260);assert.equal(informed.cutoffDate,"2026-09-27");assert.equal(informed.appliedAdjustmentKcal,-100);assert.deepEqual(informed.limitations,["Not a metabolic measurement."]);
+  assert.equal(Ui.calibrationDisplay({status:"calibrating",completeDays:5,weightDays:4}).completeDays,5,"older flat fixtures remain readable");
+  assert.equal(Ui.calibrationDisplay({status:"legacy_profile"}).label,"Legacy profile");
 });
 
 test("projection display rounds deliberately and always carries uncertainty language",()=>{

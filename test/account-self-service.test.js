@@ -23,6 +23,13 @@ function fixtureRows(){
     checkIns:[{workout_id:"workout-1",difficulty:3,energy:4,comfort:5,enjoyment:4,created_at:10,updated_at:11}],
     trainingBlock:{block_json:JSON.stringify({week:2}),revision:3,updated_at:12},
     trainingAdaptations:[{id:"adapt-1",workout_id:"workout-1",adaptation_json:JSON.stringify({summary:"Add one rep"}),plan_updated_at:12,status:"accepted",created_at:13,resolved_at:14}],
+    coachingProfile:null,
+    coachingWeeks:[],
+    coachingLogs:[
+      {log_date:"2030-03-04",calories:2200,protein_g:160,carbs_g:250,fat_g:65,morning_weight_kg:82.4,intake_complete:1,revision:2,updated_at:15},
+      {log_date:"2030-03-05",calories:0,protein_g:null,carbs_g:null,fat_g:null,morning_weight_kg:null,intake_complete:null,revision:1,updated_at:16},
+      {log_date:"2030-03-06",calories:1800,protein_g:null,carbs_g:null,fat_g:null,morning_weight_kg:81.9,intake_complete:0,revision:1,updated_at:17}
+    ],
     communityPlans:[{id:"community-1",title:"My week",description:"Three days",plan_json:JSON.stringify({days:{}}),is_published:1,created_at:15,updated_at:16}],
     trials:[{started_at:17,expires_at:18}],
     purchases:[{transaction_id:"txn_1",price_id:"pri_1",product_id:"pro_1",subscription_id:"sub_1",customer_id:"never-export-customer",paddle_status:"completed",completed_at:19,access_revoked_at:null,revocation_reason:null,created_at:18,updated_at:19}],
@@ -113,6 +120,7 @@ test("account export is POST plus CSRF, no-store, and explicitly omits secrets a
   assert.equal(result.data.format,"strata-account-export");assert.equal(result.data.schemaVersion,1);
   assert.equal(result.data.weeklyPlan.data.version,1);assert.equal(result.data.workouts[0].workout.status,"completed");
   assert.equal(result.data.checkIns[0].workoutId,"workout-1");assert.equal(result.data.training.adaptations[0].status,"accepted");
+  assert.deepEqual(result.data.coaching.logs.map(({morningWeightKg,complete})=>({morningWeightKg,complete})),[{morningWeightKg:82.4,complete:true},{morningWeightKg:null,complete:null},{morningWeightKg:81.9,complete:false}]);
   assert.equal(result.data.access.purchases[0].transactionId,"txn_1");assert.equal(result.data.supportTickets[0].reference,"STRATA-ONE");
   assert.doesNotMatch(JSON.stringify(result.data),/never-export|password_hash|password_salt|token_hash|csrf_token|customer_id|admin_note|create_hash/i);
 });

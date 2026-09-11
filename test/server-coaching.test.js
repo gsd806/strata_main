@@ -3,6 +3,8 @@
 const test=require("node:test"),assert=require("node:assert/strict");
 const {spawn}=require("node:child_process"),{mkdirSync,mkdtempSync,rmSync}=require("node:fs"),{join}=require("node:path");
 const {DatabaseSync}=require("node:sqlite");
+const {ENERGY_MODEL_VERSION,addDays,currentWeekStart}=require("../src/coaching-core");
+const {logPayload}=require("../src/coaching");
 const ROOT=join(__dirname,"..");let server,directory,base;
 
 async function launch(){
@@ -13,7 +15,7 @@ async function launch(){
 async function stop(){if(server&&server.exitCode===null)await new Promise((resolve)=>{const timer=setTimeout(()=>server.kill("SIGKILL"),2000);server.once("exit",()=>{clearTimeout(timer);resolve();});server.kill("SIGTERM");});if(directory)rmSync(directory,{recursive:true,force:true});}
 async function request(path,account=null,method="GET",body,headers={}){const response=await fetch(`${base}${path}`,{method,headers:{Origin:base,"Content-Type":"application/json",...(account?{Cookie:account.cookie,"X-CSRF-Token":account.csrf}:{}),...headers},...(body===undefined?{}:{body:typeof body==="string"?body:JSON.stringify(body)})});return {status:response.status,data:await response.json(),cookie:response.headers.get("set-cookie")?.split(";")[0]||""};}
 async function account(suffix,{plus=true}={}){const signup=await request("/api/signup",null,"POST",{name:`Coach ${suffix}`,email:`coach-${suffix}@example.test`,password:"strong-coaching-password-123"});assert.equal(signup.status,201);const me=await request("/api/me",{cookie:signup.cookie,csrf:""});const result={cookie:signup.cookie,csrf:me.data.csrfToken,id:me.data.user.id};if(plus)assert.ok([200,201].includes((await request("/api/discovery/trial",result,"POST",{})).status));return result;}
-function profile(overrides={}){return {version:1,measurementSystem:"metric",preferredLoadUnit:"kg",age:30,heightCm:180,weightKg:80,bodyFatPercent:null,sexForEquation:"male",goal:"maintenance",goalPace:"moderate",experience:"intermediate",lifestyleActivity:"moderately_active",workoutDays:["Monday","Wednesday","Friday"],sessionMinutes:60,usualExercises:[{exerciseId:"flat-dumbbell-press",maxSets:4,maxReps:10,maxWeightKg:30}],availableEquipment:[],movementLimitations:[],caloriePattern:"zigzag",flexibleDay:null,macroPreference:"balanced",timeZone:"Asia/Dubai",...overrides};}
+function profile(overrides={}){return {version:3,measurementSystem:"metric",preferredLoadUnit:"kg",age:30,heightCm:180,weightKg:80,bodyFatPercent:null,sexForEquation:"male",goal:"maintenance",goalPace:"moderate",experience:"intermediate",lifestyleActivity:"moderately_active",workoutDays:["Monday","Wednesday","Friday"],sessionMinutes:60,usualExercises:[{exerciseId:"flat-dumbbell-press",maxSets:4,maxReps:10,maxWeightKg:30}],availableEquipment:[],movementLimitations:[],caloriePattern:"zigzag",flexibleDay:null,macroPreference:"balanced",timeZone:"Asia/Dubai",...overrides};}
 function mealPreferences(overrides={}){return {allergyStatus:"none_known",allergens:[],otherAllergies:"",dietaryPattern:"omnivore",dietaryRequirements:[],favoriteFoods:["chicken","rice"],mealsPerDay:3,dailyBudgetCents:1800,...overrides};}
 
 test.before(launch);test.after(stop);
@@ -27,7 +29,7 @@ test("every coaching endpoint fails closed without an authenticated active Strat
 });
 
 test("food options use the saved target, intake, allergies, favorites, meal count, and budget",async()=>{
-  const member=await account("food-options"),saved=await request("/api/coaching/profile",member,"PUT",{profile:profile({version:2,mealPreferences:mealPreferences({allergyStatus:"listed",allergens:["milk","peanuts"],favoriteFoods:["chicken","rice"],mealsPerDay:4,dailyBudgetCents:1600})}),expectedRevision:0});
+  const member=await account("food-options"),saved=await request("/api/coaching/profile",member,"PUT",{profile:profile({mealPreferences:mealPreferences({allergyStatus:"listed",allergens:["milk","peanuts"],favoriteFoods:["chicken","rice"],mealsPerDay:4,dailyBudgetCents:1600})}),expectedRevision:0});
   assert.equal(saved.status,200);const date=saved.data.week.weekStart,target=saved.data.week.nutrition.dailyTargets.find((day)=>day.date===date);
   assert.equal((await request(`/api/coaching/logs/${date}`,member,"PUT",{log:{calories:600,proteinG:40,carbsG:70,fatG:18},expectedRevision:0})).status,200);
   const result=await request(`/api/coaching/food-options/${date}`,member);assert.equal(result.status,200);assert.equal(result.data.csrfToken,member.csrf);assert.equal(result.data.status,"ready");assert.equal(result.data.options.length,3);assert.equal(result.data.remaining.calories,target.calories-600);assert.ok(result.data.mealsRemaining>=1&&result.data.mealsRemaining<=4);assert.match(result.data.nutritionProvenance.url,/fdc\.nal\.usda\.gov/);assert.match(result.data.costDisclaimer,/not live store prices/i);
@@ -39,7 +41,7 @@ test("food options use the saved target, intake, allergies, favorites, meal coun
 
   const legacy=await account("food-options-legacy"),legacySaved=await request("/api/coaching/profile",legacy,"PUT",{profile:profile(),expectedRevision:0});
   const missing=await request(`/api/coaching/food-options/${legacySaved.data.week.weekStart}`,legacy);assert.equal(missing.status,409);assert.equal(missing.data.code,"MEAL_PREFERENCES_REQUIRED");
-  const unsure=await request("/api/coaching/profile",legacy,"PUT",{profile:profile({version:2,mealPreferences:mealPreferences({allergyStatus:"other_or_unsure",otherAllergies:"Uncommon spice reaction"})}),expectedRevision:1});
+  const unsure=await request("/api/coaching/profile",legacy,"PUT",{profile:profile({mealPreferences:mealPreferences({allergyStatus:"other_or_unsure",otherAllergies:"Uncommon spice reaction"})}),expectedRevision:1});
   const manual=await request(`/api/coaching/food-options/${unsure.data.week.weekStart}`,legacy);assert.equal(manual.status,200);assert.equal(manual.data.status,"manual_review");assert.deepEqual(manual.data.options,[]);
 });
 
@@ -50,8 +52,11 @@ test("profile and weekly snapshot routes enforce mutation boundaries and optimis
   assert.equal((await request("/api/coaching/profile",member,"PUT",{profile:profile(),expectedRevision:0},{"X-CSRF-Token":"wrong"})).status,403);
   const wrongType=await request("/api/coaching/profile",member,"PUT",JSON.stringify({profile:profile(),expectedRevision:0}),{"Content-Type":"text/plain"});assert.equal(wrongType.status,415);assert.equal(wrongType.data.code,"JSON_REQUIRED");
   const wrongAccount=await request("/api/coaching/profile",member,"PUT",{profile:profile(),expectedRevision:0,expectedUserId:"someone-else"});assert.equal(wrongAccount.status,409);assert.equal(wrongAccount.data.code,"COACHING_ACCOUNT_CHANGED");
+  const age18=await request("/api/coaching/profile",member,"PUT",{profile:profile({age:18}),expectedRevision:0});assert.equal(age18.status,400);assert.match(age18.data.error,/19 to 80/);
+  const unreviewed=await request("/api/coaching/profile",member,"PUT",{profile:profile({version:2,mealPreferences:mealPreferences()}),expectedRevision:0});assert.equal(unreviewed.status,409);assert.equal(unreviewed.data.code,"COACHING_ACTIVITY_REVIEW_REQUIRED");
+  const nullSex=await request("/api/coaching/profile",member,"PUT",{profile:profile({bodyFatPercent:20,sexForEquation:null}),expectedRevision:0});assert.equal(nullSex.status,400);assert.match(nullSex.data.error,/required for a new or updated/);
   const saved=await request("/api/coaching/profile",member,"PUT",{profile:profile(),expectedRevision:0,expectedUserId:member.id});
-  assert.equal(saved.status,200);assert.equal(saved.data.profile.revision,1);assert.equal(saved.data.profile.sessionsPerWeek,3);assert.equal(saved.data.week.profileRevision,1);assert.equal(saved.data.week.training.sessions.length,3);assert.equal(saved.data.week.nutrition.dailyTargets.length,7);assert.equal(saved.data.logs.length,0);
+  assert.equal(saved.status,200);assert.equal(saved.data.profile.revision,1);assert.equal(saved.data.profile.sessionsPerWeek,3);assert.equal(saved.data.week.profileRevision,1);assert.equal(saved.data.week.energyModelVersion,ENERGY_MODEL_VERSION);assert.equal(saved.data.week.training.sessions.length,3);assert.equal(saved.data.week.nutrition.dailyTargets.length,7);assert.equal(saved.data.logs.length,0);
   const week=await request("/api/coaching/week",member);assert.equal(week.status,200);assert.equal(week.data.week.planKey,saved.data.week.planKey);assert.equal(week.data.week.generatedAt,saved.data.week.generatedAt,"same-week reads reuse the persisted snapshot");
   const stale=await request("/api/coaching/profile",member,"PUT",{profile:profile({weightKg:81}),expectedRevision:0});assert.equal(stale.status,409);assert.equal(stale.data.code,"COACHING_PROFILE_CHANGED");assert.equal(stale.data.profile.weightKg,80);
   const invalid=await request("/api/coaching/profile",member,"PUT",{profile:{...profile(),userId:"untrusted"},expectedRevision:1});assert.equal(invalid.status,400);assert.match(invalid.data.error,/unsupported fields/);
@@ -59,21 +64,52 @@ test("profile and weekly snapshot routes enforce mutation boundaries and optimis
   assert.equal((await request("/api/coaching/profile",member,"DELETE",{})).status,405);
 });
 
-test("daily calorie and optional macro logs are current-week, account-scoped, and conflict safe",async()=>{
+test("daily calorie, macro, morning-weight, and completeness logs are current-week, account-scoped, and conflict safe",async()=>{
   const owner=await account("logs"),other=await account("logs-other");
   const setup=await request("/api/coaching/profile",owner,"PUT",{profile:profile({caloriePattern:"flexible_day",flexibleDay:"Saturday"}),expectedRevision:0});assert.equal(setup.status,200);
   const date=setup.data.week.weekStart,target=setup.data.week.nutrition.dailyTargets.find((day)=>day.date===date).calories;
   assert.equal((await request(`/api/coaching/logs/${date}`,owner)).data.log,null);
   const partial=await request(`/api/coaching/logs/${date}`,owner,"PUT",{log:{calories:2000,proteinG:150},expectedRevision:0});assert.equal(partial.status,400);assert.equal(partial.data.code,"INVALID_COACHING_LOG");
+  const invalidWeight=await request(`/api/coaching/logs/${date}`,owner,"PUT",{log:{calories:2000,morningWeightKg:34.9,complete:true},expectedRevision:0});assert.equal(invalidWeight.status,400);assert.equal(invalidWeight.data.code,"INVALID_COACHING_LOG");
   const wrongDate=setup.data.week.nextWeekStart;const outside=await request(`/api/coaching/logs/${wrongDate}`,owner,"PUT",{log:{calories:2000},expectedRevision:0});assert.equal(outside.status,400);assert.equal(outside.data.code,"COACHING_LOG_OUTSIDE_CURRENT_WEEK");
-  const saved=await request(`/api/coaching/logs/${date}`,owner,"PUT",{log:{calories:target-100,proteinG:150,carbsG:220,fatG:70},expectedRevision:0,expectedUserId:owner.id});
-  assert.equal(saved.status,200);assert.equal(saved.data.log.revision,1);assert.equal(saved.data.log.remainingCalories,100);assert.equal(saved.data.log.overCalories,0);
+  const saved=await request(`/api/coaching/logs/${date}`,owner,"PUT",{log:{calories:target-100,proteinG:150,carbsG:220,fatG:70,morningWeightKg:80.2,complete:true},expectedRevision:0,expectedUserId:owner.id});
+  assert.equal(saved.status,200);assert.equal(saved.data.log.revision,1);assert.equal(saved.data.log.remainingCalories,100);assert.equal(saved.data.log.overCalories,0);assert.equal(saved.data.log.morningWeightKg,80.2);assert.equal(saved.data.log.complete,true);
   const stale=await request(`/api/coaching/logs/${date}`,owner,"PUT",{log:{calories:9999},expectedRevision:0});assert.equal(stale.status,409);assert.equal(stale.data.code,"COACHING_LOG_CHANGED");assert.equal(stale.data.log.calories,target-100);
-  const over=await request(`/api/coaching/logs/${date}`,owner,"PUT",{log:{calories:target+50},expectedRevision:1});assert.equal(over.status,200);assert.equal(over.data.log.remainingCalories,0);assert.equal(over.data.log.overCalories,50);
+  const legacyUpdate=await request(`/api/coaching/logs/${date}`,owner,"PUT",{log:{calories:target},expectedRevision:1});assert.equal(legacyUpdate.status,200);assert.equal(legacyUpdate.data.log.morningWeightKg,80.2);assert.equal(legacyUpdate.data.log.complete,true,"omitted observation fields retain the stored values for older clients");
+  const over=await request(`/api/coaching/logs/${date}`,owner,"PUT",{log:{calories:target+50,morningWeightKg:null,complete:false},expectedRevision:2});assert.equal(over.status,200);assert.equal(over.data.log.remainingCalories,0);assert.equal(over.data.log.overCalories,50);assert.equal(over.data.log.morningWeightKg,null);assert.equal(over.data.log.complete,false);
   const macrosOff=await request("/api/coaching/profile",owner,"PUT",{profile:profile({caloriePattern:"flexible_day",flexibleDay:"Saturday",macroPreference:null}),expectedRevision:1});assert.equal(macrosOff.status,200);
-  const calorieOnly=await request(`/api/coaching/logs/${date}`,owner,"PUT",{log:{calories:target,proteinG:175,carbsG:240,fatG:65},expectedRevision:2});assert.equal(calorieOnly.status,200);assert.deepEqual([calorieOnly.data.log.proteinG,calorieOnly.data.log.carbsG,calorieOnly.data.log.fatG],[null,null,null]);
-  const week=await request("/api/coaching/week",owner);assert.equal(week.data.logs.length,1);assert.equal(week.data.logs[0].revision,3);
+  const calorieOnly=await request(`/api/coaching/logs/${date}`,owner,"PUT",{log:{calories:target,proteinG:175,carbsG:240,fatG:65,morningWeightKg:79.8,complete:true},expectedRevision:3});assert.equal(calorieOnly.status,200);assert.deepEqual([calorieOnly.data.log.proteinG,calorieOnly.data.log.carbsG,calorieOnly.data.log.fatG],[null,null,null]);assert.equal(calorieOnly.data.log.morningWeightKg,79.8);assert.equal(calorieOnly.data.log.complete,true);
+  const week=await request("/api/coaching/week",owner);assert.equal(week.data.logs.length,1);assert.equal(week.data.logs[0].revision,4);
   assert.deepEqual((await request("/api/coaching/profile",other)).data.profile,null);assert.equal((await request(`/api/coaching/logs/${date}`,other)).data.code,"COACHING_PROFILE_REQUIRED");
+});
+
+test("new weekly snapshots use only the bounded prior evidence window for a trend-informed estimate",async()=>{
+  const member=await account("calibration"),weekStart=currentWeekStart(Date.now(),"Asia/Dubai"),database=new DatabaseSync(join(directory,"strata.sqlite"));
+  try{
+    const insert=database.prepare("INSERT INTO coaching_daily_logs(user_id,log_date,calories,protein_g,carbs_g,fat_g,morning_weight_kg,intake_complete,revision,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)");
+    for(let index=0;index<21;index+=1)insert.run(member.id,addDays(weekStart,index-21),2700,null,null,null,82.6-index*.02,1,1,Date.now()+index);
+  }finally{database.close();}
+  const saved=await request("/api/coaching/profile",member,"PUT",{profile:profile(),expectedRevision:0}),calibration=saved.data.week?.nutrition?.maintenance?.calibration;
+  assert.equal(saved.status,200);assert.equal(calibration.status,"trend_informed");assert.equal(calibration.windowEnd,addDays(weekStart,-1));assert.deepEqual({complete:calibration.evidence.completeCalorieDays,weights:calibration.evidence.morningWeightDays},{complete:21,weights:21});assert.notEqual(calibration.appliedAdjustmentKcal,0);
+  assert.equal(saved.data.week.nutrition.maintenance.targetKcal,saved.data.week.nutrition.maintenance.baselineKcal+calibration.appliedAdjustmentKcal);
+  const replay=await request("/api/coaching/week",member);assert.equal(replay.status,200);assert.equal(replay.data.week.planKey,saved.data.week.planKey);assert.equal(replay.data.week.generatedAt,saved.data.week.generatedAt);
+});
+
+test("stored age-18 null-sex legacy profiles remain readable without changing their energy semantics",async()=>{
+  const member=await account("legacy-energy"),database=new DatabaseSync(join(directory,"strata.sqlite")),legacy={...profile({version:1,age:18,bodyFatPercent:20,sexForEquation:null}),sessionsPerWeek:3};
+  try{database.prepare("INSERT INTO coaching_profiles(user_id,profile_json,revision,updated_at) VALUES(?,?,?,?)").run(member.id,JSON.stringify(legacy),1,Date.now());}finally{database.close();}
+  const read=await request("/api/coaching/profile",member);assert.equal(read.status,200);assert.equal(read.data.profile.age,18);assert.equal(read.data.profile.sexForEquation,null);
+  const week=await request("/api/coaching/week",member);assert.equal(week.status,200);assert.equal(week.data.week.inputs.version,1);assert.equal(week.data.week.nutrition.energySemantics,"legacy_rmr_activity_multiplier");assert.equal(week.data.week.nutrition.primaryEquation,"legacy_cunningham_activity_fallback");assert.equal(week.data.week.nutrition.equation,"cunningham_1991");assert.equal(week.data.week.nutrition.maintenance.baselineKcal,2725);assert.equal(week.data.week.nutrition.maintenance.calibration.status,"legacy_profile");assert.equal(week.data.week.nutrition.maintenance.calibration.appliedAdjustmentKcal,0);
+});
+
+test("concurrent first reads return the same persisted weekly snapshot",async()=>{
+  const member=await account("week-race"),created=await request("/api/coaching/profile",member,"PUT",{profile:profile(),expectedRevision:0});assert.equal(created.status,200);
+  const database=new DatabaseSync(join(directory,"strata.sqlite"));try{database.prepare("DELETE FROM coaching_weeks WHERE user_id=?").run(member.id);}finally{database.close();}
+  const [first,second]=await Promise.all([request("/api/coaching/week",member),request("/api/coaching/week",member)]);assert.equal(first.status,200);assert.equal(second.status,200);assert.equal(first.data.week.planKey,second.data.week.planKey);assert.equal(first.data.week.generatedAt,second.data.week.generatedAt);
+});
+
+test("coaching row mapping treats adapter string zero as false",()=>{
+  const mapped=logPayload({log_date:"2030-03-04",calories:2000,protein_g:null,carbs_g:null,fat_g:null,morning_weight_kg:null,intake_complete:"0",revision:1,updated_at:1});assert.equal(mapped.complete,false);
 });
 
 test("expired Strata+ access denies existing coaching data without mutating it",async()=>{

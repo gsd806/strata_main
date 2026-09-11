@@ -1,7 +1,7 @@
 // @ts-check
 "use strict";
 
-const {CATALOG_FINGERPRINT,GENERATION_VERSION,MEAL_CATALOG_FINGERPRINT,currentWeekStart,generateCoachingWeek,sanitizeCoachingProfile,sanitizeDailyLog,validDate,weekStartForDate}=require("./coaching-core");
+const {CATALOG_FINGERPRINT,ENERGY_MODEL_VERSION,GENERATION_VERSION,MEAL_CATALOG_FINGERPRINT,addDays,currentWeekStart,generateCoachingWeek,sanitizeCoachingProfile,sanitizeDailyLog,validDate,weekStartForDate}=require("./coaching-core");
 const {generateRemainingDayFoodOptions}=require("./meal-planning-core");
 
 /** @param {string} message @param {number} [status] @param {string} [code] */
@@ -18,7 +18,7 @@ function profilePayload(row){
   try{
     const stored=object(JSON.parse(String(row.profile_json)),"Stored coaching profile"),storedSessions=stored.sessionsPerWeek;
     delete stored.sessionsPerWeek;
-    const profile=sanitizeCoachingProfile(stored);
+    const profile=sanitizeCoachingProfile(stored,{allowLegacyProfile:true});
     if(storedSessions!==profile.sessionsPerWeek)throw new Error("Stored session count does not match workout days.");
     return {...profile,revision:Number(row.revision),updatedAt:Number(row.updated_at)};
   }catch{return null;}
@@ -36,7 +36,7 @@ function weekPayload(row){
 function logPayload(row,target=null){
   if(!row)return null;
   const calories=Number(row.calories),targetCalories=target?Number(target.calories):null;
-  return {date:String(row.log_date),calories,proteinG:row.protein_g==null?null:Number(row.protein_g),carbsG:row.carbs_g==null?null:Number(row.carbs_g),fatG:row.fat_g==null?null:Number(row.fat_g),revision:Number(row.revision),updatedAt:Number(row.updated_at),targetCalories,remainingCalories:targetCalories==null?null:Math.max(0,targetCalories-calories),overCalories:targetCalories==null?null:Math.max(0,calories-targetCalories)};
+  return {date:String(row.log_date),calories,proteinG:row.protein_g==null?null:Number(row.protein_g),carbsG:row.carbs_g==null?null:Number(row.carbs_g),fatG:row.fat_g==null?null:Number(row.fat_g),morningWeightKg:row.morning_weight_kg==null?null:Number(row.morning_weight_kg),complete:row.intake_complete==null?null:Number(row.intake_complete)===1,revision:Number(row.revision),updatedAt:Number(row.updated_at),targetCalories,remainingCalories:targetCalories==null?null:Math.max(0,targetCalories-calories),overCalories:targetCalories==null?null:Math.max(0,calories-targetCalories)};
 }
 
 /**
@@ -58,12 +58,17 @@ function createCoachingService({store,auth,requireAccess,trustedOrigin,rateAllow
     if(row&&!profile)throw coachingError("Your coaching profile could not be read safely. Contact support before replacing it.",500,"COACHING_PROFILE_UNREADABLE");
     return profile;
   }
+  /** @param {string} userId @param {string} weekStart */
+  async function calibrationEvidence(userId,weekStart){
+    const rows=await store.coachingDailyLogs(userId,addDays(weekStart,-21),addDays(weekStart,-1));
+    return {dailyLogs:rows.map((row)=>({date:String(row.log_date),calories:Number(row.calories),complete:row.intake_complete==null?null:Number(row.intake_complete)===1,morningWeightKg:row.morning_weight_kg==null?null:Number(row.morning_weight_kg)}))};
+  }
   /** @param {string} userId @param {any} profile @param {number} timestamp @param {any} [prepared] */
   async function ensureWeek(userId,profile,timestamp,prepared=null){
-    const weekStart=currentWeekStart(timestamp,profile.timeZone),existingRow=await store.coachingWeek(userId,weekStart),existing=weekPayload(existingRow);
-    if(existing&&existing.profileRevision===profile.revision&&existing.generationVersion===GENERATION_VERSION&&existing.catalogFingerprint===CATALOG_FINGERPRINT&&existing.mealCatalogFingerprint===MEAL_CATALOG_FINGERPRINT)return existing;
+    const weekStart=currentWeekStart(timestamp,profile.timeZone),existingRow=await store.coachingWeek(userId,weekStart),existing=weekPayload(existingRow),expectedEnergySemantics=profile.version===3?"nasem_2023_whole_day_eer":"legacy_rmr_activity_multiplier";
+    if(existing&&existing.profileRevision===profile.revision&&existing.inputs?.version===profile.version&&existing.nutrition?.energySemantics===expectedEnergySemantics&&existing.generationVersion===GENERATION_VERSION&&existing.energyModelVersion===ENERGY_MODEL_VERSION&&existing.catalogFingerprint===CATALOG_FINGERPRINT&&existing.mealCatalogFingerprint===MEAL_CATALOG_FINGERPRINT)return existing;
     const input={...profile};delete input.revision;delete input.updatedAt;
-    const generated=prepared&&prepared.weekStart===weekStart?prepared:generateCoachingWeek(input,profile.revision,weekStart,timestamp);
+    const generated=prepared&&prepared.weekStart===weekStart?prepared:generateCoachingWeek(input,profile.revision,weekStart,timestamp,await calibrationEvidence(userId,weekStart));
     const record={userId,weekStart,planKey:generated.planKey,profileRevision:profile.revision,snapshotJson:JSON.stringify(generated),generatedAt:timestamp};
     const saved=await store.upsertCoachingWeek(record),current=weekPayload(saved||await store.coachingWeek(userId,weekStart));
     if(!current||current.profileRevision!==profile.revision||current.planKey!==generated.planKey)throw coachingError("Your coaching profile changed while this week was generated. Refresh and try again.",409,"COACHING_PROFILE_CHANGED");
@@ -89,7 +94,7 @@ function createCoachingService({store,auth,requireAccess,trustedOrigin,rateAllow
         if(req.method==="GET"){json(res,200,{profile:await readProfile(session.id),csrfToken:session.csrf_token});return true;}
         const input=object(await bodyJson(req),"Request");exactKeys(input,["profile","expectedRevision","expectedUserId"],"Request");const expectedRevision=revision(input.expectedRevision,"Expected profile version");
         if(input.expectedUserId!==undefined&&String(input.expectedUserId)!==String(session.id))throw coachingError("Your account changed. Reload before saving this profile.",409,"COACHING_ACCOUNT_CHANGED");
-        const profile=sanitizeCoachingProfile(input.profile),timestamp=now(),weekStart=currentWeekStart(timestamp,profile.timeZone),prepared=generateCoachingWeek(profile,expectedRevision+1,weekStart,timestamp);
+        const profile=sanitizeCoachingProfile(input.profile),timestamp=now(),weekStart=currentWeekStart(timestamp,profile.timeZone),prepared=generateCoachingWeek(profile,expectedRevision+1,weekStart,timestamp,await calibrationEvidence(session.id,weekStart));
         const saved=await store.upsertCoachingProfile(session.id,JSON.stringify(profile),timestamp,expectedRevision);
         if(!saved){json(res,409,{error:"This coaching profile changed elsewhere. Review the latest version before saving.",code:"COACHING_PROFILE_CHANGED",profile:await readProfile(session.id)});return true;}
         const output=profilePayload(saved);if(!output)throw coachingError("The coaching profile was saved but could not be read safely.",500,"COACHING_PROFILE_UNREADABLE");
@@ -112,9 +117,9 @@ function createCoachingService({store,auth,requireAccess,trustedOrigin,rateAllow
         json(res,200,{date:logDate,day:target.day,target,log,mealsRemaining,...options,csrfToken:session.csrf_token});return true;
       }
       if(req.method==="GET"){json(res,200,{log:logPayload(await store.coachingDailyLog(session.id,logDate),target),csrfToken:session.csrf_token});return true;}
-      const input=object(await bodyJson(req),"Request");exactKeys(input,["log","expectedRevision","expectedUserId"],"Request");const expectedRevision=revision(input.expectedRevision,"Expected log version");
+      const input=object(await bodyJson(req),"Request");exactKeys(input,["log","expectedRevision","expectedUserId"],"Request");const expectedRevision=revision(input.expectedRevision,"Expected log version"),logInput=object(input.log,"Calorie log");
       if(input.expectedUserId!==undefined&&String(input.expectedUserId)!==String(session.id))throw coachingError("Your account changed. Reload before saving this entry.",409,"COACHING_ACCOUNT_CHANGED");
-      const sanitized=sanitizeDailyLog(input.log),log=profile.macroPreference?sanitized:{...sanitized,proteinG:null,carbsG:null,fatG:null},saved=await store.upsertCoachingDailyLog({userId:session.id,logDate,...log,updatedAt:timestamp},expectedRevision);
+      const sanitized=sanitizeDailyLog(logInput),needsExisting=!Object.prototype.hasOwnProperty.call(logInput,"morningWeightKg")||!Object.prototype.hasOwnProperty.call(logInput,"complete"),existingLog=needsExisting?await store.coachingDailyLog(session.id,logDate):null,merged={...sanitized,morningWeightKg:Object.prototype.hasOwnProperty.call(logInput,"morningWeightKg")?sanitized.morningWeightKg:existingLog?.morning_weight_kg==null?null:Number(existingLog.morning_weight_kg),complete:Object.prototype.hasOwnProperty.call(logInput,"complete")?sanitized.complete:existingLog?.intake_complete==null?null:Number(existingLog.intake_complete)===1},log=profile.macroPreference?merged:{...merged,proteinG:null,carbsG:null,fatG:null},saved=await store.upsertCoachingDailyLog({userId:session.id,logDate,...log,updatedAt:timestamp},expectedRevision);
       if(!saved){json(res,409,{error:"This daily entry changed elsewhere. Review the latest values before saving.",code:"COACHING_LOG_CHANGED",log:logPayload(await store.coachingDailyLog(session.id,logDate),target)});return true;}
       json(res,200,{ok:true,log:logPayload(saved,target),csrfToken:session.csrf_token});
     }catch(error){

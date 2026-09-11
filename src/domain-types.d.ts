@@ -517,7 +517,7 @@ export interface AccountExportStoreRows {
   trainingAdaptations:JsonObject[];
   coachingProfile:JsonObject|null;
   coachingWeeks:JsonObject[];
-  coachingLogs:JsonObject[];
+  coachingLogs:CoachingDailyLogRow[];
   communityPlans:JsonObject[];
   grants:JsonObject[];
   trials:JsonObject[];
@@ -807,7 +807,7 @@ export interface MealPreferences extends JsonObject {
   mealsPerDay:number;dailyBudgetCents:number|null;
 }
 export interface CoachingProfile extends JsonObject {
-  version:1|2;measurementSystem:"metric"|"imperial";preferredLoadUnit:"kg"|"lb";
+  version:1|2|3;measurementSystem:"metric"|"imperial";preferredLoadUnit:"kg"|"lb";
   age:number;heightCm:number;weightKg:number;bodyFatPercent:number|null;sexForEquation:"female"|"male"|null;
   goal:CoachingGoal;goalPace:"gentle"|"moderate";experience:CoachingExperience;lifestyleActivity:string;
   workoutDays:string[];sessionsPerWeek:number;sessionMinutes:30|45|60|75|90;usualExercises:CoachingCapability[];
@@ -816,15 +816,16 @@ export interface CoachingProfile extends JsonObject {
 }
 export interface CoachingProfilePayload extends CoachingProfile {revision:number;updatedAt:number;}
 export interface CoachingWeekRecord {userId:string;weekStart:string;planKey:string;profileRevision:number;snapshotJson:string;generatedAt:number;}
-export interface CoachingDailyLogRecord {userId:string;logDate:string;calories:number;proteinG:number|null;carbsG:number|null;fatG:number|null;updatedAt:number;}
+export interface CoachingDailyLogRecord {userId:string;logDate:string;calories:number;proteinG:number|null;carbsG:number|null;fatG:number|null;morningWeightKg:number|null;complete:boolean|null;updatedAt:number;}
+export interface CoachingDailyLogRow extends JsonObject {log_date:string;calories:number;protein_g:number|null;carbs_g:number|null;fat_g:number|null;morning_weight_kg:number|null;intake_complete:0|1|null;revision:number;updated_at:number;}
 export interface CoachingStore {
   coachingProfile(userId:string):Promise<JsonObject|null>;
   upsertCoachingProfile(userId:string,profileJson:string,updatedAt:number,expectedRevision:number):Promise<JsonObject|null>;
   coachingWeek(userId:string,weekStart:string):Promise<JsonObject|null>;
   upsertCoachingWeek(record:CoachingWeekRecord):Promise<JsonObject|null>;
-  coachingDailyLog(userId:string,logDate:string):Promise<JsonObject|null>;
-  coachingDailyLogs(userId:string,startDate:string,endDate:string):Promise<JsonObject[]>;
-  upsertCoachingDailyLog(record:CoachingDailyLogRecord,expectedRevision:number):Promise<JsonObject|null>;
+  coachingDailyLog(userId:string,logDate:string):Promise<CoachingDailyLogRow|null>;
+  coachingDailyLogs(userId:string,startDate:string,endDate:string):Promise<CoachingDailyLogRow[]>;
+  upsertCoachingDailyLog(record:CoachingDailyLogRecord,expectedRevision:number):Promise<CoachingDailyLogRow|null>;
 }
 export interface LocalCoachingStoreDependencies {
   statements:Record<string,PreparedStatementLike>;

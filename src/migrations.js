@@ -11,7 +11,8 @@ const MIGRATIONS=Object.freeze([
   {id:"001-account-security-columns",description:"Add verified-account, authorization-version, suspension, and verification-purpose fields."},
   {id:"002-reviewed-index-set",description:"Remove unused legacy indexes and preserve the verification lookup index."},
   {id:"003-one-active-workout",description:"Reconcile duplicate active workouts before enforcing the partial unique index."},
-  {id:"004-monthly-subscriptions",description:"Add the lean Paddle subscription cache while preserving legacy lifetime purchases."}
+  {id:"004-monthly-subscriptions",description:"Add the lean Paddle subscription cache while preserving legacy lifetime purchases."},
+  {id:"005-coaching-calibration",description:"Add optional morning-weight and intake-completeness observations to coaching logs."}
 ]);
 const LATEST_MIGRATION_ID=MIGRATIONS.at(-1).id;
 
@@ -69,6 +70,10 @@ function migrateLocalSchema(database,{activeWorkoutIndex,reconcileActiveWorkouts
     database.exec(BILLING_SUBSCRIPTION_TABLE);
     database.exec("CREATE INDEX IF NOT EXISTS paddle_subscriptions_user_id ON paddle_subscriptions(user_id)");
   },now())) applied.push(MIGRATIONS[3].id);
+  if (runLocalMigration(database,MIGRATIONS[4].id,()=>{
+    addLocalColumn(database,"coaching_daily_logs","morning_weight_kg","REAL CHECK(morning_weight_kg BETWEEN 35 AND 300)");
+    addLocalColumn(database,"coaching_daily_logs","intake_complete","INTEGER CHECK(intake_complete IN (0,1))");
+  },now())) applied.push(MIGRATIONS[4].id);
   return {latest:LATEST_MIGRATION_ID,applied};
 }
 
@@ -126,6 +131,11 @@ async function migrateTursoSchema(client,{activeWorkoutIndex,reconcileActiveWork
       {sql:"INSERT OR IGNORE INTO schema_migrations(migration_id,applied_at) VALUES(?,?)",args:[MIGRATIONS[3].id,now()]}
     ],"write");
     applied.push(MIGRATIONS[3].id);
+  }
+  if (!completed.has(MIGRATIONS[4].id)) {
+    await addTursoColumn(client,"coaching_daily_logs","morning_weight_kg","REAL CHECK(morning_weight_kg BETWEEN 35 AND 300)");
+    await addTursoColumn(client,"coaching_daily_logs","intake_complete","INTEGER CHECK(intake_complete IN (0,1))");
+    await recordTursoMigration(client,MIGRATIONS[4].id,now());applied.push(MIGRATIONS[4].id);
   }
   return {latest:LATEST_MIGRATION_ID,applied};
 }
