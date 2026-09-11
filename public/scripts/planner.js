@@ -32,9 +32,10 @@ const apiClient=API.createClient({
 async function api(path,options={}){return apiClient.request(path,options);}
 
 function lockChangedAccount(){
-  persistAccountDraft();state.accountChanged=true;state.csrfToken="";clearTimeout(state.saveTimer);
+  persistAccountDraft();state.accountChanged=true;state.csrfToken="";state.entitlementStatus="unavailable";clearTimeout(state.saveTimer);clearTimeout(state.entitlementTimer);state.entitlementTimer=null;
   el("plannerShell").inert=true;el("accountChangedNotice").hidden=false;
   el("accountChangedDetails").textContent=state.draftStorageError?"Keep this page open and export your week. Reload to open the currently signed-in account.":"Your week is retained as a device draft for its original account. Export it if needed, then reload to open the currently signed-in account.";
+  if(state.plan){renderSummary();renderPlannerModeNotice();}
 }
 async function verifyPlannerIdentity(){
   if(state.guest)return;
@@ -156,6 +157,7 @@ function setReady(ready){
   if(!ready)el("retryPlanSave").hidden=true;
   el("manageWeekTemplates").disabled=!ready;
   renderUndo();
+  renderResetWeek();
   el("plannerShell").setAttribute("aria-busy",String(!ready));
   el("libraryPanel").setAttribute("aria-busy",String(!ready));
   el("weekBoard").setAttribute("aria-busy",String(!ready));
@@ -238,6 +240,7 @@ function renderWeek(focusSelector=null){
   renderDayNav();
   renderSummary();
   renderUndo();
+  renderResetWeek();
   focusSoon(focusSelector);
 }
 
@@ -249,20 +252,62 @@ function renderSummary(){
   const peak=Math.max(1,...DAYS.map((day)=>state.plan.days[day].length));
   const distribution=DAYS.map((day)=>`${day}: ${state.plan.days[day].length} exercises`).join(", ");
   const next=nextScheduledDay();
-  let readiness;
-  if(restConflict)readiness={tone:"needs-attention",label:"Plan check",title:"Clear the recovery conflict.",detail:`Move exercises off ${restDays().filter((day)=>state.plan.days[day].length).join(", ")} before this week can save cleanly.`,action:"",href:""};
-  else if(!total)readiness={tone:"getting-started",label:"Next move",title:"Build your first training day.",detail:"Choose a destination day, then add one movement from the library. Sets and reps remain editable.",action:"Choose a movement",href:"#libraryPanel"};
-  else {
-    const noRecovery=restDays().length===0,plusActive=state.user?.discovery?.active===true;
+  const plusActive=STATE.hasConfirmedPlusAccess(state);
+  let readiness=null;
+  if(plusActive&&restConflict)readiness={tone:"needs-attention",label:"Plan check",title:"Clear the recovery conflict.",detail:`Move exercises off ${restDays().filter((day)=>state.plan.days[day].length).join(", ")} before this week can save cleanly.`,action:"",href:""};
+  else if(plusActive&&!total)readiness={tone:"getting-started",label:"Next move",title:"Build your first training day.",detail:"Choose a destination day, then add one movement from the library. Sets and reps remain editable.",action:"Choose a movement",href:"#libraryPanel"};
+  else if(plusActive){
+    const noRecovery=restDays().length===0;
     const nextDetail=`${next?.isToday?"Today":`Next scheduled: ${next?.day||"your plan"}`} · ${next?.movements||total} movement${(next?.movements||total)===1?"":"s"}.${noRecovery?" Consider marking an open day for recovery.":" Changes save automatically."}`;
     readiness={
-      tone:noRecovery?"review-recovery":"ready",label:noRecovery?"Recovery check":plusActive?"Train-ready":"Free plan ready",title:noRecovery?"Your week is built. Recovery is unmarked.":plusActive?"Your week is ready to train.":"Your free week is ready.",
-      detail:plusActive?nextDetail:`${nextDetail} Guided workouts and set logging are included in Strata+.`,
-      action:plusActive?`Review ${next?.day||DAYS.find((day)=>state.plan.days[day].length)} workout`:"See guided workout tools",href:plusActive?`/workout.html?day=${encodeURIComponent(next?.day||DAYS.find((day)=>state.plan.days[day].length))}`:"/pricing"
+      tone:noRecovery?"review-recovery":"ready",label:noRecovery?"Recovery check":"Train-ready",title:noRecovery?"Your week is built. Recovery is unmarked.":"Your week is ready to train.",
+      detail:nextDetail,action:`Review ${next?.day||DAYS.find((day)=>state.plan.days[day].length)} workout`,href:`/workout.html?day=${encodeURIComponent(next?.day||DAYS.find((day)=>state.plan.days[day].length))}`
     };
   }
-  el("weekSummary").innerHTML=`<div class="summary-stat"><span>Scheduled movements</span><strong>${total}</strong></div><div class="summary-stat"><span>Training days</span><strong>${trainingDays}</strong></div><div class="summary-stat"><span>Working sets</span><strong>${totalSets}</strong></div><div class="summary-stat ${restConflict?"summary-warning":""}"><span>Rest days</span><strong>${restDays().length}${restConflict?" · clear":""}</strong></div><div class="week-distribution" role="img" aria-label="Weekly exercise distribution. ${distribution}">${DAYS.map((day)=>`<div aria-hidden="true"><span>${state.plan.days[day].length}</span><div class="week-bar-track"><i style="height:${Math.max(3,state.plan.days[day].length/peak*100)}%" class="${isRestDay(day)?"is-rest":""}"></i></div><small>${day.slice(0,3)}</small></div>`).join("")}</div><section class="week-readiness ${readiness.tone}" aria-label="Plan guidance"><div><span>${readiness.label}</span><strong>${readiness.title}</strong><p>${readiness.detail}</p></div>${readiness.href?`<a href="${readiness.href}">${readiness.action} <span aria-hidden="true">→</span></a>`:""}</section>`;
+  el("weekSummary").innerHTML=`<div class="summary-stat"><span>Scheduled movements</span><strong>${total}</strong></div><div class="summary-stat"><span>Training days</span><strong>${trainingDays}</strong></div><div class="summary-stat"><span>Working sets</span><strong>${totalSets}</strong></div><div class="summary-stat ${restConflict?"summary-warning":""}"><span>Rest days</span><strong>${restDays().length}${restConflict?" · clear":""}</strong></div><div class="week-distribution" role="img" aria-label="Weekly exercise distribution. ${distribution}">${DAYS.map((day)=>`<div aria-hidden="true"><span>${state.plan.days[day].length}</span><div class="week-bar-track"><i style="height:${Math.max(3,state.plan.days[day].length/peak*100)}%" class="${isRestDay(day)?"is-rest":""}"></i></div><small>${day.slice(0,3)}</small></div>`).join("")}</div>${readiness?`<section class="week-readiness ${readiness.tone}" aria-label="Plan guidance"><div><span>${readiness.label}</span><strong>${readiness.title}</strong><p>${readiness.detail}</p></div>${readiness.href?`<a href="${readiness.href}">${readiness.action} <span aria-hidden="true">→</span></a>`:""}</section>`:""}`;
   renderInsights();
+}
+
+function renderPlannerModeNotice(){
+  const notice=el("plannerModeNotice"),confirmed=STATE.hasConfirmedPlusAccess(state);
+  const oversized=state.plan&&(DAYS.some(day=>state.plan.days[day].length>MAX_DAY_ITEMS)||planMovementCount()>MAX_WEEK_ITEMS);
+  notice.hidden=false;notice.innerHTML=RENDER.modeNoticeMarkup({guest:state.guest,status:state.entitlementStatus,confirmed,oversized});
+}
+function scheduleEntitlementRefresh({retry=false}={}){
+  clearTimeout(state.entitlementTimer);state.entitlementTimer=null;
+  if(state.guest||state.accountChanged)return;
+  const delay=retry?STATE.entitlementRetryDelay(++state.entitlementFailureCount):STATE.entitlementRefreshDelay(state.user);if(delay)state.entitlementTimer=setTimeout(()=>{state.entitlementTimer=null;void refreshEntitlement({force:true});},delay);
+}
+
+function refreshEntitlement({force=false}={}){
+  if(!state.ready||state.guest||state.accountChanged||!state.user?.id)return Promise.resolve(false);
+  if(state.entitlementRefreshPromise)return state.entitlementRefreshPromise;if(!force&&Date.now()-state.entitlementCheckedAt<1000)return Promise.resolve(true);
+  const expectedUserId=String(state.user.id),requestId=++state.entitlementRequest;state.entitlementStatus="checking";renderSummary();renderPlannerModeNotice();
+  const operation=(async()=>{try{
+    const result=await api("/api/me",{cache:"no-store"});if(requestId!==state.entitlementRequest)return false;
+    if(!result.user?.id||String(result.user.id)!==expectedUserId){lockChangedAccount();return false;}
+    state.user=result.user;state.csrfToken=String(result.csrfToken||state.csrfToken||"");state.entitlementStatus="ready";state.entitlementCheckedAt=Date.now();state.entitlementFailureCount=0;scheduleEntitlementRefresh();renderSummary();renderPlannerModeNotice();return true;
+  }catch(error){if(requestId!==state.entitlementRequest)return false;state.entitlementStatus="unavailable";state.entitlementCheckedAt=Date.now();renderSummary();renderPlannerModeNotice();if(error.status===401)lockChangedAccount();else scheduleEntitlementRefresh({retry:true});return false;}
+  finally{if(state.entitlementRefreshPromise===operation)state.entitlementRefreshPromise=null;}})();
+  state.entitlementRefreshPromise=operation;return operation;
+}
+
+function renderResetWeek(){el("resetWeeklyPlan").disabled=!state.ready||!state.plan||state.accountChanged||Boolean(state.conflictDraft)||Boolean(state.conflictReview)||LOGIC.isDefaultPlan(state.plan);}
+function openResetWeek(trigger){
+  if(el("resetWeeklyPlan").disabled)return;
+  const movements=planMovementCount(),recovery=restDays();
+  state.resetWeekSnapshot={revision:state.revision,plan:JSON.stringify(state.plan)};state.resetWeekTrigger=trigger;
+  el("resetWeekImpact").textContent=`This will remove ${movements} scheduled movement${movements===1?"":"s"}${recovery.length?` and replace ${recovery.length} recovery marker${recovery.length===1?"":"s"}`:""}.`;
+  el("resetWeekStatus").textContent="Nothing has changed.";el("confirmResetWeek").disabled=false;
+  el("resetWeekDialog").showModal();focusSoon("#resetWeekDialogTitle");
+}
+function closeResetWeek(){if(el("resetWeekDialog").open)el("resetWeekDialog").close();}
+function confirmResetWeek(){
+  const snapshot=state.resetWeekSnapshot;
+  if(!snapshot||!state.ready||state.accountChanged||state.conflictDraft||state.conflictReview)return false;
+  if(snapshot.revision!==state.revision||snapshot.plan!==JSON.stringify(state.plan)){el("resetWeekStatus").textContent="Your week changed after this confirmation opened. Cancel and review it again.";el("confirmResetWeek").disabled=true;return false;}
+  state.resetWeekSnapshot=null;state.resetWeekTrigger=null;state.plan=emptyPlan();state.selectedDay=STATE.firstTrainingDay(state.plan);state.undoRemoval=null;state.replacement=null;persistSelectedDay();
+  el("resetWeekDialog").close();renderWeek("#weekTitle");renderLibrary();queueSave();showToast("Week reset. All scheduled movements were cleared; follow the save status for confirmation.");return true;
 }
 
 function insightRows(entries,emptyMessage){
@@ -576,14 +621,17 @@ function restoreExerciseGuideFocus(){const trigger=exerciseGuideTrigger;exercise
 function bindPlannerUIEvents(){
   EVENTS.bindPlannerEvents({document,window,location,el,state,searchDebounceMs:SEARCH_DEBOUNCE_MS,actions:{
     api,init,addExercise,moveItem,persistSelectedDay,renderLibrary,renderFilters,resetLibraryWindow,openExerciseGuide,instanceSelector,renderWeek,showToast,openReplacement,removeItem,setRestDay,moveWithinDay,libraryPageSize,unpublishSharedPlan,updatePrescriptionInput,
-    downloadWeeklyPlan,undoLastRemoval,openTemplates,saveWeekTemplate,weekTemplates,previewTemplate,importWeekTemplate,useWeekTemplate,deleteWeekTemplate,syncCopyDayOptions,openCopyDayPreview,applyCopyDayPreview,closeCopyDayPreview,renderReplacementOptions,confirmReplacement,restoreExerciseGuideFocus,selectRecoveredDraft,
-    setSaveStatus,flushSave,reviewConflictDraft,keepLatestPlan,renderActivationCandidate,toggleActivationComparison,setActivationStatus,keepAccountActivationPlan,claimActivationPlan,openSharePanel,closeSharePanel,publishWeeklyPlan,loadSharedPlans,sendKeepaliveSave
+    downloadWeeklyPlan,undoLastRemoval,openResetWeek,closeResetWeek,confirmResetWeek,openTemplates,saveWeekTemplate,weekTemplates,previewTemplate,importWeekTemplate,useWeekTemplate,deleteWeekTemplate,syncCopyDayOptions,openCopyDayPreview,applyCopyDayPreview,closeCopyDayPreview,renderReplacementOptions,confirmReplacement,restoreExerciseGuideFocus,selectRecoveredDraft,
+    setSaveStatus,flushSave,reviewConflictDraft,keepLatestPlan,renderActivationCandidate,toggleActivationComparison,setActivationStatus,keepAccountActivationPlan,claimActivationPlan,openSharePanel,closeSharePanel,publishWeeklyPlan,loadSharedPlans,sendKeepaliveSave,refreshEntitlement
   }});
 }
 
 async function init({guestOnly=false}={}){
+  state.entitlementRequest+=1;state.entitlementRefreshPromise=null;clearTimeout(state.entitlementTimer);state.entitlementTimer=null;state.entitlementStatus="unknown";state.entitlementFailureCount=0;
   setReady(false);
   if(el("copyDayDialog").open)el("copyDayDialog").close();
+  if(el("resetWeekDialog").open)el("resetWeekDialog").close();
+  state.resetWeekSnapshot=null;state.resetWeekTrigger=null;
   state.copyPreview=null;state.copyTrigger=null;
   hideActivationPanel();
   setSaveStatus("Loading plan…");
@@ -591,14 +639,14 @@ async function init({guestOnly=false}={}){
   el("weekSummary").innerHTML="";
   el("weekBoard").innerHTML='<div class="planner-load-state">Loading your weekly plan…</div>';
   try{
-    const exercises=await api("/exercises.json?v=7.8.5");
+    const exercises=await api("/exercises.json?v=7.8.6");
     if(!Array.isArray(exercises))throw new Error("STRATA returned an incomplete exercise library.");
     state.exercises=exercises;
     let result;
     try{result=guestOnly?{plan:guestPlan(),user:null}:await api("/api/plan");}
     catch(error){if(error.status!==401)throw error;result={plan:guestPlan(),user:null};}
     if(!result.plan?.days)throw new Error("STRATA returned an incomplete plan.");
-    state.plan=result.plan;state.user=result.user;state.guest=!result.user?.id;state.csrfToken=String(result.csrfToken||"");state.planUpdatedAt=Number(result.planUpdatedAt)||0;state.sharedPlans=[];state.sharedPlansLoaded=false;state.sharedPlansRequest=0;state.shareBusy=false;state.pendingUnpublish="";
+    state.plan=result.plan;state.user=result.user;state.guest=!result.user?.id;state.csrfToken=String(result.csrfToken||"");state.planUpdatedAt=Number(result.planUpdatedAt)||0;state.sharedPlans=[];state.sharedPlansLoaded=false;state.sharedPlansRequest=0;state.shareBusy=false;state.pendingUnpublish="";state.entitlementStatus=state.guest?"guest":"ready";state.entitlementCheckedAt=Date.now();
     clearPlanConflict();
     state.accountChanged=false;el("accountChangedNotice").hidden=true;el("draftStorageNotice").hidden=true;state.undoRemoval=null;state.draftKey="";state.draftValue="";state.recoverySource=null;state.recoveredDrafts=[];
     state.revision=0;state.savedRevision=0;state.savePromise=null;state.lastSaveError=null;
@@ -611,23 +659,16 @@ async function init({guestOnly=false}={}){
     el("userName").hidden=state.guest;
     el("logoutButton").hidden=state.guest;
     el("plannerSignIn").hidden=!state.guest;
-    el("plannerModeNotice").hidden=false;
-    el("plannerModeNotice").innerHTML=state.guest
-      ? '<strong>Free device plan.</strong> No account required. This week stays in this browser. <a href="/account.html?mode=login&amp;next=planner">Use a synced plan</a>.'
-      : result.user.discovery?.active===true
-        ? '<strong>Synced account plan.</strong> Changes save across your signed-in devices. <a href="/discover.html">Open Strata+</a>.'
-        : '<strong>Free synced plan.</strong> Changes save across your signed-in devices. <a href="/pricing">See what Strata+ adds</a>.';
+    renderPlannerModeNotice();
     setReady(true);
-    resetLibraryWindow();renderFilters();renderLibrary();renderWeek();renderShareAccess();setSaveStatus("Saved");
-    const oversized=DAYS.some((day)=>state.plan.days[day].length>MAX_DAY_ITEMS)||DAYS.reduce((n,day)=>n+state.plan.days[day].length,0)>MAX_WEEK_ITEMS;
-    if(oversized)el("plannerModeNotice").innerHTML+='<p><strong>Large saved draft preserved.</strong> Export a copy, then reduce to 30 exercises per day and 140 per week before syncing or importing.</p>';
+    resetLibraryWindow();renderFilters();renderLibrary();renderWeek();renderShareAccess();setSaveStatus("Saved");scheduleEntitlementRefresh();
     if(!state.guest)void loadSharedPlans();
     if(!state.guest){const renderedPlan=state.plan;state.plan=storedAccountPlan;const recovered=offerRecoveredDraft();if(recovered){renderWeek();renderLibrary();return;}state.plan=renderedPlan;}
     if(repairedRest){queueSave();showToast("Scheduled exercises preserved. Conflicting rest markers removed.");}
     handlePendingAdd();
     if(!state.guest)offerDevicePlan();
   }catch(error){
-    state.ready=false;
+    state.ready=false;state.entitlementStatus="unavailable";clearTimeout(state.entitlementTimer);state.entitlementTimer=null;
     el("plannerSearch").disabled=true;el("exportWeeklyPlan").disabled=true;el("shareWeeklyPlan").disabled=true;
     el("plannerShell").setAttribute("aria-busy","false");el("libraryPanel").setAttribute("aria-busy","false");
     setSaveStatus("Unable to load",true);renderLoadError(error);

@@ -33,6 +33,10 @@ test("planner pure logic validates, filters, counts, and describes the selected-
   assert.equal(Logic.planMovementCount(value),1);
   assert.equal(Logic.isEmptyPlan(value),false);
   assert.equal(Logic.isEmptyPlan(Logic.emptyPlan()),true);
+  assert.equal(Logic.isDefaultPlan(Logic.emptyPlan()),true);
+  assert.equal(Logic.isDefaultPlan(value),false);
+  const emptyWithoutRecovery=Logic.emptyPlan();Logic.updateRestDays(emptyWithoutRecovery,[]);
+  assert.equal(Logic.isDefaultPlan(emptyWithoutRecovery),false,"reset remains available when only recovery markers differ from the default");
   assert.deepEqual(Logic.selectedDayHandoff(value,"Monday"),{day:"Monday",count:1,addLabel:"Add to Monday",viewLabel:"View Monday · 1 exercise"});
   assert.deepEqual(Logic.filterExercises([
     {name:"Row",sub:"Back",equipment:"Cable",group:"back",score:70},
@@ -51,6 +55,30 @@ test("planner state keeps destination choices scoped and rejects a stored rest d
   assert.equal(PlannerState.readSelectedDay(storage,{guest:true},value),"Monday","guest and account selections cannot leak into each other");
   Logic.updateRestDays(value,["Friday"]);
   assert.equal(PlannerState.readSelectedDay(storage,{guest:false,userId:"member/1"},value),"Monday","a newly marked recovery day cannot remain the add target");
+});
+
+test("planner guidance requires a fresh entitlement and schedules boundaries, periodic checks, and retries",()=>{
+  const now=1_800_000_000_000,state=PlannerState.createState(),trialExpiry=now+10*60*1000;
+  state.user={id:"member-1",discovery:{active:true,accessType:"trial",trial:{active:true,expiresAt:trialExpiry}}};
+  state.entitlementStatus="checking";
+  assert.equal(PlannerState.hasConfirmedPlusAccess(state,now),false,"a foreground recheck must hide Plus guidance immediately");
+  state.entitlementStatus="ready";
+  assert.equal(PlannerState.hasConfirmedPlusAccess(state,now),true);
+  assert.equal(PlannerState.hasConfirmedPlusAccess(state,trialExpiry),false,"the client must fail closed at the known expiry even before a delayed timer runs");
+  assert.equal(PlannerState.entitlementBoundary(state.user),trialExpiry);
+  assert.equal(PlannerState.entitlementRefreshDelay(state.user,now),10*60*1000+50);
+  state.user.discovery.trial.expiresAt=null;
+  assert.equal(PlannerState.hasConfirmedPlusAccess(state,now),false,"malformed timed access must fail closed instead of becoming lifetime access");
+
+  state.user={id:"member-1",discovery:{active:true,accessType:"paid",subscription:{active:true,currentPeriodEndsAt:now+90_000,scheduledChange:{action:"cancel",effectiveAt:now+60_000}}}};
+  assert.equal(PlannerState.entitlementBoundary(state.user),now+60_000,"a scheduled cancellation is the earliest known entitlement boundary");
+  assert.equal(PlannerState.entitlementRefreshDelay(state.user,now),60_050);
+  state.user.discovery.subscription=null;
+  assert.equal(PlannerState.entitlementBoundary(state.user),0,"grandfathered access has no invented client expiry");
+  assert.equal(PlannerState.entitlementRefreshDelay(state.user,now),PlannerState.ENTITLEMENT_RECHECK_MAX_DELAY,"boundaryless access must still refresh periodically so manual revocation cannot remain stale");
+  state.entitlementStatus="unavailable";
+  assert.equal(PlannerState.hasConfirmedPlusAccess(state,now),false,"network uncertainty must not retain gated guidance");
+  assert.deepEqual([1,2,3,4,20].map(PlannerState.entitlementRetryDelay),[15_000,60_000,300_000,900_000,900_000],"temporary failures must use bounded retry backoff");
 });
 
 test("planner rendering names the destination and safely escapes catalog content",()=>{
@@ -98,4 +126,9 @@ test("planner entrypoint composes bounded modules in dependency order",()=>{
   const main=readFileSync(join(ROOT,"public","scripts","planner.js"),"utf8");
   assert.ok(main.split("\n").length<700,"planner orchestration should stay focused after workflow extraction");
   for(const globalName of ["StrataPlannerConflicts","StrataPlannerTemplates","StrataPlannerSharing","StrataPlannerActivation"])assert.match(main,new RegExp(`globalThis\\.${globalName}`),`entrypoint should explicitly compose ${globalName}`);
+  assert.match(html,/id="resetWeeklyPlan"[^>]*aria-haspopup="dialog"[^>]*aria-controls="resetWeekDialog"/);
+  assert.match(html,/<dialog class="planner-dialog reset-week-dialog"[^>]*aria-labelledby="resetWeekDialogTitle"[^>]*aria-describedby="resetWeekDialogDescription resetWeekImpact"/);
+  assert.match(main,/state\.plan=emptyPlan\(\);state\.selectedDay=STATE\.firstTrainingDay\(state\.plan\)/,"whole-week reset must reuse the canonical empty plan");
+  assert.match(sources["planner-events.js"],/window\.addEventListener\("focus",refreshEntitlement\)/,"returning to Plan must recheck Strata+ access");
+  assert.match(main,/state\.entitlementStatus="checking";renderSummary\(\);renderPlannerModeNotice\(\)/,"foreground checks must hide entitlement-bound UI before awaiting the network");
 });

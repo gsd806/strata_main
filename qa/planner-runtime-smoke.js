@@ -299,6 +299,48 @@ function clickSelectDay(day){
   assert.equal(elements.get("plannerShell").inert,false);
   assert.equal(elements.get("planConflictPanel").hidden,true);
 
+  const planBeforeEntitlementRefresh=vm.runInContext("JSON.stringify(state.plan)",context),saveBoundaryBefore=vm.runInContext("[state.revision,state.savedRevision,state.planUpdatedAt]",context);
+  let resolveEntitlementRefresh;
+  context.fetch=async(path)=>{
+    if(path==="/api/me")return new Promise(resolve=>{resolveEntitlementRefresh=resolve;});
+    return {ok:false,status:404,json:async()=>({error:"Not found"})};
+  };
+  vm.runInContext("state.entitlementCheckedAt=0",context);
+  for(const handler of windowListeners.focus||[])handler();
+  assert.equal(vm.runInContext("state.entitlementStatus",context),"checking","foregrounding Plan must enter a fail-closed entitlement state before the account response arrives");
+  assert.doesNotMatch(elements.get("weekSummary").innerHTML,/class="week-readiness/,"Plus guidance must disappear during an uncertain foreground recheck");
+  assert.match(elements.get("plannerModeNotice").innerHTML,/Checking Strata\+ access/);
+  resolveEntitlementRefresh({ok:true,json:async()=>({user:{id:"u1",name:"Planner Audit",discovery:{active:false,accessType:null}},csrfToken:"fresh-csrf"})});
+  await vm.runInContext("state.entitlementRefreshPromise",context);
+  assert.equal(vm.runInContext("state.user.discovery.active",context),false,"a revoked entitlement must replace the stale Plus snapshot");
+  assert.doesNotMatch(elements.get("weekSummary").innerHTML,/class="week-readiness/);
+  assert.match(elements.get("plannerModeNotice").innerHTML,/Free synced plan/);
+  assert.equal(vm.runInContext("JSON.stringify(state.plan)",context),planBeforeEntitlementRefresh,"entitlement refreshes must not mutate the editable week");
+  assert.deepEqual([...vm.runInContext("[state.revision,state.savedRevision,state.planUpdatedAt]",context)],[...saveBoundaryBefore],"entitlement refreshes must not disturb dirty/save revision boundaries");
+
+  context.fetch=async(path)=>path==="/api/me"
+    ?{ok:true,json:async()=>({user:{id:"u1",name:"Planner Audit",discovery:{active:true,accessType:"paid",trial:{eligible:false,active:false}}},csrfToken:"restored-csrf"})}
+    :{ok:false,status:404,json:async()=>({error:"Not found"})};
+  vm.runInContext("state.entitlementCheckedAt=0",context);
+  for(const handler of windowListeners.pageshow||[])handler({persisted:true});
+  await vm.runInContext("state.entitlementRefreshPromise",context);
+  assert.match(elements.get("weekSummary").innerHTML,/class="week-readiness ready"/,"a confirmed Plus entitlement should restore guidance after a persisted-page return");
+  assert.equal(vm.runInContext("state.csrfToken",context),"restored-csrf","the safe account refresh should retain the newest CSRF token for later saves");
+  assert.equal(vm.runInContext("Boolean(state.entitlementTimer)",context),true,"boundaryless Plus access must retain a bounded periodic refresh");
+
+  context.fetch=async(path)=>{if(path==="/api/me")throw new Error("offline");return{ok:false,status:404,json:async()=>({error:"Not found"})};};
+  vm.runInContext("state.entitlementCheckedAt=0",context);
+  for(const handler of windowListeners.focus||[])handler();
+  await vm.runInContext("state.entitlementRefreshPromise",context);
+  assert.equal(vm.runInContext("state.entitlementStatus",context),"unavailable");
+  assert.equal(vm.runInContext("state.entitlementFailureCount",context),1,"the first transient account failure must enter retry backoff");
+  assert.equal(vm.runInContext("Boolean(state.entitlementTimer)",context),true,"a transient failure must schedule recovery without waiting for another focus event");
+  assert.doesNotMatch(elements.get("weekSummary").innerHTML,/class="week-readiness/,"guidance stays fail-closed during retry backoff");
+  context.fetch=async(path)=>path==="/api/me"?{ok:true,json:async()=>({user:{id:"u1",name:"Planner Audit",discovery:{active:true,accessType:"paid"}},csrfToken:"recovered-csrf"})}:{ok:false,status:404,json:async()=>({error:"Not found"})};
+  assert.equal(await vm.runInContext("refreshEntitlement({force:true})",context),true);
+  assert.equal(vm.runInContext("state.entitlementFailureCount",context),0,"a successful retry must reset backoff");
+  assert.match(elements.get("weekSummary").innerHTML,/class="week-readiness ready"/);
+
   let guestCommunityFetches=0;
   context.fetch=async(path)=>{
     if(path===CATALOG_URL)return {ok:true,json:async()=>exercises};
@@ -307,8 +349,10 @@ function clickSelectDay(day){
     return {ok:false,status:404,json:async()=>({error:"Not found"})};
   };
   await vm.runInContext("init()",context);
+  assert.equal(vm.runInContext("state.entitlementTimer",context),null,"guest fallback must cancel account entitlement timers");
   assert.equal(elements.get("sharePlanGuest").hidden,false,"Guest planners should see the sign-in publishing prompt");
   assert.equal(elements.get("sharePlanAccount").hidden,true,"Guest planners must not see account publishing controls");
+  assert.doesNotMatch(elements.get("weekSummary").innerHTML,/class="week-readiness/,"Free and guest planners must not receive Strata+ plan-guidance cards");
   assert.equal(elements.get("userName").hidden,true,"Guest planners should not see a misleading account-name link");
   assert.equal(guestCommunityFetches,0,"Guest planners must not request private community management data");
   assert.match(elements.get("plannerModeNotice").innerHTML,/Free device plan[\s\S]*No account required[\s\S]*stays in this browser[\s\S]*Use a synced plan/i,"Guest copy must distinguish the browser-local free plan from optional account sync");
@@ -385,7 +429,7 @@ function clickSelectDay(day){
   const fixture=()=>({version:1,restDay:"Sunday",days:Object.fromEntries(DAYS.map((day)=>[day,day==="Monday"?[{instanceId:"editing-item",exerciseId:exercises[0].id,sets:4,reps:"6–8"}]:[]]))});
   const reset=({guest=true,userId="u1",plan=fixture(),stamp=100}={})=>{
     context.fixturePlan=plan;context.fixtureUserId=userId;context.fixtureGuest=guest;context.fixtureStamp=stamp;
-    run("clearTimeout(state.saveTimer);clearPlanConflict();hideActivationPanel();state.ready=true;state.accountChanged=false;state.guest=fixtureGuest;state.guestRaw=localStorage.getItem(GUEST_PLAN_KEY);state.user=fixtureGuest?null:{id:fixtureUserId,name:'Runtime user'};state.plan=copyPlan(fixturePlan);state.revision=0;state.savedRevision=0;state.planUpdatedAt=fixtureStamp;state.lastSaveError=null;state.savePromise=null;state.undoRemoval=null;state.draftKey='';state.draftValue='';state.recoverySource=null;state.recoveredDrafts=[];state.csrfToken='planner-csrf';renderWeek();");
+    run("clearTimeout(state.saveTimer);clearPlanConflict();hideActivationPanel();state.ready=true;state.accountChanged=false;state.guest=fixtureGuest;state.guestRaw=localStorage.getItem(GUEST_PLAN_KEY);state.user=fixtureGuest?null:{id:fixtureUserId,name:'Runtime user'};state.plan=copyPlan(fixturePlan);state.revision=0;state.savedRevision=0;state.planUpdatedAt=fixtureStamp;state.lastSaveError=null;state.savePromise=null;state.undoRemoval=null;state.resetWeekSnapshot=null;state.resetWeekTrigger=null;state.draftKey='';state.draftValue='';state.recoverySource=null;state.recoveredDrafts=[];state.csrfToken='planner-csrf';renderWeek();");
   };
   context.localStorage.getItem=(key)=>storedValues.get(key)||null;
   storedValues.clear();reset();
@@ -413,6 +457,23 @@ function clickSelectDay(day){
   assert.equal(run("undoLastRemoval()"),true);
   assert.equal(snapshot().days.Monday.length,1,"Undo restores the actual removed exercise");
   assert.deepEqual(snapshot().restDays,["Sunday"],"Undo clears only its own rest marker");
+
+  reset();const beforeResetPreview=JSON.stringify(snapshot());
+  assert.equal(elements.get("resetWeeklyPlan").disabled,false,"A populated week must expose Reset week");
+  run("openResetWeek(document.getElementById('resetWeeklyPlan'))");
+  assert.equal(elements.get("resetWeekDialog").open,true);
+  assert.equal(JSON.stringify(snapshot()),beforeResetPreview,"Opening reset confirmation must not mutate the week");
+  run("state.revision+=1");
+  assert.equal(run("confirmResetWeek()"),false,"A stale reset confirmation must not clear a newer edit");
+  assert.match(elements.get("resetWeekStatus").textContent,/changed/);
+  reset();run("openResetWeek(document.getElementById('resetWeeklyPlan'))");
+  assert.equal(run("confirmResetWeek()"),true);
+  assert.equal(run("planMovementCount()"),0,"Confirmed reset clears every scheduled movement");
+  assert.deepEqual(snapshot().restDays,["Sunday"],"Confirmed reset restores the canonical Sunday recovery marker");
+  assert.equal(run("state.selectedDay"),"Monday");
+  assert.equal(elements.get("resetWeeklyPlan").disabled,true,"Canonical empty weeks cannot be reset again");
+  assert.equal(await run("flushSave()"),true,"Reset uses the normal guest autosave path");
+  assert.equal(Object.values(JSON.parse(storedValues.get("strata_guest_plan_v1")).days).flat().length,0);
 
   reset();
   for(const value of [[],"broken"]){

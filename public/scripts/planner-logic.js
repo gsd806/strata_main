@@ -18,6 +18,7 @@
   function emptyPlan(){return{version:1,restDay:"Sunday",restDays:["Sunday"],days:Object.fromEntries(DAYS.map(day=>[day,[]]))};}
   function planMovementCount(plan){return DAYS.reduce((total,day)=>total+(Array.isArray(plan?.days?.[day])?plan.days[day].length:0),0);}
   function isEmptyPlan(plan){return planMovementCount(plan)===0;}
+  function isDefaultPlan(plan){const recovery=restDays(plan);return isEmptyPlan(plan)&&recovery.length===1&&recovery[0]==="Sunday";}
 
   function nextScheduledDay(plan,now=new Date()){
     const todayIndex=(now.getDay()+6)%7;
@@ -78,5 +79,5 @@
     };
   }
 
-  return{DAYS,GROUPS,MAX_DAY_ITEMS,MAX_WEEK_ITEMS,copyPlan,restDays,isRestDay,updateRestDays,emptyPlan,planMovementCount,isEmptyPlan,nextScheduledDay,filterExercises,validateWeekPlan,saveErrorMessage,selectedDayHandoff};
+  return{DAYS,GROUPS,MAX_DAY_ITEMS,MAX_WEEK_ITEMS,copyPlan,restDays,isRestDay,updateRestDays,emptyPlan,planMovementCount,isEmptyPlan,isDefaultPlan,nextScheduledDay,filterExercises,validateWeekPlan,saveErrorMessage,selectedDayHandoff};
 });

@@ -315,6 +315,10 @@ button:disabled { cursor:not-allowed; opacity:.58; }
 .planner-dialog label{display:grid;gap:8px;margin-block:18px;font:500 12px/1.5 var(--mono)}
 .planner-dialog input:not([type=checkbox]),.planner-dialog select{width:100%;min-width:0;min-height:44px;padding:10px;border:1px solid var(--line);background:var(--white);color:var(--ink);font:400 16px var(--body, sans-serif)}
 .planner-dialog-status{min-height:21px;color:var(--muted)}
+.reset-week-button{border-color:var(--orange);color:var(--orange)}
+.reset-week-impact{margin:18px 0;padding:14px 16px;border-left:4px solid var(--orange);color:var(--ink);background:#f7eae5;font-weight:650}
+.reset-week-confirm{width:100%;border-color:var(--orange);background:var(--orange)}
+@media(hover:hover){.reset-week-button:hover:not(:disabled),.reset-week-confirm:hover:not(:disabled){border-color:var(--orange);color:var(--white);background:var(--orange)}}
 .template-save-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:12px;margin-block:18px}
 .template-save-row label{margin:0}
 .template-preview{border-top:1px solid var(--line);padding-top:12px}

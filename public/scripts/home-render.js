@@ -17,7 +17,7 @@
     const groupTabs=el("groupTabs"),musclePanel=el("musclePanel"),submuscleFilters=el("submuscleFilters"),exerciseList=el("exerciseList");
     const detailDialog=el("detailDialog"),compareDialog=el("compareDialog"),dialogReturnFocus=new WeakMap();
     const frame=callback=>(globalThis.requestAnimationFrame||setTimeout)(callback);
-    let toastTimer;
+    let toastTimer,activeDetailId=null;
 
     function renderTabs(){
       groupTabs.innerHTML=groupOrder.map(key=>{const selected=state.group===key;return`<button class="group-tab" id="group-tab-${key}" type="button" role="tab" aria-selected="${selected}" aria-controls="rankingsPanel" tabindex="${selected?"0":"-1"}" data-group="${key}">${groups[key].name}</button>`;}).join("");
@@ -49,12 +49,13 @@
         return;
       }
       setEmptyStateCopy("No movement found.","Clear a filter or search another exercise.","Reset filters",false);
-      const rows=logic.filterExercises(state.exercises,state),activeFilters=[state.sub!=="all"?`Target: ${state.sub}`:"",state.equipment!=="all"?`Equipment: ${state.equipment}`:"",state.level!=="all"?`Experience: ${state.level}`:"",state.query.trim()?`Search: “${state.query.trim()}”`:""].filter(Boolean);
+      const rows=logic.filterExercises(state.exercises,state),comparisonAllowed=logic.comparisonAccessIsFresh(state),activeFilters=[state.sub!=="all"?`Target: ${state.sub}`:"",state.equipment!=="all"?`Equipment: ${state.equipment}`:"",state.level!=="all"?`Experience: ${state.level}`:"",state.query.trim()?`Search: “${state.query.trim()}”`:""].filter(Boolean);
       el("resultCount").textContent=rows.length;el("resultNoun").textContent=rows.length===1?"exercise":"exercises";el("activeTarget").textContent=`${groups[state.group].name} · ${activeFilters.length?activeFilters.join(" · "):"All targets"}`;
       el("resetActiveFilters").hidden=activeFilters.length===0;el("emptyState").hidden=rows.length!==0;
       exerciseList.innerHTML=rows.map((exercise,index)=>{
         const compared=state.compare.includes(exercise.id),escape=logic.escapeHtml,id=escape(exercise.id),name=escape(exercise.name);
-        return `<article class="exercise-row" role="listitem"><div class="rank-number"><span aria-hidden="true">${String(index+1).padStart(2,"0")}</span><span class="sr-only">Rank ${index+1}</span></div><div class="exercise-title"><button type="button" data-detail="${id}"><h3>${name}</h3><p>${escape(exercise.pattern)} · ${escape(exercise.level)}</p><p class="mobile-exercise-meta">${escape(exercise.sub)} · ${escape(exercise.equipment)}</p><span class="details-cue">View details <span aria-hidden="true">↘</span></span></button></div><div><span class="target-pill">${escape(exercise.sub)}</span></div><div class="exercise-cell"><small>Equipment</small><strong>${escape(exercise.equipment)}</strong></div><div class="score-badge ${exercise.score>=94?"top":""}" role="img" aria-label="FitScore ${exercise.score} out of 100" style="--score:${exercise.score}%"><strong>${exercise.score}</strong><span aria-hidden="true">/100</span></div><div class="row-actions"><a class="action-icon youtube-action" href="${escape(exercise.youtube)}" target="_blank" rel="noreferrer" title="Watch tutorials" aria-label="Find ${name} tutorials on YouTube"><span aria-hidden="true">▶</span></a><button class="action-icon ${compared?"active":""}" data-compare="${id}" type="button" title="${compared?"Remove from comparison":"Add to comparison"}" aria-pressed="${compared}" aria-label="${compared?"Remove":"Add"} ${name} ${compared?"from":"to"} comparison"><span aria-hidden="true">⇄</span></button><button class="action-icon" data-add-planner="${id}" type="button" title="Add to planner" aria-label="Add ${name} to weekly planner"><span aria-hidden="true">+</span></button></div></article>`;
+        const compareAction=comparisonAllowed?`<button class="action-icon ${compared?"active":""}" data-compare="${id}" type="button" title="${compared?"Remove from comparison":"Add to comparison"}" aria-pressed="${compared}" aria-label="${compared?"Remove":"Add"} ${name} ${compared?"from":"to"} comparison"><span aria-hidden="true">⇄</span></button>`:"";
+        return `<article class="exercise-row" role="listitem"><div class="rank-number"><span aria-hidden="true">${String(index+1).padStart(2,"0")}</span><span class="sr-only">Rank ${index+1}</span></div><div class="exercise-title"><button type="button" data-detail="${id}"><h3>${name}</h3><p>${escape(exercise.pattern)} · ${escape(exercise.level)}</p><p class="mobile-exercise-meta">${escape(exercise.sub)} · ${escape(exercise.equipment)}</p><span class="details-cue">View details <span aria-hidden="true">↘</span></span></button></div><div><span class="target-pill">${escape(exercise.sub)}</span></div><div class="exercise-cell"><small>Equipment</small><strong>${escape(exercise.equipment)}</strong></div><div class="score-badge ${exercise.score>=94?"top":""}" role="img" aria-label="FitScore ${exercise.score} out of 100" style="--score:${exercise.score}%"><strong>${exercise.score}</strong><span aria-hidden="true">/100</span></div><div class="row-actions"><a class="action-icon youtube-action" href="${escape(exercise.youtube)}" target="_blank" rel="noreferrer" title="Watch tutorials" aria-label="Find ${name} tutorials on YouTube"><span aria-hidden="true">▶</span></a>${compareAction}<button class="action-icon" data-add-planner="${id}" type="button" title="Add to planner" aria-label="Add ${name} to weekly planner"><span aria-hidden="true">+</span></button></div></article>`;
       }).join("");
     }
 
@@ -91,7 +92,8 @@
       const planCount=state.user?(Number(state.user.planCount)||0):guestCount();el("planCount").textContent=planCount;el("planButton").href="/planner.html";el("planButton").setAttribute("aria-label",`Open weekly planner, ${planCount} ${planCount===1?"exercise":"exercises"}`);
     }
     function updateCompareDock(){
-      el("compareDock").hidden=state.compare.length===0;document.body?.classList.toggle("compare-open",state.compare.length>0);el("compareCount").textContent=`${state.compare.length}/2`;el("openCompare").disabled=state.compare.length!==2;
+      const allowed=logic.comparisonAccessIsFresh(state),visible=allowed&&state.compare.length>0;
+      el("compareDock").hidden=!visible;document.body?.classList.toggle("compare-open",visible);el("compareCount").textContent=`${state.compare.length}/2`;el("openCompare").disabled=!allowed||state.compare.length!==2;
       el("compareNames").textContent=state.compare.length?state.compare.map(id=>state.exercises.find(exercise=>exercise.id===id)?.name).join(" vs "):"Choose two exercises";
     }
     function renderAll(){renderTabs();renderPanel();renderSubfilters();updateEquipmentOptions();renderExercises();updateCompareDock();updateAccountUI();}
@@ -104,24 +106,47 @@
       syncDialogState();frame(()=>dialog.querySelector?.("[data-close-dialog],button,[href],input,select,textarea")?.focus());
     }
     function closeModal(dialog){if(dialog?.open)dialog.close();syncDialogState();if(dialog)restoreModalFocus(dialog);}
-    function openDetail(id){
+    function detailFocusToken(){
+      const active=document.activeElement;if(!detailDialog.open||!active||typeof detailDialog.contains!=="function"||!detailDialog.contains(active))return null;
+      for(const attribute of ["data-close-dialog","data-detail","data-add-planner","data-compare","href"]){const value=active.getAttribute?.(attribute);if(value!==null&&value!==undefined)return{attribute,value};}
+      return{attribute:null,value:null};
+    }
+    function restoreDetailFocus(token){
+      if(!token)return;frame(()=>{
+        const candidates=token.attribute?[...detailDialog.querySelectorAll?.(`[${token.attribute}]`)||[]]:[];
+        const matching=candidates.find(control=>control.getAttribute?.(token.attribute)===token.value);
+        (matching||detailDialog.querySelector?.("[data-close-dialog]")||detailDialog).focus?.({preventScroll:true});
+      });
+    }
+    function openDetail(id,{focus=true}={}){
       const exercise=state.exercises.find(item=>item.id===id);if(!exercise)return;
-      const compared=state.compare.includes(id),guidance=window.StrataDiscovery.exerciseGuidance(exercise,state.exercises),escape=logic.escapeHtml;
+      activeDetailId=id;
+      const compared=state.compare.includes(id),comparisonAllowed=logic.comparisonAccessIsFresh(state),guidance=window.StrataDiscovery.exerciseGuidance(exercise,state.exercises),escape=logic.escapeHtml;
       const alternatives=guidance.alternatives.map(({exercise:alternative,reason})=>`<li><button type="button" data-detail="${escape(alternative.id)}"><strong>${escape(alternative.name)}</strong><span>${escape(alternative.equipment)}</span></button><small>${escape(reason)}</small></li>`).join("");
-      el("detailContent").innerHTML=`<div class="detail-hero"><button class="icon-button detail-close" data-close-dialog="detailDialog" type="button" aria-label="Close details">×</button><div class="detail-hero-copy"><p class="kicker">${groups[exercise.group].name} / ${escape(exercise.sub)}</p><h2 id="detailTitle">${escape(exercise.name)}</h2><p>${escape(exercise.why)}</p></div><div class="detail-score" role="img" aria-label="FitScore ${exercise.score} out of 100"><span>FIT SCORE</span><strong>${exercise.score}</strong><span>OUT OF 100</span></div></div><div class="detail-body"><div class="detail-meta"><div><span>Sets</span><strong>${escape(exercise.sets)}</strong></div><div><span>Reps</span><strong>${escape(exercise.reps)}</strong></div><div><span>Rest</span><strong>${escape(exercise.rest)}</strong></div><div><span>Level</span><strong>${escape(exercise.level)}</strong></div></div><div class="metric-grid">${metricMarkup(exercise)}</div><p class="detail-score-build"><strong>Score build</strong><span>Weighted baseline ${exercise.weightedBaseline}</span><span>Editorial adjustment ${logic.adjustmentLabel(exercise.editorialAdjustment)}</span></p><div class="detail-columns exercise-guidance"><div><h3>Set up</h3><p class="detail-rationale">${escape(guidance.setup)}</p><h3>Technique cues</h3><ul>${guidance.cues.map(cue=>`<li>${escape(cue)}</li>`).join("")}</ul></div><div><h3>Purpose &amp; working range</h3><p class="detail-rationale">${escape(guidance.purpose)}</p><p class="guidance-prescription"><strong>General catalog range</strong><span>${escape(guidance.prescription)}</span></p><p class="detail-note"><strong>Caution / Common mistake:</strong> ${escape(guidance.mistake)}</p></div></div><section class="guidance-alternatives" aria-labelledby="guidanceAlternativesTitle"><div><h3 id="guidanceAlternativesTitle">Same target, different equipment</h3><p>Equivalent purpose does not mean identical feel. Review the setup and choose the option that matches your available equipment.</p></div><ul>${alternatives}</ul></section><div class="detail-footer"><button class="button button-dark" data-add-planner="${escape(exercise.id)}" type="button">Add to weekly planner<span aria-hidden="true">+</span></button><a class="button detail-youtube" href="${escape(exercise.youtube)}" target="_blank" rel="noreferrer">YouTube tutorials <span aria-hidden="true">▶</span></a><button class="button" style="border-color:var(--ink)" data-compare="${escape(exercise.id)}" type="button" aria-pressed="${compared}">${compared?"Remove comparison":"Compare exercise"}<span aria-hidden="true">⇄</span></button></div></div>`;
-      openModal(detailDialog);
+      const compareAction=comparisonAllowed?`<button class="button" style="border-color:var(--ink)" data-compare="${escape(exercise.id)}" type="button" aria-pressed="${compared}">${compared?"Remove comparison":"Compare exercise"}<span aria-hidden="true">⇄</span></button>`:"";
+      el("detailContent").innerHTML=`<div class="detail-hero"><button class="icon-button detail-close" data-close-dialog="detailDialog" type="button" aria-label="Close details">×</button><div class="detail-hero-copy"><p class="kicker">${groups[exercise.group].name} / ${escape(exercise.sub)}</p><h2 id="detailTitle">${escape(exercise.name)}</h2><p>${escape(exercise.why)}</p></div><div class="detail-score" role="img" aria-label="FitScore ${exercise.score} out of 100"><span>FIT SCORE</span><strong>${exercise.score}</strong><span>OUT OF 100</span></div></div><div class="detail-body"><div class="detail-meta"><div><span>Sets</span><strong>${escape(exercise.sets)}</strong></div><div><span>Reps</span><strong>${escape(exercise.reps)}</strong></div><div><span>Rest</span><strong>${escape(exercise.rest)}</strong></div><div><span>Level</span><strong>${escape(exercise.level)}</strong></div></div><div class="metric-grid">${metricMarkup(exercise)}</div><p class="detail-score-build"><strong>Score build</strong><span>Weighted baseline ${exercise.weightedBaseline}</span><span>Editorial adjustment ${logic.adjustmentLabel(exercise.editorialAdjustment)}</span></p><div class="detail-columns exercise-guidance"><div><h3>Set up</h3><p class="detail-rationale">${escape(guidance.setup)}</p><h3>Technique cues</h3><ul>${guidance.cues.map(cue=>`<li>${escape(cue)}</li>`).join("")}</ul></div><div><h3>Purpose &amp; working range</h3><p class="detail-rationale">${escape(guidance.purpose)}</p><p class="guidance-prescription"><strong>General catalog range</strong><span>${escape(guidance.prescription)}</span></p><p class="detail-note"><strong>Caution / Common mistake:</strong> ${escape(guidance.mistake)}</p></div></div><section class="guidance-alternatives" aria-labelledby="guidanceAlternativesTitle"><div><h3 id="guidanceAlternativesTitle">Same target, different equipment</h3><p>Equivalent purpose does not mean identical feel. Review the setup and choose the option that matches your available equipment.</p></div><ul>${alternatives}</ul></section><div class="detail-footer"><button class="button button-dark" data-add-planner="${escape(exercise.id)}" type="button">Add to weekly planner<span aria-hidden="true">+</span></button><a class="button detail-youtube" href="${escape(exercise.youtube)}" target="_blank" rel="noreferrer">YouTube tutorials <span aria-hidden="true">▶</span></a>${compareAction}</div></div>`;
+      if(focus)openModal(detailDialog);else syncDialogState();
     }
     function openComparison(){
+      if(!logic.comparisonAccessIsFresh(state)){syncComparisonAccess();return false;}
       const [left,right]=state.compare.map(id=>state.exercises.find(exercise=>exercise.id===id));if(!left||!right)return;
       const escape=logic.escapeHtml,row=(label,a,b,className="")=>`<tr><th scope="row">${label}</th><td class="${className}">${a}</td><td class="${className}">${b}</td></tr>`;
       el("compareContent").innerHTML=`<div class="compare-table-wrap" role="region" aria-label="${escape(left.name)} and ${escape(right.name)} comparison table" tabindex="0"><table class="compare-table"><caption class="sr-only">Comparison of ${escape(left.name)} and ${escape(right.name)}</caption><thead><tr><th scope="col">Measure</th><th scope="col" class="compare-name">${escape(left.name)}</th><th scope="col" class="compare-name">${escape(right.name)}</th></tr></thead><tbody>${row("FitScore",left.score,right.score,"compare-score")}${row("Weighted baseline",left.weightedBaseline,right.weightedBaseline)}${row("Editorial adjustment",logic.adjustmentLabel(left.editorialAdjustment),logic.adjustmentLabel(right.editorialAdjustment))}${row("Target",escape(left.sub),escape(right.sub))}${row("Equipment",escape(left.equipment),escape(right.equipment))}${row("Level",escape(left.level),escape(right.level))}${row("Stimulus",`${left.metrics.stimulus}/100`,`${right.metrics.stimulus}/100`)}${row("Stability",`${left.metrics.stability}/100`,`${right.metrics.stability}/100`)}${row("Useful range",`${left.metrics.range}/100`,`${right.metrics.range}/100`)}${row("Progression",`${left.metrics.progression}/100`,`${right.metrics.progression}/100`)}${row("Low fatigue",`${left.metrics.fatigue}/100`,`${right.metrics.fatigue}/100`)}</tbody></table></div>`;
-      openModal(compareDialog);
+      openModal(compareDialog);return true;
+    }
+    function syncComparisonAccess(){
+      const allowed=logic.comparisonAccessIsFresh(state),comparisonWasOpen=compareDialog.open;
+      const focusToken=detailFocusToken();
+      if(!allowed){el("compareContent").innerHTML="";dialogReturnFocus.delete(compareDialog);if(compareDialog.open)compareDialog.close();}
+      renderExercises();updateCompareDock();
+      if(detailDialog.open&&activeDetailId){openDetail(activeDetailId,{focus:false});restoreDetailFocus(focusToken);}
+      syncDialogState();if(comparisonWasOpen&&!allowed)frame(()=>el("searchInput")?.focus({preventScroll:true}));
     }
     function showToast(message){const toast=el("toast");toast.textContent=message;toast.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove("show"),3000);}
 
     return{
       closeModal,compareDialog,detailDialog,focusRenderedControl,openComparison,openDetail,previewPlaceholder,previewResultMarkup,
-      renderAll,renderExercises,renderSubfilters,renderTabs,restoreModalFocus,showToast,syncDialogState,updateAccountUI,updateCompareDock,updateEquipmentOptions,updatePreviewEquipmentOptions
+      renderAll,renderExercises,renderSubfilters,renderTabs,restoreModalFocus,showToast,syncComparisonAccess,syncDialogState,updateAccountUI,updateCompareDock,updateEquipmentOptions,updatePreviewEquipmentOptions
     };
   }
 

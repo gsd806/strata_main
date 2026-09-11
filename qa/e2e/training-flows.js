@@ -82,6 +82,7 @@ test("training journeys use real browser controls and isolated local fixtures",{
     const {context,page}=await newPage({viewport:{width:320,height:760},reducedMotion:"reduce"});
     await goto(page,"/");
     const submit=page.locator("#quickPreviewSubmit");await submit.waitFor({state:"visible"});await page.waitForFunction(()=>!globalThis.document.querySelector("#quickPreviewSubmit")?.disabled);
+    assert.equal(await page.locator("[data-compare]").count(),0,"Guest homepage rankings must not expose Strata+ comparison controls");
     await page.selectOption("#quickPreviewGoal","hypertrophy");await page.selectOption("#quickPreviewGroup","chest");await page.selectOption("#quickPreviewEquipment","Dumbbells");await page.selectOption("#quickPreviewLevel","Intermediate");await submit.click();
     await page.locator("#quickPreviewResults .preview-result").first().waitFor({state:"visible"});
     assert.equal(await page.locator("#quickPreviewResults .preview-result").count(),3);
@@ -154,6 +155,26 @@ test("training journeys use real browser controls and isolated local fixtures",{
     assert.deepEqual(await guestPlan(page),duplicated,"Import preview must not mutate the current week");
     assert.equal(await page.locator("#applyWeekTemplate").isDisabled(),true);
     await page.keyboard.press("Escape");assert.equal(await page.locator("#weekTemplatesDialog").isVisible(),false);
+    assert.equal(await page.locator("#planInsights").evaluate(node=>node.open),false,"Plan evidence should start collapsed");
+    const beforeReset=await guestPlan(page);await page.click("#resetWeeklyPlan");await page.locator("#resetWeekDialog").waitFor({state:"visible"});
+    assert.deepEqual(await guestPlan(page),beforeReset,"Opening Reset week must not change the saved plan");
+    await page.click("#closeResetWeek");assert.deepEqual(await guestPlan(page),beforeReset,"Canceling Reset week must preserve the plan");
+    await page.click("#resetWeeklyPlan");await page.click("#confirmResetWeek");await plannerReady(page);
+    const cleared=await guestPlan(page);assert.equal(Object.values(cleared.days).flat().length,0,"Reset week must clear all seven training days");assert.deepEqual(cleared.restDays,["Sunday"]);
+    assert.equal(await page.locator("#resetWeeklyPlan").isDisabled(),true,"The canonical empty week cannot be reset again");
+    await context.close();
+  });
+
+  await t.test("a signed-in reset clears only the editable account week through the normal save boundary",async()=>{
+    const {context,page}=await newPage({viewport:{width:390,height:844},reducedMotion:"reduce"});const user=await signup(context,"reset-week");
+    await goto(page,"/planner.html");await plannerReady(page);await savedAccountEdit(page,()=>page.locator("[data-quick-add]").first().click());
+    const before=await accountPlan(context);assert.equal(Object.values(before.plan.days).flat().length,1);
+    await page.click("#resetWeeklyPlan");await page.locator("#resetWeekDialog").waitFor({state:"visible"});assert.equal(Object.values((await accountPlan(context)).plan.days).flat().length,1,"Opening reset must not write");
+    await page.click("#closeResetWeek");assert.equal(await page.locator("#resetWeeklyPlan").evaluate(node=>node===globalThis.document.activeElement),true,"Cancel returns focus to Reset week");
+    await page.click("#resetWeeklyPlan");
+    const resetRequest=page.waitForRequest(request=>new URL(request.url()).pathname==="/api/plan"&&request.method()==="PUT");await page.click("#confirmResetWeek");const request=await resetRequest;await plannerReady(page);
+    const body=request.postDataJSON(),saved=await accountPlan(context);assert.equal(body.expectedUserId,user.id);assert.equal(body.expectedPlanUpdatedAt,before.planUpdatedAt);assert.equal(Object.values(body.plan.days).flat().length,0);
+    assert.equal(Object.values(saved.plan.days).flat().length,0);assert.deepEqual(saved.plan.restDays,["Sunday"]);assert.equal(await page.locator("#weekTitle").evaluate(node=>node===globalThis.document.activeElement),true,"Completed reset moves focus to the updated week");
     await context.close();
   });
 
@@ -401,8 +422,12 @@ test("training journeys use real browser controls and isolated local fixtures",{
     const {context,page}=await newPage({viewport:{width:390,height:844},reducedMotion:"reduce"});
     await goto(page,"/workout.html?guest=1");assert.match(page.url(),/account.html/);
     await signup(context,"setup");
+    await goto(page,"/");await page.waitForFunction(()=>globalThis.document.querySelector("#catalogTotal")?.textContent==="200"&&globalThis.document.querySelector("#accountButton")?.textContent?.includes("profile"));
+    assert.equal(await page.locator("[data-compare]").count(),0,"A signed-in free account must not receive homepage comparison controls");
     await goto(page,"/onboarding.html");assert.match(page.url(),/pricing/);
     await activatePlus(context);
+    await goto(page,"/");await page.locator("[data-compare]").first().waitFor({state:"visible"});
+    assert.ok(await page.locator("[data-compare]").count()>0,"A currently entitled member should retain homepage comparison controls");
     await goto(page,"/workout.html");await page.locator("#trainingRoom").waitFor({state:"visible"});await page.waitForFunction(()=>globalThis.document.querySelector("#planStatus")?.textContent==="You have not built a weekly plan yet.");
     assert.equal(await page.locator("#openPlannerFromEmpty").isVisible(),true);assert.match(await page.locator("#openPlannerFromEmpty").textContent(),/Build your first week/);
     for(const selector of ["#resumeWorkout","#chooseScheduledDay","#startWorkout","#differentWorkout","#editWorkoutWeek"])assert.equal(await page.locator(selector).isHidden(),true,`${selector} must stay hidden before a weekly plan exists`);

@@ -69,6 +69,10 @@
     el("exportAccountDraft").addEventListener("click",actions.downloadWeeklyPlan);
     el("reloadPlannerAccount").addEventListener("click",()=>window.location.reload());
     el("undoPlanRemoval").addEventListener("click",actions.undoLastRemoval);
+    el("resetWeeklyPlan").addEventListener("click",event=>actions.openResetWeek(event.currentTarget));
+    el("closeResetWeek").addEventListener("click",actions.closeResetWeek);
+    el("confirmResetWeek").addEventListener("click",actions.confirmResetWeek);
+    el("resetWeekDialog").addEventListener("close",()=>{const trigger=state.resetWeekTrigger;state.resetWeekSnapshot=null;state.resetWeekTrigger=null;frame(()=>trigger?.focus?.());});
     el("manageWeekTemplates").addEventListener("click",actions.openTemplates);
     el("saveWeekTemplate").addEventListener("click",actions.saveWeekTemplate);
     el("weekTemplateSelect").addEventListener("change",()=>{el("previewWeekTemplate").disabled=!el("weekTemplateSelect").value;});
@@ -131,7 +135,10 @@
       event.preventDefault();state.navigating=true;
       void (async()=>{const saved=await actions.flushSave();if(saved)location.assign(destination.href);else{state.navigating=false;actions.showToast("Your plan is still unsaved. Retry before leaving this page.");}})();
     });
-    document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")actions.sendKeepaliveSave();});
+    const refreshEntitlement=()=>{if(!document.visibilityState||document.visibilityState==="visible")void actions.refreshEntitlement();};
+    document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")actions.sendKeepaliveSave();else refreshEntitlement();});
+    window.addEventListener("focus",refreshEntitlement);
+    window.addEventListener("pageshow",event=>{if(event.persisted)refreshEntitlement();});
     window.addEventListener("pagehide",actions.sendKeepaliveSave);
     window.addEventListener("beforeunload",event=>{if(state.ready&&state.savedRevision<state.revision){actions.sendKeepaliveSave();event.preventDefault();event.returnValue="";}});
   }

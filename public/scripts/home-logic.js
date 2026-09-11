@@ -21,6 +21,7 @@
   const METRIC_LABELS={stimulus:"Stimulus",stability:"Stability",progression:"Progression",range:"Useful range",fatigue:"Low fatigue"};
   const PLAN_DAYS=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
   const GUEST_PLAN_KEY="strata_guest_plan_v1";
+  const COMPARISON_ACCESS_MAX_AGE_MS=30_000;
   const PREVIEW_STARTERS={
     dumbbells:{equipment:"Dumbbells",level:"Intermediate",minutes:35,goal:"balanced"},
     bodyweight:{equipment:"Bodyweight",level:"Intermediate",minutes:20,goal:"balanced"},
@@ -95,6 +96,12 @@
     return current;
   }
 
+  function canCompareExercises(state){return state?.accountStatus==="authenticated"&&state?.user?.discovery?.active===true;}
+  function comparisonAccessIsFresh(state,now=Date.now()){
+    const verifiedAt=Number(state?.accountVerifiedAt),age=Number(now)-verifiedAt;
+    return canCompareExercises(state)&&Number.isFinite(verifiedAt)&&verifiedAt>0&&Number.isFinite(age)&&age>=0&&age<=COMPARISON_ACCESS_MAX_AGE_MS;
+  }
+
   function toggleComparison(compare,id,limit=2){
     const next=[...compare],index=next.indexOf(id);
     if(index>=0)next.splice(index,1);
@@ -104,7 +111,7 @@
   }
 
   return{
-    GROUPS,GROUP_ORDER,METRIC_WEIGHTS,METRIC_LABELS,PLAN_DAYS,GUEST_PLAN_KEY,PREVIEW_STARTERS,
-    adjustmentLabel,equipmentOptions,escapeHtml,filterExercises,guestPlanCount,nextGroupForKey,normalizeCatalog,normalizeExercise,plannerUrl,previewProfile,previewStarter,toggleComparison,validPreviewGroup
+    GROUPS,GROUP_ORDER,METRIC_WEIGHTS,METRIC_LABELS,PLAN_DAYS,GUEST_PLAN_KEY,PREVIEW_STARTERS,COMPARISON_ACCESS_MAX_AGE_MS,
+    adjustmentLabel,canCompareExercises,comparisonAccessIsFresh,equipmentOptions,escapeHtml,filterExercises,guestPlanCount,nextGroupForKey,normalizeCatalog,normalizeExercise,plannerUrl,previewProfile,previewStarter,toggleComparison,validPreviewGroup
   };
 });

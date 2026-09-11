@@ -38,7 +38,13 @@ function previewPlaceholder(message){renderer.previewPlaceholder(message);}
 function updatePreviewEquipmentOptions(options){renderer.updatePreviewEquipmentOptions(options);}
 function previewResultMarkup(item){return RENDER.previewResultMarkup(item);}
 function openDetail(id){renderer.openDetail(id);}
-function openComparison(){renderer.openComparison();}
+function comparisonAllowed(){return LOGIC.comparisonAccessIsFresh(state);}
+function rejectComparison(){if(state.accountStatus!=="rechecking")STATE.clearComparison(state);renderer.syncComparisonAccess();return false;}
+function retryComparison(action){
+  if(state.accountStatus!=="authenticated"||state.user?.discovery?.active!==true)return rejectComparison();
+  return recheckAccount({preserveAccountChrome:true}).then(()=>comparisonAllowed()?action():rejectComparison());
+}
+function openComparison(){return comparisonAllowed()?renderer.openComparison():retryComparison(()=>renderer.openComparison());}
 function closeModal(dialog){renderer.closeModal(dialog);}
 function showToast(message){renderer.showToast(message);}
 
@@ -82,13 +88,14 @@ function selectSubfilter(sub,restoreFocus=true){
   if(!STATE.selectSubfilter(state,sub))return;renderSubfilters();renderExercises();if(restoreFocus)renderer.focusRenderedControl(submuscleFilters,"data-sub",sub);
 }
 function addToPlanner(id){window.location.assign(LOGIC.plannerUrl(id));}
-function toggleCompare(id){
+function applyComparisonToggle(id){
   const detailWasOpen=renderer.detailDialog.open,result=LOGIC.toggleComparison(state.compare,id);
   if(result.full){showToast("Comparison tray is full");return;}
   state.compare=result.compare;updateCompareDock();renderExercises();
   if(detailWasOpen){renderer.detailDialog.close();requestAnimationFrame(()=>{openDetail(id);renderer.focusRenderedControl(renderer.detailDialog,"data-compare",id);});}
   else renderer.focusRenderedControl(exerciseList,"data-compare",id);
 }
+function toggleCompare(id){return comparisonAllowed()?applyComparisonToggle(id):retryComparison(()=>applyComparisonToggle(id));}
 
 function resetFilters(){
   if(state.catalogStatus==="error"){void initializeCatalog();return;}
@@ -96,26 +103,33 @@ function resetFilters(){
 }
 function clearCompare(){state.compare=[];updateCompareDock();renderExercises();requestAnimationFrame(()=>el("searchInput").focus());}
 
-let accountRequestId=0,accountRecheck=null;
-async function initializeAccount({recheck=false}={}){
+let accountRequestId=0,accountRecheck=null,comparisonAccessTimer=null;
+function syncAccountBoundUI(){renderer.syncComparisonAccess();updateAccountUI();}
+function scheduleComparisonAccessRecheck(){
+  clearTimeout(comparisonAccessTimer);comparisonAccessTimer=null;if(!LOGIC.canCompareExercises(state))return;
+  const delay=Math.max(0,LOGIC.COMPARISON_ACCESS_MAX_AGE_MS-(Date.now()-state.accountVerifiedAt)+25);
+  comparisonAccessTimer=setTimeout(()=>{comparisonAccessTimer=null;if(!document.visibilityState||document.visibilityState==="visible")void recheckAccount({preserveAccountChrome:true});else{STATE.beginAccountRecheck(state);renderer.syncComparisonAccess();}},delay);
+  comparisonAccessTimer?.unref?.();
+}
+async function initializeAccount({recheck=false,preserveAccountChrome=false}={}){
   const requestId=++accountRequestId;
-  if(recheck){STATE.beginAccountRecheck(state);updateAccountUI();}
+  if(recheck){STATE.beginAccountRecheck(state);renderer.syncComparisonAccess();if(!preserveAccountChrome)updateAccountUI();}
   try{const result=await api("/api/me",{cache:"no-store"});if(requestId!==accountRequestId)return;STATE.setAccount(state,result.user);}
-  catch(error){if(requestId!==accountRequestId)return;if(error.status===401)STATE.setAccount(state,null);else state.accountStatus="unavailable";}
-  updateAccountUI();
+  catch(error){if(requestId!==accountRequestId)return;if(error.status===401)STATE.setAccount(state,null);else STATE.setAccountUnavailable(state);}
+  syncAccountBoundUI();scheduleComparisonAccessRecheck();
   const requestedSignin=new URLSearchParams(location.search).get("signin")==="1";
   if(requestedSignin&&state.accountStatus!=="unavailable"){
     history.replaceState({},"","/");window.location.assign(state.user?"/planner.html":"/account.html?mode=login");
   }else if(requestedSignin)showToast("Could not confirm your account. Check your connection and try again.");
 }
-function recheckAccount(){
+function recheckAccount(options={}){
   if(accountRecheck)return accountRecheck;
-  accountRecheck=initializeAccount({recheck:true}).finally(()=>{accountRecheck=null;});return accountRecheck;
+  accountRecheck=initializeAccount({recheck:true,...options}).finally(()=>{accountRecheck=null;});return accountRecheck;
 }
 
 async function initializeCatalog(){
   state.catalogStatus="loading";renderAll();
-  try{STATE.setCatalog(state,await api("/exercises.json?v=7.8.5"));el("catalogTotal").textContent=state.exercises.length;}
+  try{STATE.setCatalog(state,await api("/exercises.json?v=7.8.6"));el("catalogTotal").textContent=state.exercises.length;}
   catch{STATE.failCatalog(state);}
   renderAll();updatePreviewEquipmentOptions();window.StrataHomeActivation?.restore?.({exercises:state.exercises,applyProfile:applyActivationProfile,readSample:quickPreviewProfile,previewResultMarkup});
 }

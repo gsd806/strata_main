@@ -64,6 +64,8 @@ test(`${Object.keys(ENGINES).join(", ")} pass focused accessibility, keyboard, a
         await page.locator("[data-quick-add]").first().waitFor({state:"visible"});
         await page.locator("[data-quick-add]").first().click();
         await page.waitForFunction(()=>globalThis.document.querySelector("#saveStatus")?.textContent==="Saved");
+        await page.locator("#planInsights > summary").click();
+        assert.equal(await page.locator("#planInsights").evaluate((node)=>node.open),true,`${engineName} expands Plan Evidence before using its copy controls`);
         await page.locator("#copySourceDay").selectOption("Monday");
         await page.locator("#copyTargetDay").selectOption("Tuesday");
         await page.locator("#previewCopyDay").click();

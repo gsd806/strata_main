@@ -52,7 +52,7 @@ const context={
   FormData:class{constructor(form){this.values=form.values||{};}get(key){return this.values[key]||null;}},
   fetch:async(path)=>{
     fetches.push(path);
-    if(path==="/api/me")return {ok:true,json:async()=>({user:{id:"u1",name:"Account Audit",email:"audit@example.test",planCount:2,workoutDays:1}})};
+    if(path==="/api/me")return {ok:true,json:async()=>({user:{id:"u1",name:"Account Audit",email:"audit@example.test",planCount:2,workoutDays:1,discovery:{active:true}}})};
     if(path===CATALOG_URL)return {ok:true,json:async()=>catalog};
     return {ok:false,json:async()=>({error:"Not found"})};
   }

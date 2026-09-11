@@ -210,6 +210,8 @@ test("pricing and homepage pure boundaries normalize legacy-shaped input safely"
   assert.equal(HomeLogic.nextGroupForKey("core","ArrowRight"),"chest");
   assert.equal(HomeLogic.nextGroupForKey("chest","ArrowLeft"),"core");
   assert.equal(HomeLogic.nextGroupForKey("back","Escape"),"back");
+  assert.equal(HomeLogic.canCompareExercises({accountStatus:"authenticated",user:{discovery:{active:true}}}),true);
+  assert.equal(HomeLogic.canCompareExercises({accountStatus:"authenticated",user:{discovery:{active:false}}}),false);
   assert.deepEqual(HomeLogic.toggleComparison([],"press"),{compare:["press"],full:false});
   assert.equal(HomeLogic.guestPlanCount({days:{Monday:[{exerciseId:"press"}]}},null),1);
   const state=HomeState.createState();

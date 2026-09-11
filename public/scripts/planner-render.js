@@ -62,5 +62,14 @@
     return `<div><span>Device source</span><strong>${escapeHtml(candidate.label)}</strong></div><div><span>Device week</span><strong>${deviceCount} movement${deviceCount===1?"":"s"}</strong></div><div><span>Account week</span><strong>${accountCount} movement${accountCount===1?"":"s"}</strong></div>${profile?`<div><span>Goal</span><strong>${escapeHtml(String(profile.goal).replace("-"," "))}</strong></div><div><span>Schedule</span><strong>${profile.availability.length} days · ${profile.minutes} min</strong></div><div><span>Equipment</span><strong>${escapeHtml(profile.equipment.join(", "))}</strong></div>`:""}`;
   }
 
-  return{escapeHtml,filterMarkup,dayNavMarkup,libraryMarkup,scheduledCardMarkup,weekBoardMarkup,planConflictSummaryMarkup,activationOverviewMarkup};
+  function modeNoticeMarkup({guest,status,confirmed,oversized}){
+    const base=guest?'<strong>Free device plan.</strong> No account required. This week stays in this browser. <a href="/account.html?mode=login&amp;next=planner">Use a synced plan</a>.'
+      :status==="checking"?'<strong>Synced account plan.</strong> Checking Strata+ access. Plan editing and saves remain available.'
+        :status==="unavailable"?'<strong>Synced account plan.</strong> Strata+ access could not be confirmed. Plan editing and saves remain available; reconnect to refresh it.'
+          :confirmed?'<strong>Synced account plan.</strong> Changes save across your signed-in devices. <a href="/discover.html">Open Strata+</a>.'
+            :'<strong>Free synced plan.</strong> Changes save across your signed-in devices. <a href="/pricing">See what Strata+ adds</a>.';
+    return base+(oversized?'<p><strong>Large saved draft preserved.</strong> Export a copy, then reduce to 30 exercises per day and 140 per week before syncing or importing.</p>':"");
+  }
+
+  return{escapeHtml,filterMarkup,dayNavMarkup,libraryMarkup,scheduledCardMarkup,weekBoardMarkup,planConflictSummaryMarkup,activationOverviewMarkup,modeNoticeMarkup};
 });

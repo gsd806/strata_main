@@ -144,13 +144,16 @@ test("workout empty days and planner mobile hand-offs expose useful 44px actions
   assert.match(workoutCss,/\.check-in-grid\{display:grid/);
 });
 
-test("planner only offers workout logging to active Strata+ accounts",()=>{
-  const planner=read("public/scripts/planner.js");
-  assert.match(planner,/plusActive=state\.user\?\.discovery\?\.active===true/);
-  assert.match(planner,/action:plusActive\?`Review \$\{next\?\.day\|\|DAYS\.find/);
-  assert.match(planner,/href:plusActive\?`\/workout\.html\?day=/);
-  assert.match(planner,/Free device plan/);
-  assert.match(planner,/Free synced plan/);
+test("planner keeps evidence collapsed and shows plan guidance only to active Strata+ accounts",()=>{
+  const plannerHtml=read("public/pages/planner.html"),planner=read("public/scripts/planner.js"),plannerRender=read("public/scripts/planner-render.js");
+  assert.match(plannerHtml,/<details class="plan-insights" id="planInsights">/);
+  assert.doesNotMatch(plannerHtml,/<details class="plan-insights" id="planInsights"[^>]*\sopen(?:\s|>)/);
+  assert.match(planner,/plusActive=STATE\.hasConfirmedPlusAccess\(state\)/);
+  assert.match(planner,/else if\(plusActive&&!total\)readiness=/);
+  assert.match(planner,/\$\{readiness\?`<section class="week-readiness/);
+  assert.match(planner,/href:`\/workout\.html\?day=/);
+  assert.match(plannerRender,/Free device plan/);
+  assert.match(plannerRender,/Free synced plan/);
 });
 
 test("fixed mobile navigation reserves scroll space for keyboard focus",()=>{

@@ -1,5 +1,18 @@
 # Changelog
 
+## 7.8.6 — Clear plans and protected comparisons
+
+- Keep Plan evidence collapsed by default so the editable week remains the visual priority.
+- Remove the Strata+ next-move guidance card from guest and free Plan views while retaining it for currently entitled members.
+- Add a review-first Reset week action that clears every scheduled movement, restores Sunday as the default recovery day, and saves through the existing account CAS or guest exact-copy boundary.
+- Preserve workout history, saved templates, monthly plans, and published community copies when resetting the editable week.
+- Restrict homepage exercise comparison controls and direct comparison actions to confirmed active Strata+ accounts, failing closed during load, revalidation, logout, network uncertainty, and entitlement loss.
+- Revalidate homepage comparison access on a bounded freshness window and Plan guidance on foreground, known expiry, and a bounded periodic timer, with retry backoff after temporary network failures.
+- Keep free Plan ownership/conflict comparisons intact because they prevent silent week overwrites rather than provide workout analysis.
+- Add pure, runtime, and real-browser regressions for default disclosure state, reset confirmation and focus, account-bound reset saves, guest persistence, and free/Plus comparison states.
+
+Validation is recorded in the [7.8.6 release guide](docs/release-7.8.6.md).
+
 ## 7.8.5 — Interrupted checkout deletion recovery
 
 - Fix Admin and self-service account deletion getting stuck behind a Paddle transaction that remained in `draft` after an interrupted checkout.
