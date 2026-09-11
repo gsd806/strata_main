@@ -1,5 +1,16 @@
 # Changelog
 
+## 7.8.5 — Interrupted checkout deletion recovery
+
+- Fix Admin and self-service account deletion getting stuck behind a Paddle transaction that remained in `draft` after an interrupted checkout.
+- Make an abandoned draft non-payable using Paddle's supported manual-collection state, disable its checkout link, and clear STRATA checkout metadata while preserving Paddle's truthful retained record.
+- Reconcile both current and earlier monthly Paddle catalogs against durable account, checkout, price, product, quantity, origin, and cadence boundaries; mismatches still fail closed.
+- Resume safely when Paddle accepted retirement but STRATA did not finish its local cleanup, without issuing a second mutation.
+- Clarify that blocking checkout creation and revoking STRATA login sessions are separate actions, and distinguish checkout, payment, subscription-link, and provider-reconciliation blockers in Admin.
+- Extract the retirement policy into a bounded provider leaf and add focused unit, integration, deletion, idempotency, failure, and prior-catalog regressions.
+
+Validation is recorded in the [7.8.5 release guide](docs/release-7.8.5.md).
+
 ## 7.8.4 — Direct sole-owner administration
 
 - Let the sole verified account permanently bound as primary owner open Admin with its normal live session; retire the separate Admin password and registered-email-code elevation routes.

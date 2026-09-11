@@ -94,6 +94,10 @@ async function startPaddle(){
     }
     if(req.method==="PATCH"&&/^\/transactions\/txn_[a-z0-9]+$/.test(req.url)){
       const id=req.url.split("/").at(-1),transaction=paddleTransactions.get(id);
+      if(transaction?.status==="draft"&&body?.collection_mode==="manual"&&body?.billing_details?.enable_checkout===false&&body?.custom_data===null){
+        transaction.collection_mode="manual";transaction.billing_details=body.billing_details;transaction.custom_data=null;transaction.checkout=null;transaction.updated_at=new Date().toISOString();
+        res.writeHead(200,{"Content-Type":"application/json"});res.end(JSON.stringify({data:transaction}));return;
+      }
       if(transaction?.status==="draft"&&Array.isArray(body?.items)&&body.items.length===1&&body.items[0]?.price_id===PRICE_ID&&body.items[0]?.quantity===1){
         if(failedItemReplacementResponses>0){failedItemReplacementResponses-=1;res.writeHead(502,{"Content-Type":"application/json"});res.end(JSON.stringify({error:{detail:"temporary failure"}}));return;}
         transaction.items=[{quantity:1,price:{id:PRICE_ID,product_id:PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}}];
@@ -803,23 +807,18 @@ test("account deletion requires email confirmation, supports cancel, blocks pend
     db.close();
   }
   const draftPaddleBefore=paddleRequests.length;
-  const blockedDraftDeletion=await jsonRequest("/api/account/delete/complete",{token:draftDeleteToken,confirmation:"DELETE"});
-  assert.equal(blockedDraftDeletion.response.status,409,"deletion must stop while Paddle keeps an incomplete draft");
-  assert.equal(blockedDraftDeletion.data.code,"CHECKOUT_PREPARING");
-  assert.deepEqual(paddleRequests.slice(draftPaddleBefore).map((entry)=>entry.method),["GET"]);
-  assert.equal(paddleTransactions.get(draftTransactionId).status,"draft","deletion must not attempt Paddle's unsupported draft-to-canceled transition");
+  const retiredDraftDeletion=await jsonRequest("/api/account/delete/complete",{token:draftDeleteToken,confirmation:"DELETE"});
+  assert.equal(retiredDraftDeletion.response.status,200,"deletion should safely disable an incomplete draft instead of waiting forever");
+  assert.deepEqual(paddleRequests.slice(draftPaddleBefore).map((entry)=>entry.method),["GET","PATCH"]);
+  const retiredDraft=paddleTransactions.get(draftTransactionId);
+  assert.equal(retiredDraft.status,"draft","retirement must preserve Paddle's truthful transaction status");
+  assert.equal(retiredDraft.collection_mode,"manual");assert.equal(retiredDraft.billing_details.enable_checkout,false);assert.equal(retiredDraft.custom_data,null);assert.equal(retiredDraft.checkout,null);
   {
     const db=database({readOnly:true});
-    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM users WHERE id=?").get(draftClaimed.user.id).count,1);
-    assert.equal(db.prepare("SELECT transaction_id FROM paddle_checkout_claims WHERE user_id=?").get(draftClaimed.user.id).transaction_id,draftTransactionId);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM users WHERE id=?").get(draftClaimed.user.id).count,0);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM paddle_checkout_claims WHERE user_id=?").get(draftClaimed.user.id).count,0);
     db.close();
   }
-  paddleTransactions.get(draftTransactionId).status="ready";
-  const readyPaddleBefore=paddleRequests.length;
-  const readyDeletion=await jsonRequest("/api/account/delete/complete",{token:draftDeleteToken,confirmation:"DELETE"});
-  assert.equal(readyDeletion.response.status,200,"the same link works after Paddle moves the checkout to a cancelable state");
-  assert.deepEqual(paddleRequests.slice(readyPaddleBefore).map((entry)=>entry.method),["GET","PATCH"]);
-  assert.equal(paddleTransactions.get(draftTransactionId).status,"canceled");
   const releaseRace=await verifiedSignup({
     name:"Checkout Release Race",email:"claim-release-race@example.test",password:"claim-release-race-password-123"
   });

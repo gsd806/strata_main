@@ -255,6 +255,15 @@ test("account actions stay locked until authoritative detail loads",()=>{
   assert.match(controller,/renderUserDetails\(result\.user,\{actionsReady:true\}\)/);assert.match(controller,/Account actions remain locked\. \$\{friendlyError\(error\)\}/);
 });
 
+test("Admin deletion blockers explain payment holds without implying that closing restores the account",()=>{
+  const html=readPublic("pages/admin.html"),controller=sourceFor("admin.js"),logic=sourceFor("admin-logic.js");
+  assert.match(html,/Block new and close eligible checkouts/);
+  assert.match(logic,/CHECKOUT_PREPARING[\s\S]{0,300}in-flight checkout/);
+  assert.match(logic,/PURCHASE_PENDING[\s\S]{0,320}revoking STRATA sign-in sessions do not cancel/);
+  assert.match(controller,/To restore access, cancel this review and choose Restore account/);
+  assert.doesNotMatch(controller,/Close this dialog to restore it/);
+});
+
 test("admin state changes move focus to stable visible targets",()=>{
   const html=readPublic("pages/admin.html"),controller=sourceFor("admin.js"),render=sourceFor("admin-render.js");
   assert.match(html,/id="accessTitle" tabindex="-1"/i);assert.match(controller,/if\(focus\)requestAnimationFrame\(\(\)=>el\("accessTitle"\)\.focus/);

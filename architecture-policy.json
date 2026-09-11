@@ -200,9 +200,15 @@
       "role": "Paddle integration boundary",
       "maxLines": 430,
       "allowedDependencies": [
+        "src/paddle-checkout-retirement.js",
         "src/paddle-subscriptions.js",
         "src/paddle-webhooks.js"
       ]
+    },
+    "src/paddle-checkout-retirement.js": {
+      "role": "Interrupted Paddle checkout retirement policy",
+      "maxLines": 80,
+      "allowedDependencies": []
     },
     "src/paddle-subscriptions.js": {
       "role": "Recurring subscription validation and temporary customer-portal links",

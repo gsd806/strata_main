@@ -9,7 +9,7 @@
   const ACTION_DETAILS=Object.freeze({
     "grant-plus":{title:"GIVE FREE STRATA+?",button:"Give free Strata+",description:"Give this account complimentary access for the chosen period. This replaces its current grant, never charges the user, and does not cancel a paid subscription."},
     "revoke-plus":{title:"REVOKE FREE STRATA+?",button:"Revoke free Strata+",description:"End the administrator's complimentary grant. Separate paid or trial access is unchanged."},
-    "close-checkouts":{title:"CLOSE PAYMENT SESSIONS?",button:"Close payment sessions",description:"Block new checkouts until you allow them again and ask Paddle to cancel eligible unfinished transactions. Drafts and payments already processing may remain open. Existing subscriptions and charges are unchanged."},
+    "close-checkouts":{title:"BLOCK NEW CHECKOUTS?",button:"Block new and close eligible checkouts",description:"Block new checkouts until you allow them again and ask Paddle to cancel eligible unfinished transactions. Paddle does not allow STRATA to cancel a draft checkout, so STRATA retires the draft by disabling its checkout link and clearing STRATA’s checkout metadata while Paddle retains the transaction record. Revoking STRATA sign-in sessions is separate and does not change Paddle payment state. Existing subscriptions and charges are unchanged."},
     "enable-checkouts":{title:"ALLOW PAYMENT SESSIONS?",button:"Allow payment sessions",description:"Allow this account to open new checkouts again. Previously canceled transactions stay canceled."},
     "send-password-reset":{title:"SEND PASSWORD RESET?",button:"Send password reset",description:"A single-use password-reset link will be emailed to the account’s registered address. The link itself will not be shown here."},
     "send-delete-link":{title:"SEND DELETION LINK?",button:"Send deletion link",description:"A deletion-confirmation link will be emailed to the registered address. Opening the link alone does not delete the account."},
@@ -55,7 +55,11 @@
     if(error?.status===403)return "This verified account does not have administrator access.";
     if(error?.code==="ACCOUNT_MUST_BE_SUSPENDED")return "Pause this account first, then reopen it to permanently delete it.";
     if(error?.code==="SUBSCRIPTION_ACTIVE")return "Cancel this account’s Paddle subscription and wait for its canceled status before deleting STRATA data.";
-    if(error?.code==="CHECKOUT_PREPARING"||error?.code==="PURCHASE_PENDING")return "A Strata+ checkout or payment is still being reconciled. Nothing was deleted; wait and try again.";
+    if(error?.code==="CHECKOUT_PREPARING")return "A Strata+ checkout that already started is still being matched with Paddle. Blocking new payment sessions does not erase an in-flight checkout. Nothing was deleted; wait a moment and retry.";
+    if(error?.code==="PURCHASE_PENDING")return "A Paddle payment or subscription link has not reached a deletion-safe state. Blocking new payment sessions and revoking STRATA sign-in sessions do not cancel payment processing. Nothing was deleted; wait for Paddle to settle it, then retry.";
+    if(error?.code==="CHECKOUT_CLOSE_INCOMPLETE")return cleanString(error?.message,"New payment sessions are blocked, but Paddle did not confirm that every eligible checkout was closed. Nothing was deleted; retry shortly.");
+    if(error?.code==="PURCHASE_RECONCILIATION_UNAVAILABLE")return "Paddle did not confirm the checkout cleanup. Nothing was deleted; the account remains protected. Retry shortly.";
+    if(error?.code==="PURCHASE_RECONCILIATION_INVALID")return "STRATA could not safely match the Paddle checkout to this account. Nothing was deleted. Review the transaction in Paddle before trying again.";
     if(error?.code==="ADMIN_STATE_CHANGED")return "The account or billing state changed. Nothing was deleted; refresh and try again.";
     if(error?.code==="SUPPORT_STATE_CHANGED"||error?.code==="SUPPORT_VERSION_REQUIRED")return "This help request changed. Close it, refresh the help desk, and try again.";
     if(error?.code==="SUPPORT_RESPONSE_DELIVERY_FAILED")return "The workflow was saved, but the email response was not sent. Refresh the request and try the response again.";

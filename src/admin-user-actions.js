@@ -23,9 +23,11 @@ function createAdminUserActions({store,auth,adminActionReason,adminAuditEvent,re
         await reconcileUnsettledPurchases(target.id,{includeFresh:true,checkSubscription:false,transactionIds});
         const unfinished=await store.unsettledPurchasesForUser(target.id),claim=await store.checkoutCreationForUser(target.id);
         const remaining=unfinished.length+(claim&&!unfinished.some(p=>p.transaction_id===claim.transaction_id)?1:0);
-        await recordAdminAudit(session.id,target.id,action,reason,remaining?"partial":"success");
+        const deletionBlocked=await store.pendingPurchasesForUser(target.id)>0;
+        await recordAdminAudit(session.id,target.id,action,reason,remaining||deletionBlocked?"partial":"success");
         const held=(await store.adminControls(target.id))?.checkout_blocked_at!=null;
-        message=`${held?"New payment sessions are blocked.":"Payment sessions were re-enabled by another admin action."} ${remaining?`${remaining} unfinished payment record(s) remain; Paddle may not allow their current state to be canceled. Retry closure after their state changes.`:"No unfinished payment sessions remain."} Existing subscriptions and charges are unchanged.`;
+        const result=remaining?`${remaining} unfinished payment record(s) remain; Paddle may not allow their current state to be canceled. Retry closure after their state changes.`:deletionBlocked?"No unfinished checkout records remain, but a completed purchase or subscription still blocks account deletion.":"No unfinished checkout records remain. Account deletion will still run a fresh billing safety check.";
+        message=`${held?"New payment sessions are blocked.":"Payment sessions were re-enabled by another admin action."} ${result} Existing subscriptions and charges are unchanged.`;
       }catch(error){
         await recordAdminAudit(session.id,target.id,action,reason,"failed");
         const held=(await store.adminControls(target.id))?.checkout_blocked_at!=null;

@@ -58,6 +58,20 @@ export interface PaddleCustomData {
   strata_version?:unknown;
 }
 
+export interface PaddlePaymentTerms {
+  interval?:unknown;
+  frequency?:unknown;
+}
+
+export interface PaddleBillingDetails {
+  enable_checkout?:unknown;
+  payment_terms?:PaddlePaymentTerms|null;
+}
+
+export interface PaddleCheckoutData {
+  url?:unknown;
+}
+
 export interface PaddleTransactionData {
   id?:unknown;
   status?:unknown;
@@ -73,6 +87,8 @@ export interface PaddleTransactionData {
   scheduled_change?:PaddleScheduledChange|null;
   current_billing_period?:PaddleBillingPeriod|null;
   billing_cycle?:{interval?:unknown;frequency?:unknown}|null;
+  billing_details?:PaddleBillingDetails|null;
+  checkout?:PaddleCheckoutData|null;
 }
 
 export interface PaddleAdjustmentData {
@@ -93,6 +109,7 @@ export interface CheckoutIdentity {
 
 export interface CheckoutRecoveryIdentity extends CheckoutIdentity {
   createdAt?:unknown;
+  retirement?:boolean;
 }
 
 export type ValidationResult={ok:true}|{ok:false;reason:string};

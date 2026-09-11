@@ -45,9 +45,21 @@ test("admin pure logic normalizes hostile labels and supplies one-click action l
   assert.equal(logic.userEmail(user),"owner@example.test");
   assert.equal(logic.userSuspended(user),true);assert.equal(logic.discoveryActive(user),true);
   assert.equal(logic.ACTION_DETAILS["delete-account"].button,"Permanently delete account");
+  assert.equal(logic.ACTION_DETAILS["close-checkouts"].button,"Block new and close eligible checkouts");
+  assert.match(logic.ACTION_DETAILS["close-checkouts"].description,/draft checkout[^.]*retires the draft/i);
+  assert.match(logic.ACTION_DETAILS["close-checkouts"].description,/disabling its checkout link and clearing STRATA’s checkout metadata/i);
+  assert.match(logic.ACTION_DETAILS["close-checkouts"].description,/Revoking STRATA sign-in sessions is separate/i);
   assert.equal(logic.ACTION_DETAILS.suspend.button,"Suspend account");
   assert.equal(logic.supportState({status:"waiting_on_user"}),"waiting");
   assert.equal(logic.friendlyError({code:"INVALID_CSRF"}),"The security check expired. Refresh this page and try again.");
+  assert.match(logic.friendlyError({code:"CHECKOUT_PREPARING"}),/in-flight checkout/i);
+  assert.match(logic.friendlyError({code:"CHECKOUT_PREPARING"}),/Blocking new payment sessions does not erase/i);
+  assert.match(logic.friendlyError({code:"PURCHASE_PENDING"}),/payment or subscription link/i);
+  assert.match(logic.friendlyError({code:"PURCHASE_PENDING"}),/revoking STRATA sign-in sessions do not cancel/i);
+  assert.match(logic.friendlyError({code:"PURCHASE_RECONCILIATION_UNAVAILABLE"}),/Paddle did not confirm the checkout cleanup/i);
+  assert.match(logic.friendlyError({code:"PURCHASE_RECONCILIATION_INVALID"}),/safely match the Paddle checkout/i);
+  assert.equal(logic.friendlyError({code:"CHECKOUT_CLOSE_INCOMPLETE",message:"New payment sessions are blocked. Safe provider detail."}),"New payment sessions are blocked. Safe provider detail.");
+  assert.notEqual(logic.friendlyError({code:"CHECKOUT_PREPARING"}),logic.friendlyError({code:"PURCHASE_PENDING"}));
 });
 
 test("admin API reports network and structured server failures without losing error codes",async()=>{

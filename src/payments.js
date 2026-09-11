@@ -11,6 +11,7 @@ const {
   fetchPaddleIpv4Cidrs:fetchWebhookIpv4Cidrs,
   isPaddleWebhookAddress
 }=require("./paddle-webhooks");
+const {createPaddleCheckoutRetirement,validateRetiredPaddleCheckoutTransaction}=require("./paddle-checkout-retirement");
 
 const DEFAULT_PRODUCT_ID="pro_01m1ky8j916ybyacs836dxbz8x";
 const DEFAULT_PRICE_ID="pri_01m1kyc2zd313d7a3ssmg02424";
@@ -283,13 +284,18 @@ function validateCheckoutRecoveryTransaction(data,config,identity={}){
   return clean(data.custom_data?.strata_checkout_id)===clean(identity.checkoutId)?{ok:true}:{ok:false,reason:"checkout"};
 }
 
+const {retirePaddleDraftTransaction,validateCheckoutTransactionForRetirement}=createPaddleCheckoutRetirement({
+  transactionRequest:paddleTransactionRequest,transactionError:paddleTransactionError,validateTransaction:validateCheckoutTransaction,
+  defaultProductId:DEFAULT_PRODUCT_ID,defaultPriceId:DEFAULT_PRICE_ID
+});
+
 /**
  * @param {import("./domain-types").PaymentConfig} config
  * @param {import("./domain-types").CheckoutRecoveryIdentity} identity
  * @param {import("./domain-types").FetchLike} fetchImpl
  * @returns {Promise<import("./domain-types").PaddleFetchedTransactionResult|null>}
  */
-async function findPaddleCheckoutTransaction(config,{userId,checkoutId,createdAt,priceId=config?.priceId,productId=config?.productId,retiredOneTimeCancellation=false}={},fetchImpl=globalThis.fetch) {
+async function findPaddleCheckoutTransaction(config,{userId,checkoutId,createdAt,priceId=config?.priceId,productId=config?.productId,retiredOneTimeCancellation=false,retirement=false}={},fetchImpl=globalThis.fetch) {
   const secrets=secretsByConfig.get(config);
   if (!secrets?.apiKey) throw paddleTransactionError("Paddle transaction status is temporarily unavailable.","PADDLE_RECONCILIATION_UNAVAILABLE");
   const referenceTime=Number(createdAt);
@@ -328,8 +334,9 @@ async function findPaddleCheckoutTransaction(config,{userId,checkoutId,createdAt
     if (!Array.isArray(payload?.data)) throw paddleTransactionError("Paddle returned an invalid transaction list.","PADDLE_RECONCILIATION_INVALID_RESPONSE");
     const match=payload.data.find((transaction)=>{
       const transactionTime=Date.parse(clean(transaction?.created_at));
-      return Number.isFinite(transactionTime)&&transactionTime>=windowStart&&transactionTime<=windowEnd
-        &&validateCheckoutRecoveryTransaction(transaction,config,{userId,checkoutId,priceId,productId,retiredOneTimeCancellation}).ok;
+      const standard=validateCheckoutRecoveryTransaction(transaction,config,{userId,checkoutId,priceId,productId,retiredOneTimeCancellation});
+      const validation=retirement&&!standard.ok?validateCheckoutTransactionForRetirement(transaction,config,{userId,checkoutId,priceId}):standard;
+      return Number.isFinite(transactionTime)&&transactionTime>=windowStart&&transactionTime<=windowEnd&&validation.ok;
     });
     if (match) return {transactionId:validTransactionId(match.id),status:clean(match.status),data:match};
     const pagination=payload?.meta?.pagination;
@@ -403,8 +410,11 @@ module.exports={
   createPaddleTransaction,
   fetchPaddleTransaction,
   cancelPaddleTransaction,
+  retirePaddleDraftTransaction,
+  validateRetiredPaddleCheckoutTransaction,
   replacePaddleTransactionItems,
   validateCheckoutTransaction,
+  validateCheckoutTransactionForRetirement,
   validateCheckoutRecoveryTransaction,
   findPaddleCheckoutTransaction,
   fetchPaddleIpv4Cidrs,

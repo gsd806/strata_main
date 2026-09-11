@@ -120,7 +120,7 @@
       if(privateOperationIsCurrent(operation)&&!handleAuthorizationFailure(error)){
         try{const refreshed=await client.user(userId(user));if(privateOperationIsCurrent(operation)&&state.authorized&&refreshed.user)renderUserDetails(refreshed.user);}catch{/* Preserve the action error. */}
         if(!privateOperationIsCurrent(operation)||!state.authorized)return;
-        message.textContent=friendlyError(error)+(action==="delete-account"&&userSuspended(state.selectedUser)?" The account remains paused. Close this dialog to restore it or retry deletion.":"");message.className="dialog-message error";message.hidden=false;message.focus();
+        message.textContent=friendlyError(error)+(action==="delete-account"&&userSuspended(state.selectedUser)?" The account remains paused. To restore access, cancel this review and choose Restore account; otherwise retry deletion after the payment state changes.":"");message.className="dialog-message error";message.hidden=false;message.focus();
       }
     }finally{if(privateOperationIsCurrent(operation))button.disabled=false;}
   }

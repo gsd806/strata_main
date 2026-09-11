@@ -12,6 +12,9 @@ const {
   createPaddleTransaction,
   fetchPaddleTransaction,
   cancelPaddleTransaction,
+  retirePaddleDraftTransaction,
+  validateRetiredPaddleCheckoutTransaction,
+  validateCheckoutTransactionForRetirement,
   replacePaddleTransactionItems,
   validateCheckoutTransaction,
   validateCheckoutRecoveryTransaction,
@@ -28,6 +31,8 @@ const API_KEY="pdl_live_apikey_01fixture0000000000000000_fixture_secret_123";
 const WEBHOOK_SECRET="pdl_ntfset_server_only_fixture";
 const CLIENT_TOKEN="live_client_side_fixture_123456";
 const RECURRING_PRICE_ID="pri_01monthlyfixture00000000000000";
+const PREVIOUS_PRODUCT_ID="pro_01previousmonthly000000000000";
+const PREVIOUS_PRICE_ID="pri_01previousmonthly0000000000000";
 const SUBSCRIPTION_ID="sub_01m1ky8j916ybyacs836dxbz8x";
 const NOW_SECONDS=1_788_393_600;
 
@@ -600,6 +605,80 @@ test("transaction reconciliation reads and cancels only a specific live transact
   assert.deepEqual(JSON.parse(calls[1].options.body),{status:"canceled"});
   assert.deepEqual(JSON.parse(calls[2].options.body),{items:[{price_id:RECURRING_PRICE_ID,quantity:1}]});
   for(const call of calls)assert.equal(call.options.headers.Authorization,`Bearer ${API_KEY}`);
+});
+
+test("draft checkout retirement removes browser checkout and account metadata at Paddle",async()=>{
+  const config=getPaymentConfig(liveEnv());
+  const transactionId="txn_01m1kz00000000000000000000";
+  const calls=[];
+  const fetchImpl=async(url,options)=>{
+    calls.push({url,options});
+    return {ok:true,json:async()=>({data:{
+      id:transactionId,status:"draft",collection_mode:"manual",custom_data:null,
+      billing_details:{enable_checkout:false,payment_terms:{interval:"day",frequency:30}},
+      checkout:null
+    }})};
+  };
+  const retired=await retirePaddleDraftTransaction(config,transactionId,fetchImpl);
+  assert.equal(retired.transactionId,transactionId);
+  assert.equal(retired.status,"draft");
+  assert.equal(retired.data.checkout,null);
+  assert.equal(calls.length,1);
+  assert.equal(calls[0].url,`https://api.paddle.com/transactions/${transactionId}`);
+  assert.equal(calls[0].options.method,"PATCH");
+  assert.equal(calls[0].options.headers.Authorization,`Bearer ${API_KEY}`);
+  assert.deepEqual(JSON.parse(calls[0].options.body),{
+    collection_mode:"manual",
+    billing_details:{enable_checkout:false,payment_terms:{interval:"day",frequency:30}},
+    custom_data:null
+  });
+});
+
+test("draft checkout retirement fails closed unless every provider boundary is confirmed",async(t)=>{
+  const config=getPaymentConfig(liveEnv());
+  const transactionId="txn_01m1kz00000000000000000000";
+  const retired={
+    id:transactionId,status:"draft",collection_mode:"manual",custom_data:null,
+    billing_details:{enable_checkout:false,payment_terms:{interval:"day",frequency:30}},
+    checkout:null
+  };
+  const cases=[
+    ["non-editable status",{status:"completed"}],
+    ["automatic collection",{collection_mode:"automatic"}],
+    ["checkout still enabled",{billing_details:{...retired.billing_details,enable_checkout:true}}],
+    ["wrong payment terms",{billing_details:{enable_checkout:false,payment_terms:{interval:"month",frequency:1}}}],
+    ["checkout URL remains",{checkout:{url:"https://pay.paddle.io/checkout/retained"}}],
+    ["account metadata remains",{custom_data:{strata_user_id:"user-1"}}]
+  ];
+  assert.equal(validateRetiredPaddleCheckoutTransaction(retired).ok,true);
+  assert.equal(validateRetiredPaddleCheckoutTransaction({...retired,checkout:{url:null}}).ok,true,"a defensive null-URL representation is also non-payable");
+  for(const [label,override] of cases){
+    await t.test(label,async()=>{
+      await assert.rejects(
+        ()=>retirePaddleDraftTransaction(config,transactionId,async()=>({ok:true,json:async()=>({data:{...retired,...override}})})),
+        (error)=>error.status===502&&error.code==="PADDLE_RECONCILIATION_FAILED"
+      );
+    });
+  }
+});
+
+test("older monthly checkout retirement pins the durable account and purchase catalog",async(t)=>{
+  const config=getPaymentConfig(liveEnv());
+  const identity={userId:"user-1",checkoutId:"checkout-1",priceId:PREVIOUS_PRICE_ID,productId:PREVIOUS_PRODUCT_ID};
+  const transaction=checkoutTransaction({status:"draft",items:[{quantity:1,price:{id:PREVIOUS_PRICE_ID,product_id:PREVIOUS_PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}}]});
+  assert.equal(validateCheckoutTransactionForRetirement(transaction,config,identity).ok,true);
+  const cases=[
+    ["another account",{custom_data:{strata_user_id:"user-2",strata_checkout_id:"checkout-1",strata_version:1}}],
+    ["another checkout",{custom_data:{strata_user_id:"user-1",strata_checkout_id:"checkout-2",strata_version:1}}],
+    ["another price",{items:[{quantity:1,price:{id:RECURRING_PRICE_ID,product_id:PREVIOUS_PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}}]}],
+    ["another product",{items:[{quantity:1,price:{id:PREVIOUS_PRICE_ID,product_id:DEFAULT_PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}}]}],
+    ["wrong quantity",{items:[{quantity:2,price:{id:PREVIOUS_PRICE_ID,product_id:PREVIOUS_PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}}]}],
+    ["non-API origin",{origin:"web"}],
+    ["subscription attached",{subscription_id:SUBSCRIPTION_ID}],
+    ["annual cadence",{items:[{quantity:1,price:{id:PREVIOUS_PRICE_ID,product_id:PREVIOUS_PRODUCT_ID,billing_cycle:{interval:"year",frequency:1}}}]}],
+    ["one-time cadence",{items:[{quantity:1,price:{id:PREVIOUS_PRICE_ID,product_id:PREVIOUS_PRODUCT_ID,billing_cycle:null}}]}]
+  ];
+  for(const [label,override] of cases)await t.test(label,()=>assert.equal(validateCheckoutTransactionForRetirement({...transaction,...override},config,identity).ok,false));
 });
 
 test("transaction reconciliation fails closed with sanitized provider errors",async()=>{

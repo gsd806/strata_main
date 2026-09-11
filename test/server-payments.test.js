@@ -13,6 +13,8 @@ const PROJECT_ROOT=join(__dirname,"..");
 
 const PRODUCT_ID="pro_01m1ky8j916ybyacs836dxbz8x";
 const PRICE_ID="pri_01monthlyfixture00000000000000";
+const PREVIOUS_PRODUCT_ID="pro_01previousmonthly000000000000";
+const PREVIOUS_PRICE_ID="pri_01previousmonthly0000000000000";
 const CLIENT_TOKEN="live_browser_token_for_server_payment_test";
 const API_KEY="pdl_live_apikey_01serverpaymentfixture0000_fixture_secret_123";
 const WEBHOOK_SECRET="pdl_ntfset_live_server_payment_test_secret";
@@ -30,7 +32,7 @@ let BASE;
 let PADDLE_BASE;
 let transactionSequence=0;
 let malformedCreateResponses=0;
-let createResponseHook=null,cancelFailure=false;
+let createResponseHook=null,cancelFailure=false,draftRetirementFailure=false;
 const paddleRequests=[];
 const paddleTransactions=new Map();
 
@@ -80,10 +82,14 @@ async function startFakePaddle() {
     }
     if(req.method==="PATCH"&&transactionMatch){
       const transaction=paddleTransactions.get(transactionMatch[1]);
-      const allowed=transaction&&["ready","billed"].includes(transaction.status)&&body?.status==="canceled"&&!cancelFailure;
-      if(allowed){transaction.status="canceled";transaction.updated_at=new Date().toISOString();}
+      const cancellation=transaction&&["ready","billed"].includes(transaction.status)&&body?.status==="canceled"&&!cancelFailure;
+      const draftRetirement=transaction?.status==="draft"&&body?.collection_mode==="manual"&&body?.billing_details?.enable_checkout===false&&body?.custom_data===null&&!draftRetirementFailure;
+      const allowed=cancellation||draftRetirement;
+      if(cancellation)transaction.status="canceled";
+      if(draftRetirement){transaction.collection_mode="manual";transaction.billing_details=body.billing_details;transaction.custom_data=null;transaction.checkout=null;}
+      if(allowed)transaction.updated_at=new Date().toISOString();
       res.writeHead(allowed?200:409,{"Content-Type":"application/json"});
-      res.end(JSON.stringify(allowed?{data:transaction}:{error:{detail:"cannot cancel current state"}}));return;
+      res.end(JSON.stringify(allowed?{data:transaction}:{error:{detail:draftRetirementFailure?"cannot retire current draft":"cannot cancel current state"}}));return;
     }
     const portalMatch=requestUrl.pathname.match(/^\/customers\/(ctm_[a-z0-9]+)\/portal-sessions$/);
     if(req.method==="POST"&&portalMatch){
@@ -961,7 +967,7 @@ async function controlPaymentAccount(account,action,revision,grant){
   return request(`/api/admin/users/${account.user.id}/actions`,{method:"POST",headers:{Cookie:admin.cookie,Origin:BASE,"Content-Type":"application/json","X-CSRF-Token":admin.csrf},body:JSON.stringify({action,expectedControlsRevision:revision,...(grant?{grant}:{})})});
 }
 
-test("admin closes fresh checkouts, reports noncancelable states, and retains holds on provider failure",async()=>{
+test("admin closes fresh checkouts and retains holds on provider failure",async()=>{
   const account=await signup({name:"Close Checkout",email:"close-checkout@example.test",password:"close-checkout-password-123"});
   const prepared=await checkout(account);assert.equal(prepared.response.status,201);
   const remote=paddleTransactions.get(prepared.data.transactionId);
@@ -971,18 +977,193 @@ test("admin closes fresh checkouts, reports noncancelable states, and retains ho
   assert.equal(closed.data.code,"CHECKOUT_CLOSE_INCOMPLETE");
   assert.equal((await checkout(account)).data.code,"CHECKOUT_BLOCKED");
   assert.equal(remote.status,"ready","failed cancellation must not mark local or provider state canceled");
-  remote.status="draft";
-  const partial=await controlPaymentAccount(account,"close-checkouts",1);
-  assert.equal(partial.response.status,200,JSON.stringify(partial.data));
-  assert.match(partial.data.message,/unfinished payment record/);
-  assert.equal(remote.status,"draft");
-  remote.status="ready";
-  const retried=await controlPaymentAccount(account,"close-checkouts",2);
+  const retried=await controlPaymentAccount(account,"close-checkouts",1);
   assert.equal(retried.response.status,200,JSON.stringify(retried.data));
   assert.equal(remote.status,"canceled");assert.match(retried.data.message,/No unfinished/);
-  const enabled=await controlPaymentAccount(account,"enable-checkouts",3);assert.equal(enabled.response.status,200);
+  const enabled=await controlPaymentAccount(account,"enable-checkouts",2);assert.equal(enabled.response.status,200);
   const next=await checkout(account);assert.equal(next.response.status,201);
   assert.notEqual(next.data.transactionId,prepared.data.transactionId);
+});
+
+test("admin retires an interrupted Paddle draft, revokes sessions, and permanently deletes the account",async()=>{
+  const account=await signup({name:"Interrupted Draft",email:"interrupted-draft@example.test",password:"interrupted-draft-password-123"});
+  const prepared=await checkout(account);assert.equal(prepared.response.status,201);
+  const transactionId=prepared.data.transactionId,remote=paddleTransactions.get(transactionId),claimId=remote.custom_data.strata_checkout_id;
+  remote.status="draft";remote.checkout={url:`https://checkout.paddle.test/${transactionId}`};
+  {
+    const db=database(),stamp=Date.now();
+    db.prepare("UPDATE paddle_purchases SET paddle_status='draft',updated_at=? WHERE transaction_id=?").run(stamp,transactionId);
+    db.prepare("INSERT INTO paddle_checkout_claims(user_id,price_id,claim_id,transaction_id,expires_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?)")
+      .run(account.user.id,PRICE_ID,claimId,transactionId,stamp+60_000,stamp,stamp);
+    db.close();
+  }
+
+  const providerBefore=paddleRequests.length;
+  const closed=await controlPaymentAccount(account,"close-checkouts",0);
+  assert.equal(closed.response.status,200,JSON.stringify(closed.data));
+  assert.equal(closed.data.user.checkoutBlocked,true);assert.match(closed.data.message,/No unfinished/);
+  const retirement=paddleRequests.slice(providerBefore).find((entry)=>entry.method==="PATCH"&&entry.url===`/transactions/${transactionId}`);
+  assert.ok(retirement,"closing payment sessions must retire the account-bound Paddle draft");
+  assert.equal(retirement.body.collection_mode,"manual");
+  assert.equal(retirement.body.billing_details?.enable_checkout,false);
+  assert.equal(retirement.body.custom_data,null);
+  assert.equal(retirement.body.status,undefined,"draft retirement is not a draft-to-canceled status transition");
+  assert.equal(remote.status,"draft");assert.equal(remote.collection_mode,"manual");assert.equal(remote.custom_data,null);assert.equal(remote.checkout,null);
+  {
+    const db=database({readOnly:true});
+    const retired=db.prepare("SELECT paddle_status,access_revoked_at,revocation_reason FROM paddle_purchases WHERE transaction_id=?").get(transactionId);
+    assert.equal(retired.paddle_status,"draft","the retained Paddle record keeps its truthful provider status");
+    assert.ok(retired.access_revoked_at,"a safely retired remote draft must stop blocking local deletion");
+    assert.equal(retired.revocation_reason,"checkout_disabled");
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM paddle_checkout_claims WHERE user_id=?").get(account.user.id).count,0,"draft retirement must release the interrupted checkout claim");
+    db.close();
+  }
+
+  const revoked=await controlPaymentAccount(account,"revoke-sessions",1);
+  assert.equal(revoked.response.status,200,JSON.stringify(revoked.data));assert.match(revoked.data.message,/Signed the account out/);
+  assert.equal((await request("/api/me",{headers:{Cookie:account.cookie}})).response.status,401);
+  const providerAfterClosure=paddleRequests.length;
+  const deleted=await controlPaymentAccount(account,"delete-account",1);
+  assert.equal(deleted.response.status,200,JSON.stringify(deleted.data));assert.match(deleted.data.message,/permanently deleted from STRATA/i);
+  assert.equal(paddleRequests.length,providerAfterClosure,"deletion must use the completed closure state instead of reconciling the retired draft again");
+  {
+    const db=database({readOnly:true});
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM users WHERE id=?").get(account.user.id).count,0);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM sessions WHERE user_id=?").get(account.user.id).count,0);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM paddle_purchases WHERE user_id=?").get(account.user.id).count,0);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM admin_audit_events WHERE target_user_id=? AND action='revoke-sessions'").get(account.user.id).count,1);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM admin_audit_events WHERE target_user_id=? AND action='delete-account'").get(account.user.id).count,1);
+    db.close();
+  }
+});
+
+test("admin resumes safely when Paddle retirement succeeded before local cleanup",async()=>{
+  const account=await signup({name:"Retirement Retry",email:"retirement-retry@example.test",password:"retirement-retry-password-123"});
+  const prepared=await checkout(account);assert.equal(prepared.response.status,201);
+  const transactionId=prepared.data.transactionId,remote=paddleTransactions.get(transactionId),claimId=remote.custom_data.strata_checkout_id,stamp=Date.now();
+  {
+    const db=database();
+    db.prepare("UPDATE paddle_purchases SET paddle_status='draft',updated_at=? WHERE transaction_id=?").run(stamp,transactionId);
+    db.prepare("INSERT INTO paddle_checkout_claims(user_id,price_id,claim_id,transaction_id,expires_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?)")
+      .run(account.user.id,PRICE_ID,claimId,transactionId,stamp+60_000,stamp,stamp);
+    db.close();
+  }
+  remote.status="draft";remote.collection_mode="manual";
+  remote.billing_details={enable_checkout:false,payment_terms:{interval:"day",frequency:30}};
+  remote.custom_data=null;remote.checkout=null;remote.updated_at=new Date(stamp+1).toISOString();
+
+  const providerBefore=paddleRequests.length;
+  const closed=await controlPaymentAccount(account,"close-checkouts",0);
+  assert.equal(closed.response.status,200,JSON.stringify(closed.data));assert.match(closed.data.message,/No unfinished/);
+  const retryCalls=paddleRequests.slice(providerBefore);
+  assert.equal(retryCalls.filter((entry)=>entry.method==="PATCH").length,0,"an already-retired provider draft must not be patched twice");
+  assert.ok(retryCalls.some((entry)=>entry.method==="GET"&&entry.url===`/transactions/${transactionId}`));
+  {
+    const db=database({readOnly:true});
+    const purchase=db.prepare("SELECT access_revoked_at,revocation_reason FROM paddle_purchases WHERE transaction_id=?").get(transactionId);
+    assert.ok(purchase.access_revoked_at);assert.equal(purchase.revocation_reason,"checkout_disabled");
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM paddle_checkout_claims WHERE user_id=?").get(account.user.id).count,0);
+    db.close();
+  }
+  assert.equal((await controlPaymentAccount(account,"delete-account",1)).response.status,200);
+  const db=database({readOnly:true});assert.equal(db.prepare("SELECT COUNT(*) AS count FROM users WHERE id=?").get(account.user.id).count,0);db.close();
+});
+
+test("admin retires a stored draft from an earlier monthly catalog",async()=>{
+  const account=await signup({name:"Stored Previous Draft",email:"stored-previous-draft@example.test",password:"stored-previous-draft-password-123"});
+  const prepared=await checkout(account);assert.equal(prepared.response.status,201);
+  const transactionId=prepared.data.transactionId,remote=paddleTransactions.get(transactionId),stamp=Date.now();
+  remote.status="draft";remote.items=[{quantity:1,price:{id:PREVIOUS_PRICE_ID,product_id:PREVIOUS_PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}}];
+  remote.checkout={url:`https://checkout.paddle.test/${transactionId}`};remote.updated_at=new Date(stamp).toISOString();
+  {
+    const db=database();
+    db.prepare("UPDATE paddle_purchases SET price_id=?,product_id=?,paddle_status='draft',updated_at=? WHERE transaction_id=?")
+      .run(PREVIOUS_PRICE_ID,PREVIOUS_PRODUCT_ID,stamp,transactionId);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM paddle_checkout_claims WHERE user_id=?").get(account.user.id).count,0,"the ordinary recorded-purchase path has no recovery claim");
+    db.close();
+  }
+
+  const providerBefore=paddleRequests.length;
+  const closed=await controlPaymentAccount(account,"close-checkouts",0);
+  assert.equal(closed.response.status,200,JSON.stringify(closed.data));assert.match(closed.data.message,/No unfinished/);
+  assert.ok(paddleRequests.slice(providerBefore).some((entry)=>entry.method==="PATCH"&&entry.url===`/transactions/${transactionId}`));
+  assert.equal(remote.collection_mode,"manual");assert.equal(remote.custom_data,null);assert.equal(remote.checkout,null);
+  {
+    const db=database({readOnly:true}),purchase=db.prepare("SELECT access_revoked_at,revocation_reason FROM paddle_purchases WHERE transaction_id=?").get(transactionId);
+    assert.ok(purchase.access_revoked_at);assert.equal(purchase.revocation_reason,"checkout_disabled");db.close();
+  }
+  assert.equal((await controlPaymentAccount(account,"delete-account",1)).response.status,200);
+  const db=database({readOnly:true});assert.equal(db.prepare("SELECT COUNT(*) AS count FROM users WHERE id=?").get(account.user.id).count,0);db.close();
+});
+
+test("admin retires an unbound interrupted draft after the deployed monthly catalog changes",async()=>{
+  const account=await signup({name:"Previous Catalog Draft",email:"previous-catalog-draft@example.test",password:"previous-catalog-draft-password-123"});
+  const prepared=await checkout(account);assert.equal(prepared.response.status,201);
+  const transactionId=prepared.data.transactionId,remote=paddleTransactions.get(transactionId),claimId="previous_catalog_interrupted",stamp=Date.now();
+  remote.status="draft";remote.created_at=new Date(stamp).toISOString();remote.updated_at=remote.created_at;
+  remote.custom_data={strata_user_id:account.user.id,strata_checkout_id:claimId,strata_version:1};
+  remote.items=[{quantity:1,price:{id:PREVIOUS_PRICE_ID,product_id:PREVIOUS_PRODUCT_ID,billing_cycle:{interval:"month",frequency:1}}}];
+  remote.checkout={url:`https://checkout.paddle.test/${transactionId}`};
+  {
+    const db=database();
+    db.prepare("DELETE FROM paddle_purchases WHERE transaction_id=?").run(transactionId);
+    db.prepare("INSERT INTO paddle_checkout_claims(user_id,price_id,claim_id,transaction_id,expires_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?)")
+      .run(account.user.id,PREVIOUS_PRICE_ID,claimId,null,stamp+60_000,stamp,stamp);
+    db.close();
+  }
+
+  const providerBefore=paddleRequests.length;
+  const closed=await controlPaymentAccount(account,"close-checkouts",0);
+  assert.equal(closed.response.status,200,JSON.stringify(closed.data));assert.match(closed.data.message,/No unfinished/);
+  const cleanup=paddleRequests.slice(providerBefore);
+  assert.ok(cleanup.some((entry)=>entry.method==="GET"&&entry.url.startsWith("/transactions?")),"the unbound claim must be recovered by its durable checkout identity");
+  assert.ok(cleanup.some((entry)=>entry.method==="PATCH"&&entry.url===`/transactions/${transactionId}`));
+  assert.equal(remote.collection_mode,"manual");assert.equal(remote.custom_data,null);assert.equal(remote.checkout,null);
+  {
+    const db=database({readOnly:true});
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM paddle_checkout_claims WHERE user_id=?").get(account.user.id).count,0);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM paddle_purchases WHERE user_id=?").get(account.user.id).count,0);
+    db.close();
+  }
+
+  assert.equal((await controlPaymentAccount(account,"revoke-sessions",1)).response.status,200);
+  assert.equal((await controlPaymentAccount(account,"delete-account",1)).response.status,200);
+  const db=database({readOnly:true});assert.equal(db.prepare("SELECT COUNT(*) AS count FROM users WHERE id=?").get(account.user.id).count,0);db.close();
+});
+
+test("a failed Paddle draft retirement keeps Admin deletion blocked after session revocation",async()=>{
+  const account=await signup({name:"Blocked Draft",email:"blocked-draft@example.test",password:"blocked-draft-password-123"});
+  const prepared=await checkout(account);assert.equal(prepared.response.status,201);
+  const transactionId=prepared.data.transactionId,remote=paddleTransactions.get(transactionId),claimId=remote.custom_data.strata_checkout_id;
+  remote.status="draft";remote.checkout={url:`https://checkout.paddle.test/${transactionId}`};
+  {
+    const db=database(),stamp=Date.now();
+    db.prepare("UPDATE paddle_purchases SET paddle_status='draft',updated_at=? WHERE transaction_id=?").run(stamp,transactionId);
+    db.prepare("INSERT INTO paddle_checkout_claims(user_id,price_id,claim_id,transaction_id,expires_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?)")
+      .run(account.user.id,PRICE_ID,claimId,transactionId,stamp+60_000,stamp,stamp);
+    db.close();
+  }
+
+  draftRetirementFailure=true;
+  try{
+    const closed=await controlPaymentAccount(account,"close-checkouts",0);
+    assert.equal(closed.response.status,503,JSON.stringify(closed.data));assert.equal(closed.data.code,"CHECKOUT_CLOSE_INCOMPLETE");
+    assert.equal(closed.data.user,undefined);assert.equal(remote.collection_mode,"automatic");assert.notEqual(remote.custom_data,null);
+    const revoked=await controlPaymentAccount(account,"revoke-sessions",1);
+    assert.equal(revoked.response.status,200,JSON.stringify(revoked.data));
+    assert.equal((await request("/api/me",{headers:{Cookie:account.cookie}})).response.status,401);
+    const deleted=await controlPaymentAccount(account,"delete-account",1);
+    assert.notEqual(deleted.response.status,200,"provider retirement failure must never fall through to local account deletion");
+  }finally{draftRetirementFailure=false;}
+
+  {
+    const db=database({readOnly:true}),user=db.prepare("SELECT suspended_at FROM users WHERE id=?").get(account.user.id);
+    assert.ok(user?.suspended_at,"the failed deletion must retain the automatically paused account");
+    assert.equal(db.prepare("SELECT paddle_status FROM paddle_purchases WHERE transaction_id=?").get(transactionId).paddle_status,"draft");
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM paddle_checkout_claims WHERE user_id=?").get(account.user.id).count,1);
+    assert.ok(db.prepare("SELECT checkout_blocked_at FROM admin_account_controls WHERE user_id=?").get(account.user.id).checkout_blocked_at);
+    db.close();
+  }
 });
 
 test("a grant or hold during provider creation prevents exposing the in-flight checkout",async()=>{
@@ -995,7 +1176,7 @@ test("a grant or hold during provider creation prevents exposing the in-flight c
     assert.equal(prepared.data.transactionId,undefined);
     assert.equal(prepared.data.code,action==="grant-plus"?"ALREADY_ENTITLED":"CHECKOUT_BLOCKED");
     const db=new DatabaseSync(join(runtimeDir,"strata.sqlite"));
-    const remote=[...paddleTransactions.values()].find(t=>t.custom_data.strata_user_id===account.user.id);
+    const remote=[...paddleTransactions.values()].find(t=>t.custom_data?.strata_user_id===account.user.id);
     const purchase=db.prepare("SELECT * FROM paddle_purchases WHERE transaction_id=?").get(remote.id);
     if(action==="grant-plus")assert.ok(purchase,"accepted provider work remains durably recorded");
     else assert.equal(remote.status,"canceled");
@@ -1006,7 +1187,7 @@ test("a grant or hold during provider creation prevents exposing the in-flight c
 test("admin closure records a completed interrupted checkout while the payment hold remains active",async()=>{
   const account=await signup({name:"Completed During Hold",email:"completed-hold@example.test",password:"completed-hold-password-123"});
   malformedCreateResponses=1;assert.equal((await checkout(account)).response.status,502);
-  const remote=[...paddleTransactions.values()].find(t=>t.custom_data.strata_user_id===account.user.id);
+  const remote=[...paddleTransactions.values()].find(t=>t.custom_data?.strata_user_id===account.user.id);
   remote.status="completed";remote.customer_id="ctm_00000000000000000000000009";remote.subscription_id=subscriptionId(remote.id);remote.updated_at=new Date().toISOString();
   const closed=await controlPaymentAccount(account,"close-checkouts",0);
   assert.equal(closed.response.status,200,JSON.stringify(closed.data));
