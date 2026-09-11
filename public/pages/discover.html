@@ -13,11 +13,12 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icons/strata-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="/fonts.css?v=7.8.8" />
-    <link rel="stylesheet" href="/experience.css?v=7.8.8" />
-    <link rel="stylesheet" href="discover.css?v=7.8.8" />
-    <link rel="stylesheet" href="/product-signals.css?v=7.8.8" />
-    <script src="/motion.js?v=7.8.8"></script>
+    <link rel="stylesheet" href="/fonts.css?v=7.9.0" />
+    <link rel="stylesheet" href="/experience.css?v=7.9.0" />
+    <link rel="stylesheet" href="discover.css?v=7.9.0" />
+    <link rel="stylesheet" href="discover-coaching-meals.css?v=7.9.0" />
+    <link rel="stylesheet" href="/product-signals.css?v=7.9.0" />
+    <script src="/motion.js?v=7.9.0"></script>
   </head>
   <body class="plus-studio">
     <a class="skip-link" id="activeWorkspaceSkip" href="#todayTitle">Skip to active Strata+ workspace</a>
@@ -159,16 +160,23 @@
           <section class="progress-calorie-card" id="progressCalorieCard" aria-labelledby="progressCalorieTitle" hidden>
             <div class="progress-calorie-head"><div><p class="kicker">Daily calorie progress</p><h3 id="progressCalorieTitle">LOG A DAY’S TOTAL.</h3><p>Use the target for each specific day. Optional macros appear only when enabled in your coaching profile.</p></div><a class="small-button" href="#coachingWorkspace" data-feature-target="coaching">Open full coaching week <span aria-hidden="true">→</span></a></div>
             <div class="progress-calorie-summary" id="progressCoachingSummary" role="status" aria-live="polite"></div>
-            <form class="progress-calorie-form" id="progressCoachingLogForm" novalidate>
+              <form class="progress-calorie-form" id="progressCoachingLogForm" novalidate>
               <label for="progressCoachingLogDate"><span>Day</span><select id="progressCoachingLogDate" name="date"></select></label>
               <label for="progressCoachingCaloriesEaten"><span>Calories eaten</span><input id="progressCoachingCaloriesEaten" name="calories" type="number" min="0" max="20000" step="1" inputmode="numeric" required /></label>
               <label class="progress-coaching-macro" for="progressCoachingProteinEaten"><span>Protein (g)</span><input id="progressCoachingProteinEaten" name="proteinGrams" type="number" min="0" max="2000" step="1" inputmode="numeric" /></label>
               <label class="progress-coaching-macro" for="progressCoachingCarbsEaten"><span>Carbs (g)</span><input id="progressCoachingCarbsEaten" name="carbGrams" type="number" min="0" max="3000" step="1" inputmode="numeric" /></label>
               <label class="progress-coaching-macro" for="progressCoachingFatEaten"><span>Fat (g)</span><input id="progressCoachingFatEaten" name="fatGrams" type="number" min="0" max="1000" step="1" inputmode="numeric" /></label>
               <button class="button button-dark" id="progressCoachingSaveLog" type="submit">Save intake <span aria-hidden="true">→</span></button>
-              <p id="progressCoachingLogStatus" role="status" aria-live="polite">Choose a day and enter its current total.</p>
-            </form>
-          </section>
+                <p id="progressCoachingLogStatus" role="status" aria-live="polite">Choose a day and enter its current total.</p>
+              </form>
+              <section class="coaching-meal-suggestions coaching-meal-suggestions-light" id="progressCoachingFood" aria-labelledby="progressCoachingFoodTitle">
+                <header class="coaching-meal-suggestions-head"><div><p class="kicker">Food ideas for what remains</p><h4 id="progressCoachingFoodTitle" tabindex="-1">OPTIONS FOR THIS DAY.</h4></div><button class="small-button" id="progressCoachingFoodRefresh" type="button" aria-controls="progressCoachingFoodOptions" disabled>Refresh suggestions <span aria-hidden="true">↻</span></button></header>
+                <dl class="coaching-meal-remaining" id="progressCoachingFoodRemaining" aria-label="Remaining nutrition used for meal suggestions"><div><dt>Calories left</dt><dd>—</dd></div><div data-meal-macro="protein"><dt>Protein left</dt><dd>—</dd></div><div data-meal-macro="carbs"><dt>Carbs left</dt><dd>—</dd></div><div data-meal-macro="fat"><dt>Fat left</dt><dd>—</dd></div></dl>
+                <p class="coaching-meal-status" id="progressCoachingFoodStatus" role="status" aria-live="polite" aria-atomic="true">Save your food preferences to load options for the selected day.</p>
+                <ul class="coaching-meal-list" id="progressCoachingFoodOptions" aria-busy="false" aria-label="Meal suggestions"></ul>
+                <p class="coaching-meal-disclaimer">Listed household amounts define one approximate base meal. Nutrition estimates are informed by <a href="https://fdc.nal.usda.gov/" target="_blank" rel="noreferrer">USDA FoodData Central reference data <span aria-hidden="true">↗</span></a>; costs are not live grocery prices. Verify actual portions, every label, and cross-contact risk—STRATA cannot guarantee allergy safety.</p>
+              </section>
+            </section>
           <section class="progress-first-workout" id="progressFirstWorkout" aria-labelledby="progressFirstWorkoutTitle" hidden><span aria-hidden="true">01</span><div><p class="kicker">Your first useful signal</p><h3 id="progressFirstWorkoutTitle">COMPLETE YOUR FIRST WORKOUT TO UNLOCK PROGRESS.</h3><p>Your progress appears after your first completed workout. Log the work you actually complete to begin your history.</p></div><a class="button button-accent" id="progressEmptyAction" href="/workout.html">Start working out <span aria-hidden="true">→</span></a></section>
           <div id="progressHistoryContent" hidden>
             <div class="progress-metric-grid" aria-label="Training progress summary">
@@ -221,7 +229,7 @@
                 <a href="#coachingBodyInputs"><span>01</span><strong>Body</strong><small>Energy inputs</small></a>
                 <a href="#coachingTrainingInputs"><span>02</span><strong>Training</strong><small>Your real week</small></a>
                 <a href="#coachingCapabilityInputs"><span>03</span><strong>Experience</strong><small>Known exercises</small></a>
-                <a href="#coachingNutritionInputs"><span>04</span><strong>Nutrition</strong><small>Calorie pattern</small></a>
+                <a href="#coachingNutritionInputs"><span>04</span><strong>Nutrition</strong><small>Calories &amp; food</small></a>
               </nav>
             </header>
             <form id="coachingProfileForm" class="coaching-profile-form" novalidate>
@@ -269,8 +277,8 @@
               </fieldset>
 
               <fieldset class="coaching-form-section" id="coachingNutritionInputs">
-                <legend><span>04</span><b>Calorie pattern and optional macros</b></legend>
-                <p class="coaching-field-intro">Every pattern keeps approximately the same weekly energy target. Only the distribution changes.</p>
+                <legend><span>04</span><b>Calories, macros, and food preferences</b></legend>
+                <p class="coaching-field-intro">Every calorie pattern keeps approximately the same weekly energy target. Food preferences help rank optional meal ideas without changing that target.</p>
                 <div class="coaching-pattern-grid" role="radiogroup" aria-label="Calorie schedule pattern">
                   <label><input type="radio" name="caloriePattern" value="steady" /><span><strong>Steady</strong><small>Nearly the same target every day.</small></span></label>
                   <label><input type="radio" name="caloriePattern" value="training_day" checked /><span><strong>Training-day zigzag</strong><small>More fuel on workout days, less on rest days.</small></span></label>
@@ -280,6 +288,35 @@
                   <label for="coachingFlexibleDay"><span>Flexible day</span><select id="coachingFlexibleDay" name="flexibleDay" disabled><option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option selected>Friday</option><option>Saturday</option><option>Sunday</option></select></label>
                   <label class="coaching-switch"><input id="coachingMacrosEnabled" name="macrosEnabled" type="checkbox" /><span><strong>Show optional macros</strong><small>Add protein, fat, and carbohydrate targets and tracking.</small></span></label>
                 </div>
+                <section class="coaching-meal-preferences" aria-labelledby="coachingMealPreferencesTitle">
+                  <div class="coaching-meal-preferences-head"><div><p class="kicker">Optional meal suggestions</p><h3 id="coachingMealPreferencesTitle">FOOD THAT FITS YOUR DAY.</h3></div><p>Choose only what applies. Allergies are exclusions; favorites only influence the order of otherwise suitable ideas.</p></div>
+                  <div class="coaching-meal-preference-basics">
+                    <label for="mealDietaryPattern"><span>Dietary pattern</span><select id="mealDietaryPattern" name="dietaryPattern"><option value="omnivore">Omnivore</option><option value="pescatarian">Pescatarian</option><option value="vegetarian">Vegetarian</option><option value="vegan">Vegan</option></select></label>
+                    <label for="mealMealsPerDay"><span>Meals per day</span><select id="mealMealsPerDay" name="mealsPerDay"><option value="1">1 meal</option><option value="2">2 meals</option><option value="3" selected>3 meals</option><option value="4">4 meals</option><option value="5">5 meals</option><option value="6">6 meals</option></select><small>Used to size each suggestion—not to prescribe meal frequency.</small></label>
+                    <label for="mealDailyBudget"><span>Daily food budget <small>Optional</small></span><span class="coaching-budget-input"><b aria-hidden="true">$</b><input id="mealDailyBudget" name="dailyBudgetUsd" type="number" min="0" max="1000" step="0.01" inputmode="decimal" aria-describedby="mealDailyBudgetHelp" placeholder="No limit" /></span><small id="mealDailyBudgetHelp">USD planning estimate per person; not a live store price.</small></label>
+                  </div>
+                  <fieldset class="coaching-food-choice-group">
+                    <legend>Dietary requirements</legend>
+                    <div class="coaching-food-chips coaching-food-chips-compact"><label><input id="mealDietGlutenFree" type="checkbox" name="dietaryRequirements" value="gluten_free" /><span>Gluten-free</span></label><label><input id="mealDietDairyFree" type="checkbox" name="dietaryRequirements" value="dairy_free" /><span>Dairy-free</span></label></div>
+                  </fieldset>
+                  <fieldset class="coaching-food-choice-group" aria-describedby="coachingAllergyHelp">
+                    <legend>Major food allergy acknowledgement</legend>
+                    <p id="coachingAllergyHelp">Confirm no known listed allergies, or select every listed allergen that applies. Missing or uncertain ingredient data is never treated as allergy-safe.</p>
+                    <div class="coaching-food-chips coaching-allergen-chips">
+                      <label class="coaching-allergy-none"><input id="mealAllergyNone" type="radio" name="mealAllergyStatus" value="none_known" /><span>No known listed allergies</span></label>
+                      <label><input id="mealAllergyListed" type="radio" name="mealAllergyStatus" value="listed" /><span>I have a listed allergy</span></label>
+                      <label><input id="mealAllergyOther" type="radio" name="mealAllergyStatus" value="other_or_unsure" /><span>Another allergy / unsure</span></label>
+                      <label><input type="checkbox" name="mealAllergen" value="milk" /><span>Milk</span></label><label><input type="checkbox" name="mealAllergen" value="egg" /><span>Egg</span></label><label><input type="checkbox" name="mealAllergen" value="fish" /><span>Fish</span></label><label><input type="checkbox" name="mealAllergen" value="crustacean_shellfish" /><span>Crustacean shellfish</span></label><label><input type="checkbox" name="mealAllergen" value="tree_nuts" /><span>Tree nuts</span></label><label><input type="checkbox" name="mealAllergen" value="peanuts" /><span>Peanuts</span></label><label><input type="checkbox" name="mealAllergen" value="wheat" /><span>Wheat</span></label><label><input type="checkbox" name="mealAllergen" value="soy" /><span>Soy</span></label><label><input type="checkbox" name="mealAllergen" value="sesame" /><span>Sesame</span></label>
+                    </div>
+                    <label class="coaching-other-allergy" for="mealOtherAllergies"><span>Other allergy or uncertainty</span><textarea id="mealOtherAllergies" name="otherAllergies" maxlength="200" rows="2" aria-describedby="mealOtherAllergiesHelp" placeholder="Describe the ingredient or uncertainty"></textarea><small id="mealOtherAllergiesHelp">STRATA will withhold automatic suggestions for manual review when “Another allergy / unsure” is selected.</small></label>
+                  </fieldset>
+                  <fieldset class="coaching-food-choice-group">
+                    <legend>Favorite foods <span>Optional</span></legend>
+                    <p>Favorites influence ranking only after allergy and dietary filters pass. Calorie and budget differences stay visible so you can review the tradeoff.</p>
+                    <div class="coaching-food-chips coaching-favorite-foods"><label><input type="checkbox" name="mealFavorite" value="beans" /><span>Beans</span></label><label><input type="checkbox" name="mealFavorite" value="beef" /><span>Beef</span></label><label><input type="checkbox" name="mealFavorite" value="chicken" /><span>Chicken</span></label><label><input type="checkbox" name="mealFavorite" value="eggs" /><span>Eggs</span></label><label><input type="checkbox" name="mealFavorite" value="fish" /><span>Fish</span></label><label><input type="checkbox" name="mealFavorite" value="fruit" /><span>Fruit</span></label><label><input type="checkbox" name="mealFavorite" value="grains" /><span>Grains</span></label><label><input type="checkbox" name="mealFavorite" value="lentils" /><span>Lentils</span></label><label><input type="checkbox" name="mealFavorite" value="nuts" /><span>Nuts</span></label><label><input type="checkbox" name="mealFavorite" value="pasta" /><span>Pasta</span></label><label><input type="checkbox" name="mealFavorite" value="potatoes" /><span>Potatoes</span></label><label><input type="checkbox" name="mealFavorite" value="rice" /><span>Rice</span></label><label><input type="checkbox" name="mealFavorite" value="shellfish" /><span>Shellfish</span></label><label><input type="checkbox" name="mealFavorite" value="tofu" /><span>Tofu</span></label><label><input type="checkbox" name="mealFavorite" value="turkey" /><span>Turkey</span></label><label><input type="checkbox" name="mealFavorite" value="vegetables" /><span>Vegetables</span></label><label><input type="checkbox" name="mealFavorite" value="yogurt" /><span>Yogurt</span></label></div>
+                  </fieldset>
+                  <p class="coaching-meal-safety-note"><strong>Food-allergy note:</strong> suggestions can exclude declared ingredients, but recipes, packaged foods, kitchens, and manufacturers can change. Verify labels and cross-contact every time.</p>
+                </section>
               </fieldset>
 
               <p class="coaching-validation" id="coachingValidation" role="alert" hidden></p>
@@ -328,6 +365,13 @@
                 <button class="button button-accent" id="coachingSaveLog" type="submit">Save intake <span aria-hidden="true">→</span></button>
                 <p id="coachingLogStatus" role="status" aria-live="polite">Choose a day and enter its current total.</p>
               </form>
+              <section class="coaching-meal-suggestions" id="coachingFood" aria-labelledby="coachingFoodTitle">
+                <header class="coaching-meal-suggestions-head"><div><p class="kicker kicker-light">Food ideas for what remains</p><h5 id="coachingFoodTitle" tabindex="-1">OPTIONS FOR THIS DAY.</h5></div><button class="small-button" id="coachingFoodRefresh" type="button" aria-controls="coachingFoodOptions" disabled>Refresh suggestions <span aria-hidden="true">↻</span></button></header>
+                <dl class="coaching-meal-remaining" id="coachingFoodRemaining" aria-label="Remaining nutrition used for meal suggestions"><div><dt>Calories left</dt><dd>—</dd></div><div data-meal-macro="protein"><dt>Protein left</dt><dd>—</dd></div><div data-meal-macro="carbs"><dt>Carbs left</dt><dd>—</dd></div><div data-meal-macro="fat"><dt>Fat left</dt><dd>—</dd></div></dl>
+                <p class="coaching-meal-status" id="coachingFoodStatus" role="status" aria-live="polite" aria-atomic="true">Save your food preferences to load options for the selected day.</p>
+                <ul class="coaching-meal-list" id="coachingFoodOptions" aria-busy="false" aria-label="Meal suggestions"></ul>
+                <p class="coaching-meal-disclaimer">Listed household amounts define one approximate base meal. Nutrition estimates are informed by <a href="https://fdc.nal.usda.gov/" target="_blank" rel="noreferrer">USDA FoodData Central reference data <span aria-hidden="true">↗</span></a>; costs are not live grocery prices. Verify actual portions, every label, and cross-contact risk—STRATA cannot guarantee allergy safety.</p>
+              </section>
             </section>
           </section>
         </div>
@@ -535,7 +579,7 @@
 
     </main>
 
-    <footer class="build-footer">STRATA · Build 7.8.8 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
+    <footer class="build-footer">STRATA · Build 7.9.0 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
 
     <aside class="compare-tray" id="compareTray" hidden aria-label="Exercise comparison tray">
       <div><span>EXERCISE BATTLE</span><p id="compareNames">Choose 2–4 exercises</p></div>
@@ -568,26 +612,28 @@
     </dialog>
     <noscript><div class="no-script-note" role="status"><strong>Strata+ needs JavaScript for personalized tools.</strong> The page content remains available, but saving, filtering, comparing, and plan building require JavaScript.</div></noscript>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=7.8.8"></script>
-    <script src="/product-signals.js?v=7.8.8"></script>
-    <script src="session-selection-core.js?v=7.8.8"></script>
-    <script src="discovery-core.js?v=7.8.8"></script>
-    <script src="monthly-plan-core.js?v=7.8.8"></script>
-    <script src="training-block-core.js?v=7.8.8"></script>
-    <script src="personal-training-ui-core.js?v=7.8.8"></script>
-    <script src="discover-state.js?v=7.8.8"></script>
-    <script src="discover-api.js?v=7.8.8"></script>
-    <script src="discover-navigation.js?v=7.8.8"></script>
-    <script src="discover-progress.js?v=7.8.8"></script>
-    <script src="discover-render.js?v=7.8.8"></script>
-    <script src="discover-coaching-render.js?v=7.8.8"></script>
-    <script src="discover-catalog.js?v=7.8.8"></script>
-    <script src="discover-detail.js?v=7.8.8"></script>
-    <script src="discover-community.js?v=7.8.8"></script>
-    <script src="discover-session.js?v=7.8.8"></script>
-    <script src="discover-sharing.js?v=7.8.8"></script>
-    <script src="discover-events.js?v=7.8.8"></script>
-    <script src="discover-coaching.js?v=7.8.8"></script>
-    <script src="discover.js?v=7.8.8"></script>
+    <script src="/pwa.js?v=7.9.0"></script>
+    <script src="/product-signals.js?v=7.9.0"></script>
+    <script src="session-selection-core.js?v=7.9.0"></script>
+    <script src="discovery-core.js?v=7.9.0"></script>
+    <script src="monthly-plan-core.js?v=7.9.0"></script>
+    <script src="training-block-core.js?v=7.9.0"></script>
+    <script src="personal-training-ui-core.js?v=7.9.0"></script>
+    <script src="personal-training-meals-ui-core.js?v=7.9.0"></script>
+    <script src="discover-state.js?v=7.9.0"></script>
+    <script src="discover-api.js?v=7.9.0"></script>
+    <script src="discover-navigation.js?v=7.9.0"></script>
+    <script src="discover-progress.js?v=7.9.0"></script>
+    <script src="discover-render.js?v=7.9.0"></script>
+    <script src="discover-coaching-render.js?v=7.9.0"></script>
+    <script src="discover-catalog.js?v=7.9.0"></script>
+    <script src="discover-detail.js?v=7.9.0"></script>
+    <script src="discover-community.js?v=7.9.0"></script>
+    <script src="discover-session.js?v=7.9.0"></script>
+    <script src="discover-sharing.js?v=7.9.0"></script>
+    <script src="discover-events.js?v=7.9.0"></script>
+    <script src="discover-coaching-meals.js?v=7.9.0"></script>
+    <script src="discover-coaching.js?v=7.9.0"></script>
+    <script src="discover.js?v=7.9.0"></script>
   </body>
 </html>

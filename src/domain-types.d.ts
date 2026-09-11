@@ -798,13 +798,21 @@ export interface TrainingService {
 export type CoachingGoal="fat_loss"|"maintenance"|"muscle_gain";
 export type CoachingExperience="beginner"|"intermediate"|"advanced";
 export interface CoachingCapability {exerciseId:string;maxSets:number;maxReps:number;maxWeightKg:number|null;}
+export type FoodAllergen="milk"|"egg"|"fish"|"crustacean_shellfish"|"tree_nuts"|"peanuts"|"wheat"|"soy"|"sesame";
+export type DietaryPattern="omnivore"|"pescatarian"|"vegetarian"|"vegan";
+export type DietaryRequirement="gluten_free"|"dairy_free";
+export interface MealPreferences extends JsonObject {
+  allergyStatus:"none_known"|"listed"|"other_or_unsure";allergens:FoodAllergen[];otherAllergies:string;
+  dietaryPattern:DietaryPattern;dietaryRequirements:DietaryRequirement[];favoriteFoods:string[];
+  mealsPerDay:number;dailyBudgetCents:number|null;
+}
 export interface CoachingProfile extends JsonObject {
-  version:1;measurementSystem:"metric"|"imperial";preferredLoadUnit:"kg"|"lb";
+  version:1|2;measurementSystem:"metric"|"imperial";preferredLoadUnit:"kg"|"lb";
   age:number;heightCm:number;weightKg:number;bodyFatPercent:number|null;sexForEquation:"female"|"male"|null;
   goal:CoachingGoal;goalPace:"gentle"|"moderate";experience:CoachingExperience;lifestyleActivity:string;
   workoutDays:string[];sessionsPerWeek:number;sessionMinutes:30|45|60|75|90;usualExercises:CoachingCapability[];
   availableEquipment:string[];movementLimitations:string[];caloriePattern:"steady"|"zigzag"|"flexible_day";
-  flexibleDay:string|null;macroPreference:"balanced"|"higher_protein"|null;timeZone:string;
+  flexibleDay:string|null;macroPreference:"balanced"|"higher_protein"|null;timeZone:string;mealPreferences:MealPreferences|null;
 }
 export interface CoachingProfilePayload extends CoachingProfile {revision:number;updatedAt:number;}
 export interface CoachingWeekRecord {userId:string;weekStart:string;planKey:string;profileRevision:number;snapshotJson:string;generatedAt:number;}

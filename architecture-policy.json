@@ -40,15 +40,22 @@
       "role": "Strata+ coaching profile, weekly snapshot, and daily-log API",
       "maxLines": 180,
       "allowedDependencies": [
-        "src/coaching-core.js"
+        "src/coaching-core.js",
+        "src/meal-planning-core.js"
       ]
     },
     "src/coaching-core.js": {
       "role": "Validated energy estimates and deterministic weekly training generation",
       "maxLines": 300,
       "allowedDependencies": [
+        "src/meal-planning-core.js",
         "src/plans.js"
       ]
+    },
+    "src/meal-planning-core.js": {
+      "role": "Validated dietary preferences and deterministic remaining-day food options",
+      "maxLines": 300,
+      "allowedDependencies": []
     },
     "src/coaching-schema.js": {
       "role": "Coaching profile, weekly snapshot, and daily-log schema",

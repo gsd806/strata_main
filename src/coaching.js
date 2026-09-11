@@ -1,7 +1,8 @@
 // @ts-check
 "use strict";
 
-const {currentWeekStart,generateCoachingWeek,sanitizeCoachingProfile,sanitizeDailyLog,validDate,weekStartForDate}=require("./coaching-core");
+const {CATALOG_FINGERPRINT,GENERATION_VERSION,MEAL_CATALOG_FINGERPRINT,currentWeekStart,generateCoachingWeek,sanitizeCoachingProfile,sanitizeDailyLog,validDate,weekStartForDate}=require("./coaching-core");
+const {generateRemainingDayFoodOptions}=require("./meal-planning-core");
 
 /** @param {string} message @param {number} [status] @param {string} [code] */
 function coachingError(message,status=400,code="INVALID_COACHING_REQUEST"){return Object.assign(new Error(message),{status,code});}
@@ -60,7 +61,7 @@ function createCoachingService({store,auth,requireAccess,trustedOrigin,rateAllow
   /** @param {string} userId @param {any} profile @param {number} timestamp @param {any} [prepared] */
   async function ensureWeek(userId,profile,timestamp,prepared=null){
     const weekStart=currentWeekStart(timestamp,profile.timeZone),existingRow=await store.coachingWeek(userId,weekStart),existing=weekPayload(existingRow);
-    if(existing&&existing.profileRevision===profile.revision)return existing;
+    if(existing&&existing.profileRevision===profile.revision&&existing.generationVersion===GENERATION_VERSION&&existing.catalogFingerprint===CATALOG_FINGERPRINT&&existing.mealCatalogFingerprint===MEAL_CATALOG_FINGERPRINT)return existing;
     const input={...profile};delete input.revision;delete input.updatedAt;
     const generated=prepared&&prepared.weekStart===weekStart?prepared:generateCoachingWeek(input,profile.revision,weekStart,timestamp);
     const record={userId,weekStart,planKey:generated.planKey,profileRevision:profile.revision,snapshotJson:JSON.stringify(generated),generatedAt:timestamp};
@@ -75,7 +76,7 @@ function createCoachingService({store,auth,requireAccess,trustedOrigin,rateAllow
   }
   /** @param {import("./domain-types").HttpRequest} req @param {import("./domain-types").HttpResponse} res @param {URL} url */
   async function handleApi(req,res,url){
-    const logMatch=url.pathname.match(/^\/api\/coaching\/logs\/(\d{4}-\d{2}-\d{2})$/),recognized=Boolean(logMatch||url.pathname==="/api/coaching/profile"||url.pathname==="/api/coaching/week");
+    const logMatch=url.pathname.match(/^\/api\/coaching\/logs\/(\d{4}-\d{2}-\d{2})$/),foodMatch=url.pathname.match(/^\/api\/coaching\/food-options\/(\d{4}-\d{2}-\d{2})$/),recognized=Boolean(logMatch||foodMatch||url.pathname==="/api/coaching/profile"||url.pathname==="/api/coaching/week");
     if(!recognized)return false;
     const session=await requireAccess(req,res);if(!session)return true;
     try{
@@ -99,10 +100,17 @@ function createCoachingService({store,auth,requireAccess,trustedOrigin,rateAllow
       if(!profile)throw coachingError("Complete your coaching profile before opening a personalized week.",409,"COACHING_PROFILE_REQUIRED");
       const timestamp=now(),week=await ensureWeek(session.id,profile,timestamp);
       if(url.pathname==="/api/coaching/week"){json(res,200,{week,logs:await weekLogs(session.id,week),csrfToken:session.csrf_token});return true;}
-      if(!logMatch)throw coachingError("Coaching route not found.",404,"COACHING_ROUTE_NOT_FOUND");
-      const logDate=validDate(logMatch[1]);
+      if(!logMatch&&!foodMatch)throw coachingError("Coaching route not found.",404,"COACHING_ROUTE_NOT_FOUND");
+      const logDate=validDate((logMatch||foodMatch)?.[1]);
       if(weekStartForDate(logDate)!==week.weekStart)throw coachingError(`Daily entries are open for the current coaching week (${week.weekStart} to ${week.weekEnd}).`,400,"COACHING_LOG_OUTSIDE_CURRENT_WEEK");
       const target=week.nutrition.dailyTargets.find((/** @type {any} */ entry)=>entry.date===logDate)||null;
+      if(foodMatch){
+        if(!profile.mealPreferences)throw coachingError("Add your food preferences before asking STRATA for meal options.",409,"MEAL_PREFERENCES_REQUIRED");
+        if(!target)throw coachingError("That day has no nutrition target in the current coaching week.",409,"COACHING_TARGET_REQUIRED");
+        const row=await store.coachingDailyLog(session.id,logDate),log=logPayload(row,target),consumedCalories=log?.calories||0,remainingRatio=Math.max(0,target.calories-consumedCalories)/target.calories,mealsRemaining=Math.max(1,Math.min(profile.mealPreferences.mealsPerDay,Math.ceil(profile.mealPreferences.mealsPerDay*remainingRatio))),macrosKnown=!log||[log.proteinG,log.carbsG,log.fatG].every((value)=>Number.isFinite(value)),macros=macrosKnown?target.macros:null;
+        const options=generateRemainingDayFoodOptions({mealPreferences:profile.mealPreferences,target:{calories:target.calories,proteinG:macros?.proteinG??null,carbsG:macros?.carbsG??null,fatG:macros?.fatG??null,costCents:0},consumed:{calories:consumedCalories,proteinG:macrosKnown?log?.proteinG??0:null,carbsG:macrosKnown?log?.carbsG??0:null,fatG:macrosKnown?log?.fatG??0:null,costCents:0},mealsRemaining,seed:`${week.weekStart}\0${logDate}\0${session.id}`});
+        json(res,200,{date:logDate,day:target.day,target,log,mealsRemaining,...options,csrfToken:session.csrf_token});return true;
+      }
       if(req.method==="GET"){json(res,200,{log:logPayload(await store.coachingDailyLog(session.id,logDate),target),csrfToken:session.csrf_token});return true;}
       const input=object(await bodyJson(req),"Request");exactKeys(input,["log","expectedRevision","expectedUserId"],"Request");const expectedRevision=revision(input.expectedRevision,"Expected log version");
       if(input.expectedUserId!==undefined&&String(input.expectedUserId)!==String(session.id))throw coachingError("Your account changed. Reload before saving this entry.",409,"COACHING_ACCOUNT_CHANGED");

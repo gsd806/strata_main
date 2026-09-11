@@ -14,15 +14,33 @@ async function stop(){if(server&&server.exitCode===null)await new Promise((resol
 async function request(path,account=null,method="GET",body,headers={}){const response=await fetch(`${base}${path}`,{method,headers:{Origin:base,"Content-Type":"application/json",...(account?{Cookie:account.cookie,"X-CSRF-Token":account.csrf}:{}),...headers},...(body===undefined?{}:{body:typeof body==="string"?body:JSON.stringify(body)})});return {status:response.status,data:await response.json(),cookie:response.headers.get("set-cookie")?.split(";")[0]||""};}
 async function account(suffix,{plus=true}={}){const signup=await request("/api/signup",null,"POST",{name:`Coach ${suffix}`,email:`coach-${suffix}@example.test`,password:"strong-coaching-password-123"});assert.equal(signup.status,201);const me=await request("/api/me",{cookie:signup.cookie,csrf:""});const result={cookie:signup.cookie,csrf:me.data.csrfToken,id:me.data.user.id};if(plus)assert.ok([200,201].includes((await request("/api/discovery/trial",result,"POST",{})).status));return result;}
 function profile(overrides={}){return {version:1,measurementSystem:"metric",preferredLoadUnit:"kg",age:30,heightCm:180,weightKg:80,bodyFatPercent:null,sexForEquation:"male",goal:"maintenance",goalPace:"moderate",experience:"intermediate",lifestyleActivity:"moderately_active",workoutDays:["Monday","Wednesday","Friday"],sessionMinutes:60,usualExercises:[{exerciseId:"flat-dumbbell-press",maxSets:4,maxReps:10,maxWeightKg:30}],availableEquipment:[],movementLimitations:[],caloriePattern:"zigzag",flexibleDay:null,macroPreference:"balanced",timeZone:"Asia/Dubai",...overrides};}
+function mealPreferences(overrides={}){return {allergyStatus:"none_known",allergens:[],otherAllergies:"",dietaryPattern:"omnivore",dietaryRequirements:[],favoriteFoods:["chicken","rice"],mealsPerDay:3,dailyBudgetCents:1800,...overrides};}
 
 test.before(launch);test.after(stop);
 
 test("every coaching endpoint fails closed without an authenticated active Strata+ entitlement",async()=>{
-  for(const path of ["/api/coaching/profile","/api/coaching/week","/api/coaching/logs/2026-09-07"]){assert.equal((await request(path)).status,401,path);}
+  for(const path of ["/api/coaching/profile","/api/coaching/week","/api/coaching/logs/2026-09-07","/api/coaching/food-options/2026-09-07"]){assert.equal((await request(path)).status,401,path);}
   const free=await account("free",{plus:false});
-  for(const [path,method,body] of [["/api/coaching/profile","GET"],["/api/coaching/profile","PUT",{profile:profile(),expectedRevision:0}],["/api/coaching/week","GET"],["/api/coaching/logs/2026-09-07","GET"],["/api/coaching/logs/2026-09-07","PUT",{log:{calories:2000},expectedRevision:0}]]){
+  for(const [path,method,body] of [["/api/coaching/profile","GET"],["/api/coaching/profile","PUT",{profile:profile(),expectedRevision:0}],["/api/coaching/week","GET"],["/api/coaching/logs/2026-09-07","GET"],["/api/coaching/logs/2026-09-07","PUT",{log:{calories:2000},expectedRevision:0}],["/api/coaching/food-options/2026-09-07","GET"]]){
     const result=await request(path,free,method,body);assert.equal(result.status,402,path);assert.equal(result.data.code,"DISCOVERY_ACCESS_REQUIRED");
   }
+});
+
+test("food options use the saved target, intake, allergies, favorites, meal count, and budget",async()=>{
+  const member=await account("food-options"),saved=await request("/api/coaching/profile",member,"PUT",{profile:profile({version:2,mealPreferences:mealPreferences({allergyStatus:"listed",allergens:["milk","peanuts"],favoriteFoods:["chicken","rice"],mealsPerDay:4,dailyBudgetCents:1600})}),expectedRevision:0});
+  assert.equal(saved.status,200);const date=saved.data.week.weekStart,target=saved.data.week.nutrition.dailyTargets.find((day)=>day.date===date);
+  assert.equal((await request(`/api/coaching/logs/${date}`,member,"PUT",{log:{calories:600,proteinG:40,carbsG:70,fatG:18},expectedRevision:0})).status,200);
+  const result=await request(`/api/coaching/food-options/${date}`,member);assert.equal(result.status,200);assert.equal(result.data.csrfToken,member.csrf);assert.equal(result.data.status,"ready");assert.equal(result.data.options.length,3);assert.equal(result.data.remaining.calories,target.calories-600);assert.ok(result.data.mealsRemaining>=1&&result.data.mealsRemaining<=4);assert.match(result.data.nutritionProvenance.url,/fdc\.nal\.usda\.gov/);assert.match(result.data.costDisclaimer,/not live store prices/i);
+  for(const option of result.data.options)for(const meal of option.meals){assert.equal(meal.allergens.includes("milk"),false);assert.equal(meal.allergens.includes("peanuts"),false);}
+  assert.equal((await request(`/api/coaching/logs/${date}`,member,"PUT",{log:{calories:700,proteinG:null,carbsG:null,fatG:null},expectedRevision:1})).status,200);
+  const caloriesOnly=await request(`/api/coaching/food-options/${date}`,member);assert.equal(caloriesOnly.status,200);assert.equal(caloriesOnly.data.remaining.calories,target.calories-700);assert.equal(caloriesOnly.data.remaining.proteinG,null);assert.ok(caloriesOnly.data.options.every((option)=>option.macroDifference===null));
+  assert.equal((await request(`/api/coaching/food-options/${date}`,member,"POST",{})).status,405);
+  assert.equal((await request(`/api/coaching/food-options/${saved.data.week.nextWeekStart}`,member)).data.code,"COACHING_LOG_OUTSIDE_CURRENT_WEEK");
+
+  const legacy=await account("food-options-legacy"),legacySaved=await request("/api/coaching/profile",legacy,"PUT",{profile:profile(),expectedRevision:0});
+  const missing=await request(`/api/coaching/food-options/${legacySaved.data.week.weekStart}`,legacy);assert.equal(missing.status,409);assert.equal(missing.data.code,"MEAL_PREFERENCES_REQUIRED");
+  const unsure=await request("/api/coaching/profile",legacy,"PUT",{profile:profile({version:2,mealPreferences:mealPreferences({allergyStatus:"other_or_unsure",otherAllergies:"Uncommon spice reaction"})}),expectedRevision:1});
+  const manual=await request(`/api/coaching/food-options/${unsure.data.week.weekStart}`,legacy);assert.equal(manual.status,200);assert.equal(manual.data.status,"manual_review");assert.deepEqual(manual.data.options,[]);
 });
 
 test("profile and weekly snapshot routes enforce mutation boundaries and optimistic revisions",async()=>{
@@ -68,6 +86,7 @@ test("expired Strata+ access denies existing coaching data without mutating it",
     ["/api/coaching/profile","GET"],
     ["/api/coaching/profile","PUT",{profile:profile({weightKg:99}),expectedRevision:1}],
     ["/api/coaching/week","GET"],
+    [`/api/coaching/food-options/${date}`,"GET"],
     [`/api/coaching/logs/${date}`,"GET"],
     [`/api/coaching/logs/${date}`,"PUT",{log:{calories:9999},expectedRevision:1}]
   ];

@@ -3,11 +3,12 @@
 const test=require("node:test");
 const assert=require("node:assert/strict");
 const {EXERCISES}=require("../src/plans");
-const {addDays,currentWeekStart,generateCoachingWeek,sanitizeCoachingProfile,sanitizeDailyLog,weekStartForDate}=require("../src/coaching-core");
+const {MEAL_CATALOG_FINGERPRINT,addDays,currentWeekStart,generateCoachingWeek,sanitizeCoachingProfile,sanitizeDailyLog,weekStartForDate}=require("../src/coaching-core");
 
 function profile(overrides={}){
   return {version:1,measurementSystem:"metric",preferredLoadUnit:"kg",age:32,heightCm:178,weightKg:82,bodyFatPercent:null,sexForEquation:"male",goal:"maintenance",goalPace:"moderate",experience:"intermediate",lifestyleActivity:"moderately_active",workoutDays:["Monday","Wednesday","Friday"],sessionMinutes:60,usualExercises:[{exerciseId:"flat-dumbbell-press",maxSets:4,maxReps:10,maxWeightKg:32}],availableEquipment:[],movementLimitations:[],caloriePattern:"zigzag",flexibleDay:null,macroPreference:"balanced",timeZone:"Asia/Dubai",...overrides};
 }
+function mealPreferences(overrides={}){return {allergyStatus:"none_known",allergens:[],otherAllergies:"",dietaryPattern:"omnivore",dietaryRequirements:[],favoriteFoods:["chicken","rice"],mealsPerDay:3,dailyBudgetCents:1500,...overrides};}
 
 test("coaching profiles strictly validate adult energy and training boundaries",()=>{
   const clean=sanitizeCoachingProfile(profile());
@@ -19,6 +20,14 @@ test("coaching profiles strictly validate adult energy and training boundaries",
   assert.throws(()=>sanitizeCoachingProfile(profile({workoutDays:["Monday","Monday"]})),/valid and unique/);
   assert.throws(()=>sanitizeCoachingProfile(profile({usualExercises:[profile().usualExercises[0],profile().usualExercises[0]]})),/only be entered once/);
   assert.throws(()=>sanitizeCoachingProfile(profile({timeZone:"Mars/Olympus"})),/Time zone is invalid/);
+});
+
+test("version 2 coaching profiles add strict private food preferences without breaking version 1 profiles",()=>{
+  const legacy=sanitizeCoachingProfile(profile());assert.equal(legacy.version,1);assert.equal(legacy.mealPreferences,null);
+  const current=sanitizeCoachingProfile(profile({version:2,mealPreferences:mealPreferences()}));assert.equal(current.version,2);assert.deepEqual(current.mealPreferences,mealPreferences());
+  assert.throws(()=>sanitizeCoachingProfile(profile({version:1,mealPreferences:mealPreferences()})),/version 2/);
+  assert.throws(()=>sanitizeCoachingProfile(profile({version:2})),/requires meal preferences/);
+  const week=generateCoachingWeek(current,1,"2026-09-07",1_000);assert.equal(week.schemaVersion,2);assert.equal(week.mealCatalogFingerprint,MEAL_CATALOG_FINGERPRINT);assert.match(week.methodology.cautions.join(" "),/allergen safety/i);
 });
 
 test("daily logs require bounded calories and either zero or all three macros",()=>{

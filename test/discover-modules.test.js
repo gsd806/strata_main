@@ -30,6 +30,10 @@ test("Discover API attaches account CSRF state and rejects stale responses",asyn
   const client=Api.createClient({fetchImpl:async(path,options)=>{request={path,options};return{ok:true,json:async()=>({ok:true})};},getCsrfToken:()=>"csrf-token",getGeneration:()=>generation,redirect:()=>{}});
   assert.deepEqual(await client("/api/plan",{method:"PUT",body:"{}"}),{ok:true});
   assert.equal(request.options.credentials,"same-origin");assert.equal(request.options.headers["X-CSRF-Token"],"csrf-token");
+  const accountResponse={csrfToken:"csrf-token"},account={userId:"user-a",csrfToken:"csrf-token"};
+  assert.equal(Api.assertAccountResponse(accountResponse,account,account),accountResponse);
+  assert.throws(()=>Api.assertAccountResponse(accountResponse,{...account,userId:"user-b"},account),error=>error.code==="ACCOUNT_CHANGED");
+  assert.throws(()=>Api.assertAccountResponse({csrfToken:"other"},account,account),error=>error.code==="ACCOUNT_CHANGED");
   const stale=Api.createClient({fetchImpl:async()=>({ok:true,json:async()=>{generation+=1;return{ok:true};}}),getCsrfToken:()=>"",getGeneration:()=>generation,redirect:()=>{}});
   await assert.rejects(stale("/api/discovery"),error=>error.code==="STALE_WORKSPACE_RESPONSE"&&error.stale===true);
 });

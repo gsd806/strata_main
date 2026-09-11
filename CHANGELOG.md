@@ -1,5 +1,17 @@
 # Changelog
 
+## 7.9.0 — Constraint-aware daily food options
+
+- Extend the private coaching profile with an explicit allergy state, supported allergens, an other-or-uncertain-allergy note, dietary pattern and requirements, favorite-food categories, a preferred 1–6 meals per day, and an optional whole-cent daily USD budget.
+- Add remaining-day food options to the daily intake experience, using the saved current-week target and intake log to show up to three deterministic menus with portions, ingredients, calorie and optional macro differences, and rough ingredient cost.
+- Apply allergy, dietary-pattern, gluten-free, and dairy-free rules before favorites or budget ranking; return manual review or no compatible option instead of silently relaxing a hard constraint.
+- Add a bundled, fingerprinted recipe catalog with rounded STRATA editorial estimates informed by generic USDA FoodData Central values, plus explicit FDA allergy/cross-contact, non-live nutrition, and non-live cost limitations.
+- Keep the server authoritative through an authenticated, current-week `GET /api/coaching/food-options/:date` boundary; the browser supplies neither account identity, nutrition targets, nor catalog data, and generated options are not persisted as food eaten.
+- Preserve existing version-1 coaching profiles, store new preferences in version-2 profile JSON without a database migration, repeat those inputs in the private weekly snapshot, and keep account export/deletion and SQLite/Turso behavior aligned.
+- Separate pure meal filtering/generation, browser form normalization/display shaping, request/render orchestration, and the existing coaching coordinator, with focused unit, integration, contract, runtime, and browser coverage.
+
+Safety, data provenance, deployment, verification placeholders, and the version-2 rollback boundary are documented in the [7.9.0 release guide](docs/release-7.9.0.md). Calculation order and limitations are in the [coaching methodology](docs/coaching-methodology.md).
+
 ## 7.8.8 — Guided coaching setup and $2.99 monthly pricing
 
 - Redesign the Personal training and calorie counting profile as a clear four-step setup with separate cards, compact mobile orientation, persistent known-exercise labels, a useful empty state, stronger contrast, and 200% text reflow coverage.

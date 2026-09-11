@@ -19,6 +19,12 @@
 
   function saveRetryMessage(error){return `Couldn't save — Retry. ${saveErrorDetail(error)}`;}
 
+  function assertAccountResponse(response,current,expected){
+    const sameUser=String(current?.userId||"")===String(expected?.userId||""),sameCsrf=Boolean(expected?.csrfToken)&&String(current?.csrfToken||"")===String(expected.csrfToken)&&String(response?.csrfToken||"")===String(expected.csrfToken);
+    if(!sameUser||!sameCsrf)throw Object.assign(new Error("The signed-in account changed."),{code:"ACCOUNT_CHANGED"});
+    return response;
+  }
+
   function createClient({fetchImpl,getCsrfToken,getGeneration,redirect}){
     if(typeof fetchImpl!=="function")throw new TypeError("A fetch implementation is required.");
     return async function request(path,options={}){
@@ -41,5 +47,5 @@
     };
   }
 
-  return{createClient,saveErrorDetail,saveRetryMessage};
+  return{assertAccountResponse,createClient,saveErrorDetail,saveRetryMessage};
 });

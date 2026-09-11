@@ -22,7 +22,9 @@ const CommunityCore=globalThis.StrataDiscoverCommunity;if(!CommunityCore)throw n
 const SessionCore=globalThis.StrataDiscoverSession;if(!SessionCore)throw new Error("The Strata+ session module did not load.");
 const SharingCore=globalThis.StrataDiscoverSharing;if(!SharingCore)throw new Error("The Strata+ sharing module did not load.");
 const CoachingUi=globalThis.StrataPersonalTrainingUi;if(!CoachingUi)throw new Error("The Strata+ personal-training input module did not load.");
+const CoachingMealsUi=globalThis.StrataPersonalTrainingMealsUi;if(!CoachingMealsUi)throw new Error("The Strata+ food-preference input module did not load.");
 const CoachingRender=globalThis.StrataDiscoverCoachingRender;if(!CoachingRender)throw new Error("The Strata+ coaching renderer did not load.");
+const CoachingMealsCore=globalThis.StrataDiscoverCoachingMeals;if(!CoachingMealsCore)throw new Error("The Strata+ food-options controller did not load.");
 const CoachingCore=globalThis.StrataDiscoverCoaching;if(!CoachingCore)throw new Error("The Strata+ coaching controller did not load.");
 const {FEATURE_CONFIG,FEATURE_DEFAULT,GROUP_LABELS,LIMITATION_OPTIONS,MOVEMENT_BOARD_STORAGE_PREFIX,PREFERENCE_OPTIONS}=StateCore;
 const EXPLORER_DESKTOP_PAGE_SIZE=StateCore.LIMITS.explorerDesktopPageSize;
@@ -57,7 +59,8 @@ function saveMovementBoard(){
 const toastController=NavigationCore.createToastController(el("toast"));
 function showToast(message){toastController.show(message);}
 function hideToast(){toastController.hide();}
-const coaching=CoachingCore.createController({document,element:el,api,state,ui:CoachingUi,renderFactory:CoachingRender.createRenderer,saveRetryMessage,showToast,onAccountError:redirectedOrChangedAccount});
+const coachingMeals=CoachingMealsCore.createController({document,element:el,api,state,ui:CoachingMealsUi,assertAccountResponse:ApiCore.assertAccountResponse,onAccountError:redirectedOrChangedAccount});
+const coaching=CoachingCore.createController({document,element:el,api,state,ui:CoachingUi,meals:coachingMeals,assertAccountResponse:ApiCore.assertAccountResponse,renderFactory:CoachingRender.createRenderer,saveRetryMessage,showToast,onAccountError:redirectedOrChangedAccount});
 const featureNavigation=NavigationCore.createFeatureNavigation({
   config:FEATURE_CONFIG,defaultFeature:FEATURE_DEFAULT,state,document,window,
   onDestinationChange:hideToast,

@@ -22,6 +22,7 @@
     "src/billing.js",
     "src/billing-store.js",
     "src/coaching-core.js",
+    "src/meal-planning-core.js",
     "src/coaching-schema.js",
     "src/coaching-store.js",
     "src/coaching.js",
