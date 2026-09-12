@@ -13,7 +13,7 @@
 
   const isRecord=(value)=>Boolean(value)&&typeof value==="object"&&!Array.isArray(value);
   const cleanText=(value)=>String(value??"").trim().replace(/\s+/g," ");
-  const finiteNumber=(value)=>{if(value==null||value==="")return null;const parsed=Number(String(value).trim());return Number.isFinite(parsed)?parsed:null;};
+  const finiteNumber=(value)=>{if(value==null||!["number","string"].includes(typeof value)||String(value).trim()==="")return null;const parsed=Number(String(value).trim());return Number.isFinite(parsed)?parsed:null;};
   function selectedValues(value){return Array.isArray(value)?value.map(cleanText).filter(Boolean):value==null||value===""?[]:[cleanText(value)].filter(Boolean);}
   function allowedList(value,allowed,field,errors){
     const selected=[...new Set(selectedValues(value))],unknown=selected.filter((item)=>!allowed.includes(item));
@@ -62,7 +62,8 @@
     if(!isRecord(target)||!isRecord(consumed))throw new TypeError("Nutrition target and intake must be objects.");
     const calories=nutrientProgress(target.calories??target.targetCalories,consumed.calories??consumed.consumedCalories,"Calories"),macroTarget=isRecord(target.macros)?target.macros:target;
     const hasMacros=["proteinG","carbsG","fatG"].every((key)=>finiteNumber(macroTarget[key])!=null);
-    const macros=hasMacros?{proteinG:nutrientProgress(macroTarget.proteinG,consumed.proteinG,"Protein"),carbsG:nutrientProgress(macroTarget.carbsG,consumed.carbsG,"Carbohydrate"),fatG:nutrientProgress(macroTarget.fatG,consumed.fatG,"Fat")}:null;
+    const consumedKnown=["proteinG","carbsG","fatG"].every((key)=>finiteNumber(consumed[key])!=null)||calories.consumed===0&&["proteinG","carbsG","fatG"].every((key)=>consumed[key]==null);
+    const macros=hasMacros&&consumedKnown?{proteinG:nutrientProgress(macroTarget.proteinG,consumed.proteinG,"Protein"),carbsG:nutrientProgress(macroTarget.carbsG,consumed.carbsG,"Carbohydrate"),fatG:nutrientProgress(macroTarget.fatG,consumed.fatG,"Fat")}:null;
     return{calories,macros};
   }
   function perMealTarget(remaining,mealsRemaining){
@@ -70,9 +71,14 @@
     const divide=(item)=>Math.round(Number(item?.remaining||0)/mealsRemaining),macros=remaining.macros?{proteinG:divide(remaining.macros.proteinG),carbsG:divide(remaining.macros.carbsG),fatG:divide(remaining.macros.fatG)}:null;
     return{calories:divide(remaining.calories),macros,mealsRemaining};
   }
+  function optionFitSummary(option){
+    const source=isRecord(option)?option:{},difference=(value,unit)=>{const amount=finiteNumber(value);return amount==null?"unavailable":amount===0?"matches the remaining plan":`${Math.abs(Math.round(amount)).toLocaleString()} ${unit} ${amount<0?"below":"above"} the remaining plan`;};
+    const macros=isRecord(source.macroDifference)&&["proteinG","carbsG","fatG"].every((key)=>finiteNumber(source.macroDifference[key])!=null)?source.macroDifference:null;
+    return{calories:difference(source.calorieDifference,"kcal"),macros:macros?`Protein ${difference(macros.proteinG,"g")}; carbs ${difference(macros.carbsG,"g")}; fat ${difference(macros.fatG,"g")}.`:null};
+  }
   const formatCalories=(value)=>{const amount=finiteNumber(value);return amount==null||amount<0?"—":`${Math.round(amount).toLocaleString()} kcal`;};
   const formatGrams=(value)=>{const amount=finiteNumber(value);return amount==null||amount<0?"—":`${Math.round(amount).toLocaleString()} g`;};
   const formatUsd=(cents)=>{if(cents==null)return"No daily budget";const amount=finiteNumber(cents);return amount==null||amount<0?"—":new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format(amount/100);};
 
-  return Object.freeze({ALLERGENS,DIETARY_PATTERNS,DIETARY_REQUIREMENTS,FAVORITE_FOODS,formatCalories,formatGrams,formatUsd,normalizeMealPreferencesDraft,perMealTarget,remainingNutrition});
+  return Object.freeze({ALLERGENS,DIETARY_PATTERNS,DIETARY_REQUIREMENTS,FAVORITE_FOODS,formatCalories,formatGrams,formatUsd,normalizeMealPreferencesDraft,optionFitSummary,perMealTarget,remainingNutrition});
 });

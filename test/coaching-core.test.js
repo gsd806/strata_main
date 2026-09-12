@@ -32,7 +32,7 @@ test("version 3 marks reviewed whole-day activity while legacy versions remain r
   assert.throws(()=>sanitizeCoachingProfile(profile({version:1,mealPreferences:mealPreferences()}),{allowLegacyProfile:true}),/version 2 or 3/);
   assert.throws(()=>sanitizeCoachingProfile(profile({version:2}),{allowLegacyProfile:true}),/requires meal preferences/);
   assert.throws(()=>sanitizeCoachingProfile(profile({lifestyleActivity:"extremely_active"})),/Lifestyle activity is invalid/);assert.equal(sanitizeCoachingProfile(profile({version:1,lifestyleActivity:"extremely_active"}),{allowLegacyProfile:true}).lifestyleActivity,"extremely_active");
-  const week=generateCoachingWeek(current,1,"2026-09-07",1_000);assert.equal(week.schemaVersion,3);assert.equal(week.generationVersion,"coaching-week-v3");assert.equal(week.energyModelVersion,ENERGY_MODEL_VERSION);assert.equal(week.nutrition.maintenance.calibration.modelVersion,ENERGY_MODEL_VERSION);assert.equal(week.mealCatalogFingerprint,MEAL_CATALOG_FINGERPRINT);assert.match(week.methodology.cautions.join(" "),/allergen safety/i);assert.match(week.methodology.references.map(({label})=>label).join(" "),/Repeated-weight.*Self-reported/i);
+  const week=generateCoachingWeek(current,1,"2026-09-07",1_000);assert.equal(week.schemaVersion,3);assert.equal(week.generationVersion,"coaching-week-v4");assert.equal(week.energyModelVersion,ENERGY_MODEL_VERSION);assert.equal(week.nutrition.maintenance.calibration.modelVersion,ENERGY_MODEL_VERSION);assert.equal(week.mealCatalogFingerprint,MEAL_CATALOG_FINGERPRINT);assert.match(week.methodology.cautions.join(" "),/allergen safety/i);assert.match(week.methodology.references.map(({label})=>label).join(" "),/Repeated-weight.*Self-reported/i);
 });
 
 test("daily logs require bounded calories and either zero or all three macros",()=>{
@@ -56,11 +56,12 @@ test("ISO weeks use the profile time zone and reject impossible dates",()=>{
   assert.throws(()=>weekStartForDate("2026-02-30"),/invalid/);
 });
 
-test("weekly coaching is deterministic, rotates by week, and preserves its calorie budget",()=>{
+test("weekly coaching is deterministic, keeps repeatable main exercises, and preserves its calorie budget",()=>{
   const clean=sanitizeCoachingProfile(profile({usualExercises:[]})),first=generateCoachingWeek(clean,1,"2026-09-07",1_000),replay=generateCoachingWeek(clean,1,"2026-09-07",1_000),next=generateCoachingWeek(clean,1,"2026-09-14",2_000);
   assert.deepEqual(replay,first);assert.notEqual(next.planKey,first.planKey);assert.equal(first.nextWeekStart,"2026-09-14");
-  assert.ok(first.training.sessions.some((session,index)=>session.exercises.some((exercise,exerciseIndex)=>exercise.exerciseId!==next.training.sessions[index].exercises[exerciseIndex].exerciseId)),"an adjacent week must visibly rotate at least one unconstrained movement");
-  assert.equal(first.training.sessions.length,3);assert.ok(first.training.sessions.every((session)=>session.exercises.length===6));
+  const anchors=(week)=>week.training.sessions.map(session=>session.exercises.filter(exercise=>["knee","posterior","push","pull"].includes(exercise.role)).map(exercise=>exercise.exerciseId));
+  assert.deepEqual(anchors(next),anchors(first),"main exercises remain comparable across adjacent weeks");
+  assert.equal(first.training.sessions.length,3);assert.ok(first.training.sessions.every((session)=>session.exercises.length>=4&&session.estimatedDurationMinutes<=60));
   assert.equal(first.nutrition.weeklyTargetKcal,first.nutrition.dailyTargets.reduce((sum,day)=>sum+day.calories,0));
   assert.equal(first.nutrition.weeklyTargetKcal,first.nutrition.maintenance.targetKcal*7);
   assert.equal(first.nutrition.equation,"nasem_2023_eer");assert.equal(first.nutrition.activityFactor,null);assert.equal(first.nutrition.legacyActivityFactor,1.55);
@@ -68,25 +69,29 @@ test("weekly coaching is deterministic, rotates by week, and preserves its calor
     const macros=day.macros,total=macros.proteinG*4+macros.carbsG*4+macros.fatG*9;
     assert.ok(macros.carbsG*4/total>=.44,"rounding keeps carbohydrates near or above the 45% AMDR floor");
   }
-  assert.match(first.methodology.cautions.join(" "),/not predictions/i);
+  assert.match(first.methodology.cautions.join(" "),/not forecasts or confidence intervals/i);
 });
 
-test("entered exercise capability conservatively caps first-week sets, reps, and load",()=>{
+test("entered exercise capability caps starting sets and reps without inventing a tested load",()=>{
   const input=profile({usualExercises:[{exerciseId:"flat-dumbbell-press",maxSets:2,maxReps:8,maxWeightKg:32}]}),clean=sanitizeCoachingProfile(input);
   let press;
   for(let offset=0;offset<6&&!press;offset+=1){const week=generateCoachingWeek(clean,1,addDays("2026-09-07",offset*7),1_000+offset);press=week.training.sessions.flatMap((session)=>session.exercises).find((exercise)=>exercise.exerciseId==="flat-dumbbell-press");}
-  assert.ok(press);assert.equal(press.sets,2);assert.equal(press.reps,"6");
-  assert.deepEqual(press.suggestedStartingLoad,{value:22,unit:"kg",kg:22,basis:"No more than 70% of the entered load, rounded down; the entry is not treated as a tested 1RM."});
-  assert.match(press.loadingGuidance,/22 kg/);assert.match(press.loadingGuidance,/not a 1RM percentage/);
+  assert.ok(press);assert.equal(press.sets,2);assert.equal(press.reps,"6–8");assert.equal(press.measurement,"reps");assert.equal(press.loadType,"external");
+  assert.equal(press.suggestedStartingLoad,null);assert.equal(press.targetSets,null);assert.equal(press.enteredCapability.maxWeightKg,32);
+  assert.match(press.loadingGuidance,/not a tested maximum or an automatic load target/);
 });
 
-test("known exercise capabilities participate in deterministic adjacent-week rotation",()=>{
+test("known exercises stay repeatable and full performance evidence changes optional training targets only",()=>{
   const knownIds=["hack-squat","seated-leg-curl","incline-smith-press","neutral-pulldown","cable-lateral-raise","cable-crunch","hip-thrust","cable-reverse-lunge","overhead-triceps","seated-calf"];
   const usualExercises=knownIds.map((exerciseId)=>({exerciseId,maxSets:4,maxReps:10,maxWeightKg:40})),clean=sanitizeCoachingProfile(profile({usualExercises}));
   const first=generateCoachingWeek(clean,1,"2026-09-07",1_000),replay=generateCoachingWeek(clean,1,"2026-09-07",1_000),next=generateCoachingWeek(clean,1,"2026-09-14",2_000);
   const ids=(week)=>week.training.sessions.map((session)=>session.exercises.map((exercise)=>exercise.exerciseId));
-  assert.deepEqual(ids(replay),ids(first));assert.notDeepEqual(ids(next),ids(first));
-  assert.ok(first.training.sessions.flatMap((session)=>session.exercises).some((exercise)=>knownIds.includes(exercise.exerciseId)),"known exercises remain in the preferred rotation window");
+  assert.deepEqual(ids(replay),ids(first));assert.deepEqual(ids(next),ids(first));
+  const known=first.training.sessions[0].exercises.find(exercise=>knownIds.includes(exercise.exerciseId)&&exercise.measurement==="reps"&&exercise.loadType==="external");assert.ok(known);
+  const workouts=["2026-08-28","2026-09-04"].map(date=>({id:`workout-${date}`,date,status:"completed",startedAt:Date.parse(`${date}T12:00:00Z`),completedAt:Date.parse(`${date}T13:00:00Z`),entries:[{id:`entry-${date}`,exerciseId:known.exerciseId,measurement:known.measurement,loadType:known.loadType,unit:known.unit,prescribedReps:known.reps,effortType:"rir",sets:Array.from({length:known.sets},()=>({reps:known.range.high,weight:40,seconds:null,effort:3,completed:true}))}]}));
+  const informed=generateCoachingWeek(clean,1,"2026-09-07",1_000,{workouts}),target=informed.training.sessions[0].exercises.find(exercise=>exercise.exerciseId===known.exerciseId);
+  assert.equal(target.performance.sourceDate,"2026-09-04");assert.equal(target.performance.action,"increase_load");assert.ok(target.targetSets.every(set=>set.weight===42.5&&set.reps===known.range.low));
+  assert.notEqual(informed.planKey,first.planKey);assert.deepEqual(informed.nutrition,first.nutrition,"workout history never adds calorie burn to the whole-day estimate");
 });
 
 test("legacy null-sex body-fat input uses the labeled Cunningham fallback and goal pace changes conservative targets",()=>{

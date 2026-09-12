@@ -78,6 +78,7 @@ vm.runInContext(readPublic("scripts","discovery-core.js"),context,{filename:"dis
 vm.runInContext(readPublic("scripts","monthly-plan-core.js"),context,{filename:"monthly-plan-core.js"});
 vm.runInContext(readPublic("scripts","training-block-core.js"),context,{filename:"training-block-core.js"});
 vm.runInContext(readPublic("scripts","personal-training-ui-core.js"),context,{filename:"personal-training-ui-core.js"});
+vm.runInContext(readPublic("scripts","personal-training-diary-ui.js"),context,{filename:"personal-training-diary-ui.js"});
 vm.runInContext(readPublic("scripts","personal-training-meals-ui-core.js"),context,{filename:"personal-training-meals-ui-core.js"});
 for(const name of ["discover-state.js","discover-api.js","discover-navigation.js","discover-progress.js","discover-render.js","discover-catalog.js","discover-detail.js","discover-community.js","discover-session.js","discover-sharing.js","discover-events.js"])vm.runInContext(readPublic("scripts",name),context,{filename:name});
 for(const name of ["discover-coaching-render.js","discover-coaching-meals.js","discover-coaching.js"])vm.runInContext(readPublic("scripts",name),context,{filename:name});
