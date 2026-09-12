@@ -107,7 +107,9 @@ test("saved equipment, experience, and movement limitations are hard constraints
     const exercise=byId.get(item.exerciseId);assert.ok(exercise);assert.equal(exercise.level,"Beginner");assert.ok(!exercise.traits.includes("floor"));assert.ok(!exercise.traits.includes("overhead"));
   }
   assert.ok(week.training.sessions.every((session)=>session.exercises.length===4));
-  assert.throws(()=>generateCoachingWeek(sanitizeCoachingProfile(profile({availableEquipment:["Resistance band"],movementLimitations:["no-floor","no-overhead","no-deep-knee","no-unilateral"]})),1,"2026-09-07",1_000),{code:"COACHING_PLAN_CONSTRAINTS"});
+  const restricted=generateCoachingWeek(sanitizeCoachingProfile(profile({availableEquipment:["Resistance band"],movementLimitations:["no-floor","no-overhead","no-deep-knee","no-unilateral"]})),1,"2026-09-07",1_000);
+  assert.equal(restricted.training.summary.reviewNeeded,true);assert.equal(restricted.nutrition.dailyTargets.length,7);
+  for(const session of restricted.training.sessions)for(const item of session.exercises){const exercise=byId.get(item.exerciseId);assert.equal(exercise.equipment,"Resistance band");assert.ok(!exercise.traits.some(trait=>["floor","overhead","deep-knee","unilateral"].includes(trait)));}
 });
 
 test("unsafe automated deficits fail closed and low-energy variations disclose a steady fallback",()=>{

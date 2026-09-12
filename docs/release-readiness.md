@@ -6,13 +6,13 @@ Verification uses Darwin arm64 with supported Node.js 24.20.0, isolated temporar
 
 | Check | Result |
 | --- | --- |
-| Node regression suite | 915 passed; no failures, skips, or cancellations |
-| Coverage | 95.09% lines, 83.21% branches, 91.61% functions; unchanged 90/78/85 floors passed |
+| Node regression suite | 920 passed; no failures, skips, or cancellations |
+| Coverage | 95.09% lines, 83.25% branches, 91.59% functions; unchanged 90/78/85 floors passed |
 | Energy and training leaves | 100% line coverage for calibration, energy planning, and training composition |
 | Numerical benchmark | Fixed-seed alignment, noise, missing-intake, fluid-step, density, repeated-week, and under-reporting assertions passed; adverse outcomes retained |
-| Storage and service integration | 13 coaching database/HTTP tests passed, including SQLite/Turso parity, snapshot continuity, historical dates, and account/revision isolation |
+| Storage and service integration | 14 coaching database/HTTP tests passed, including SQLite/Turso parity, snapshot continuity, historical dates, and account/revision isolation |
 | Complete local release gate | `npm run check` passed |
-| Browser journeys | 53 passed; no failures, skips, or cancellations |
+| Browser journeys | 54 passed; no failures, skips, or cancellations |
 | Responsive UI audit | 18 routes × 8 widths; zero horizontal overflow, text-containment issues, navigation-focus overlap, or unexpected browser errors |
 | Runtime and performance | All runtime surfaces and seven endpoint/storage budgets passed; 40 measured samples after eight warmups per operation |
 | Architecture | 53 server modules, 73 browser modules, seven browser boundaries; zero cycles or policy violations |
@@ -25,7 +25,7 @@ Focused verification includes exact weekly budgets, integer macro accounting, ra
 
 Version-3 calorie estimates use complete intake aligned with actual morning-weight intervals within the prior 42 dates. Quality checks can withhold an adjustment. Accepted evidence gradually informs a new weekly target, with explicit stale-evidence handling and sensitivity ranges. Credible recent weights inform the equation, macros, BMI guard, and scenario starting point. The published EER coefficients and legacy version-1/version-2 semantics remain unchanged.
 
-Balanced, strength, and hypertrophy training goals control repeatable prescriptions that respect equipment, actual experience, movement constraints, and the selected duration. Direct-muscle coverage and recorded per-set targets are reviewable. Food quantities scale with servings, and menus disclose calorie or known-macro shortfalls.
+Balanced, strength, and hypertrophy training goals control repeatable prescriptions that respect equipment, actual experience, movement constraints, and the selected duration. Direct-muscle coverage and recorded per-set targets are reviewable. Missing required movements produce partial or unavailable sessions; valid equipment-limited profiles keep access to calories and the diary without claiming more equipment or a different experience level. Food quantities scale with servings, and menus disclose calorie or known-macro shortfalls.
 
 Saved current weeks remain fixed through deployment and diary edits. Concurrent generation at the same profile revision keeps the first stored snapshot. Today and the preceding 42 diary dates accept corrections, and old dates use their original saved target or show none. Explicit profile review/save or the next generated week adopts the new model.
 

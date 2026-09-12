@@ -102,6 +102,20 @@ test("stored age-18 null-sex legacy profiles remain readable without changing th
   const week=await request("/api/coaching/week",member);assert.equal(week.status,200);assert.equal(week.data.week.inputs.version,1);assert.equal(week.data.week.nutrition.energySemantics,"legacy_rmr_activity_multiplier");assert.equal(week.data.week.nutrition.primaryEquation,"legacy_cunningham_activity_fallback");assert.equal(week.data.week.nutrition.equation,"cunningham_1991");assert.equal(week.data.week.nutrition.maintenance.baselineKcal,2725);assert.equal(week.data.week.nutrition.maintenance.calibration.status,"legacy_profile");assert.equal(week.data.week.nutrition.maintenance.calibration.appliedAdjustmentKcal,0);
 });
 
+test("existing equipment-limited profiles keep their weekly dashboard and diary without claiming new equipment",async()=>{
+  for(const equipment of ["Bodyweight","Cables","Resistance band"]){
+    const member=await account(`limited-${equipment.toLowerCase().replaceAll(" ","-")}`),input={...profile({experience:"beginner",availableEquipment:[equipment],usualExercises:[]}),sessionsPerWeek:3},database=new DatabaseSync(join(directory,"strata.sqlite"));
+    try{database.prepare("INSERT INTO coaching_profiles(user_id,profile_json,revision,updated_at) VALUES(?,?,?,?)").run(member.id,JSON.stringify(input),1,Date.now());}finally{database.close();}
+    const read=await request("/api/coaching/week",member);assert.equal(read.status,200,JSON.stringify(read.data));
+    assert.equal(read.data.week.training.summary.reviewNeeded,true);assert.equal(read.data.week.nutrition.dailyTargets.length,7);
+    assert.deepEqual(read.data.week.inputs.availableEquipment,[equipment]);assert.equal(read.data.week.inputs.experience,"beginner");
+    for(const session of read.data.week.training.sessions)if(session.status!=="ready"){assert.ok(session.missingRoles.length);assert.ok(session.readinessWarning);}
+    const date=read.data.week.weekStart,saved=await request(`/api/coaching/logs/${date}`,member,"PUT",{log:{calories:2000,complete:true},expectedRevision:0});
+    assert.equal(saved.status,200);assert.ok(saved.data.log.targetCalories>0);
+    const replay=await request("/api/coaching/week",member);assert.equal(replay.status,200);assert.equal(replay.data.week.planKey,read.data.week.planKey);
+  }
+});
+
 test("concurrent first reads return the same persisted weekly snapshot",async()=>{
   const member=await account("week-race"),created=await request("/api/coaching/profile",member,"PUT",{profile:profile(),expectedRevision:0});assert.equal(created.status,200);
   const database=new DatabaseSync(join(directory,"strata.sqlite"));try{database.prepare("DELETE FROM coaching_weeks WHERE user_id=?").run(member.id);}finally{database.close();}

@@ -5,6 +5,7 @@ const assert=require("node:assert/strict");
 const {buildTraining,CATALOG_FINGERPRINT,MODEL_VERSION}=require("../src/coaching-training-core");
 const {exerciseFormat,estimatedSeconds,prepareEvidence,startingPrescription,withPerformance}=require("../src/coaching-prescription-core");
 const {DAYS,EXERCISES}=require("../src/plans");
+const {sanitizeCoachingProfile}=require("../src/coaching-core");
 
 const WEEK="2026-09-14";
 function profile(overrides={}){return {experience:"intermediate",trainingGoal:"balanced",sessionsPerWeek:3,workoutDays:["Monday","Wednesday","Friday"],sessionMinutes:60,usualExercises:[],availableEquipment:[],movementLimitations:[],preferredLoadUnit:"kg",timeZone:"UTC",...overrides};}
@@ -54,10 +55,37 @@ test("equipment, experience and movement restrictions override previous exercise
   for(const item of result.sessions.flatMap(session=>session.exercises)){
     const catalog=EXERCISES.find(exercise=>exercise.id===item.exerciseId);assert.equal(catalog.level,"Beginner");assert.ok(p.availableEquipment.includes(catalog.equipment));assert.ok(!catalog.traits.includes("floor")&&!catalog.traits.includes("overhead"));
   }
-  assert.throws(()=>buildTraining(profile({availableEquipment:["Resistance band"],movementLimitations:["no-floor","no-overhead","no-deep-knee","no-unilateral"]}),WEEK),{code:"COACHING_PLAN_CONSTRAINTS",status:422});
+  const restricted=buildTraining(profile({availableEquipment:["Resistance band"],movementLimitations:["no-floor","no-overhead","no-deep-knee","no-unilateral"]}),WEEK);assert.equal(restricted.summary.reviewNeeded,true);
   const bodyweight=buildTraining(profile({sessionsPerWeek:4,workoutDays:["Monday","Tuesday","Thursday","Friday"],availableEquipment:["Bodyweight"]}),WEEK);
   assert.ok(bodyweight.sessions.every(session=>session.exercises.length>=2));
-  assert.throws(()=>buildTraining(profile({experience:"beginner",availableEquipment:["Bodyweight"]}),WEEK),/Keep your actual experience level and movement limits/);
+  const limited=buildTraining(profile({experience:"beginner",availableEquipment:["Bodyweight"]}),WEEK);assert.equal(limited.sessions[0].status,"partial");assert.match(limited.sessions[0].readinessWarning,/Keep your actual experience level and movement limits/);
+});
+
+test("valid saved profiles retain available training for every single equipment choice without weakening constraints",()=>{
+  const limits={"no-floor":"floor","no-overhead":"overhead","no-deep-knee":"deep-knee","no-unilateral":"unilateral","no-unsupported-hinge":"unsupported-hinge"},equipment=[...new Set(EXERCISES.map(exercise=>exercise.equipment))];
+  for(const version of [1,3])for(const available of equipment)for(const movementLimitations of [[],Object.keys(limits)]){
+    const input={version,measurementSystem:"metric",preferredLoadUnit:"kg",age:32,heightCm:170,weightKg:75,bodyFatPercent:null,sexForEquation:"male",goal:"maintenance",goalPace:"moderate",experience:"beginner",lifestyleActivity:"moderately_active",workoutDays:["Monday","Wednesday","Friday"],sessionMinutes:30,usualExercises:[],availableEquipment:[available],movementLimitations,caloriePattern:"steady",flexibleDay:null,macroPreference:"balanced",timeZone:"UTC"};
+    const saved=sanitizeCoachingProfile(input,{allowLegacyProfile:true}),before=structuredClone(saved),result=buildTraining(saved,WEEK);
+    assert.deepEqual(saved,before);assert.equal(result.sessions.length,3);assert.equal(result.summary.scheduledDays,3);
+    for(const session of result.sessions){
+      assert.ok(session.estimatedDurationMinutes<=30);
+      for(const item of session.exercises){const catalog=EXERCISES.find(exercise=>exercise.id===item.exerciseId);assert.equal(catalog.equipment,available);assert.equal(catalog.level,"Beginner");assert.ok(movementLimitations.every(limit=>!catalog.traits.includes(limits[limit])));}
+      if(session.missingRoles.length){assert.notEqual(session.status,"ready");assert.equal(result.summary.reviewNeeded,true);assert.ok(result.summary.missingCoverage.some(message=>message.startsWith(`${session.day}:`)));assert.doesNotMatch(session.label,/Full body/);assert.match(session.readinessWarning,/actual experience level and movement limits/);}
+    }
+  }
+});
+
+test("an unavailable constrained workout has no exercises, working sets or estimated warmup time",()=>{
+  const result=buildTraining(profile({experience:"beginner",sessionMinutes:30,availableEquipment:["Cables"],movementLimitations:["no-floor","no-overhead","no-deep-knee","no-unilateral","no-unsupported-hinge"]}),WEEK);
+  for(const session of result.sessions){assert.equal(session.status,"unavailable");assert.equal(session.label,"Workout unavailable");assert.equal(session.exercises.length,0);assert.equal(session.workingSets,0);assert.equal(session.estimatedDurationMinutes,0);assert.deepEqual(session.missingRoles,["Knee-dominant legs","Upper-body push","Upper-body pull","Posterior legs and hips"]);assert.match(session.readinessWarning,/No compatible exercises/);}
+  assert.equal(result.summary.reviewNeeded,true);assert.equal(result.summary.trainingDays,0);assert.equal(result.summary.scheduledDays,3);assert.equal(result.summary.workingSets,0);assert.equal(result.summary.estimatedDurationMinutes,0);assert.ok(result.summary.groups.every(group=>group.workingSets===0&&group.frequency===0));
+});
+
+test("unrestricted complete workouts retain their prescriptions and are ready without review warnings",()=>{
+  const result=buildTraining(profile({sessionMinutes:30}),WEEK);
+  assert.equal(result.summary.reviewNeeded,false);assert.deepEqual(result.summary.missingCoverage,[]);assert.equal(result.summary.trainingDays,3);
+  for(const session of result.sessions){assert.equal(session.status,"ready");assert.equal(session.label,session.plannedLabel);assert.deepEqual(session.missingRoles,[]);assert.equal(session.readinessWarning,null);assert.deepEqual(session.exercises.map(item=>item.role),["knee","push","pull","posterior"]);}
+  assert.deepEqual(result.sessions[0].exercises.map(({exerciseId,sets,reps})=>({exerciseId,sets,reps})),[{exerciseId:"belt-squat",sets:2,reps:"8–12"},{exerciseId:"incline-barbell-bench-press",sets:2,reps:"8–12"},{exerciseId:"neutral-pulldown",sets:3,reps:"6–12"},{exerciseId:"romanian-deadlift",sets:3,reps:"6–10"}]);
 });
 
 test("strength and hypertrophy change practical prescriptions independently of calorie goals",()=>{
