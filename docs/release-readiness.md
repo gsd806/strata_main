@@ -8,7 +8,7 @@ Verification uses Darwin arm64 with supported Node.js 24.20.0, isolated temporar
 | --- | --- |
 | Node regression suite | 920 passed; no failures, skips, or cancellations |
 | Coverage | 95.09% lines, 83.25% branches, 91.59% functions; unchanged 90/78/85 floors passed |
-| Energy and training leaves | 100% line coverage for calibration, energy planning, and training composition |
+| Energy and training leaves | 100% line coverage for calorie calibration and energy planning; 99.07% for training composition |
 | Numerical benchmark | Fixed-seed alignment, noise, missing-intake, fluid-step, density, repeated-week, and under-reporting assertions passed; adverse outcomes retained |
 | Storage and service integration | 14 coaching database/HTTP tests passed, including SQLite/Turso parity, snapshot continuity, historical dates, and account/revision isolation |
 | Complete local release gate | `npm run check` passed |
