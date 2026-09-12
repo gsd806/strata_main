@@ -2,7 +2,7 @@
 
 const test=require("node:test");
 const assert=require("node:assert/strict");
-const {ACTIVITY_CATEGORY_MAP,baselineFor,calibrateMaintenance,nasemEer,nutritionFor}=require("../src/energy-planning-core");
+const {ACTIVITY_CATEGORY_MAP,baselineFor,calibrateMaintenance,macroTarget,nasemEer,nutritionFor}=require("../src/energy-planning-core");
 
 function profile(overrides={}){return {version:3,age:40,heightCm:175,weightKg:75,bodyFatPercent:null,sexForEquation:"male",goal:"maintenance",goalPace:"moderate",lifestyleActivity:"moderately_active",workoutDays:["Monday","Wednesday","Friday"],caloriePattern:"steady",flexibleDay:null,macroPreference:"balanced",...overrides};}
 function date(offset){return new Date(Date.parse("2026-08-17T00:00:00.000Z")+offset*86400000).toISOString().slice(0,10);}
@@ -37,22 +37,22 @@ test("body-fat data is a secondary cross-check and cannot silently replace the a
   assert.equal(withBodyFat.primaryEquation,"nasem_2023_eer");assert.equal(withBodyFat.targetKcal,without.targetKcal);assert.equal(withBodyFat.bodyFatCrossCheck.role,"secondary_cross_check");assert.equal(without.bodyFatCrossCheck,null);
 });
 
-test("calibration uses exactly the preceding 21 calendar days and ignores incomplete or future rows",()=>{
+test("calibration searches the preceding 42 days and ignores outside and future rows",()=>{
   const evidence=completeEvidence();
-  evidence.dailyLogs.push({date:"2026-08-16",calories:1,complete:true,morningWeightKg:200},{date:"2026-09-07",calories:1,complete:true,morningWeightKg:200},{date:"2026-08-20",calories:1,complete:false,morningWeightKg:null});
+  evidence.dailyLogs.push({date:"2026-07-26",calories:1,complete:true,morningWeightKg:200},{date:"2026-09-07",calories:1,complete:true,morningWeightKg:200});
   const result=calibrateMaintenance(profile(),"2026-09-07",evidence);
-  assert.equal(result.windowStart,"2026-08-17");assert.equal(result.windowEnd,"2026-09-06");assert.equal(result.evidence.completeCalorieDays,21);assert.equal(result.evidence.rawMorningWeightDays,13);assert.equal(result.status,"trend_informed");
+  assert.equal(result.windowStart,"2026-07-27");assert.equal(result.windowEnd,"2026-09-06");assert.equal(result.evidence.completeCalorieDays,21);assert.equal(result.evidence.rawMorningWeightDays,13);assert.equal(result.status,"trend_informed");
 });
 
 test("sparse and incomplete evidence reports progress without changing the equation baseline",()=>{
   const starting=calibrateMaintenance(profile(),"2026-09-07",null);assert.equal(starting.status,"starting");assert.equal(starting.appliedAdjustmentKcal,0);
-  const evidence=completeEvidence();evidence.dailyLogs=evidence.dailyLogs.slice(0,17);let kept=0;for(const row of evidence.dailyLogs)if(row.morningWeightKg!=null){kept+=1;if(kept>11)row.morningWeightKg=null;}
-  const calibrating=calibrateMaintenance(profile(),"2026-09-07",evidence);assert.equal(calibrating.status,"calibrating");assert.equal(calibrating.targetKcal,calibrating.baselineKcal);assert.match(calibrating.explanation,/18 explicitly complete/);
+  const evidence=completeEvidence();evidence.dailyLogs=evidence.dailyLogs.slice(0,13);let kept=0;for(const row of evidence.dailyLogs)if(row.morningWeightKg!=null){kept+=1;if(kept>11)row.morningWeightKg=null;}
+  const calibrating=calibrateMaintenance(profile(),"2026-09-07",evidence);assert.equal(calibrating.status,"calibrating");assert.equal(calibrating.targetKcal,calibrating.baselineKcal);assert.match(calibrating.explanation,/complete|14/);
 });
 
 test("Theil-Sen calibration is deterministic, rejects an isolated weight outlier, and caps correction",()=>{
   const input=completeEvidence({calories:3600,outlier:true}),snapshot=structuredClone(input),first=calibrateMaintenance(profile(),"2026-09-07",input),reordered=calibrateMaintenance(profile(),"2026-09-07",{dailyLogs:[...input.dailyLogs].reverse()});
-  assert.deepEqual(input,snapshot,"calibration must not mutate caller evidence");assert.deepEqual(reordered,first);assert.equal(first.status,"trend_informed");assert.equal(first.evidence.outlierWeightDays,1);assert.equal(first.appliedAdjustmentKcal,150);assert.equal(first.targetKcal,first.baselineKcal+150);assert.match(first.explanation,/capped at 150/);
+  assert.deepEqual(input,snapshot,"calibration must not mutate caller evidence");assert.deepEqual(reordered,first);assert.equal(first.status,"trend_informed");assert.equal(first.evidence.outlierWeightDays,1);assert.equal(first.appliedAdjustmentKcal,150);assert.equal(first.targetKcal,first.baselineKcal+150);assert.match(first.explanation,/150 kcal\/day per new week/);
 });
 
 test("calibration fingerprints all usable raw evidence, including a rejected weight outlier",()=>{
@@ -63,14 +63,14 @@ test("calibration fingerprints all usable raw evidence, including a rejected wei
 
 test("trend calibration requires exact evidence counts spread across at least 14 days",()=>{
   const evidence={dailyLogs:Array.from({length:21},(_,index)=>({date:date(index),calories:3000,complete:index<18,morningWeightKg:index<=10||index===14?75:null}))};
-  const accepted=calibrateMaintenance(profile(),"2026-09-07",evidence);assert.equal(accepted.status,"trend_informed");assert.deepEqual({calories:accepted.evidence.completeCalorieDays,weights:accepted.evidence.morningWeightDays,span:accepted.evidence.weightObservationSpanDays},{calories:18,weights:12,span:14});assert.match(accepted.thresholdBasis,/STRATA heuristic/);
+  const accepted=calibrateMaintenance(profile(),"2026-09-07",evidence);assert.equal(accepted.status,"trend_informed");assert.deepEqual({calories:accepted.evidence.completeCalorieDays,weights:accepted.evidence.morningWeightDays,span:accepted.evidence.weightObservationSpanDays},{calories:18,weights:12,span:14});assert.match(accepted.thresholdBasis,/engineering heuristics/);
   evidence.dailyLogs[14].morningWeightKg=null;evidence.dailyLogs[11].morningWeightKg=75;
   const clustered=calibrateMaintenance(profile(),"2026-09-07",evidence);assert.equal(clustered.status,"calibrating");assert.equal(clustered.evidence.morningWeightDays,12);assert.equal(clustered.evidence.weightObservationSpanDays,11);assert.match(clustered.explanation,/14 days/);
 });
 
 test("implausible trend and observed-maintenance signals are rejected instead of applied",()=>{
   const fast=calibrateMaintenance(profile(),"2026-09-07",completeEvidence({calories:2600,weeklyChange:-1.2}));assert.equal(fast.status,"calibrating");assert.equal(fast.appliedAdjustmentKcal,0);assert.match(fast.explanation,/1.5%/);
-  const far=calibrateMaintenance(profile(),"2026-09-07",completeEvidence({calories:1200}));assert.equal(far.status,"calibrating");assert.equal(far.appliedAdjustmentKcal,0);assert.match(far.explanation,/STRATA's heuristic 40%/);
+  const far=calibrateMaintenance(profile(),"2026-09-07",completeEvidence({calories:1200}));assert.equal(far.status,"calibrating");assert.equal(far.appliedAdjustmentKcal,0);assert.match(far.explanation,/plausibility bounds/);
 });
 
 test("plausible gain and loss trends adjust maintenance in the correct bounded direction",()=>{
@@ -90,4 +90,40 @@ test("daily patterns and weight scenarios preserve their intended ordering",()=>
 test("nutrition output keeps legacy consumer fields while exposing the model, range, and evidence",()=>{
   const evidence=completeEvidence({calories:3000}),snapshot=structuredClone(evidence),nutrition=nutritionFor(profile(),"2026-09-07",evidence);
   assert.deepEqual(evidence,snapshot);assert.equal(nutrition.equation,"nasem_2023_eer");assert.equal(nutrition.rmrEquation,"mifflin_st_jeor");assert.equal(nutrition.activityFactor,null);assert.equal(nutrition.legacyActivityFactor,1.55);assert.equal(nutrition.maintenance.calibration.status,"trend_informed");assert.match(nutrition.activityFactorBasis,/No resting-energy multiplier/);assert.match(nutrition.maintenance.rangeLabel,/not a confidence interval/);assert.equal(nutrition.weeklyTargetKcal,nutrition.dailyTargets.reduce((sum,day)=>sum+day.calories,0));
+});
+
+test("weekly patterns allocate exact budgets and integer macros reconcile at every supported planning weight",()=>{
+  for(const weightKg of [35,60,90,180,350])for(const calories of [1200,1201,1225,1999,2600,4600])for(const preference of ["balanced","higher_protein"]){
+    const macros=macroTarget(calories,weightKg,preference,"fat_loss");
+    assert.ok([macros.proteinG,macros.carbsG,macros.fatG].every(n=>Number.isInteger(n)&&n>=0));
+    assert.equal(4*macros.proteinG+4*macros.carbsG+9*macros.fatG,calories);
+    assert.ok(macros.proteinG*4<=calories*.3);
+    if(macros.proteinG<macros.requestedProteinG)assert.ok(macros.adjustmentReason);
+  }
+  for(const caloriePattern of ["steady","zigzag","flexible_day"]){
+    const output=nutritionFor(profile({caloriePattern,flexibleDay:caloriePattern==="flexible_day"?"Sunday":null}),"2026-09-07");
+    assert.equal(output.weeklyTargetKcal,7*output.maintenance.targetKcal);
+    for(const target of output.dailyTargets)assert.equal(target.macros.energyKcal,target.calories);
+    const peers=output.dailyTargets.filter(day=>day.kind==="standard"||day.kind==="lower_rest_day").map(day=>day.calories);
+    assert.ok(Math.max(...peers)-Math.min(...peers)<=1,"equally weighted days differ by at most a calorie");
+  }
+});
+
+test("recent credible weight anchors baseline, macros and scenarios without reusing stale body fat",()=>{
+  const evidence={dailyLogs:[0,1,2].map(i=>({date:date(18+i),morningWeightKg:72,complete:false,calories:2000}))};
+  const result=nutritionFor(profile({bodyFatPercent:20}),"2026-09-07",evidence);
+  assert.equal(result.weightBasis.weightKg,72);assert.equal(result.bodyFatCrossCheck,null);
+  assert.equal(result.maintenance.baselineKcal,baselineFor(profile({weightKg:72})).targetKcal);
+  assert.equal(result.dailyTargets[0].macros.requestedProteinG,Math.round(72*1.6));
+  assert.ok(result.weightScenarios.every(s=>s.startWeightKg===72));
+  assert.equal(result.maintenance.referencePredictionErrorKcal,342);
+  assert.equal(nutritionFor(profile({sexForEquation:"female"}),"2026-09-07").maintenance.referencePredictionErrorKcal,241);
+});
+
+test("a contradictory recent weight or unrounded unsafe lower scenario blocks an automated deficit",()=>{
+  const evidence={dailyLogs:[0,1,2].map(i=>({date:date(18+i),morningWeightKg:55,complete:false,calories:2000}))};
+  const maintenance=nutritionFor(profile(),"2026-09-07",evidence);
+  assert.equal(maintenance.weightBasis.requiresReview,true);assert.equal(maintenance.weightBasis.weightKg,75);
+  assert.throws(()=>nutritionFor(profile({goal:"fat_loss"}),"2026-09-07",evidence),{code:"DEFICIT_REQUIRES_REVIEW"});
+  assert.throws(()=>nutritionFor(profile({sexForEquation:"female",age:32,heightCm:170,weightKg:59.6,lifestyleActivity:"sedentary",goalPace:"gentle",goal:"fat_loss"}),"2026-09-07"),{code:"DEFICIT_REQUIRES_REVIEW"});
 });

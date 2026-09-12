@@ -38,6 +38,9 @@ async function scenario(store,suffix){
   const wrongWeek=await store.upsertCoachingWeek({userId:user.id,weekStart:"2030-03-04",planKey:"wrong",profileRevision:1,snapshotJson:JSON.stringify({wrong:true}),generatedAt:now+4});
   const week=await store.upsertCoachingWeek({userId:user.id,weekStart:"2030-03-04",planKey:"week-key",profileRevision:2,snapshotJson:JSON.stringify({weekStart:"2030-03-04",planKey:"week-key",profileRevision:2}),generatedAt:now+5});
   const duplicateWeek=await store.upsertCoachingWeek({userId:user.id,weekStart:"2030-03-04",planKey:"week-key",profileRevision:2,snapshotJson:JSON.stringify({weekStart:"2030-03-04",planKey:"week-key",profileRevision:2,generatedAt:now+999}),generatedAt:now+999}),persistedWeek=await store.coachingWeek(user.id,"2030-03-04");
+  const differentEvidence=await store.upsertCoachingWeek({userId:user.id,weekStart:"2030-03-04",planKey:"different-evidence",profileRevision:2,snapshotJson:JSON.stringify({weekStart:"2030-03-04",planKey:"different-evidence",profileRevision:2}),generatedAt:now+1000});
+  assert.equal(differentEvidence,null,"the first snapshot wins even when concurrent evidence changes its key");
+  assert.equal((await store.coachingWeek(user.id,"2030-03-04")).plan_key,"week-key");
   const log1=await store.upsertCoachingDailyLog({userId:user.id,logDate:"2030-03-04",calories:2100,proteinG:null,carbsG:null,fatG:null,morningWeightKg:null,complete:null,updatedAt:now+6},0);
   const staleLog=await store.upsertCoachingDailyLog({userId:user.id,logDate:"2030-03-04",calories:9999,proteinG:null,carbsG:null,fatG:null,morningWeightKg:80,complete:false,updatedAt:now+7},0);
   const log2=await store.upsertCoachingDailyLog({userId:user.id,logDate:"2030-03-04",calories:2200,proteinG:160,carbsG:250,fatG:65,morningWeightKg:82.4,complete:true,updatedAt:now+8},1);

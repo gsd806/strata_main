@@ -21,6 +21,7 @@ const DetailCore=globalThis.StrataDiscoverDetail;if(!DetailCore)throw new Error(
 const CommunityCore=globalThis.StrataDiscoverCommunity;if(!CommunityCore)throw new Error("The Strata+ community module did not load.");
 const SessionCore=globalThis.StrataDiscoverSession;if(!SessionCore)throw new Error("The Strata+ session module did not load.");
 const SharingCore=globalThis.StrataDiscoverSharing;if(!SharingCore)throw new Error("The Strata+ sharing module did not load.");
+const CoachingDiaryUi=globalThis.StrataPersonalTrainingDiaryUi;if(!CoachingDiaryUi)throw new Error("The personal-training diary module did not load.");
 const CoachingUi=globalThis.StrataPersonalTrainingUi;if(!CoachingUi)throw new Error("The Strata+ personal-training input module did not load.");
 const CoachingMealsUi=globalThis.StrataPersonalTrainingMealsUi;if(!CoachingMealsUi)throw new Error("The Strata+ food-preference input module did not load.");
 const CoachingRender=globalThis.StrataDiscoverCoachingRender;if(!CoachingRender)throw new Error("The Strata+ coaching renderer did not load.");
@@ -60,7 +61,7 @@ const toastController=NavigationCore.createToastController(el("toast"));
 function showToast(message){toastController.show(message);}
 function hideToast(){toastController.hide();}
 const coachingMeals=CoachingMealsCore.createController({document,element:el,api,state,ui:CoachingMealsUi,assertAccountResponse:ApiCore.assertAccountResponse,onAccountError:redirectedOrChangedAccount});
-const coaching=CoachingCore.createController({document,element:el,api,state,ui:CoachingUi,meals:coachingMeals,assertAccountResponse:ApiCore.assertAccountResponse,renderFactory:CoachingRender.createRenderer,saveRetryMessage,showToast,onAccountError:redirectedOrChangedAccount});
+const coaching=CoachingCore.createController({document,element:el,api,state,ui:CoachingUi,diaryUi:CoachingDiaryUi,meals:coachingMeals,assertAccountResponse:ApiCore.assertAccountResponse,renderFactory:CoachingRender.createRenderer,saveRetryMessage,showToast,onAccountError:redirectedOrChangedAccount});
 const featureNavigation=NavigationCore.createFeatureNavigation({
   config:FEATURE_CONFIG,defaultFeature:FEATURE_DEFAULT,state,document,window,
   onDestinationChange:hideToast,

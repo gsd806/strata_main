@@ -41,7 +41,9 @@
       "maxLines": 180,
       "allowedDependencies": [
         "src/coaching-core.js",
-        "src/meal-planning-core.js"
+        "src/meal-planning-core.js",
+        "src/coaching-evidence.js",
+        "src/energy-calibration-core.js"
       ]
     },
     "src/coaching-core.js": {
@@ -50,14 +52,17 @@
       "allowedDependencies": [
         "src/energy-planning-core.js",
         "src/meal-planning-core.js",
-        "src/plans.js"
+        "src/plans.js",
+        "src/coaching-training-core.js"
       ]
     },
     "src/energy-planning-core.js": {
       "role": "Adult EER estimation, bounded trend calibration, and nutrition planning",
       "maxLines": 190,
       "allowedDependencies": [
-        "src/plans.js"
+        "src/plans.js",
+        "src/energy-calibration-core.js",
+        "src/energy-scenarios-core.js"
       ]
     },
     "src/meal-planning-core.js": {
@@ -346,6 +351,39 @@
       "allowedDependencies": [
         "src/plans.js"
       ]
+    },
+    "src/energy-calibration-core.js": {
+      "role": "Aligned intake/weight estimation, quality diagnostics, and bounded weekly adaptation",
+      "maxLines": 220,
+      "allowedDependencies": []
+    },
+    "src/coaching-training-core.js": {
+      "role": "Repeatable goal-specific training composition with duration and coverage accounting",
+      "maxLines": 220,
+      "allowedDependencies": [
+        "src/plans.js",
+        "src/coaching-prescription-core.js"
+      ]
+    },
+    "src/coaching-prescription-core.js": {
+      "role": "Measurement-aware prescriptions from comparable completed training history",
+      "maxLines": 180,
+      "allowedDependencies": [
+        "src/progression.js"
+      ]
+    },
+    "src/coaching-evidence.js": {
+      "role": "Owner-filtered coaching history and original-target diary assembly",
+      "maxLines": 130,
+      "allowedDependencies": [
+        "src/coaching-core.js",
+        "src/energy-calibration-core.js"
+      ]
+    },
+    "src/energy-scenarios-core.js": {
+      "role": "Explicit dynamic sensitivity scenarios with propagated maintenance uncertainty",
+      "maxLines": 100,
+      "allowedDependencies": []
     }
   }
 }

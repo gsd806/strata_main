@@ -1,5 +1,16 @@
 # Changelog
 
+## 8.0.0 — Personal training and calorie refinement
+
+- Align complete intake with actual morning-weight intervals across a bounded 42-day history; use robust estimates, explicit quality checks, gradually changing targets, and expiring evidence.
+- Use credible recent weights consistently, reconcile exact weekly calories and macro energy, and propagate maintenance uncertainty through explicit weight scenarios.
+- Add balanced, strength, and hypertrophy training goals; retain main exercises, fit sets and rest to available time, show direct-muscle coverage, and derive optional per-set targets from comparable completed workouts.
+- Scale listed food quantities with portions and disclose whole-menu calorie and macro gaps.
+- Support today and 42 previous diary dates, original historical targets, hidden-macro preservation, and safe delayed-save handling.
+- Preserve saved weeks across deployment and enforce first-writer-wins for concurrent generation at the same profile revision. No new database migration is needed.
+
+See the [8.0.0 release guide](docs/release-8.0.0.md) and [methodology](docs/coaching-methodology.md), including synthetic benchmark tradeoffs and limits.
+
 ## 7.10.0 — Trend-informed energy planning
 
 - Add coaching profile schema version 3 for the sex-specific 2023 adult Dietary Reference Intake EER primary maintenance estimate; retain Mifflin–St Jeor and the optional Cunningham body-composition estimate as visible resting-energy cross-checks.

@@ -809,7 +809,7 @@ export interface MealPreferences extends JsonObject {
 export interface CoachingProfile extends JsonObject {
   version:1|2|3;measurementSystem:"metric"|"imperial";preferredLoadUnit:"kg"|"lb";
   age:number;heightCm:number;weightKg:number;bodyFatPercent:number|null;sexForEquation:"female"|"male"|null;
-  goal:CoachingGoal;goalPace:"gentle"|"moderate";experience:CoachingExperience;lifestyleActivity:string;
+  goal:CoachingGoal;trainingGoal:"balanced"|"strength"|"hypertrophy";goalPace:"gentle"|"moderate";experience:CoachingExperience;lifestyleActivity:string;
   workoutDays:string[];sessionsPerWeek:number;sessionMinutes:30|45|60|75|90;usualExercises:CoachingCapability[];
   availableEquipment:string[];movementLimitations:string[];caloriePattern:"steady"|"zigzag"|"flexible_day";
   flexibleDay:string|null;macroPreference:"balanced"|"higher_protein"|null;timeZone:string;mealPreferences:MealPreferences|null;
@@ -836,7 +836,7 @@ export interface TursoCoachingStoreDependencies {
   all(sql:string,args?:any[]):Promise<any[]>;
 }
 export interface CoachingServiceDependencies {
-  store:CoachingStore;
+  store:CoachingStore&Pick<TrainingServiceStore,"workouts"|"workout"|"workoutCheckIn">;
   auth:Pick<AuthService,"validCsrf">;
   requireAccess:(request:HttpRequest,response:HttpResponse)=>Promise<SessionRow|null>;
   trustedOrigin:(request:HttpRequest)=>boolean;

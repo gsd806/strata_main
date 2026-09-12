@@ -75,3 +75,20 @@ test("Discover markup supplies accessible preference and suggestion surfaces wit
   assert.match(html,/id="coachingFoodOptions"[^>]*><\/ul>/);assert.match(html,/id="progressCoachingFoodOptions"[^>]*><\/ul>/);
   assert.match(css,/grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);assert.match(css,/@media\(max-width:560px\)/);assert.match(css,/\.coaching-meal-list[^}]*grid-template-columns:minmax\(0,1fr\)/);assert.match(css,/@media\(forced-colors:active\)/);
 });
+
+
+test("remaining macro display distinguishes missing intake from a recorded zero",()=>{
+  const target={calories:2200,macros:{proteinG:160,carbsG:250,fatG:70}};
+  assert.equal(Ui.remainingNutrition(target,{calories:600,proteinG:null,carbsG:null,fatG:null}).macros,null);
+  assert.equal(Ui.remainingNutrition(target,{calories:600,proteinG:40,carbsG:null,fatG:null}).macros,null);
+  assert.equal(Ui.remainingNutrition(target,{calories:600,proteinG:0,carbsG:0,fatG:0}).macros.proteinG.remaining,160);
+  assert.equal(Ui.remainingNutrition(target).macros.proteinG.remaining,160);
+  assert.equal(Ui.formatCalories("   "),"—");assert.equal(Ui.formatGrams(NaN),"—");assert.equal(Ui.formatGrams(true),"—");
+});
+
+test("menu fit copy exposes signed calorie and macro residuals without inventing missing values",()=>{
+  const result=Ui.optionFitSummary({calorieDifference:-8,macroDifference:{proteinG:-43,carbsG:55,fatG:0}});
+  assert.equal(result.calories,"8 kcal below the remaining plan");assert.equal(result.macros,"Protein 43 g below the remaining plan; carbs 55 g above the remaining plan; fat matches the remaining plan.");
+  assert.deepEqual(Ui.optionFitSummary({calorieDifference:0,macroDifference:null}),{calories:"matches the remaining plan",macros:null});
+  assert.deepEqual(Ui.optionFitSummary({calorieDifference:NaN,macroDifference:{proteinG:null,carbsG:0,fatG:0}}),{calories:"unavailable",macros:null});
+});
