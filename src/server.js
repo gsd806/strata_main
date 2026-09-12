@@ -147,6 +147,7 @@ const STATIC_FILES = new Map([
   ["discovery-core.js","scripts/discovery-core.js"],
   ["preview-core.js","scripts/preview-core.js"],
   ["monthly-plan-core.js","scripts/monthly-plan-core.js"],
+  ["personal-training-energy-ui-core.js","scripts/personal-training-energy-ui-core.js"],
   ["personal-training-ui-core.js","scripts/personal-training-ui-core.js"],
   ["personal-training-diary-ui.js","scripts/personal-training-diary-ui.js"],
   ["personal-training-meals-ui-core.js","scripts/personal-training-meals-ui-core.js"],

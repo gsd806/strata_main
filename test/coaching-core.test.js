@@ -6,7 +6,8 @@ const {EXERCISES}=require("../src/plans");
 const {ENERGY_MODEL_VERSION,MEAL_CATALOG_FINGERPRINT,addDays,currentWeekStart,generateCoachingWeek,sanitizeCoachingProfile,sanitizeDailyLog,weekStartForDate}=require("../src/coaching-core");
 
 function profile(overrides={}){
-  return {version:3,measurementSystem:"metric",preferredLoadUnit:"kg",age:32,heightCm:178,weightKg:82,bodyFatPercent:null,sexForEquation:"male",goal:"maintenance",goalPace:"moderate",experience:"intermediate",lifestyleActivity:"moderately_active",workoutDays:["Monday","Wednesday","Friday"],sessionMinutes:60,usualExercises:[{exerciseId:"flat-dumbbell-press",maxSets:4,maxReps:10,maxWeightKg:32}],availableEquipment:[],movementLimitations:[],caloriePattern:"zigzag",flexibleDay:null,macroPreference:"balanced",timeZone:"Asia/Dubai",...overrides};
+  const version=overrides.version??4,activity=version===4?{dailyMovement:"mostly_seated",additionalActivityMinutesPerWeek:0,additionalActivityIntensity:"moderate"}:{lifestyleActivity:"moderately_active"};
+  return {version,measurementSystem:"metric",preferredLoadUnit:"kg",age:32,heightCm:178,weightKg:82,bodyFatPercent:null,sexForEquation:"male",goal:"maintenance",goalPace:"moderate",trainingGoal:"balanced",experience:"intermediate",...activity,workoutDays:["Monday","Wednesday","Friday"],sessionMinutes:60,usualExercises:[{exerciseId:"flat-dumbbell-press",maxSets:4,maxReps:10,maxWeightKg:32}],availableEquipment:[],movementLimitations:[],caloriePattern:"zigzag",flexibleDay:null,macroPreference:"balanced",timeZone:"Asia/Dubai",...overrides};
 }
 function mealPreferences(overrides={}){return {allergyStatus:"none_known",allergens:[],otherAllergies:"",dietaryPattern:"omnivore",dietaryRequirements:[],favoriteFoods:["chicken","rice"],mealsPerDay:3,dailyBudgetCents:1500,...overrides};}
 
@@ -24,15 +25,17 @@ test("coaching profiles strictly validate adult energy and training boundaries",
   assert.throws(()=>sanitizeCoachingProfile(profile({timeZone:"Mars/Olympus"})),/Time zone is invalid/);
 });
 
-test("version 3 marks reviewed whole-day activity while legacy versions remain read-only compatible",()=>{
+test("version 4 stores split activity while versions 1–3 remain read-only compatible",()=>{
   const legacy=sanitizeCoachingProfile(profile({version:1}),{allowLegacyProfile:true});assert.equal(legacy.version,1);assert.equal(legacy.mealPreferences,null);
   const legacyMeals=sanitizeCoachingProfile(profile({version:2,mealPreferences:mealPreferences()}),{allowLegacyProfile:true});assert.equal(legacyMeals.version,2);
-  const current=sanitizeCoachingProfile(profile({mealPreferences:mealPreferences()}));assert.equal(current.version,3);assert.deepEqual(current.mealPreferences,mealPreferences());
-  for(const version of [1,2])assert.throws(()=>sanitizeCoachingProfile(profile({version,mealPreferences:version===2?mealPreferences():null})),{code:"COACHING_ACTIVITY_REVIEW_REQUIRED",status:409});
-  assert.throws(()=>sanitizeCoachingProfile(profile({version:1,mealPreferences:mealPreferences()}),{allowLegacyProfile:true}),/version 2 or 3/);
+  const wholeDay=sanitizeCoachingProfile(profile({version:3}),{allowLegacyProfile:true});assert.equal(wholeDay.lifestyleActivity,"moderately_active");
+  const current=sanitizeCoachingProfile(profile({mealPreferences:mealPreferences()}));assert.equal(current.version,4);assert.equal(current.dailyMovement,"mostly_seated");assert.equal(current.lifestyleActivity,undefined);assert.deepEqual(current.mealPreferences,mealPreferences());
+  for(const version of [1,2,3])assert.throws(()=>sanitizeCoachingProfile(profile({version,mealPreferences:version===2?mealPreferences():null})),{code:"COACHING_ACTIVITY_REVIEW_REQUIRED",status:409});
+  assert.throws(()=>sanitizeCoachingProfile(profile({version:1,mealPreferences:mealPreferences()}),{allowLegacyProfile:true}),/version 2, 3, or 4/);
   assert.throws(()=>sanitizeCoachingProfile(profile({version:2}),{allowLegacyProfile:true}),/requires meal preferences/);
-  assert.throws(()=>sanitizeCoachingProfile(profile({lifestyleActivity:"extremely_active"})),/Lifestyle activity is invalid/);assert.equal(sanitizeCoachingProfile(profile({version:1,lifestyleActivity:"extremely_active"}),{allowLegacyProfile:true}).lifestyleActivity,"extremely_active");
-  const week=generateCoachingWeek(current,1,"2026-09-07",1_000);assert.equal(week.schemaVersion,3);assert.equal(week.generationVersion,"coaching-week-v4");assert.equal(week.energyModelVersion,ENERGY_MODEL_VERSION);assert.equal(week.nutrition.maintenance.calibration.modelVersion,ENERGY_MODEL_VERSION);assert.equal(week.mealCatalogFingerprint,MEAL_CATALOG_FINGERPRINT);assert.match(week.methodology.cautions.join(" "),/allergen safety/i);assert.match(week.methodology.references.map(({label})=>label).join(" "),/Repeated-weight.*Self-reported/i);
+  assert.throws(()=>sanitizeCoachingProfile(profile({lifestyleActivity:"extremely_active"})),/cannot accept the old whole-day activity field/);assert.equal(sanitizeCoachingProfile(profile({version:1,lifestyleActivity:"extremely_active"}),{allowLegacyProfile:true}).lifestyleActivity,"extremely_active");
+  for(const invalid of [{dailyMovement:"active"},{additionalActivityMinutesPerWeek:-1},{additionalActivityMinutesPerWeek:1261},{additionalActivityMinutesPerWeek:1.5},{additionalActivityIntensity:"extreme"}])assert.throws(()=>sanitizeCoachingProfile(profile(invalid)),/invalid|whole number/i);
+  const week=generateCoachingWeek(current,1,"2026-09-07",1_000);assert.equal(week.schemaVersion,4);assert.equal(week.generationVersion,"coaching-week-v5");assert.equal(week.energyModelVersion,ENERGY_MODEL_VERSION);assert.equal(week.nutrition.maintenance.calibration.modelVersion,ENERGY_MODEL_VERSION);assert.equal(week.mealCatalogFingerprint,MEAL_CATALOG_FINGERPRINT);assert.match(week.methodology.cautions.join(" "),/allergen safety/i);assert.match(week.methodology.references.map(({label})=>label).join(" "),/Adult Compendium.*Older Adult Compendium.*Repeated-weight.*Self-reported/i);
 });
 
 test("daily logs require bounded calories and either zero or all three macros",()=>{
@@ -64,7 +67,7 @@ test("weekly coaching is deterministic, keeps repeatable main exercises, and pre
   assert.equal(first.training.sessions.length,3);assert.ok(first.training.sessions.every((session)=>session.exercises.length>=4&&session.estimatedDurationMinutes<=60));
   assert.equal(first.nutrition.weeklyTargetKcal,first.nutrition.dailyTargets.reduce((sum,day)=>sum+day.calories,0));
   assert.equal(first.nutrition.weeklyTargetKcal,first.nutrition.maintenance.targetKcal*7);
-  assert.equal(first.nutrition.equation,"nasem_2023_eer");assert.equal(first.nutrition.activityFactor,null);assert.equal(first.nutrition.legacyActivityFactor,1.55);
+  assert.equal(first.nutrition.equation,"mifflin_st_jeor");assert.equal(first.nutrition.primaryEquation,"mifflin_structured_activity");assert.equal(first.nutrition.activityFactor,null);assert.equal(first.nutrition.legacyActivityFactor,null);assert.equal(first.nutrition.activityBreakdown.sessions.length,3);
   for(const day of first.nutrition.dailyTargets){
     const macros=day.macros,total=macros.proteinG*4+macros.carbsG*4+macros.fatG*9;
     assert.ok(macros.carbsG*4/total>=.44,"rounding keeps carbohydrates near or above the 45% AMDR floor");
@@ -112,6 +115,12 @@ test("saved equipment, experience, and movement limitations are hard constraints
   for(const session of restricted.training.sessions)for(const item of session.exercises){const exercise=byId.get(item.exerciseId);assert.equal(exercise.equipment,"Resistance band");assert.ok(!exercise.traits.some(trait=>["floor","overhead","deep-knee","unilateral"].includes(trait)));}
 });
 
+test("version 4 energy follows the feasible generated plan rather than the requested schedule alone",()=>{
+  const short=generateCoachingWeek(sanitizeCoachingProfile(profile({sessionMinutes:30})),1,"2026-09-07",1_000),long=generateCoachingWeek(sanitizeCoachingProfile(profile({sessionMinutes:90})),1,"2026-09-07",1_000),limited=generateCoachingWeek(sanitizeCoachingProfile(profile({availableEquipment:["Resistance band"],movementLimitations:["no-overhead","no-deep-knee","no-unsupported-hinge","no-floor","no-unilateral"]})),1,"2026-09-07",1_000);
+  assert.ok(long.training.summary.estimatedDurationMinutes>short.training.summary.estimatedDurationMinutes);assert.ok(long.nutrition.activityBreakdown.plannedTrainingWeekKcal>short.nutrition.activityBreakdown.plannedTrainingWeekKcal);
+  assert.ok(limited.training.sessions.some((session)=>session.status!=="ready"));assert.ok(limited.nutrition.activityBreakdown.plannedTrainingWeekKcal<long.nutrition.activityBreakdown.plannedTrainingWeekKcal);assert.equal(limited.nutrition.activityBreakdown.sessions.length,limited.training.sessions.filter((session)=>session.status!=="unavailable"&&session.exercises.length).length);
+});
+
 test("unsafe automated deficits fail closed and low-energy variations disclose a steady fallback",()=>{
   const lowBmi=sanitizeCoachingProfile(profile({heightCm:190,weightKg:50,goal:"fat_loss"}));
   assert.throws(()=>generateCoachingWeek(lowBmi,1,"2026-09-07",1_000),{code:"DEFICIT_REQUIRES_REVIEW"});
@@ -125,7 +134,7 @@ test("unsafe automated deficits fail closed and low-energy variations disclose a
   assert.ok(60.1/1.8**2>18.5);assert.equal(projectedMaintenance.nutrition.deficit.targetKcal,null);
   const safeDeficit=generateCoachingWeek(sanitizeCoachingProfile(profile({goal:"fat_loss"})),1,"2026-09-07",1_000),minimumSafeWeight=18.5*(safeDeficit.inputs.heightCm/100)**2;
   assert.ok(safeDeficit.nutrition.weightScenarios.every((scenario)=>scenario.rangeKg[0]>=minimumSafeWeight));
-  const lowEnergy=generateCoachingWeek(sanitizeCoachingProfile(profile({age:80,heightCm:130,weightKg:40,sexForEquation:"female",lifestyleActivity:"sedentary",caloriePattern:"zigzag",macroPreference:null})),1,"2026-09-07",1_000);
+  const lowEnergy=generateCoachingWeek(sanitizeCoachingProfile(profile({age:60,heightCm:140,weightKg:45,sexForEquation:"female",caloriePattern:"zigzag",macroPreference:null})),1,"2026-09-07",1_000);
   assert.equal(lowEnergy.nutrition.requestedPattern,"zigzag");assert.equal(lowEnergy.nutrition.effectivePattern,"steady");assert.match(lowEnergy.nutrition.patternFallback,/1,200/);
-  assert.throws(()=>generateCoachingWeek(sanitizeCoachingProfile(profile({age:80,heightCm:120,weightKg:35,sexForEquation:"female",lifestyleActivity:"sedentary",caloriePattern:"steady",macroPreference:null})),1,"2026-09-07",1_000),{code:"CALORIE_TARGET_REQUIRES_REVIEW"});
+  assert.throws(()=>generateCoachingWeek(sanitizeCoachingProfile(profile({age:80,heightCm:120,weightKg:35,sexForEquation:"female",caloriePattern:"steady",macroPreference:null})),1,"2026-09-07",1_000),{code:"CALORIE_TARGET_REQUIRES_REVIEW"});
 });

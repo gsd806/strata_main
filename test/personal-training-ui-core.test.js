@@ -10,7 +10,7 @@ const Ui=require("../public/scripts/personal-training-ui-core");
 function validDraft(overrides={}){
   return{
     unitSystem:"metric",age:"31",heightCm:"178",weightKg:"82.4",bodyFatPercent:"18.5",sexForEquation:"male",
-    activityLevel:"moderate",goal:"deficit",goalPace:"gentle",experience:"intermediate",trainingDaysPerWeek:"3",sessionMinutes:"45",
+    dailyMovement:"lightly_moving",additionalActivityMinutesPerWeek:"120",additionalActivityIntensity:"moderate",goal:"deficit",goalPace:"gentle",experience:"intermediate",trainingDaysPerWeek:"3",sessionMinutes:"45",
     availableDays:["Monday","Wednesday","Friday"],equipment:["Dumbbells","Cables"],knownExerciseIds:["flat-dumbbell-press"],
     performanceMaxes:[{exerciseId:"flat-dumbbell-press",maxSets:"4",maxReps:"10",maxWeight:"32.5"}],
     caloriePattern:"training-day",flexibleDay:"",macrosEnabled:true,...overrides
@@ -19,6 +19,7 @@ function validDraft(overrides={}){
 
 test("no-build script exposes the same frozen browser API",()=>{
   const context={Intl};context.globalThis=context;vm.createContext(context);
+  vm.runInContext(readFileSync(join(__dirname,"..","public","scripts","personal-training-energy-ui-core.js"),"utf8"),context,{filename:"personal-training-energy-ui-core.js"});
   vm.runInContext(readFileSync(join(__dirname,"..","public","scripts","personal-training-ui-core.js"),"utf8"),context,{filename:"personal-training-ui-core.js"});
   assert.equal(typeof context.StrataPersonalTrainingUi.profileDraftToMetric,"function");
   assert.equal(Object.isFrozen(context.StrataPersonalTrainingUi),true);
@@ -28,7 +29,7 @@ test("metric and imperial profile drafts serialize to the same canonical units",
   const metric=Ui.profileDraftToMetric(validDraft());
   assert.equal(metric.ok,true);
   assert.deepEqual(metric.payload.usualExercises,[{exerciseId:"flat-dumbbell-press",maxSets:4,maxReps:10,maxWeightKg:32.5}]);
-  assert.equal(metric.payload.goal,"fat_loss");assert.equal(metric.payload.goalPace,"gentle");assert.equal(metric.payload.lifestyleActivity,"moderately_active");
+  assert.equal(metric.payload.goal,"fat_loss");assert.equal(metric.payload.goalPace,"gentle");assert.equal(metric.payload.dailyMovement,"lightly_moving");assert.equal(metric.payload.additionalActivityMinutesPerWeek,120);assert.equal(metric.payload.additionalActivityIntensity,"moderate");assert.equal(Object.hasOwn(metric.payload,"lifestyleActivity"),false);
   assert.deepEqual(metric.payload.workoutDays,["Monday","Wednesday","Friday"]);assert.equal(metric.payload.sessionMinutes,45);
   assert.equal(Object.hasOwn(metric.payload,"revision"),false);
   assert.equal(metric.payload.sexForEquation,"male","the primary equation coefficient remains explicit when body fat supplies a noisy cross-check");
@@ -54,11 +55,11 @@ test("primary equation coefficient is required even when optional body fat is su
 
 test("profile validation gives field-specific adult, measurement, schedule, and flexible-day errors",()=>{
   const result=Ui.profileDraftToMetric(validDraft({
-    age:"18",heightCm:"99",weightKg:"900",bodyFatPercent:"80",activityLevel:"unknown",goal:"cut",experience:"expert",
+    age:"18",heightCm:"99",weightKg:"900",bodyFatPercent:"80",dailyMovement:"unknown",additionalActivityMinutesPerWeek:"1261",additionalActivityIntensity:"unknown",goal:"cut",experience:"expert",
     trainingDaysPerWeek:"4",availableDays:["Monday","Monday","Funday"],caloriePattern:"flexible-day",flexibleDay:""
   }));
   assert.equal(result.ok,false);
-  for(const field of ["age","height","weight","bodyFatPercent","activityLevel","goal","experience","trainingDays","flexibleDay"]){
+  for(const field of ["age","height","weight","bodyFatPercent","dailyMovement","additionalActivityMinutesPerWeek","additionalActivityIntensity","goal","experience","trainingDays","flexibleDay"]){
     assert.ok(result.errors.some((error)=>error.field===field),field);
   }
 });
@@ -80,7 +81,7 @@ test("usual exercise rows are normalized without duplicates or incomplete maxima
 test("saved metric profiles round-trip through imperial form values",()=>{
   const source=Ui.profileDraftToMetric(validDraft()).payload,form=Ui.profileMetricToDraft(source,"imperial"),roundTrip=Ui.profileDraftToMetric(form);
   assert.equal(roundTrip.ok,true);
-  assert.equal(form.activityLevel,"moderately_active","stored activity should map to the current form option rather than a retired alias");
+  assert.equal(form.dailyMovement,"lightly_moving");assert.equal(form.additionalActivityMinutesPerWeek,120);assert.equal(form.additionalActivityIntensity,"moderate");
   assert.ok(Math.abs(roundTrip.payload.heightCm-source.heightCm)<0.2);
   assert.ok(Math.abs(roundTrip.payload.weightKg-source.weightKg)<0.1);
   assert.ok(Math.abs(roundTrip.payload.usualExercises[0].maxWeightKg-source.usualExercises[0].maxWeightKg)<0.1);
@@ -95,15 +96,15 @@ test("saved metric profiles round-trip through imperial form values",()=>{
 test("discover form aliases map to the strict coaching API contract",()=>{
   const result=Ui.profileDraftToMetric({
     height:"70",heightUnit:"in",weight:"180",weightUnit:"lb",age:"28",bodyFatPercent:"",sexForEquation:"male",
-    goal:"surplus",goalPace:"moderate",activityLevel:"high",experience:"advanced",frequency:"2",sessionMinutes:"60",
+    goal:"surplus",goalPace:"moderate",dailyMovement:"on_feet",additionalActivityMinutesPerWeek:"0",additionalActivityIntensity:"moderate",experience:"advanced",frequency:"2",sessionMinutes:"60",
     trainingDays:["Tuesday","Saturday"],equipment:["Dumbbells"],limitations:["no-overhead"],
     performanceMaxes:[{exerciseId:"incline-curl",sets:"3",reps:"10",load:"30",unit:"lb"}],
     caloriePattern:"flexible_day",flexibleDay:"Saturday",macrosEnabled:true,timeZone:"Asia/Dubai"
   });
   assert.equal(result.ok,true);
   assert.deepEqual(result.payload,{
-    version:3,measurementSystem:"imperial",preferredLoadUnit:"lb",age:28,heightCm:177.8,weightKg:81.6,bodyFatPercent:null,sexForEquation:"male",
-    goal:"muscle_gain",goalPace:"moderate",trainingGoal:"balanced",experience:"advanced",lifestyleActivity:"very_active",workoutDays:["Tuesday","Saturday"],sessionMinutes:60,
+    version:4,measurementSystem:"imperial",preferredLoadUnit:"lb",age:28,heightCm:177.8,weightKg:81.6,bodyFatPercent:null,sexForEquation:"male",
+    goal:"muscle_gain",goalPace:"moderate",trainingGoal:"balanced",experience:"advanced",dailyMovement:"on_feet",additionalActivityMinutesPerWeek:0,additionalActivityIntensity:"moderate",workoutDays:["Tuesday","Saturday"],sessionMinutes:60,
     usualExercises:[{exerciseId:"incline-curl",maxSets:3,maxReps:10,maxWeightKg:13.6}],availableEquipment:["Dumbbells"],movementLimitations:["no-overhead"],
     caloriePattern:"flexible_day",flexibleDay:"Saturday",macroPreference:"balanced",timeZone:"Asia/Dubai"
   });

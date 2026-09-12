@@ -13,12 +13,12 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icons/strata-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <link rel="stylesheet" href="/fonts.css?v=8.0.0" />
-    <link rel="stylesheet" href="/experience.css?v=8.0.0" />
-    <link rel="stylesheet" href="discover.css?v=8.0.0" />
-    <link rel="stylesheet" href="discover-coaching-meals.css?v=8.0.0" />
-    <link rel="stylesheet" href="/product-signals.css?v=8.0.0" />
-    <script src="/motion.js?v=8.0.0"></script>
+    <link rel="stylesheet" href="/fonts.css?v=8.0.1" />
+    <link rel="stylesheet" href="/experience.css?v=8.0.1" />
+    <link rel="stylesheet" href="discover.css?v=8.0.1" />
+    <link rel="stylesheet" href="discover-coaching-meals.css?v=8.0.1" />
+    <link rel="stylesheet" href="/product-signals.css?v=8.0.1" />
+    <script src="/motion.js?v=8.0.1"></script>
   </head>
   <body class="plus-studio">
     <a class="skip-link" id="activeWorkspaceSkip" href="#todayTitle">Skip to active Strata+ workspace</a>
@@ -234,6 +234,7 @@
                 <a href="#coachingNutritionInputs"><span>04</span><strong>Nutrition</strong><small>Calories &amp; food</small></a>
               </nav>
             </header>
+            <p class="coaching-method-note" id="coachingActivityReviewNotice" role="status" hidden></p>
             <form id="coachingProfileForm" class="coaching-profile-form" novalidate>
               <fieldset class="coaching-form-section" id="coachingBodyInputs">
                 <legend><span>01</span><b>Body and energy inputs</b></legend>
@@ -244,7 +245,9 @@
                   <label for="coachingWeight"><span>Weight</span><span class="coaching-unit-input"><input id="coachingWeight" name="weight" type="number" min="35" max="300" step="0.1" inputmode="decimal" required /><select id="coachingWeightUnit" name="weightUnit" aria-label="Weight unit"><option value="kg">kg</option><option value="lb">lb</option></select></span></label>
                   <label for="coachingBodyFat"><span>Body-fat estimate <small>Optional Cunningham cross-check</small></span><span class="coaching-suffix-input"><input id="coachingBodyFat" name="bodyFatPercent" type="number" min="3" max="65" step="0.1" inputmode="decimal" aria-describedby="coachingBodyFatHelp" /><b aria-hidden="true">%</b></span><small id="coachingBodyFatHelp">Home scales and visual estimates can be noisy. STRATA never treats this as a precise measurement.</small></label>
                   <label for="coachingSex" id="coachingSexLabel"><span>Energy-equation coefficient</span><select id="coachingSex" name="sexForEquation" aria-describedby="coachingSexHelp" required><option value="">Choose one</option><option value="female">Female coefficient</option><option value="male">Male coefficient</option></select><small id="coachingSexHelp">Required by the primary energy equation; this is a calculation input, not a gender-identity field.</small></label>
-                  <label for="coachingDailyActivity"><span>Typical whole-day activity</span><select id="coachingDailyActivity" name="activityLevel" aria-describedby="coachingActivityHelp" required><option value="">Review and choose</option><option value="sedentary" selected>Inactive · activities of daily living</option><option value="lightly_active">Low active · daily living + 60–80 min brisk walking</option><option value="moderately_active">Active · daily living + about 2 hr mixed moderate activity</option><option value="very_active">Very active · daily living + about 2 hr mixed moderate/vigorous activity</option></select><small id="coachingActivityHelp"><a href="https://www.canada.ca/en/health-canada/services/food-nutrition/healthy-eating/dietary-reference-intakes/tables/equations-estimate-energy-requirement.html" target="_blank" rel="noreferrer">Published adult DRI activity categories <span aria-hidden="true">↗</span></a>. Count work, walking, transport, chores, and training once. Choose Inactive when unsure; STRATA does not add workout calories again.</small></label>
+                  <label for="coachingDailyMovement"><span>Normal day outside planned exercise</span><select id="coachingDailyMovement" name="dailyMovement" aria-describedby="coachingDailyMovementHelp" required><option value="">Review and choose</option><option value="mostly_seated">Mostly seated · little walking or standing</option><option value="lightly_moving">Lightly moving · regular errands or short walks</option><option value="on_feet">On your feet · much of the day standing or walking</option><option value="physically_demanding">Physically demanding · regular lifting or manual work</option></select><small id="coachingDailyMovementHelp">Include normal work, chores, errands, and usual commuting. Exclude every STRATA session and any sport, cardio, or active-travel minutes you enter separately below.</small></label>
+                  <label for="coachingAdditionalActivityMinutes"><span>Separate planned activity each week <small>Optional</small></span><span class="coaching-suffix-input"><input id="coachingAdditionalActivityMinutes" name="additionalActivityMinutesPerWeek" type="number" min="0" max="1260" step="1" inputmode="numeric" value="0" aria-describedby="coachingAdditionalActivityHelp" /><b aria-hidden="true">min</b></span><small id="coachingAdditionalActivityHelp">Add sport, cardio, or active travel only when those minutes are not already represented by your normal-day answer and are not part of the STRATA workout plan. Enter 0 when there is none.</small></label>
+                  <label for="coachingAdditionalActivityIntensity"><span>Other activity intensity</span><select id="coachingAdditionalActivityIntensity" name="additionalActivityIntensity" aria-describedby="coachingAdditionalActivityIntensityHelp" disabled><option value="light">Light · easy breathing</option><option value="moderate" selected>Moderate · breathing faster</option><option value="vigorous">Vigorous · hard breathing</option></select><small id="coachingAdditionalActivityIntensityHelp">Required only when other weekly activity is above 0 minutes.</small></label>
                   <label for="coachingGoal"><span>Calorie goal</span><select id="coachingGoal" name="goal" required><option value="deficit">Fat-loss deficit</option><option value="maintenance">Maintain weight</option><option value="surplus">Muscle-gain surplus</option></select></label>
                   <label for="coachingGoalPace"><span>Target pace</span><select id="coachingGoalPace" name="goalPace" required><option value="gentle">Gentle</option><option value="moderate">Moderate</option></select><small>Non-clinical product guardrails; not proof of suitability</small></label>
                 </div>
@@ -604,7 +607,7 @@
 
     </main>
 
-    <footer class="build-footer">STRATA · Build 8.0.0 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
+    <footer class="build-footer">STRATA · Build 8.0.1 · <a href="/pricing">Pricing</a> · <a href="/contact">Contact</a> · <a href="/policies">Policies</a> · <a href="/install.html">Install app</a></footer>
 
     <aside class="compare-tray" id="compareTray" hidden aria-label="Exercise comparison tray">
       <div><span>EXERCISE BATTLE</span><p id="compareNames">Choose 2–4 exercises</p></div>
@@ -637,29 +640,30 @@
     </dialog>
     <noscript><div class="no-script-note" role="status"><strong>Strata+ needs JavaScript for personalized tools.</strong> The page content remains available, but saving, filtering, comparing, and plan building require JavaScript.</div></noscript>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="/pwa.js?v=8.0.0"></script>
-    <script src="/product-signals.js?v=8.0.0"></script>
-    <script src="session-selection-core.js?v=8.0.0"></script>
-    <script src="discovery-core.js?v=8.0.0"></script>
-    <script src="monthly-plan-core.js?v=8.0.0"></script>
-    <script src="training-block-core.js?v=8.0.0"></script>
-    <script src="personal-training-ui-core.js?v=8.0.0"></script>
-    <script src="personal-training-diary-ui.js?v=8.0.0"></script>
-    <script src="personal-training-meals-ui-core.js?v=8.0.0"></script>
-    <script src="discover-state.js?v=8.0.0"></script>
-    <script src="discover-api.js?v=8.0.0"></script>
-    <script src="discover-navigation.js?v=8.0.0"></script>
-    <script src="discover-progress.js?v=8.0.0"></script>
-    <script src="discover-render.js?v=8.0.0"></script>
-    <script src="discover-coaching-render.js?v=8.0.0"></script>
-    <script src="discover-catalog.js?v=8.0.0"></script>
-    <script src="discover-detail.js?v=8.0.0"></script>
-    <script src="discover-community.js?v=8.0.0"></script>
-    <script src="discover-session.js?v=8.0.0"></script>
-    <script src="discover-sharing.js?v=8.0.0"></script>
-    <script src="discover-events.js?v=8.0.0"></script>
-    <script src="discover-coaching-meals.js?v=8.0.0"></script>
-    <script src="discover-coaching.js?v=8.0.0"></script>
-    <script src="discover.js?v=8.0.0"></script>
+    <script src="/pwa.js?v=8.0.1"></script>
+    <script src="/product-signals.js?v=8.0.1"></script>
+    <script src="session-selection-core.js?v=8.0.1"></script>
+    <script src="discovery-core.js?v=8.0.1"></script>
+    <script src="monthly-plan-core.js?v=8.0.1"></script>
+    <script src="training-block-core.js?v=8.0.1"></script>
+    <script src="personal-training-energy-ui-core.js?v=8.0.1"></script>
+    <script src="personal-training-ui-core.js?v=8.0.1"></script>
+    <script src="personal-training-diary-ui.js?v=8.0.1"></script>
+    <script src="personal-training-meals-ui-core.js?v=8.0.1"></script>
+    <script src="discover-state.js?v=8.0.1"></script>
+    <script src="discover-api.js?v=8.0.1"></script>
+    <script src="discover-navigation.js?v=8.0.1"></script>
+    <script src="discover-progress.js?v=8.0.1"></script>
+    <script src="discover-render.js?v=8.0.1"></script>
+    <script src="discover-coaching-render.js?v=8.0.1"></script>
+    <script src="discover-catalog.js?v=8.0.1"></script>
+    <script src="discover-detail.js?v=8.0.1"></script>
+    <script src="discover-community.js?v=8.0.1"></script>
+    <script src="discover-session.js?v=8.0.1"></script>
+    <script src="discover-sharing.js?v=8.0.1"></script>
+    <script src="discover-events.js?v=8.0.1"></script>
+    <script src="discover-coaching-meals.js?v=8.0.1"></script>
+    <script src="discover-coaching.js?v=8.0.1"></script>
+    <script src="discover.js?v=8.0.1"></script>
   </body>
 </html>

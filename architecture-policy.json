@@ -57,13 +57,19 @@
       ]
     },
     "src/energy-planning-core.js": {
-      "role": "Adult EER estimation, bounded trend calibration, and nutrition planning",
+      "role": "Versioned energy estimation, bounded trend calibration, and nutrition planning",
       "maxLines": 190,
       "allowedDependencies": [
         "src/plans.js",
+        "src/energy-activity-core.js",
         "src/energy-calibration-core.js",
         "src/energy-scenarios-core.js"
       ]
+    },
+    "src/energy-activity-core.js": {
+      "role": "Profile-v4 non-workout and generated-session activity energy budget",
+      "maxLines": 100,
+      "allowedDependencies": []
     },
     "src/meal-planning-core.js": {
       "role": "Validated dietary preferences and deterministic remaining-day food options",

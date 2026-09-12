@@ -1,5 +1,16 @@
 # Changelog
 
+## 8.0.1 — Individualized activity and deficit model
+
+- Replace the ambiguous whole-day activity answer for new coaching profiles with explicit non-workout daily movement and optional separate weekly activity minutes/intensity.
+- Calculate maintenance from Mifflin–St Jeor resting energy plus ordinary movement, the actual usable minutes in the generated STRATA week, and separately entered activity—each counted once.
+- Make gentle and moderate deficits request 0.25% and 0.50% of current planning weight per week, rounded conservatively and capped by 20% of maintenance, 500 kcal/day, BMI/scenario rules, the 1,200-kcal floor, and optional body-composition review guards.
+- Show the activity contribution, generated-session minutes, requested and actual deficit, optional composition floor and cross-check difference, and lower-scenario status in the Personal training and calorie counting dashboard.
+- Keep profile versions 1–3 readable under their exact prior calculation semantics and require an explicit version-4 review instead of silently translating an old activity answer.
+- Add focused unit, HTTP, compatibility, architecture, and real-browser regressions. No database migration is required.
+
+See the [8.0.1 release guide](docs/release-8.0.1.md) and [calculation methodology](docs/coaching-methodology.md).
+
 ## 8.0.0 — Personal training and calorie refinement
 
 - Align complete intake with actual morning-weight intervals across a bounded 42-day history; use robust estimates, explicit quality checks, gradually changing targets, and expiring evidence.

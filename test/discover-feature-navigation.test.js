@@ -7,7 +7,7 @@ const {join}=require("node:path");
 
 const PROJECT_ROOT=join(__dirname,"..");
 const read=(...parts)=>readFileSync(join(PROJECT_ROOT,"public",...parts),"utf8");
-const discoverModules=["personal-training-ui-core.js","personal-training-diary-ui.js","personal-training-meals-ui-core.js","discover-state.js","discover-api.js","discover-navigation.js","discover-progress.js","discover-render.js","discover-coaching-render.js","discover-catalog.js","discover-detail.js","discover-community.js","discover-session.js","discover-sharing.js","discover-events.js","discover-coaching-meals.js","discover-coaching.js","discover.js"];
+const discoverModules=["personal-training-energy-ui-core.js","personal-training-ui-core.js","personal-training-diary-ui.js","personal-training-meals-ui-core.js","discover-state.js","discover-api.js","discover-navigation.js","discover-progress.js","discover-render.js","discover-coaching-render.js","discover-catalog.js","discover-detail.js","discover-community.js","discover-session.js","discover-sharing.js","discover-events.js","discover-coaching-meals.js","discover-coaching.js","discover.js"];
 const discoverScript=()=>discoverModules.map(name=>read("scripts",name)).join("\n");
 
 test("Strata+ progressively enhances five primary destinations and focused supporting tools",()=>{
@@ -46,9 +46,15 @@ test("coaching profile setup presents four navigable cards and labels every capa
   assert.equal((setup.match(/class="coaching-form-section/g)||[]).length,4);
   assert.match(setup,/class="coaching-capability-empty"/);
   for(const label of ["Exercise","Sets","Reps","Weight","Unit"])assert.match(script,new RegExp(`<span>${label}<\\/span>`),`${label} must remain visible beside generated capability inputs`);
-  assert.match(html,/id="coachingDailyActivity"[^>]*>[\s\S]*?<option value="">Review and choose<\/option>/,"whole-day activity must offer an explicit review choice");
-  assert.match(script,/profile&&Number\(profile\.version\)<3\?"":activityFromApi/,"legacy profiles must not silently reuse their old multiplier answer as a whole-day EER category");
-  assert.match(render,/previous activity-multiplier answer is retained until you review and save the current whole-day activity category/,"the dashboard must visibly disclose preserved legacy semantics");
+  assert.match(html,/id="coachingDailyMovement"[^>]*>[\s\S]*?<option value="">Review and choose<\/option>/,"non-workout movement must require an explicit choice");
+  for(const movement of ["mostly_seated","lightly_moving","on_feet","physically_demanding"])assert.match(html,new RegExp(`<option value="${movement}"`));
+  assert.match(html,/id="coachingAdditionalActivityMinutes"[^>]*min="0"[^>]*max="1260"/);
+  assert.match(html,/id="coachingAdditionalActivityIntensity"[^>]*disabled>[\s\S]*?<option value="moderate" selected>/);
+  assert.match(html,/Include normal work, chores, errands, and usual commuting\.[\s\S]*Exclude every STRATA session and any sport, cardio, or active-travel minutes you enter separately below\./);
+  assert.match(html,/Add sport, cardio, or active travel only when those minutes are not already represented by your normal-day answer and are not part of the STRATA workout plan\./);
+  assert.match(script,/Number\(data\.profile\.version\)<4[\s\S]*?renderer\.show\("setup"\)/,"profiles from earlier energy models must open setup for explicit review");
+  assert.match(script,/coachingDiscardProfile[\s\S]*?renderer\.renderDashboard/,"discarding the required review must keep an existing dashboard available");
+  assert.match(render,/previous activity answer remains in this saved week until you review daily movement and any activity outside STRATA/,"the dashboard must visibly disclose preserved legacy semantics");
   assert.match(css,/\.coaching-form-section > legend \{ float:left; width:100%/);
   assert.match(css,/\.coaching-capability-row > label > span \{ display:none/);
   assert.match(css,/@media\(max-width:800px\)[\s\S]*\.coaching-capability-row > label > span \{ display:block/);
@@ -94,7 +100,7 @@ test("Strata+ loads bounded state, API, navigation, feature controllers, renderi
   const html=read("pages","discover.html"),names=discoverModules;
   let previous=-1;
   for(const name of names){const index=html.indexOf(`src="${name}?v=`);assert.ok(index>previous,`${name} must load after its dependencies`);previous=index;}
-  const reviewedBudgets=new Map([["personal-training-ui-core.js",220],["personal-training-meals-ui-core.js",140]]);
+  const reviewedBudgets=new Map([["personal-training-energy-ui-core.js",80],["personal-training-ui-core.js",220],["personal-training-meals-ui-core.js",140]]);
   for(const name of names.slice(0,-1))assert.ok(read("scripts",name).split("\n").length<=(reviewedBudgets.get(name)||120),`${name} should remain a small boundary module`);
   assert.ok(read("scripts","discover.js").split("\n").length<=725,"the incremental shell should stay below the state-repair module budget");
 });

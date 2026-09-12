@@ -62,7 +62,7 @@ function createCoachingService({store,auth,requireAccess,trustedOrigin,rateAllow
   }
   /** @param {string} userId @param {any} profile @param {number} timestamp @param {any} [prepared] */
   async function ensureWeek(userId,profile,timestamp,prepared=null){
-    const weekStart=currentWeekStart(timestamp,profile.timeZone),existingRow=await store.coachingWeek(userId,weekStart),existing=compatibleWeek(existingRow,profile),expectedEnergySemantics=profile.version===3?"nasem_2023_whole_day_eer":"legacy_rmr_activity_multiplier";
+    const weekStart=currentWeekStart(timestamp,profile.timeZone),existingRow=await store.coachingWeek(userId,weekStart),existing=compatibleWeek(existingRow,profile),expectedEnergySemantics=profile.version>=4?"mifflin_structured_activity_v4":profile.version===3?"nasem_2023_whole_day_eer":"legacy_rmr_activity_multiplier";
     if(existing&&existing.profileRevision===profile.revision&&existing.inputs?.version===profile.version&&existing.nutrition?.energySemantics===expectedEnergySemantics)return existing;
     const input={...profile};delete input.revision;delete input.updatedAt;
     const generated=prepared&&prepared.weekStart===weekStart?prepared:generateCoachingWeek(input,profile.revision,weekStart,timestamp,await readCoachingEvidence(store,userId,weekStart,profile));

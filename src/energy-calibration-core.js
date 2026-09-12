@@ -2,14 +2,15 @@
 "use strict";
 
 const {createHash}=require("node:crypto");
-const MODEL_VERSION="energy-planning-v3",CALIBRATION_DAYS=42,MIN_COMPLETE_DAYS=14,MIN_WEIGHT_DAYS=8,MIN_WEIGHT_SPAN_DAYS=14;
+const MODEL_VERSION="energy-planning-v4",CALIBRATION_DAYS=42,MIN_COMPLETE_DAYS=14,MIN_WEIGHT_DAYS=8,MIN_WEIGHT_SPAN_DAYS=14;
 // Every window, gate, density, quality weight, and bound below is an engineering heuristic.
 // They are not clinically validated thresholds or statistical confidence criteria.
-const POLICY=Object.freeze({pairDays:7,recentIntervalDays:7,maxWeightGapDays:7,weightDensity:7700,densityLow:5500,densityHigh:9500,outlierKg:1.5,outlierMad:4,maxOutlierFraction:.2,maxNoiseKg:.5,maxPairSpreadKcal:400,maxSegmentGapKcal:300,maxTrendFraction:.015,maxSignalGap:.5,maxPriorDeviation:.25,weeklyStepKcal:150,staleDays:42,anchorDays:7,anchorCount:3,anchorSpan:2,anchorFreshDays:3,anchorSpreadKg:1.5,anchorProfileGap:.1});
-// Supported EER input corners peak at about 8600 kcal/day (male, 19 y, 230 cm, 300 kg,
-// very active). These conservative stored-value limits include that range plus the 25%
-// target bound. They are separate from the stricter 1000–6000 raw-inference gate below.
-const MAX_BASELINE_KCAL=10000,MAX_PLANNED_KCAL=MAX_BASELINE_KCAL*(1+POLICY.maxPriorDeviation);
+const POLICY=Object.freeze({pairDays:7,recentIntervalDays:7,maxWeightGapDays:7,weightDensity:7700,densityLow:5500,densityHigh:9500,outlierKg:1.5,outlierMad:4,maxOutlierFraction:.2,maxNoiseKg:.5,maxPairSpreadKcal:400,maxSegmentGapKcal:300,maxTrendFraction:.015,maxSignalGap:.5,maxPriorDeviation:.25,weeklyStepKcal:150,staleDays:42,anchorDays:7,anchorCount:3,anchorSpan:2,anchorFreshDays:3,anchorSpreadKg:1.5,anchorProfileGap:.1,anchorBodyFatGap:.02});
+// Supported v4 input corners peak below 15,000 kcal/day only when maximum body size,
+// manual work, 21 hours of vigorous extra activity, and six long sessions coincide.
+// These defensive provenance limits cover that declared form space plus the 25% target
+// bound. They are separate from the stricter 1,000–6,000 raw-inference gate below.
+const MAX_BASELINE_KCAL=20000,MAX_PLANNED_KCAL=MAX_BASELINE_KCAL*(1+POLICY.maxPriorDeviation);
 const DAY=86400000;
 /** @param {number} x @param {number} lo @param {number} hi */
 const clamp=(x,lo,hi)=>Math.min(hi,Math.max(lo,x));
@@ -59,9 +60,9 @@ function deriveWeightAnchor(profile,weekStart,evidence){
   if(usable.length<POLICY.anchorCount||span<POLICY.anchorSpan||!latest||daysBetween(latest,weekStart)>POLICY.anchorFreshDays)return {...fallback,diagnostics,quality:"insufficient"};
   const weight=median(usable.map(p=>p.weightKg)),spread=Math.max(...usable.map(p=>p.weightKg))-Math.min(...usable.map(p=>p.weightKg)),consistent=spread<=Math.max(POLICY.anchorSpreadKg,weight*.02),recentUnderweight=weight/(profile.heightCm/100)**2<18.5;
   if(!consistent)return {...fallback,diagnostics,quality:"inconsistent",requiresReview:true};
-  const disagreement=Math.abs(weight-profile.weightKg)/profile.weightKg>POLICY.anchorProfileGap,changed=Math.abs(weight-profile.weightKg)>=.05;
+  const relativeGap=Math.abs(weight-profile.weightKg)/profile.weightKg,disagreement=relativeGap>POLICY.anchorProfileGap,changed=Math.abs(weight-profile.weightKg)>=.05,bodyFatCompatible=relativeGap<=POLICY.anchorBodyFatGap;
   if(disagreement)return {...fallback,diagnostics,quality:"review_required",requiresReview:true,recentUnderweight,observedWeightKg:round(weight,.1),observedDate:latest};
-  return {...fallback,weightKg:round(weight,.1),source:"recent_morning_weights",date:latest,quality:"consistent",changed,requiresReview:recentUnderweight,recentUnderweight,bodyFatCompatible:!changed,diagnostics};
+  return {...fallback,weightKg:round(weight,.1),source:"recent_morning_weights",date:latest,quality:"consistent",changed,requiresReview:recentUnderweight,recentUnderweight,bodyFatCompatible,diagnostics};
 }
 
 /** Complete daily intake runs are bounded by actual morning measurements. @param {ReturnType<typeof observations>} observed @param {string} weekStart */
@@ -88,11 +89,12 @@ function energyFit(points,density=POLICY.weightDensity){
   return {maintenance,pairCount:estimates.length,pairSpread:median(estimates.map(x=>Math.abs(x-maintenance))),residuals,mad:median(residuals)};
 }
 /** The service authenticates owner/profile identity; this leaf checks the saved model and numeric provenance.
- * @param {any} evidence @param {string} weekStart */
-function previousTarget(evidence,weekStart){
+ * @param {any} evidence @param {string} weekStart @param {string[]} acceptedModelVersions */
+function previousTarget(evidence,weekStart,acceptedModelVersions){
   const previous=evidence?.previousWeek,maintenance=previous?.nutrition?.maintenance,calibration=maintenance?.calibration,previousDate=date(previous?.weekStart),target=maintenance?.targetKcal,storedBaseline=maintenance?.baselineKcal??calibration?.baselineKcal;
-  if(!previousDate||previousDate>=weekStart||previous?.energyModelVersion!==MODEL_VERSION||!finite(target,1000,MAX_PLANNED_KCAL)||!finite(storedBaseline,1000,MAX_BASELINE_KCAL))return null;
-  if((calibration?.modelVersion!=null&&calibration.modelVersion!==MODEL_VERSION)||(calibration?.targetKcal!=null&&calibration.targetKcal!==target)||(calibration?.baselineKcal!=null&&calibration.baselineKcal!==storedBaseline))return null;
+  const previousModel=String(previous?.energyModelVersion||"");
+  if(!previousDate||previousDate>=weekStart||!acceptedModelVersions.includes(previousModel)||!finite(target,1000,MAX_PLANNED_KCAL)||!finite(storedBaseline,1000,MAX_BASELINE_KCAL))return null;
+  if((calibration?.modelVersion!=null&&calibration.modelVersion!==previousModel)||(calibration?.targetKcal!=null&&calibration.targetKcal!==target)||(calibration?.baselineKcal!=null&&calibration.baselineKcal!==storedBaseline))return null;
   const outsideStoredBound=Math.abs(target-storedBaseline)>storedBaseline*POLICY.maxPriorDeviation,transition=calibration?.boundReconciliation,validationBaseline=outsideStoredBound&&transition?.required===true?transition.validationBaselineKcal:storedBaseline;
   if(!finite(validationBaseline,1000,MAX_BASELINE_KCAL)||target<Math.min(storedBaseline,validationBaseline)*(1-POLICY.maxPriorDeviation)||target>Math.max(storedBaseline,validationBaseline)*(1+POLICY.maxPriorDeviation))return null;
   const accepted=date(calibration?.lastAcceptedEvidenceEnd)||(calibration?.status==="trend_informed"?date(calibration?.interval?.end)||date(calibration?.windowEnd):null);
@@ -115,10 +117,10 @@ function targetDiagnostics(target,baseline,previous){
 
 /** @param {any} profile @param {string} weekStart @param {any} evidence @param {any} baseline */
 function calibrateMaintenance(profile,weekStart,evidence,baseline){
-  const observed=observations(evidence,weekStart),previous=previousTarget(evidence,weekStart),canonical={rows:observed.rows,conflictingDates:observed.conflictingDates,windowStart:observed.windowStart,windowEnd:observed.windowEnd,previous},fingerprint=createHash("sha256").update(JSON.stringify(canonical)).digest("hex").slice(0,16);
+  const observed=observations(evidence,weekStart),acceptedPriorModels=profile.version===3?[MODEL_VERSION,"energy-planning-v3"]:[MODEL_VERSION],previous=previousTarget(evidence,weekStart,acceptedPriorModels),canonical={rows:observed.rows,conflictingDates:observed.conflictingDates,windowStart:observed.windowStart,windowEnd:observed.windowEnd,previous},fingerprint=createHash("sha256").update(JSON.stringify(canonical)).digest("hex").slice(0,16);
   const evidenceCounts={completeCalorieDays:observed.rows.filter(row=>row.complete).length,morningWeightDays:observed.weights.length,rawMorningWeightDays:observed.weights.length,outlierWeightDays:0,weightObservationSpanDays:spanOf(observed.weights),requiredCompleteCalorieDays:MIN_COMPLETE_DAYS,requiredMorningWeightDays:MIN_WEIGHT_DAYS,requiredWeightObservationSpanDays:MIN_WEIGHT_SPAN_DAYS,conflictingDays:observed.conflictingDates.length,alignedIntakeDays:0};
   const common={modelVersion:MODEL_VERSION,windowDays:CALIBRATION_DAYS,windowStart:observed.windowStart,windowEnd:observed.windowEnd,evidenceFingerprint:fingerprint,evidence:evidenceCounts,thresholdBasis:"STRATA engineering heuristics; not validated clinical thresholds or statistical confidence criteria.",baselineKcal:baseline.targetKcal,observedMaintenanceKcal:null,trendKgPerWeek:null,appliedAdjustmentKcal:0,targetKcal:baseline.targetKcal,priorState:"none",lastAcceptedEvidenceEnd:null,interval:null,quality:{label:"insufficient",weight:0,basis:"Interval coverage and consistency; not a probability or confidence level."},sensitivity:null,limitations:["Self-reported intake may be systematically incomplete even when marked complete.","Water, glycogen, digestion, illness and measurement conditions can change scale weight.","The energy-density proxy, observation gates, sensitivity ranges and update bounds are unvalidated engineering heuristics.","A previous target limits the size of an update; it is never additional evidence."]};
-  if(profile.version<3||baseline.energySemantics==="legacy_rmr_activity_multiplier")return {...common,status:"legacy_profile",quality:{...common.quality,label:"legacy"},explanation:"This legacy profile keeps its original resting-energy × activity estimate until the whole-day activity category is reviewed and saved."};
+  if(profile.version<3||baseline.energySemantics==="legacy_rmr_activity_multiplier")return {...common,status:"legacy_profile",quality:{...common.quality,label:"legacy"},explanation:"This legacy profile keeps its original resting-energy × activity estimate until the current activity questions are reviewed and saved."};
   /** @param {string} reason @param {any} [extra] */
   function hold(reason,extra={}){
     const age=previous?.lastAcceptedEvidenceEnd?daysBetween(previous.lastAcceptedEvidenceEnd,weekStart):Infinity,holding=Boolean(previous&&age<=POLICY.staleDays&&previous.ageDays<=POLICY.staleDays),expired=Boolean(previous?.lastAcceptedEvidenceEnd&&!holding),target=limitedTarget(holding?Number(previous?.targetKcal):baseline.targetKcal,baseline.targetKcal,previous),diagnostics=targetDiagnostics(target,baseline.targetKcal,previous),reconciled=holding&&target!==previous?.targetKcal;

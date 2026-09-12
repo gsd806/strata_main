@@ -1,9 +1,10 @@
-/* global module */
+/* global module, require */
 (function(root,factory){
-  const api=factory();
+  const energyUi=typeof module==="object"&&module.exports?require("./personal-training-energy-ui-core"):root.StrataPersonalTrainingEnergyUi;
+  const api=factory(energyUi);
   if(typeof module==="object"&&module.exports)module.exports=api;
   root.StrataPersonalTrainingUi=api;
-})(typeof globalThis!=="undefined"?globalThis:this,function(){
+})(typeof globalThis!=="undefined"?globalThis:this,function(energyUi){
   "use strict";
 
   const DAYS=Object.freeze(["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]);
@@ -11,11 +12,9 @@
   const TRAINING_GOALS=Object.freeze(["balanced","strength","hypertrophy"]);
   const GOALS=Object.freeze(["fat_loss","maintenance","muscle_gain"]);
   const EXPERIENCE_LEVELS=Object.freeze(["beginner","intermediate","advanced"]);
-  const ACTIVITY_LEVELS=Object.freeze(["sedentary","lightly_active","moderately_active","very_active"]);
   const CALORIE_PATTERNS=Object.freeze(["steady","zigzag","flexible_day"]);
   const SESSION_MINUTES=Object.freeze([30,45,60,75,90]);
   const GOAL_ALIASES=Object.freeze({deficit:"fat_loss",fat_loss:"fat_loss",maintenance:"maintenance",bulk:"muscle_gain",surplus:"muscle_gain",muscle_gain:"muscle_gain"});
-  const ACTIVITY_ALIASES=Object.freeze({sedentary:"sedentary",light:"lightly_active",lightly_active:"lightly_active",moderate:"moderately_active",moderately_active:"moderately_active",high:"very_active","very-active":"very_active",very_active:"very_active"});
   const PATTERN_ALIASES=Object.freeze({steady:"steady","training-day":"zigzag",training_day:"zigzag",zigzag:"zigzag","flexible-day":"flexible_day",flexible_day:"flexible_day"});
   const KG_PER_LB=0.45359237;
   const CM_PER_INCH=2.54;
@@ -97,7 +96,7 @@
     const trainingGoal=source.trainingGoal==null?"balanced":allowedValue(source.trainingGoal,TRAINING_GOALS);if(!trainingGoal)errors.push({field:"trainingGoal",message:"Choose balanced training, strength, or muscle growth."});
     const bodyFatRaw=finiteNumber(source.bodyFatPercent),bodyFatPercent=bodyFatRaw==null?null:boundedNumber(bodyFatRaw,3,65);
     const sexForEquation=String(source.sexForEquation||source.sex||"").trim().toLowerCase();
-    const lifestyleActivity=aliasedValue(source.lifestyleActivity??source.activityLevel,ACTIVITY_ALIASES),goal=aliasedValue(source.goal,GOAL_ALIASES),experience=allowedValue(source.experience,EXPERIENCE_LEVELS),caloriePattern=aliasedValue(source.caloriePattern,PATTERN_ALIASES)||"steady";
+    const goal=aliasedValue(source.goal,GOAL_ALIASES),experience=allowedValue(source.experience,EXPERIENCE_LEVELS),caloriePattern=aliasedValue(source.caloriePattern,PATTERN_ALIASES)||"steady",energy=energyUi.profileDraftToEnergy(source);
     const workoutDays=uniqueStrings(source.trainingDays??source.workoutDays??source.availableDays).filter((day)=>DAYS.includes(day));
     const frequency=boundedNumber(source.frequency??source.trainingDaysPerWeek??workoutDays.length,1,6,{whole:true}),sessionMinutes=boundedNumber(source.sessionMinutes,30,90,{whole:true});
     if(age==null)errors.push({field:"age",message:"New STRATA energy estimates are for adults ages 19–80."});
@@ -105,7 +104,7 @@
     if(weightKg==null||weightKg<35||weightKg>300)errors.push({field:"weight",message:"Enter a weight from 35–300 kg (77.2–661.4 lb)."});
     if(bodyFatRaw!=null&&bodyFatPercent==null)errors.push({field:"bodyFatPercent",message:"Enter 3–65%, or leave body fat blank."});
     if(!['female','male'].includes(sexForEquation))errors.push({field:"sexForEquation",message:"Choose the coefficient required by the primary energy equation."});
-    if(!lifestyleActivity)errors.push({field:"activityLevel",message:"Choose the all-day activity category that includes your planned workouts."});
+    errors.push(...energy.errors);
     if(!goal)errors.push({field:"goal",message:"Choose deficit, maintenance, or building."});
     if(!experience)errors.push({field:"experience",message:"Choose your current training experience."});
     if(frequency==null)errors.push({field:"frequency",message:"Choose one to six training days."});
@@ -116,9 +115,9 @@
     const goalPace=source.goalPace==="gentle"||source.goalPace==="moderate"?source.goalPace:"moderate";
     const macroPreference=source.macrosEnabled===false?null:source.macroPreference==="higher_protein"||source.macroPreference==="balanced"?source.macroPreference:source.macrosEnabled===true?"balanced":null;
     const payload={
-      version:3,measurementSystem,preferredLoadUnit,age,heightCm:heightCm==null?null:round(heightCm,1),weightKg:weightKg==null?null:round(weightKg,1),bodyFatPercent,
+      version:4,measurementSystem,preferredLoadUnit,age,heightCm:heightCm==null?null:round(heightCm,1),weightKg:weightKg==null?null:round(weightKg,1),bodyFatPercent,
       sexForEquation:['female','male'].includes(sexForEquation)?sexForEquation:null,
-      goal,goalPace,trainingGoal,experience,lifestyleActivity,workoutDays,sessionMinutes:sessionMinutes??45,usualExercises,
+      goal,goalPace,trainingGoal,experience,...energy.payload,workoutDays,sessionMinutes:sessionMinutes??45,usualExercises,
       availableEquipment:uniqueStrings(source.equipment??source.availableEquipment),movementLimitations:uniqueStrings(source.limitations??source.movementLimitations),caloriePattern,flexibleDay:DAYS.includes(source.flexibleDay)?source.flexibleDay:null,
       macroPreference,timeZone:String(source.timeZone||"UTC")
     };
@@ -128,10 +127,10 @@
 
   function profileMetricToDraft(profile,unitSystem="metric"){
     const source=isRecord(profile)?profile:{},system=allowedValue(unitSystem,UNIT_SYSTEMS)||"metric",imperial=system==="imperial",height=imperial?centimetersToInches(source.heightCm):finiteNumber(source.heightCm),weight=imperial?kilogramsToPounds(source.weightKg):finiteNumber(source.weightKg);
-    const goal={fat_loss:"deficit",maintenance:"maintenance",muscle_gain:"surplus"}[source.goal]||source.goal||"maintenance",activityLevel={sedentary:"sedentary",lightly_active:"lightly_active",moderately_active:"moderately_active",very_active:"very_active",extremely_active:"very_active"}[source.lifestyleActivity]||"moderately_active",caloriePattern={steady:"steady",zigzag:"training_day",flexible_day:"flexible_day"}[source.caloriePattern]||"steady";
+    const goal={fat_loss:"deficit",maintenance:"maintenance",muscle_gain:"surplus"}[source.goal]||source.goal||"maintenance",caloriePattern={steady:"steady",zigzag:"training_day",flexible_day:"flexible_day"}[source.caloriePattern]||"steady",energy=energyUi.profileEnergyToDraft(source);
     return{
       ...source,unitSystem:system,height:height==null?"":round(height,imperial?2:1),heightUnit:imperial?"in":"cm",weight:weight==null?"":round(weight,1),weightUnit:imperial?"lb":"kg",
-      bodyFatPercent:source.bodyFatPercent??"",sexForEquation:source.sexForEquation??source.sex??"",goal,activityLevel,
+      bodyFatPercent:source.bodyFatPercent??"",sexForEquation:source.sexForEquation??source.sex??"",goal,...energy,
       frequency:Array.isArray(source.workoutDays)?source.workoutDays.length:"",trainingDays:Array.isArray(source.workoutDays)?[...source.workoutDays]:[],sessionMinutes:source.sessionMinutes??45,
       caloriePattern,macrosEnabled:source.macroPreference!=null,macroPreference:source.macroPreference??"balanced",
       performanceMaxes:(Array.isArray(source.usualExercises)?source.usualExercises:[]).map((entry)=>({
@@ -209,7 +208,7 @@
   }
 
   return Object.freeze({
-    DAYS,UNIT_SYSTEMS,GOALS,TRAINING_GOALS,EXPERIENCE_LEVELS,ACTIVITY_LEVELS,CALORIE_PATTERNS,SESSION_MINUTES,
+    DAYS,UNIT_SYSTEMS,GOALS,TRAINING_GOALS,EXPERIENCE_LEVELS,CALORIE_PATTERNS,SESSION_MINUTES,
     poundsToKilograms,kilogramsToPounds,inchesToCentimeters,centimetersToInches,heightToCentimeters,heightFromCentimeters,weightToKilograms,weightFromKilograms,
     profileDraftToMetric,profileMetricToDraft,calorieProgress,macroProgress,weeklyCalorieProgress,dailyWeightToKilograms,dailyWeightFromKilograms,calibrationDisplay,formatCalories,displayWeight,projectionDisplay
   });

@@ -4,11 +4,11 @@ const Diary=require("../public/scripts/personal-training-diary-ui"),Ui=require("
 const week={weekStart:"2026-09-14",weekEnd:"2026-09-20",diaryStartDate:"2026-08-05",diaryEndDate:"2026-09-16",logTargets:[{date:"2026-09-07",day:"Monday",calories:null},{date:"2026-09-15",day:"Tuesday",calories:2100,kind:"daily"},{date:"2026-09-16",day:"Wednesday",calories:2200,kind:"daily"}],nutrition:{dailyTargets:[{date:"2026-09-16",day:"Wednesday",calories:2200}]}};
 function elements(){const nodes=new Map();return id=>{if(!nodes.has(id))nodes.set(id,{id,value:"",textContent:"",innerHTML:"",checked:false,hidden:false,disabled:false,dataset:{},listeners:{},attributes:{},children:[],addEventListener(type,handler){this.listeners[type]=handler;},setAttribute(name,value){this.attributes[name]=value;},getAttribute(name){return this.attributes[name]||null;},removeAttribute(name){delete this.attributes[name];},focus(){},reset(){},querySelector(){return null;}});return nodes.get(id);};}
 function controllerFixture(api){
-  const el=elements(),state={user:{id:"member"},csrfToken:"csrf",exercises:[],preferences:{}},rendered=[],synced=[],document={querySelectorAll:()=>[],querySelector:()=>null},renderer={renderDashboard(...args){rendered.push(args);},clearPrivate(){},show(){},showProgressSetup(){},renderLog(){}};
+  const el=elements(),state={user:{id:"member"},csrfToken:"csrf",exercises:[],preferences:{}},rendered=[],synced=[],shown=[],document={querySelectorAll:()=>[],querySelector:()=>null},renderer={renderDashboard(...args){rendered.push(args);shown.push("dashboard");},clearPrivate(){},show(value){shown.push(value);},showProgressSetup(){},renderLog(){}};
   const controller=createController({document,element:el,api,state,ui:Ui,diaryUi:Diary,meals:{sync(value){synced.push(value);},clearPrivate(){},fillPreferences(){}},assertAccountResponse,renderFactory:()=>renderer,saveRetryMessage:error=>error.message,showToast(){}});
   Object.assign(controller.state,{profile:{macroPreference:null,measurementSystem:"metric"},week,logs:[{date:"2026-09-07",calories:1500,proteinG:100,carbsG:180,fatG:50,revision:4}]});
   el("coachingLogDate").value="2026-09-07";el("coachingCaloriesEaten").value="1800";el("coachingMorningWeight").value="80";el("coachingDayComplete").checked=true;
-  return{el,state,controller,rendered,synced,save:()=>el("coachingLogForm").listeners.submit({currentTarget:{id:"coachingLogForm"},preventDefault(){}})};
+  return{el,state,controller,rendered,synced,shown,save:()=>el("coachingLogForm").listeners.submit({currentTarget:{id:"coachingLogForm"},preventDefault(){}})};
 }
 
 test("historical target lookup never substitutes this week's calories for a missing saved target",()=>{
@@ -50,6 +50,38 @@ test("a delayed conflict cannot restore an earlier account's diary after reset",
 
 test("switching the maximum body weight back to metric retains a valid endpoint",()=>{
   const fixture=controllerFixture(async()=>({}));fixture.el("coachingWeight").value="661.4";fixture.el("coachingWeight").dataset.unit="lb";fixture.el("coachingWeightUnit").value="kg";fixture.el("coachingWeightUnit").listeners.change();assert.equal(fixture.el("coachingWeight").value,300);assert.equal(fixture.el("coachingWeight").max,"300");
+});
+
+test("an existing version 3 profile opens explicit movement review and can discard to its saved week",async()=>{
+  const profile={version:3,measurementSystem:"metric",preferredLoadUnit:"kg",age:31,heightCm:178,weightKg:82,bodyFatPercent:null,sexForEquation:"male",goal:"maintenance",goalPace:"gentle",trainingGoal:"balanced",experience:"intermediate",lifestyleActivity:"very_active",sessionsPerWeek:3,workoutDays:["Monday","Wednesday","Friday"],sessionMinutes:45,usualExercises:[],caloriePattern:"steady",flexibleDay:null,macroPreference:null};
+  const fixture=controllerFixture(async url=>url==="/api/coaching/profile"?{csrfToken:"csrf",profile}:{csrfToken:"csrf",week,logs:[]});
+  await fixture.controller.load();
+  assert.equal(fixture.shown.at(-1),"setup");assert.equal(fixture.el("coachingDailyMovement").value,"");assert.equal(fixture.el("coachingAdditionalActivityMinutes").value,"0");assert.equal(fixture.el("coachingAdditionalActivityIntensity").value,"moderate");
+  assert.equal(fixture.el("coachingActivityReviewNotice").hidden,false);assert.match(fixture.el("coachingActivityReviewNotice").textContent,/saved profile, week, and diary are unchanged.*Normal day outside planned exercise.*Separate planned activity each week/is);assert.match(fixture.el("coachingSaveStatus").textContent,/Two new activity answers are required/);
+  fixture.el("coachingDiscardProfile").listeners.click();assert.equal(fixture.shown.at(-1),"dashboard");
+});
+
+test("a version 3 deficit keeps its percentage policy instead of displaying null fields as zero",()=>{
+  const previous=globalThis.document;globalThis.document={querySelectorAll:()=>[]};
+  try{
+    const el=elements(),render=createRenderer({element:el,ui:Ui,diaryUi:Diary}),profile={version:3,measurementSystem:"metric",preferredLoadUnit:"kg",weightKg:82,experience:"intermediate",sessionMinutes:45,sessionsPerWeek:1,lifestyleActivity:"sedentary",usualExercises:[],trainingGoal:"balanced",goalPace:"gentle"};
+    const model={...week,modelUpdateAvailable:true,nextWeekStart:"2026-09-21",training:{sessions:[]},nutrition:{...week.nutrition,rmrKcal:1650,selectedGoal:"fat_loss",goalPace:"gentle",weeklyTargetKcal:14_000,maintenance:{targetKcal:2250},deficit:{targetKcal:2000,policy:"10% below estimated maintenance",breakdown:{requestedWeightChangePercentPerWeek:null,actualWeightChangePercentPerWeek:null,actualDeficitKcal:250}},bulk:{targetKcal:2400,policy:"Conservative surplus"},weightScenarios:[]}};
+    render.renderDashboard(profile,model,[],"2026-09-16");assert.match(el("coachingTargetDetail").textContent,/10% below estimated maintenance/);assert.doesNotMatch(el("coachingTargetDetail").textContent,/0% body weight/);assert.match(el("coachingModelUpdate").textContent,/keep their existing calculation.*opt in/is);assert.doesNotMatch(el("coachingModelUpdate").textContent,/next weekly snapshot uses the new method/i);
+  }finally{if(previous===undefined)delete globalThis.document;else globalThis.document=previous;}
+});
+
+test("version 4 dashboard explains each separate activity input and the bounded deficit",()=>{
+  const previous=globalThis.document;globalThis.document={querySelectorAll:()=>[]};
+  try{
+    const el=elements(),render=createRenderer({element:el,ui:Ui,diaryUi:Diary}),profile={version:4,measurementSystem:"metric",preferredLoadUnit:"kg",weightKg:82,experience:"intermediate",sessionMinutes:45,sessionsPerWeek:1,dailyMovement:"on_feet",additionalActivityMinutesPerWeek:180,additionalActivityIntensity:"vigorous",usualExercises:[{exerciseId:"squat"}],trainingGoal:"balanced",goalPace:"moderate",caloriePattern:"steady",flexibleDay:null,macroPreference:null};
+    const model={...week,training:{sessions:[{day:"Tuesday",label:"Full body",workingSets:6,estimatedDurationMinutes:40,exercises:[{name:"Squat",sets:3,reps:"6–8",rest:"120 sec"}]}]},nutrition:{rmrKcal:1700,primaryEquation:"mifflin_structured_activity",selectedGoal:"fat_loss",goalPace:"moderate",weeklyTargetKcal:13_300,dailyTargets:week.nutrition.dailyTargets,maintenance:{targetKcal:2300,estimateRangeKcal:[2000,2600]},activityBreakdown:{nonWorkoutKcal:2200,plannedTrainingWeekKcal:160,additionalActivityWeekKcal:300,sessions:[{day:"Tuesday",minutes:40,kcal:160}]},wholeDayEerCrossCheck:{targetKcal:2500,activityCategory:"low_active"},deficit:{targetKcal:1900,breakdown:{requestedWeightChangePercentPerWeek:.5,actualDeficitKcal:400,energyAvailabilityFloorKcal:1800,energyAvailabilityGuardApplied:true,compositionDifferenceKcal:425,compositionRangeExpanded:true,scenarioGuardApplied:false}},bulk:{targetKcal:2450,policy:"Conservative surplus"},weightScenarios:[]}};
+    render.renderDashboard(profile,model,[],"2026-09-16");
+    assert.match(el("coachingWeekExplanation").textContent,/on your feet.*1 generated STRATA session \(40 min\).*180 min of vigorous other activity.*1 known exercise/);
+    assert.match(el("coachingTdeeDetail").textContent,/ordinary daily movement: about 2,200 kcal\/day.*generated sessions: about 160 kcal\/week.*other activity: about 300 kcal\/week.*Population EER cross-check: about 2,500 kcal\/day \(low active\); context only, not an override/);
+    assert.match(el("coachingTargetDetail").textContent,/0\.5% body weight\/week requested.*400 kcal\/day actual deficit.*composition floor about 1,800 kcal\/day applied/);
+    assert.match(el("coachingTargetDetail").textContent,/resting cross-check differs by about 425 kcal and widens the planning range.*lower sensitivity scenario stays within planner limits/);
+    assert.match(el("coachingGoalComparison").innerHTML,/0\.5% body weight\/week requested/);
+  }finally{if(previous===undefined)delete globalThis.document;else globalThis.document=previous;}
 });
 
 test("dashboard shows aligned evidence and exercise-specific units without inventing timed repetitions",()=>{

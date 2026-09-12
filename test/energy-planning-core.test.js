@@ -5,6 +5,8 @@ const assert=require("node:assert/strict");
 const {ACTIVITY_CATEGORY_MAP,baselineFor,calibrateMaintenance,macroTarget,nasemEer,nutritionFor}=require("../src/energy-planning-core");
 
 function profile(overrides={}){return {version:3,age:40,heightCm:175,weightKg:75,bodyFatPercent:null,sexForEquation:"male",goal:"maintenance",goalPace:"moderate",lifestyleActivity:"moderately_active",workoutDays:["Monday","Wednesday","Friday"],caloriePattern:"steady",flexibleDay:null,macroPreference:"balanced",...overrides};}
+function structuredProfile(overrides={}){const output=profile({version:4,dailyMovement:"mostly_seated",additionalActivityMinutesPerWeek:0,additionalActivityIntensity:"moderate",...overrides});delete output.lifestyleActivity;return output;}
+function training(days=["Monday"],minutes=60,status="ready"){return {sessions:days.map(day=>({day,status,estimatedDurationMinutes:minutes,exercises:status==="unavailable"?[]:[{exerciseId:"test"}]}))};}
 function date(offset){return new Date(Date.parse("2026-08-17T00:00:00.000Z")+offset*86400000).toISOString().slice(0,10);}
 function completeEvidence({calories=3000,weightStart=75,weeklyChange=0,outlier=false}={}){
   const weights=new Map(Array.from({length:13},(_,index)=>{const day=Math.round(index*20/12),weightKg=weightStart+weeklyChange*day/7;return [day,outlier&&index===6?weightKg+12:weightKg];}));
@@ -34,7 +36,54 @@ test("version 1–2 profiles preserve the exact legacy equation choice and do no
 
 test("body-fat data is a secondary cross-check and cannot silently replace the adult EER target",()=>{
   const without=baselineFor(profile()),withBodyFat=baselineFor(profile({bodyFatPercent:12}));
-  assert.equal(withBodyFat.primaryEquation,"nasem_2023_eer");assert.equal(withBodyFat.targetKcal,without.targetKcal);assert.equal(withBodyFat.bodyFatCrossCheck.role,"secondary_cross_check");assert.equal(without.bodyFatCrossCheck,null);
+  assert.equal(withBodyFat.primaryEquation,"nasem_2023_eer");assert.equal(withBodyFat.targetKcal,without.targetKcal);assert.equal(withBodyFat.planningBandKcal,without.planningBandKcal,"version 3 must retain its exact pre-v4 planning band");assert.equal(withBodyFat.bodyFatCrossCheck.role,"secondary_cross_check");assert.equal(without.bodyFatCrossCheck,null);
+  const legacyCorner={age:19,heightCm:160,weightKg:57,sexForEquation:"male",lifestyleActivity:"sedentary",goal:"fat_loss",goalPace:"moderate"},withoutCorner=nutritionFor(profile(legacyCorner),"2026-09-07"),withCorner=nutritionFor(profile({...legacyCorner,bodyFatPercent:40}),"2026-09-07");assert.equal(withCorner.deficit.targetKcal,withoutCorner.deficit.targetKcal);
+});
+
+test("version 4 separates non-workout movement from generated sessions and the DRI cross-check",()=>{
+  const noTraining=baselineFor(structuredProfile(),training([])),withTraining=baselineFor(structuredProfile(),training(["Monday","Wednesday","Friday"]));
+  assert.equal(noTraining.energySemantics,"mifflin_structured_activity_v4");assert.equal(noTraining.primaryEquation,"mifflin_structured_activity");assert.equal(noTraining.structuredActivity.plannedTrainingWeekKcal,0);
+  assert.ok(withTraining.targetKcal>noTraining.targetKcal);assert.equal(withTraining.structuredActivity.sessions.length,3);assert.equal(withTraining.wholeDayEerCrossCheck.role,"population_cross_check");assert.ok(withTraining.targetKcal<baselineFor(profile({lifestyleActivity:"sedentary"})).targetKcal,"a reviewed seated component start avoids treating the DRI inactive example as truly sedentary");
+});
+
+test("version 4 activity inputs are monotonic and unavailable sessions never add training fuel",()=>{
+  const base=structuredProfile(),seated=baselineFor(base,training([])),moving=baselineFor(structuredProfile({dailyMovement:"lightly_moving"}),training([])),extra=baselineFor(structuredProfile({additionalActivityMinutesPerWeek:180}),training([])),unavailable=baselineFor(base,training(["Monday"],90,"unavailable"));
+  assert.ok(moving.targetKcal>seated.targetKcal);assert.ok(extra.targetKcal>seated.targetKcal);assert.equal(unavailable.targetKcal,seated.targetKcal);assert.equal(unavailable.structuredActivity.sessions.length,0);
+});
+
+test("version 4 deficit pace is weight-relative and optional composition can only restrict it",()=>{
+  const moderate=nutritionFor(structuredProfile({goal:"fat_loss",goalPace:"moderate"}),"2026-09-07",null,training(["Monday","Wednesday","Friday"])),gentle=nutritionFor(structuredProfile({goal:"fat_loss",goalPace:"gentle"}),"2026-09-07",null,training(["Monday","Wednesday","Friday"])),withComposition=nutritionFor(structuredProfile({goal:"fat_loss",goalPace:"moderate",bodyFatPercent:15}),"2026-09-07",null,training(["Monday","Wednesday","Friday"]));
+  assert.equal(moderate.deficit.breakdown.requestedWeightChangePercentPerWeek,.5);assert.equal(gentle.deficit.breakdown.requestedWeightChangePercentPerWeek,.25);assert.ok(moderate.deficit.targetKcal<gentle.deficit.targetKcal);assert.equal(moderate.deficit.breakdown.weightRateDeficitKcal,400);assert.ok(moderate.deficit.breakdown.actualWeightChangePercentPerWeek<=.5);
+  assert.equal(withComposition.maintenance.targetKcal,moderate.maintenance.targetKcal);assert.ok(withComposition.deficit.targetKcal>=moderate.deficit.targetKcal);assert.equal(withComposition.deficit.breakdown.bodyFatRole.includes("never raises maintenance"),true);
+});
+
+test("a body-fat cross-check that widens the planning range names the resulting scenario guard",()=>{
+  const common={age:19,heightCm:160,weightKg:56.3,dailyMovement:"mostly_seated",goalPace:"moderate"},without=nutritionFor(structuredProfile({...common,goal:"fat_loss"}),"2026-09-07",null,training(["Monday"],30)),withComposition=nutritionFor(structuredProfile({...common,goal:"maintenance",bodyFatPercent:40}),"2026-09-07",null,training(["Monday"],30)),details=withComposition.deficit.breakdown;
+  assert.equal(without.deficit.targetKcal,1700);assert.equal(withComposition.maintenance.targetKcal,without.maintenance.targetKcal,"composition must not raise the midpoint");assert.equal(details.energyAvailabilityGuardApplied,false);assert.equal(details.compositionRangeExpanded,true);assert.equal(details.scenarioGuardApplied,true);assert.equal(withComposition.deficit.targetKcal,null);assert.ok(details.compositionDifferenceKcal>0);
+  assert.throws(()=>nutritionFor(structuredProfile({...common,goal:"fat_loss",bodyFatPercent:40}),"2026-09-07",null,training(["Monday"],30)),error=>error?.code==="DEFICIT_REQUIRES_REVIEW"&&/widen the planning range.*lower sensitivity scenario/.test(error.message));
+});
+
+test("a small recent-weight change cannot remove a restrictive body-fat safety screen",()=>{
+  const input=structuredProfile({goal:"fat_loss",goalPace:"moderate",bodyFatPercent:5}),without=nutritionFor(input,"2026-09-07",null,training(["Monday","Wednesday","Friday"])),recent={dailyLogs:[18,19,20].map(offset=>({date:date(offset),calories:2000,complete:false,morningWeightKg:74.9}))},withRecent=nutritionFor(input,"2026-09-07",recent,training(["Monday","Wednesday","Friday"]));
+  assert.equal(withRecent.weightBasis.bodyFatCompatible,true);assert.ok(withRecent.deficit.breakdown.energyAvailabilityFloorKcal!=null);assert.ok(withRecent.deficit.targetKcal>=without.deficit.targetKcal-25,"scale noise must not unlock a materially larger deficit");
+  const changed={dailyLogs:[18,19,20].map(offset=>({date:date(offset),calories:2000,complete:false,morningWeightKg:72}))};assert.throws(()=>nutritionFor(input,"2026-09-07",changed,training(["Monday","Wednesday","Friday"])),error=>error?.code==="DEFICIT_REQUIRES_REVIEW"&&/body-fat estimate/.test(error.message));
+});
+
+test("version 4 never rounds a deficit past the requested body-weight rate or declared caps",()=>{
+  for(const weightKg of [35,75,150,300])for(const goalPace of ["gentle","moderate"]){
+    const heightCm=Math.max(120,Math.min(230,Math.sqrt(weightKg/25)*100)),output=nutritionFor(structuredProfile({age:35,heightCm,weightKg,goal:"fat_loss",goalPace}),"2026-09-07",null,training(["Monday","Wednesday","Friday"])),details=output.deficit.breakdown,actual=details.actualDeficitKcal,requestedRate=goalPace==="gentle"?.0025:.005;
+    assert.ok(actual<=weightKg*requestedRate*7700/7);assert.ok(actual<=output.maintenance.targetKcal*.2);assert.ok(actual<=500);assert.ok(details.actualWeightChangePercentPerWeek<=details.requestedWeightChangePercentPerWeek);
+  }
+});
+
+test("version 4 zigzag uses actual generated session energy and preserves the weekly budget",()=>{
+  const output=nutritionFor(structuredProfile({caloriePattern:"zigzag"}),"2026-09-07",null,training(["Monday","Friday"],60)),higher=output.dailyTargets.filter(day=>day.kind==="higher_training_day"),lower=output.dailyTargets.filter(day=>day.kind==="lower_rest_day");
+  assert.deepEqual(higher.map(day=>day.day),["Monday","Friday"]);assert.ok(Math.min(...higher.map(day=>day.calories))>Math.max(...lower.map(day=>day.calories)));assert.equal(output.weeklyTargetKcal,output.maintenance.targetKcal*7);
+});
+
+test("version 4 does not claim a zigzag when no usable generated session can receive it",()=>{
+  const output=nutritionFor(structuredProfile({caloriePattern:"zigzag"}),"2026-09-07",null,training(["Monday","Friday"],60,"unavailable"));
+  assert.equal(output.requestedPattern,"zigzag");assert.equal(output.effectivePattern,"steady");assert.match(output.patternFallback,/No usable generated session/);assert.ok(output.dailyTargets.every(day=>day.kind==="standard"));assert.ok(Math.max(...output.dailyTargets.map(day=>day.calories))-Math.min(...output.dailyTargets.map(day=>day.calories))<=1);
 });
 
 test("calibration searches the preceding 42 days and ignores outside and future rows",()=>{

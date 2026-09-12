@@ -1,12 +1,12 @@
 # Module architecture evidence
 
-Build 8.0.0 keeps extraction as an enforceable boundary. `npm run architecture:check` inventories both server JavaScript and the seven largest interactive browser surfaces. It reports physical lines, nonblank lines, bytes, reviewed line budgets, and every statically analyzable local dependency. It fails when a module exceeds its budget, gains an unapproved dependency, is omitted from the relevant policy, loads out of dependency order, references a missing local module, introduces a dependency cycle, or uses server module loading that cannot be audited.
+Build 8.0.1 keeps extraction as an enforceable boundary. `npm run architecture:check` inventories both server JavaScript and the seven largest interactive browser surfaces. It reports physical lines, nonblank lines, bytes, reviewed line budgets, and every statically analyzable local dependency. It fails when a module exceeds its budget, gains an unapproved dependency, is omitted from the relevant policy, loads out of dependency order, references a missing local module, introduces a dependency cycle, or uses server module loading that cannot be audited.
 
 The policies live in `architecture-policy.json` and `frontend-architecture-policy.json`; they should change only with an intentional architecture review. A larger line budget is not the default response to a failure: first decide whether the module has accumulated another responsibility.
 
 ## Dependency direction
 
-Build 8.0.0 adds focused modules for coaching evidence, energy calibration, sensitivity scenarios, training selection, and exercise prescriptions. The current inventory covers 53 server modules and 73 browser modules across 7 page boundaries. Existing module budgets remain enforced; new responsibilities have their own reviewed limits.
+Build 8.0.0 added focused modules for coaching evidence, energy calibration, sensitivity scenarios, training selection, and exercise prescriptions. The current profile-version-4 work adds one pure server activity-budget leaf and one pure browser energy-field leaf. The current inventory covers 54 server modules and 74 browser modules across 7 page boundaries. Existing module budgets remain enforced; new responsibilities have their own reviewed limits.
 
 ```text
 root bootstrap
@@ -18,6 +18,7 @@ root bootstrap
           ├── coaching service
           │     ├── coaching core
           │     │     ├── energy-planning core
+          │     │     │     ├── energy-activity core
           │     │     │     ├── energy-calibration core
           │     │     │     ├── energy-scenarios core
           │     │     │     └── Plan date catalog
@@ -41,7 +42,7 @@ root bootstrap
           └── static and HTTP helpers
 ```
 
-The HTTP root supplies services and adapters through explicit factories. Services do not import the composition root or construct storage. Coaching evidence receives narrow store capabilities from the service; the generation, prescription, progression, energy, and meal cores remain independent of storage and HTTP. Calibration, sensitivity scenarios, and meal planning have no local dependencies. The exact edge inventory appears in the generated server table below.
+The HTTP root supplies services and adapters through explicit factories. Services do not import the composition root or construct storage. Coaching evidence receives narrow store capabilities from the service; the generation, prescription, progression, energy, activity, and meal cores remain independent of storage and HTTP. Activity budgeting, calibration, sensitivity scenarios, and meal planning do not access storage or HTTP. The exact edge inventory appears in the generated server table below.
 
 Missing catalog coverage yields explicitly partial or unavailable training sessions. This preserves calorie and diary access for valid older equipment-limited profiles without widening their equipment, level, or movement restrictions.
 
@@ -49,17 +50,17 @@ Missing catalog coverage yields explicitly partial or unavailable training sessi
 
 `src/coaching.js` owns entitlement, account, request, revision, and date checks. `src/coaching-evidence.js` assembles owner-filtered observations: up to 42 prior diary days, six prior coaching snapshots, and the latest 100 workout summaries with full records from the preceding 56 days. Missing, malformed, truncated, or concurrently changed workout records mark the history incomplete. Historical calorie targets retain their original profile and week; identity checks and date bounds prevent another week's snapshot from replacing them. Same-profile-revision snapshot creation keeps the first persisted result, while an explicit profile revision can replace the current week's snapshot.
 
-`src/coaching-core.js` validates the versioned profile and composes the weekly result. `src/energy-planning-core.js` preserves the exact version-1/version-2 resting-energy calculation and dispatches version 3 to whole-day adult EER estimation. Its calibration leaf aligns complete intake with morning weights, qualifies intervals, reports evidence quality, and bounds updates. Its scenario leaf owns the explicitly labeled sensitivity model. `src/coaching-training-core.js` selects repeatable exercises, fits the estimated duration, and counts direct working sets. `src/coaching-prescription-core.js` preserves measurement and assistance semantics and reuses `src/progression.js` for conservative completed-set targets. `src/meal-planning-core.js` owns food constraints, the bundled recipe catalog, provenance, and calorie/macronutrient-aware options. These are planning suggestions; generation does not write the saved Plan or add workout calorie burn to whole-day energy estimates.
+`src/coaching-core.js` validates the versioned profile and composes the weekly result. `src/energy-planning-core.js` preserves exact version-1/version-2 resting-energy behavior, version-3 whole-day adult EER behavior, and dispatches version 4 to `src/energy-activity-core.js`. That pure leaf combines a reviewed non-workout movement anchor with net energy from usable generated sessions and separately entered weekly activity; it has no access to account data, storage, or HTTP. The calibration leaf aligns complete intake with morning weights, qualifies intervals, reports evidence quality, and bounds updates. The scenario leaf owns the explicitly labeled sensitivity model. `src/coaching-training-core.js` selects repeatable exercises, fits the estimated duration, and counts direct working sets before energy planning consumes the resulting session durations. `src/coaching-prescription-core.js` preserves measurement and assistance semantics and reuses `src/progression.js` for conservative completed-set targets. `src/meal-planning-core.js` owns food constraints, the bundled recipe catalog, provenance, and calorie/macronutrient-aware options. These are planning suggestions; generation does not write the saved Plan. Version 3 never receives added workout energy; version 4 counts each separated activity source once.
 
-The coaching HTTP boundary is 134 physical lines, its core 124, and its evidence helper 84. Energy planning, calibration, and scenarios are 105, 150, and 27 lines; training selection and prescriptions are 103 and 87; meal planning is 168. The HTTP composition root remains at 797 lines under its 800-line ceiling, and the dual database adapter remains at 1,198 under 1,200. The existing coaching schema and parity adapter own persistence, including the nullable morning-weight and intake-completeness fields introduced by migration `005-coaching-calibration`. The existing owner/date key serves bounded diary reads.
+The coaching HTTP boundary is 134 physical lines, its core 132, and its evidence helper 84. Activity budgeting is 49 lines; energy planning, calibration, and scenarios are 116, 152, and 27. Training selection and prescriptions are 107 and 87; meal planning is 168. The HTTP composition root remains at 798 lines under its 800-line ceiling, and the dual database adapter remains at 1,198 under 1,200. The existing coaching schema and parity adapter own persistence, including the nullable morning-weight and intake-completeness fields introduced by migration `005-coaching-calibration`; the new activity fields remain inside the already-versioned coaching-profile JSON. The existing owner/date key serves bounded 42-date diary reads.
 
-Earlier extraction boundaries remain intact: billing delegates provider validation and checkout retirement, authentication delegates account self-service and bounded export serialization, and the database adapter delegates focused schema and storage responsibilities. The current server report has 53 modules, zero dependency cycles, and zero policy violations.
+Earlier extraction boundaries remain intact: billing delegates provider validation and checkout retirement, authentication delegates account self-service and bounded export serialization, and the database adapter delegates focused schema and storage responsibilities. The current server report has 54 modules, zero dependency cycles, and zero policy violations.
 
 ## Browser boundaries
 
-Build 8.0.0 keeps the existing Home, Plan, Train, and Strata+ page boundaries. `personal-training-ui-core.js` owns unit conversion, profile and training-goal form values, progress math, and presentation of server estimates. The new `personal-training-diary-ui.js` owns historical date/target selection and draft comparisons. `personal-training-meals-ui-core.js` owns food preferences, remaining-nutrition shaping, and formatting. `discover-coaching-meals.js` handles food-option requests and rendering; `discover-coaching.js` retains coaching state, profile/log events, conflicts, and private-state clearing. `discover-coaching-render.js` presents calibration quality, sensitivity ranges, workout durations, and direct muscle coverage without recalculating the server model. The existing Strata+ API leaf remains the single HTTP transport boundary.
+Build 8.0.1 keeps the existing Home, Plan, Train, and Strata+ page boundaries. `personal-training-energy-ui-core.js` now owns validation and compatibility shaping for the separated daily-movement, additional-minutes, and intensity fields. It deliberately returns an unanswered movement choice for older profiles so the browser cannot silently reinterpret them. `personal-training-ui-core.js` owns unit conversion, the remaining profile and training-goal form values, progress math, and presentation of server estimates. `personal-training-diary-ui.js` owns historical date/target selection and draft comparisons. `personal-training-meals-ui-core.js` owns food preferences, remaining-nutrition shaping, and formatting. `discover-coaching-meals.js` handles food-option requests and rendering; `discover-coaching.js` retains coaching state, profile/log events, conflicts, and private-state clearing. `discover-coaching-render.js` presents the server's activity breakdown, population cross-check, deficit guardrails, calibration quality, sensitivity ranges, workout durations, and direct muscle coverage without recalculating the model. The existing Strata+ API leaf remains the single HTTP transport boundary.
 
-The current report inventories 73 modules across 7 page boundaries, with zero cycles and zero policy violations. The Strata+ coordinator is 722 physical lines under its 730-line ceiling. The personal-training UI core is 216 under 220, the diary leaf 15 under 80, and the coaching renderer 97 under 110. Food-preference logic is 84 under 140, food-option events/rendering 62 under 120, and coaching events 69 under 100. Progress and Personal training share the account-backed diary and its server-provided historical targets.
+The current report inventories 74 modules across 7 page boundaries, with zero cycles and zero policy violations. The Strata+ coordinator is 722 physical lines under its 730-line ceiling. The energy-field leaf is 48 under 80, the personal-training UI core is 215 under 220, the diary leaf 15 under 80, and the coaching renderer 101 under 110. Food-preference logic is 84 under 140, food-option events/rendering 62 under 120, and coaching events 67 under 100. Progress and Personal training share the account-backed diary and its server-provided historical targets.
 
 Home still coordinates comparison state through its existing logic, state, API, rendering, and event modules. Plan retains its canonical empty-plan, save, reset, and conflict boundaries. Train retains focused workout context and progression renderers. The pure `session-selection-core.js` retains the four explicit workout-builder selection modes; its form events remain in `discover-session.js`.
 
@@ -79,19 +80,19 @@ This graph is page-specific: it does not permit calls into unrelated page coordi
 
 ### Browser size result
 
-The original coordinator sizes below provide historical context; the after sizes and leaf counts are the current Build 8.0.0 report:
+The original coordinator sizes below provide historical context; the after sizes and leaf counts are the current Build 8.0.1 report:
 
 | Page | Coordinator before → after | Extracted modules (physical lines) |
 | --- | ---: | --- |
 | Home | `app.js` 626 → 146 | logic 117; state 36; API 24; render 154; events 63 |
-| Strata+ | `discover.js` 1,364 → 722 | state 54; API 51; navigation 110; progress logic 74; base render 47; coaching render 98; catalog 86; detail 54; community 52; session 60; selection logic 158; coaching logic 216; diary logic 15; meal UI logic 84; sharing 31; events 64; food-option events/rendering 62; coaching events 69 |
+| Strata+ | `discover.js` 1,364 → 722 | state 54; API 51; navigation 110; progress logic 74; base render 47; coaching render 101; catalog 86; detail 54; community 52; session 60; selection logic 158; energy-field logic 48; coaching logic 215; diary logic 15; meal UI logic 84; sharing 31; events 64; food-option events/rendering 62; coaching events 67 |
 | Plan | `planner.js` 1,233 → 679 | logic 83; state 60; API 36; render 75; conflicts 106; templates 82; sharing 120; activation 96; events 147 |
 | Train | `workout.js` 784 → 397 | state 57; API 52; calendar logic 29; progression logic 92; base render 66; context render 65; guidance 109; history 113; events 99 |
 | Pricing | `pricing.js` 414 → 213 | logic 56; state 17; API 30; render 109; events 22 |
 | Account | `account.js` 835 → 271 | logic 238; state 31; API 68; render 186; events 44 |
 | Admin | `admin.js` 848 → 203 | state 53; logic 92; API 45; render 189; session 53; events 53 |
 
-These totals are not presented as deleted functionality: much of the former coordinator code moved into named leaves, and new user-facing behavior was added. The evidence of improvement is the enforced direction, independent tests, smaller orchestration roots, and zero-cycle report—not a lower aggregate line count. `node scripts/frontend-architecture-report.js` prints the exact live line/nonblank/byte table and every resolved dependency for all 73 browser modules across seven page boundaries.
+These totals are not presented as deleted functionality: much of the former coordinator code moved into named leaves, and new user-facing behavior was added. The evidence of improvement is the enforced direction, independent tests, smaller orchestration roots, and zero-cycle report—not a lower aggregate line count. `node scripts/frontend-architecture-report.js` prints the exact live line/nonblank/byte table and every resolved dependency for all 74 browser modules across seven page boundaries.
 
 ## Resulting module sizes
 
@@ -115,7 +116,7 @@ The command-generated table below is the current server snapshot. CI generates t
 | `src/billing-store.js` | SQLite and Turso commercial storage parity | 240 | 233 | 22.8 KiB | 240 | `src/access-controls-schema.js`, `src/billing-schema.js` |
 | `src/billing.js` | Commercial entitlement, checkout, trial, webhook, and reconciliation service | 719 | 690 | 44.5 KiB | 720 | `src/access-controls.js`, `src/checkout-reconciliation.js`, `src/http.js`, `src/legacy-checkout.js`, `src/payments.js`, `src/plans.js` |
 | `src/checkout-reconciliation.js` | Validated checkout closure and settlement reconciliation | 99 | 98 | 8.0 KiB | 130 | `src/legacy-checkout.js`, `src/payments.js`, `src/plans.js` |
-| `src/coaching-core.js` | Validated coaching inputs and deterministic weekly training composition | 124 | 117 | 17.1 KiB | 300 | `src/coaching-training-core.js`, `src/energy-planning-core.js`, `src/meal-planning-core.js`, `src/plans.js` |
+| `src/coaching-core.js` | Validated coaching inputs and deterministic weekly training composition | 132 | 125 | 19.6 KiB | 300 | `src/coaching-training-core.js`, `src/energy-planning-core.js`, `src/meal-planning-core.js`, `src/plans.js` |
 | `src/coaching-evidence.js` | Owner-filtered coaching history and original-target diary assembly | 84 | 78 | 6.9 KiB | 130 | `src/coaching-core.js`, `src/energy-calibration-core.js` |
 | `src/coaching-prescription-core.js` | Measurement-aware prescriptions from comparable completed training history | 87 | 86 | 11.6 KiB | 180 | `src/progression.js` |
 | `src/coaching-schema.js` | Coaching profile, weekly snapshot, and daily-log schema | 50 | 47 | 4.5 KiB | 80 | — |
@@ -124,8 +125,9 @@ The command-generated table below is the current server snapshot. CI generates t
 | `src/coaching.js` | Strata+ coaching profile, weekly snapshot, and daily-log API | 134 | 130 | 14.0 KiB | 180 | `src/coaching-core.js`, `src/coaching-evidence.js`, `src/energy-calibration-core.js`, `src/meal-planning-core.js` |
 | `src/database.js` | SQLite and Turso store adapters | 1198 | 1171 | 63.8 KiB | 1200 | `src/access-controls-store.js`, `src/account-self-service-store.js`, `src/billing-store.js`, `src/coaching-store.js`, `src/migrations.js`, `src/schema.js`, `src/store-contract.js`, `src/training-loop-store.js` |
 | `src/email.js` | Resend integration and email security | 388 | 355 | 19.9 KiB | 400 | `src/admin-mfa.js` |
-| `src/energy-calibration-core.js` | Aligned intake/weight estimation, quality diagnostics, and bounded weekly adaptation | 150 | 145 | 21.5 KiB | 220 | — |
-| `src/energy-planning-core.js` | Adult EER estimation, bounded trend calibration, and nutrition planning | 105 | 96 | 14.8 KiB | 190 | `src/energy-calibration-core.js`, `src/energy-scenarios-core.js`, `src/plans.js` |
+| `src/energy-activity-core.js` | Profile-v4 non-workout and generated-session activity energy budget | 49 | 46 | 3.3 KiB | 100 | — |
+| `src/energy-calibration-core.js` | Aligned intake/weight estimation, quality diagnostics, and bounded weekly adaptation | 152 | 147 | 21.9 KiB | 220 | — |
+| `src/energy-planning-core.js` | Versioned energy estimation, bounded trend calibration, and nutrition planning | 116 | 107 | 21.3 KiB | 190 | `src/energy-activity-core.js`, `src/energy-calibration-core.js`, `src/energy-scenarios-core.js`, `src/plans.js` |
 | `src/energy-scenarios-core.js` | Explicit dynamic sensitivity scenarios with propagated maintenance uncertainty | 27 | 25 | 2.9 KiB | 100 | — |
 | `src/http.js` | HTTP transport helpers | 170 | 155 | 5.9 KiB | 180 | — |
 | `src/legacy-checkout.js` | Strict retired-checkout migration and completion policy | 71 | 66 | 7.4 KiB | 75 | `src/payments.js` |
@@ -142,7 +144,7 @@ The command-generated table below is the current server snapshot. CI generates t
 | `src/product-signals.js` | Consent-gated aggregate product-activity boundary | 135 | 122 | 5.5 KiB | 140 | — |
 | `src/progression.js` | Pure per-set performance progression and comparison rules | 177 | 175 | 13.2 KiB | 300 | `src/plans.js` |
 | `src/schema.js` | Shared storage schema and statements | 364 | 358 | 44.3 KiB | 390 | `src/access-controls-schema.js`, `src/account-self-service-schema.js`, `src/billing-schema.js`, `src/coaching-schema.js`, `src/product-signals-schema.js`, `src/training-loop-schema.js` |
-| `src/server.js` | HTTP composition root | 797 | 772 | 42.1 KiB | 800 | `src/access-controls.js`, `src/admin.js`, `src/auth.js`, `src/billing.js`, `src/coaching.js`, `src/database.js`, `src/email.js`, `src/http.js`, `src/observability.js`, `src/payments.js`, `src/plans.js`, `src/product-signals.js`, `src/service-composition.js`, `src/setup.js`, `src/static-assets.js`, `src/support.js`, `src/training.js`, `src/workouts.js` |
+| `src/server.js` | HTTP composition root | 798 | 773 | 42.2 KiB | 800 | `src/access-controls.js`, `src/admin.js`, `src/auth.js`, `src/billing.js`, `src/coaching.js`, `src/database.js`, `src/email.js`, `src/http.js`, `src/observability.js`, `src/payments.js`, `src/plans.js`, `src/product-signals.js`, `src/service-composition.js`, `src/setup.js`, `src/static-assets.js`, `src/support.js`, `src/training.js`, `src/workouts.js` |
 | `src/service-composition.js` | Typed auth/admin/support composition | 40 | 38 | 1.8 KiB | 60 | — |
 | `src/setup.js` | Atomic weekly-plan and preference setup | 84 | 77 | 4.9 KiB | 105 | `src/plans.js` |
 | `src/static-assets.js` | Bounded public asset representations | 46 | 41 | 1.9 KiB | 65 | `src/http.js` |
@@ -153,11 +155,11 @@ The command-generated table below is the current server snapshot. CI generates t
 | `src/training.js` | Check-ins, deterministic progression, blocks, and approved adaptations | 358 | 346 | 24.8 KiB | 450 | `src/plans.js`, `src/progression.js` |
 | `src/workouts.js` | Workout validation, history summaries, and authenticated lifecycle | 214 | 208 | 14.3 KiB | 230 | `src/plans.js` |
 
-Snapshot result: 53 server modules, zero dependency cycles, and zero policy violations. The separate browser report covers 7 page boundaries and 73 browser modules with zero cycles and zero violations.
+Snapshot result: 54 server modules, zero dependency cycles, and zero policy violations. The separate browser report covers 7 page boundaries and 74 browser modules with zero cycles and zero violations.
 
 ## Static boundary types
 
-`tsconfig.boundaries.json` runs TypeScript in strict `allowJs` plus `checkJs` mode with no output. The enforced slice covers HTTP transport, Paddle transaction/subscription/webhook validation, billing policy, account self-service and its two store implementations, store registration, setup, product signals, the training loop, coaching evidence and prescriptions, energy calibration and sensitivity scenarios, and meal-option generation/API/schema/storage, workouts, and the production service composition. Shared declarations in `src/domain-types.d.ts`, `src/plans.d.ts`, and `src/workouts.d.ts` keep untrusted payloads unknown until validation narrows them, preserve the coaching profile version as a domain-boundary field, type the nullable morning-weight and intake-completeness observations, and keep injected capabilities smaller than the full application store.
+`tsconfig.boundaries.json` runs TypeScript in strict `allowJs` plus `checkJs` mode with no output. The enforced slice covers HTTP transport, Paddle transaction/subscription/webhook validation, billing policy, account self-service and its two store implementations, store registration, setup, product signals, the training loop, coaching evidence and prescriptions, activity budgeting, energy calibration and sensitivity scenarios, and meal-option generation/API/schema/storage, workouts, and the production service composition. Shared declarations in `src/domain-types.d.ts`, `src/plans.d.ts`, and `src/workouts.d.ts` keep untrusted payloads unknown until validation narrows them; preserve the versioned daily-movement, additional-activity, and generated-session energy fields at the coaching boundary; type nullable morning-weight and intake-completeness observations; and keep injected capabilities smaller than the full application store.
 
 This is an incremental boundary strategy rather than a cosmetic file-extension migration. It does not claim that every browser DOM controller or every legacy service implementation is fully typed. Runtime guards, focused tests, and the architecture edge policy remain necessary alongside static checking.
 

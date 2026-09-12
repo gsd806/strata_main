@@ -797,6 +797,8 @@ export interface TrainingService {
 
 export type CoachingGoal="fat_loss"|"maintenance"|"muscle_gain";
 export type CoachingExperience="beginner"|"intermediate"|"advanced";
+export type CoachingDailyMovement="mostly_seated"|"lightly_moving"|"on_feet"|"physically_demanding";
+export type CoachingAdditionalActivityIntensity="light"|"moderate"|"vigorous";
 export interface CoachingCapability {exerciseId:string;maxSets:number;maxReps:number;maxWeightKg:number|null;}
 export type FoodAllergen="milk"|"egg"|"fish"|"crustacean_shellfish"|"tree_nuts"|"peanuts"|"wheat"|"soy"|"sesame";
 export type DietaryPattern="omnivore"|"pescatarian"|"vegetarian"|"vegan";
@@ -806,15 +808,18 @@ export interface MealPreferences extends JsonObject {
   dietaryPattern:DietaryPattern;dietaryRequirements:DietaryRequirement[];favoriteFoods:string[];
   mealsPerDay:number;dailyBudgetCents:number|null;
 }
-export interface CoachingProfile extends JsonObject {
-  version:1|2|3;measurementSystem:"metric"|"imperial";preferredLoadUnit:"kg"|"lb";
-  age:number;heightCm:number;weightKg:number;bodyFatPercent:number|null;sexForEquation:"female"|"male"|null;
-  goal:CoachingGoal;trainingGoal:"balanced"|"strength"|"hypertrophy";goalPace:"gentle"|"moderate";experience:CoachingExperience;lifestyleActivity:string;
+export interface CoachingProfileBase extends JsonObject {
+  measurementSystem:"metric"|"imperial";preferredLoadUnit:"kg"|"lb";
+  age:number;heightCm:number;weightKg:number;bodyFatPercent:number|null;
+  goal:CoachingGoal;trainingGoal:"balanced"|"strength"|"hypertrophy";goalPace:"gentle"|"moderate";experience:CoachingExperience;
   workoutDays:string[];sessionsPerWeek:number;sessionMinutes:30|45|60|75|90;usualExercises:CoachingCapability[];
   availableEquipment:string[];movementLimitations:string[];caloriePattern:"steady"|"zigzag"|"flexible_day";
   flexibleDay:string|null;macroPreference:"balanced"|"higher_protein"|null;timeZone:string;mealPreferences:MealPreferences|null;
 }
-export interface CoachingProfilePayload extends CoachingProfile {revision:number;updatedAt:number;}
+export interface LegacyCoachingProfile extends CoachingProfileBase {version:1|2|3;sexForEquation:"female"|"male"|null;lifestyleActivity:string;dailyMovement?:never;additionalActivityMinutesPerWeek?:never;additionalActivityIntensity?:never;}
+export interface StructuredCoachingProfile extends CoachingProfileBase {version:4;sexForEquation:"female"|"male";lifestyleActivity?:never;dailyMovement:CoachingDailyMovement;additionalActivityMinutesPerWeek:number;additionalActivityIntensity:CoachingAdditionalActivityIntensity;}
+export type CoachingProfile=LegacyCoachingProfile|StructuredCoachingProfile;
+export type CoachingProfilePayload=CoachingProfile&{revision:number;updatedAt:number;};
 export interface CoachingWeekRecord {userId:string;weekStart:string;planKey:string;profileRevision:number;snapshotJson:string;generatedAt:number;}
 export interface CoachingDailyLogRecord {userId:string;logDate:string;calories:number;proteinG:number|null;carbsG:number|null;fatG:number|null;morningWeightKg:number|null;complete:boolean|null;updatedAt:number;}
 export interface CoachingDailyLogRow extends JsonObject {log_date:string;calories:number;protein_g:number|null;carbs_g:number|null;fat_g:number|null;morning_weight_kg:number|null;intake_complete:0|1|null;revision:number;updated_at:number;}

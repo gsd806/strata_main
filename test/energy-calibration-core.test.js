@@ -14,7 +14,7 @@ const calculate=(data,options={})=>calibrateMaintenance(profile(options.profile)
 function previous(result,{week=add(WEEK,-7),model=MODEL_VERSION}={}){return {weekStart:week,energyModelVersion:model,nutrition:{maintenance:{targetKcal:result.targetKcal,calibration:result}}};}
 
 test("calibration constants declare the bounded model and minimum evidence",()=>{
-  assert.equal(CALIBRATION_DAYS,42);assert.equal(MODEL_VERSION,"energy-planning-v3");assert.equal(MIN_COMPLETE_DAYS,14);assert.equal(MIN_WEIGHT_DAYS,8);assert.equal(MIN_WEIGHT_SPAN_DAYS,14);
+  assert.equal(CALIBRATION_DAYS,42);assert.equal(MODEL_VERSION,"energy-planning-v4");assert.equal(MIN_COMPLETE_DAYS,14);assert.equal(MIN_WEIGHT_DAYS,8);assert.equal(MIN_WEIGHT_SPAN_DAYS,14);
   assert.equal(calculate({}).windowDays,42);
 });
 test("aligned cumulative intake recovers known expenditure with constant or varying intake",()=>{
@@ -72,6 +72,11 @@ test("unchanged old windows do not ratchet the target in another week",()=>{
   const input=evidence({maintenance:3400,intake:3400}),first=calculate(input);input.previousWeek=previous(first,{week:WEEK});
   const second=calculate(input,{week:add(WEEK,7)});assert.equal(second.priorState,"held");assert.equal(second.targetKcal,first.targetKcal);assert.notEqual(second.status,"trend_informed");
 });
+test("a version 3 profile preserves its immediately previous v3 calibration during model rollover",()=>{
+  const accepted=calculate(evidence({maintenance:3400,intake:3400})),oldCalibration={...accepted,modelVersion:"energy-planning-v3"},oldSnapshot=previous(oldCalibration,{week:WEEK,model:"energy-planning-v3"}),nextWeek=add(WEEK,7);
+  const held=calculate({previousWeek:oldSnapshot},{week:nextWeek});assert.equal(held.priorState,"held");assert.equal(held.targetKcal,accepted.targetKcal);assert.ok(Math.abs(held.weeklyChangeKcal)<=150);
+  const rejectedForV4=calculate({previousWeek:oldSnapshot},{week:nextWeek,profile:{version:4},baseline:{energySemantics:"mifflin_structured_activity_v4"}});assert.equal(rejectedForV4.priorState,"none");assert.equal(rejectedForV4.targetKcal,2625);
+});
 test("stale accepted evidence is held for42days then explicitly expires",()=>{
   const first=calculate(evidence({maintenance:3400,intake:3400})),saved=previous(first,{week:WEEK});
   const held=calculate({previousWeek:saved},{week:add(WEEK,35)});assert.equal(held.priorState,"held");assert.equal(held.targetKcal,2775);assert.equal(held.lastAcceptedEvidenceEnd,add(WEEK,-1));
@@ -101,7 +106,7 @@ test("disjoint baseline and weekly bounds restore gradually across successive sn
 });
 test("saved target provenance must match the stored baseline and model rather than the current baseline",()=>{
   const saved=previous({modelVersion:MODEL_VERSION,baselineKcal:2625,targetKcal:3275,status:"trend_informed",lastAcceptedEvidenceEnd:add(WEEK,-8)});
-  const variants=[{baselineKcal:undefined},{baselineKcal:2000},{modelVersion:"energy-planning-v2"},{targetKcal:3250}];
+  const variants=[{baselineKcal:undefined},{baselineKcal:2000},{modelVersion:"energy-planning-v3"},{targetKcal:3250}];
   for(const change of variants){const invalid=structuredClone(saved);Object.assign(invalid.nutrition.maintenance.calibration,change);assert.equal(calculate({previousWeek:invalid}).targetKcal,2625);}
   const contradictory=structuredClone(saved);contradictory.nutrition.maintenance.baselineKcal=2600;assert.equal(calculate({previousWeek:contradictory}).targetKcal,2625);
 });
@@ -118,9 +123,13 @@ test("valid high EER targets remain rate limiters without relaxing the raw expen
   const rejected=calculate(evidence({weight:230,maintenance:6100,intake:6100}),options);
   assert.equal(rejected.status,"calibrating");assert.equal(rejected.targetKcal,6675);assert.match(rejected.explanation,/plausibility bounds/);
 });
+test("structured-activity provenance bounds cover the full declared input range",()=>{
+  const oldCalibration={modelVersion:MODEL_VERSION,baselineKcal:15000,targetKcal:18000,status:"trend_informed",lastAcceptedEvidenceEnd:add(WEEK,-8)},snapshot={weekStart:add(WEEK,-7),energyModelVersion:MODEL_VERSION,nutrition:{maintenance:{baselineKcal:15000,targetKcal:18000,calibration:oldCalibration}}};
+  const result=calculate({previousWeek:snapshot},{profile:{version:4},baseline:{targetKcal:15000,energySemantics:"mifflin_structured_activity_v4"}});assert.equal(result.priorState,"held");assert.equal(result.targetKcal,18000);
+});
 test("future, current-week and incompatible-model prior snapshots cannot affect targets",()=>{
   const result={targetKcal:3100,status:"trend_informed",lastAcceptedEvidenceEnd:add(WEEK,-1)};
-  for(const prior of [previous(result,{week:WEEK}),previous(result,{week:add(WEEK,7)}),previous(result,{model:"energy-planning-v2"}),previous({...result,lastAcceptedEvidenceEnd:WEEK})]){
+  for(const prior of [previous(result,{week:WEEK}),previous(result,{week:add(WEEK,7)}),previous(result,{model:"energy-planning-v3"}),previous({...result,lastAcceptedEvidenceEnd:WEEK})]){
     const input=evidence({maintenance:3400,intake:3400});input.previousWeek=prior;assert.equal(calculate(input).targetKcal,2775);
   }
 });
@@ -135,8 +144,9 @@ test("legacy profiles preserve exact baseline values and do not adopt recent wei
   for(const version of [1,2]){const input=evidence({maintenance:3400,intake:3400});const result=calculate(input,{profile:{version},baseline:{targetKcal:2575,energySemantics:"legacy_rmr_activity_multiplier"}});assert.equal(result.status,"legacy_profile");assert.equal(result.targetKcal,2575);assert.equal(result.appliedAdjustmentKcal,0);assert.equal(deriveWeightAnchor(profile({version}),WEEK,input).source,"saved_profile");}
 });
 test("recent-weight anchor reports provenance and prevents stale body-fat coupling",()=>{
-  const input=evidence({weight:74}),original=profile(),snapshot=structuredClone(input),anchor=deriveWeightAnchor(original,WEEK,input);
-  assert.equal(anchor.weightKg,74);assert.equal(anchor.source,"recent_morning_weights");assert.equal(anchor.date,add(WEEK,-1));assert.equal(anchor.quality,"consistent");assert.equal(anchor.changed,true);assert.equal(anchor.bodyFatCompatible,false);assert.deepEqual(original,profile());assert.deepEqual(input,snapshot);
+  const input=evidence({weight:72}),original=profile(),snapshot=structuredClone(input),anchor=deriveWeightAnchor(original,WEEK,input);
+  assert.equal(anchor.weightKg,72);assert.equal(anchor.source,"recent_morning_weights");assert.equal(anchor.date,add(WEEK,-1));assert.equal(anchor.quality,"consistent");assert.equal(anchor.changed,true);assert.equal(anchor.bodyFatCompatible,false);assert.deepEqual(original,profile());assert.deepEqual(input,snapshot);
+  assert.equal(deriveWeightAnchor(original,WEEK,evidence({weight:74.9})).bodyFatCompatible,true,"ordinary scale drift within 2% may retain the conservative composition screen");
 });
 test("sparse, stale, conflicting and noisy recent weights cannot silently replace profile weight",()=>{
   const sparse=evidence();sparse.dailyLogs=sparse.dailyLogs.slice(0,-5);const noisy=evidence({noise:index=>index%2?2:-2});

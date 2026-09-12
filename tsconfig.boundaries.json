@@ -28,6 +28,7 @@
     "src/billing.js",
     "src/billing-store.js",
     "src/coaching-core.js",
+    "src/energy-activity-core.js",
     "src/energy-planning-core.js",
     "src/meal-planning-core.js",
     "src/coaching-schema.js",
