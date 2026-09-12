@@ -159,6 +159,23 @@ test("a Strata+ member builds, tracks, reloads, and safely refreshes a coaching 
   }finally{await context.close();}
 });
 
+test("an equipment-limited beginner sees honest training gaps while calories and diary remain usable",async()=>{
+  const context=await browser.newContext({baseURL:baseUrl,serviceWorkers:"block",timezoneId:"UTC",viewport:{width:390,height:844},extraHTTPHeaders:{"X-Forwarded-For":"198.51.100.242"}});
+  try{
+    await signup(context,"bodyweight-beginner");await activatePlus(context);
+    const session=await (await context.request.get("/api/me")).json(),profile={version:3,measurementSystem:"metric",preferredLoadUnit:"kg",age:30,heightCm:180,weightKg:80,bodyFatPercent:null,sexForEquation:"male",goal:"maintenance",goalPace:"moderate",experience:"beginner",lifestyleActivity:"lightly_active",workoutDays:["Monday","Wednesday","Friday"],sessionMinutes:30,usualExercises:[],availableEquipment:["Bodyweight"],movementLimitations:[],caloriePattern:"steady",flexibleDay:null,macroPreference:null,timeZone:"UTC"};
+    const saved=await context.request.put("/api/coaching/profile",{headers:{Origin:baseUrl,"X-CSRF-Token":session.csrfToken},data:{profile,expectedRevision:0}});
+    assert.equal(saved.status(),200,await saved.text());
+    const page=await context.newPage();await page.goto("/discover.html#coachingWorkspace",{waitUntil:"domcontentloaded"});await page.locator("#coachingDashboard").waitFor({state:"visible"});
+    assert.equal(await page.locator("#coachingCalorieWeek .coaching-calorie-card").count(),7);
+    assert.match((await page.locator("#coachingWeekGrid").textContent())||"",/partial|unavailable/i);
+    assert.match((await page.locator("#coachingWeekGrid").textContent())||"",/Knee-dominant legs/);
+    assert.match((await page.locator("#coachingPlanMethod").textContent())||"",/review/i);
+    await page.fill("#coachingCaloriesEaten","2000");const response=page.waitForResponse(r=>new URL(r.url()).pathname.startsWith("/api/coaching/logs/")&&r.request().method()==="PUT");await page.click("#coachingSaveLog");assert.equal((await response).status(),200);
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)<=1);
+  }finally{await context.close();}
+});
+
 test.before(async()=>{
   try{await startApp();const options={headless:true};if(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH)options.executablePath=resolve(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH);browser=await chromium.launch(options);}
   catch(error){await cleanup();throw error;}

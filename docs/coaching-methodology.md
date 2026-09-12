@@ -97,7 +97,7 @@ The response form is informed by the energy-balance reasoning in [Hall and colle
 
 ## Weekly training prescriptions
 
-The training goal—balanced, strength, or hypertrophy—is separate from the nutrition goal. Missing older values default to balanced. Days, equipment, actual experience, movement exclusions, and recorded capabilities constrain the exercise catalog. Empty equipment selection means no equipment filter. A required movement that cannot fit produces a constraint error; the generator does not lower safety restrictions or ask members to overstate experience.
+The training goal—balanced, strength, or hypertrophy—is separate from the nutrition goal. Missing older values default to balanced. Days, equipment, actual experience, movement exclusions, and recorded capabilities constrain the exercise catalog. Empty equipment selection means no equipment filter. When the catalog cannot cover a required movement, the session is explicitly partial or unavailable, with missing roles and a review warning. Compatible exercises remain available and nutrition/diary access is preserved. Missing required movements remain explicitly disclosed. An unavailable session has zero working sets and zero estimated training minutes. The generator does not lower restrictions or ask members to overstate experience or claim equipment they do not have.
 
 The deterministic split is full body for one to three days, upper/lower repeated for four, push/pull/lower/upper/lower for five, and push/pull/lower repeated for six. Compatible main exercises from the preceding week are strongly favored, with entered familiar exercises and recent training also considered. Accessories can vary across four-week calendar windows. Variation is not treated as necessary for progress.
 

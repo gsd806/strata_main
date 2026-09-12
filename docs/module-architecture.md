@@ -43,6 +43,8 @@ root bootstrap
 
 The HTTP root supplies services and adapters through explicit factories. Services do not import the composition root or construct storage. Coaching evidence receives narrow store capabilities from the service; the generation, prescription, progression, energy, and meal cores remain independent of storage and HTTP. Calibration, sensitivity scenarios, and meal planning have no local dependencies. The exact edge inventory appears in the generated server table below.
 
+Missing catalog coverage yields explicitly partial or unavailable training sessions. This preserves calorie and diary access for valid older equipment-limited profiles without widening their equipment, level, or movement restrictions.
+
 ## Current server boundary
 
 `src/coaching.js` owns entitlement, account, request, revision, and date checks. `src/coaching-evidence.js` assembles owner-filtered observations: up to 42 prior diary days, six prior coaching snapshots, and the latest 100 workout summaries with full records from the preceding 56 days. Missing, malformed, truncated, or concurrently changed workout records mark the history incomplete. Historical calorie targets retain their original profile and week; identity checks and date bounds prevent another week's snapshot from replacing them. Same-profile-revision snapshot creation keeps the first persisted result, while an explicit profile revision can replace the current week's snapshot.
@@ -82,7 +84,7 @@ The original coordinator sizes below provide historical context; the after sizes
 | Page | Coordinator before → after | Extracted modules (physical lines) |
 | --- | ---: | --- |
 | Home | `app.js` 626 → 146 | logic 117; state 36; API 24; render 154; events 63 |
-| Strata+ | `discover.js` 1,364 → 722 | state 54; API 51; navigation 110; progress logic 74; base render 47; coaching render 97; catalog 86; detail 54; community 52; session 60; selection logic 158; coaching logic 216; diary logic 15; meal UI logic 84; sharing 31; events 64; food-option events/rendering 62; coaching events 69 |
+| Strata+ | `discover.js` 1,364 → 722 | state 54; API 51; navigation 110; progress logic 74; base render 47; coaching render 98; catalog 86; detail 54; community 52; session 60; selection logic 158; coaching logic 216; diary logic 15; meal UI logic 84; sharing 31; events 64; food-option events/rendering 62; coaching events 69 |
 | Plan | `planner.js` 1,233 → 679 | logic 83; state 60; API 36; render 75; conflicts 106; templates 82; sharing 120; activation 96; events 147 |
 | Train | `workout.js` 784 → 397 | state 57; API 52; calendar logic 29; progression logic 92; base render 66; context render 65; guidance 109; history 113; events 99 |
 | Pricing | `pricing.js` 414 → 213 | logic 56; state 17; API 30; render 109; events 22 |
@@ -118,7 +120,7 @@ The command-generated table below is the current server snapshot. CI generates t
 | `src/coaching-prescription-core.js` | Measurement-aware prescriptions from comparable completed training history | 87 | 86 | 11.6 KiB | 180 | `src/progression.js` |
 | `src/coaching-schema.js` | Coaching profile, weekly snapshot, and daily-log schema | 50 | 47 | 4.5 KiB | 80 | — |
 | `src/coaching-store.js` | SQLite and Turso coaching storage parity | 48 | 42 | 3.9 KiB | 80 | `src/coaching-schema.js` |
-| `src/coaching-training-core.js` | Repeatable goal-specific training composition with duration and coverage accounting | 103 | 102 | 12.4 KiB | 220 | `src/coaching-prescription-core.js`, `src/plans.js` |
+| `src/coaching-training-core.js` | Repeatable goal-specific training composition with duration and coverage accounting | 107 | 106 | 13.2 KiB | 220 | `src/coaching-prescription-core.js`, `src/plans.js` |
 | `src/coaching.js` | Strata+ coaching profile, weekly snapshot, and daily-log API | 134 | 130 | 14.0 KiB | 180 | `src/coaching-core.js`, `src/coaching-evidence.js`, `src/energy-calibration-core.js`, `src/meal-planning-core.js` |
 | `src/database.js` | SQLite and Turso store adapters | 1198 | 1171 | 63.8 KiB | 1200 | `src/access-controls-store.js`, `src/account-self-service-store.js`, `src/billing-store.js`, `src/coaching-store.js`, `src/migrations.js`, `src/schema.js`, `src/store-contract.js`, `src/training-loop-store.js` |
 | `src/email.js` | Resend integration and email security | 388 | 355 | 19.9 KiB | 400 | `src/admin-mfa.js` |
