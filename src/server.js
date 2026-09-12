@@ -101,6 +101,7 @@ const STATIC_FILES = new Map([
   ["install.html","pages/install.html"],
   ["offline.html","pages/offline.html"],
   ["pricing.html","pages/pricing.html"],
+  ["reviews.html","pages/reviews.html"],
   ["contact.html","pages/contact.html"],
   ["policies.html","pages/policies.html"],
   ["terms.html","pages/terms.html"],
@@ -201,6 +202,7 @@ const STATIC_FILES = new Map([
 const PAGE_ALIASES = new Map([
   ["/install","install.html"],
   ["/pricing","pricing.html"],
+  ["/reviews","reviews.html"],
   ["/contact","contact.html"],
   ["/policies","policies.html"],
   ["/terms","terms.html"],

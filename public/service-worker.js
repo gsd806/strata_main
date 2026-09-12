@@ -14,6 +14,7 @@ const PRECACHE_URLS=[
   "/workout-offline.html",
   "/install.html",
   "/pricing.html",
+  "/reviews.html",
   "/contact.html",
   "/policies.html",
   "/terms.html",
@@ -124,6 +125,7 @@ const PRIVATE_HTML_PATHS=new Set(["/","/index.html","/account.html","/verify-ema
 const PUBLIC_HTML_FALLBACKS=new Map([
   ["/install","/install.html"],
   ["/pricing","/pricing.html"],
+  ["/reviews","/reviews.html"],
   ["/contact","/contact.html"],
   ["/policies","/policies.html"],
   ["/terms","/terms.html"],
