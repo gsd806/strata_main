@@ -581,11 +581,11 @@ test("live monthly checkout grants, manages, updates, and revokes Strata+ secure
   const replay=await signedWebhook(completion);
   assert.equal(replay.response.status,200);
   assert.equal(replay.data.outcome,"replayed");
-  const database=new DatabaseSync(join(runtimeDir,"strata.sqlite"),{readOnly:true});
-  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM paddle_webhook_events WHERE event_id=?").get(completion.event_id).count,1);
-  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM paddle_purchases WHERE transaction_id=?").get(prepared.data.transactionId).count,1);
-  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM paddle_subscriptions WHERE subscription_id=?").get(subscriptionId(prepared.data.transactionId)).count,1);
-  database.close();
+  const replayDatabase=database({readOnly:true});
+  assert.equal(replayDatabase.prepare("SELECT COUNT(*) AS count FROM paddle_webhook_events WHERE event_id=?").get(completion.event_id).count,1);
+  assert.equal(replayDatabase.prepare("SELECT COUNT(*) AS count FROM paddle_purchases WHERE transaction_id=?").get(prepared.data.transactionId).count,1);
+  assert.equal(replayDatabase.prepare("SELECT COUNT(*) AS count FROM paddle_subscriptions WHERE subscription_id=?").get(subscriptionId(prepared.data.transactionId)).count,1);
+  replayDatabase.close();
 
   const invalidAccount=await signup({
     name:"Invalid Signature Tester",
@@ -625,7 +625,7 @@ test("live monthly checkout grants, manages, updates, and revokes Strata+ secure
   assert.equal(wrongAdjustmentResult.response.status,200);
   assert.equal(wrongAdjustmentResult.data.outcome,"rejected:adjustment-transaction");
   {
-    const db=new DatabaseSync(join(runtimeDir,"strata.sqlite"),{readOnly:true});
+    const db=database({readOnly:true});
     assert.equal(db.prepare("SELECT transaction_id FROM paddle_adjustments WHERE adjustment_id=?").get(pendingRefund.data.id).transaction_id,prepared.data.transactionId);
     assert.equal(db.prepare("SELECT access_revoked_at FROM paddle_purchases WHERE transaction_id=?").get(invalidPrepared.data.transactionId).access_revoked_at,null);
     db.close();
