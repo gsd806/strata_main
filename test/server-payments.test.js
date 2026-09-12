@@ -250,7 +250,9 @@ async function checkout(account) {
 }
 
 function database(options={}) {
-  return new DatabaseSync(join(runtimeDir,"strata.sqlite"),options);
+  // The child server may still be releasing its checkout claim after sending a response.
+  // Match its bounded lock wait instead of failing a fixture write on transient contention.
+  return new DatabaseSync(join(runtimeDir,"strata.sqlite"),{timeout:5000,...options});
 }
 
 function eventId(label,sequence) {
@@ -487,14 +489,14 @@ test("live monthly checkout grants, manages, updates, and revokes Strata+ secure
     scheduledChange:null,currentPeriodEndsAt:Date.parse(INITIAL_PERIOD_END_AT)
   });
   {
-    const db=new DatabaseSync(join(runtimeDir,"strata.sqlite"));
+    const db=database();
     db.prepare("UPDATE paddle_subscriptions SET current_period_ends_at=? WHERE subscription_id=?").run(Date.now()-1,subscriptionId(prepared.data.transactionId));
     db.close();
   }
   assert.equal((await request("/api/me",{headers:{Cookie:account.cookie}})).data.user.discovery.active,false,"an expired cached provider period must fail closed");
   assert.equal((await request("/api/billing/subscription",{headers:{Cookie:account.cookie}})).data.subscription.active,false,"subscription summary must match effective entitlement");
   {
-    const db=new DatabaseSync(join(runtimeDir,"strata.sqlite"));
+    const db=database();
     db.prepare("UPDATE paddle_subscriptions SET current_period_ends_at=? WHERE subscription_id=?").run(Date.parse(INITIAL_PERIOD_END_AT),subscriptionId(prepared.data.transactionId));
     db.close();
   }
@@ -1067,7 +1069,7 @@ let paymentAdmin;
 async function authenticatedPaymentAdmin(){
   if(paymentAdmin)return paymentAdmin;
   const password="billing-admin-password-123",account=await signup({name:"Billing Admin",email:"billing-admin@example.test",password});
-  const db=new DatabaseSync(join(runtimeDir,"strata.sqlite"));
+  const db=database();
   db.prepare("UPDATE users SET email_verified_at=? WHERE id=?").run(Date.now(),account.user.id);
   db.prepare("INSERT INTO admin_principal(slot,user_id,configured_email,bound_at) VALUES('primary',?,?,?)").run(account.user.id,account.user.email,Date.now());db.close();
   const loggedIn=await request("/api/login",{method:"POST",headers:{Origin:BASE,"Content-Type":"application/json"},body:JSON.stringify({email:account.user.email,password})});
@@ -1290,7 +1292,7 @@ test("a grant or hold during provider creation prevents exposing the in-flight c
     assert.equal(controlled.response.status,200,JSON.stringify(controlled.data));
     assert.equal(prepared.data.transactionId,undefined);
     assert.equal(prepared.data.code,action==="grant-plus"?"ALREADY_ENTITLED":"CHECKOUT_BLOCKED");
-    const db=new DatabaseSync(join(runtimeDir,"strata.sqlite"));
+    const db=database();
     const remote=[...paddleTransactions.values()].find(t=>t.custom_data?.strata_user_id===account.user.id);
     const purchase=db.prepare("SELECT * FROM paddle_purchases WHERE transaction_id=?").get(remote.id);
     if(action==="grant-plus")assert.ok(purchase,"accepted provider work remains durably recorded");
@@ -1307,7 +1309,7 @@ test("admin closure records a completed interrupted checkout while the payment h
   const closed=await controlPaymentAccount(account,"close-checkouts",0);
   assert.equal(closed.response.status,200,JSON.stringify(closed.data));
   assert.equal(closed.data.user.checkoutBlocked,true);
-  const db=new DatabaseSync(join(runtimeDir,"strata.sqlite"));
+  const db=database();
   const purchase=db.prepare("SELECT * FROM paddle_purchases WHERE transaction_id=?").get(remote.id);
   assert.equal(purchase.subscription_id,remote.subscription_id);assert.ok(purchase.completed_at);
   assert.equal(db.prepare("SELECT COUNT(*) AS n FROM paddle_checkout_claims WHERE user_id=?").get(account.user.id).n,0);db.close();
